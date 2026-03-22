@@ -47,7 +47,12 @@ export const ROLES: Record<RoleId, AgentRole> = {
 ## When you receive agent output
 - If the plan/code looks good → execute it directly.
 - If it needs changes → make the changes yourself.
-- If it's wrong → ignore it and proceed with your own approach.`,
+- If it's wrong → ignore it and proceed with your own approach.
+
+## After making code changes
+- ALWAYS use the agentbridge reply tool to notify the reviewer: "Please review the changes I just made."
+- This triggers automatic code review by the Reviewer agent.
+- Wait for the review result before moving to the next task.`,
       permissionMode: "bypassPermissions",
     },
   },
@@ -84,7 +89,7 @@ You CANNOT modify files (read-only sandbox enforced at OS level).
 Provide specific, actionable feedback with file paths and line numbers.
 Your review will be sent to the Lead agent for final decision.`,
     sandboxMode: "read-only",
-    approvalPolicy: "on-request",
+    approvalPolicy: "never",
     shellTool: false,
     forwardPrompt:
       "[Reviewer completed review]\nReview results below. Apply suggested fixes if appropriate.",
@@ -112,7 +117,7 @@ You CANNOT modify files (read-only sandbox enforced at OS level).
 You CAN run test commands (shell enabled, read-only).
 Report test results with pass/fail status and error details.`,
     sandboxMode: "read-only",
-    approvalPolicy: "on-request",
+    approvalPolicy: "never",
     shellTool: true,
     forwardPrompt:
       "[Tester completed testing]\nTest results below. Fix any failures if needed.",

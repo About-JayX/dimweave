@@ -5,6 +5,7 @@ import { appendFileSync, readFileSync, unlinkSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ClaudeAdapter } from "./adapters/claude-adapter";
 import { DaemonClient } from "./daemon-client";
+import type { BridgeMessage } from "./types";
 
 const CONTROL_PORT = parseInt(
   process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502",
@@ -23,9 +24,23 @@ const daemonClient = new DaemonClient(CONTROL_WS_URL);
 
 let shuttingDown = false;
 
+// Local buffer for messages pushed via WebSocket while Claude is attached.
+// check_messages drains this buffer first, then falls back to daemon fetch.
+const pushedMessages: BridgeMessage[] = [];
+const MAX_PUSHED = 100;
+
 // Wire up tools → daemon
 claude.setReplySender(async (msg) => daemonClient.sendReply(msg));
-claude.setMessageFetcher(async () => daemonClient.fetchMessages());
+claude.setMessageFetcher(async () => {
+  // Drain locally pushed messages first (these arrive via WS push)
+  if (pushedMessages.length > 0) {
+    const drained = pushedMessages.splice(0, pushedMessages.length);
+    log(`Returning ${drained.length} pushed message(s) to Claude`);
+    return drained;
+  }
+  // Fallback: fetch from daemon buffer (for messages that arrived while offline)
+  return daemonClient.fetchMessages();
+});
 claude.setStatusFetcher(async () => {
   const res = await fetch(CONTROL_HEALTH_URL).catch(() => null);
   if (!res?.ok)
@@ -33,9 +48,15 @@ claude.setStatusFetcher(async () => {
   return res.json();
 });
 
-// Also buffer pushed messages (for check_messages to pick up)
+// Buffer pushed messages locally so check_messages can return them
 daemonClient.on("codexMessage", (message) => {
-  log(`Buffered Codex message (${message.content.length} chars)`);
+  pushedMessages.push(message);
+  if (pushedMessages.length > MAX_PUSHED) {
+    pushedMessages.splice(0, pushedMessages.length - MAX_PUSHED);
+  }
+  log(
+    `Buffered pushed Codex message (${message.content.length} chars, queue: ${pushedMessages.length})`,
+  );
 });
 
 daemonClient.on("disconnect", () => {

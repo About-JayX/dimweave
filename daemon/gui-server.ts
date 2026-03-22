@@ -367,6 +367,8 @@ function handleGuiMessage(
               const roleConfig = ROLES[role as keyof typeof ROLES];
               return codex.initSession({
                 developerInstructions: roleConfig.developerInstructions,
+                sandboxMode: roleConfig.sandboxMode,
+                approvalPolicy: roleConfig.approvalPolicy,
               });
             })
             .then((result) => {

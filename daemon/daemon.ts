@@ -134,7 +134,6 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   log(
     `Codex agentMessage (${msg.content.length} chars) — buffered for turn end`,
   );
-  emitToClaude(msg);
   lastCodexMessage = msg; // Overwrite: only the last one matters
 
   broadcastToGui({
@@ -144,10 +143,50 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   });
 });
 
+// Auto-review: after Claude processes Codex output, check for file changes and trigger reviewer
+let reviewTimer: ReturnType<typeof setTimeout> | null = null;
+const REVIEW_DELAY_MS = 45_000; // Wait 45s for Claude to finish making changes
+
+function scheduleAutoReview() {
+  if (reviewTimer) clearTimeout(reviewTimer);
+  // Only schedule if Codex is reviewer role
+  if (state.codexRole !== "reviewer") return;
+
+  reviewTimer = setTimeout(async () => {
+    reviewTimer = null;
+    try {
+      const { execSync } = await import("node:child_process");
+      const diff = execSync("git diff --stat HEAD 2>/dev/null || echo ''", {
+        encoding: "utf-8",
+        cwd: process.cwd(),
+      }).trim();
+      if (diff) {
+        log(`Auto-review: detected file changes, triggering Codex reviewer`);
+        codex.injectMessage(
+          `Please review the following recent code changes:\n\n${diff}\n\nCheck for bugs, code quality issues, and suggest improvements.`,
+        );
+        broadcastToGui({
+          type: "system_log",
+          payload: {
+            level: "info",
+            message: "Auto-triggered Codex review for recent changes",
+          },
+          timestamp: Date.now(),
+        });
+      } else {
+        log("Auto-review: no file changes detected, skipping");
+      }
+    } catch (err: any) {
+      log(`Auto-review error: ${err.message}`);
+    }
+  }, REVIEW_DELAY_MS);
+  log(`Auto-review scheduled in ${REVIEW_DELAY_MS / 1000}s`);
+}
+
 codex.on("turnCompleted", () => {
   log("Codex turn completed");
 
-  // Forward only the final conclusion to Claude PTY
+  // Forward only the final conclusion to Claude (both PTY and MCP bridge)
   if (lastCodexMessage) {
     const codexRole = ROLES[state.codexRole];
     const summary =
@@ -155,12 +194,21 @@ codex.on("turnCompleted", () => {
         ? lastCodexMessage.content.slice(0, 500) +
           "\n...(truncated, see Messages tab for full output)"
         : lastCodexMessage.content;
+
+    // Forward to Claude PTY (GUI mode)
     const sent = sendToClaudePty(`${codexRole.forwardPrompt}\n${summary}`);
     if (sent)
       log(
         `Forwarded Codex final conclusion (${state.codexRole}) to Claude PTY`,
       );
+
+    // Forward to MCP bridge (for check_messages tool)
+    emitToClaude(lastCodexMessage);
+
     lastCodexMessage = null;
+
+    // Schedule auto-review after Claude has time to process and make changes
+    scheduleAutoReview();
   }
 });
 
