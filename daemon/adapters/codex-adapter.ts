@@ -100,9 +100,18 @@ export class CodexAdapter extends EventEmitter {
   }
 
   async ensureConnected(): Promise<void> {
-    if (this.appServerWs?.readyState === WebSocket.OPEN) return;
+    if (this.appServerWs?.readyState === WebSocket.OPEN) {
+      // App-server is connected; ensure proxy is also running
+      if (!this.proxyServer) this.startProxy();
+      return;
+    }
     this.intentionalDisconnect = false;
     await this.connectToAppServer(true);
+    // Restart proxy if it was closed by a previous disconnect()
+    if (!this.proxyServer) {
+      this.startProxy();
+      this.log(`Proxy restarted on ${this.proxyUrl}`);
+    }
   }
 
   stop() {

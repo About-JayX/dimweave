@@ -143,29 +143,28 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   });
 });
 
-// No timer-based auto-review. Lead uses MCP reply tool to notify Codex when ready.
-
 codex.on("turnCompleted", () => {
   log("Codex turn completed");
 
-  // Forward only the final conclusion to Claude (both PTY and MCP bridge)
   if (lastCodexMessage) {
-    const codexRole = ROLES[state.codexRole];
-    const summary =
-      lastCodexMessage.content.length > 500
-        ? lastCodexMessage.content.slice(0, 500) +
-          "\n...(truncated, see Messages tab for full output)"
-        : lastCodexMessage.content;
-
-    // Forward to Claude PTY (GUI mode)
-    const sent = sendToClaudePty(`${codexRole.forwardPrompt}\n${summary}`);
-    if (sent)
-      log(
-        `Forwarded Codex final conclusion (${state.codexRole}) to Claude PTY`,
-      );
-
-    // Forward to MCP bridge (for check_messages tool)
+    // Buffer for MCP check_messages (Claude pulls when ready)
     emitToClaude(lastCodexMessage);
+
+    // Notify Claude PTY with a short one-liner (not the full content)
+    const codexRole = ROLES[state.codexRole];
+    sendToClaudePty(
+      `[${codexRole.label} done — use check_messages tool to see results]\r`,
+    );
+
+    // Notify GUI
+    broadcastToGui({
+      type: "system_log",
+      payload: {
+        level: "info",
+        message: `Codex (${state.codexRole}) completed. Results available via check_messages.`,
+      },
+      timestamp: Date.now(),
+    });
 
     lastCodexMessage = null;
   }

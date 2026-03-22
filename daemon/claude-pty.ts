@@ -14,6 +14,7 @@ export class ClaudePty {
   private proc: ChildProcess | null = null;
   private onData: PtyDataCallback;
   private onExitCb: ((code: number) => void) | null = null;
+  private exitFired = false;
 
   constructor(onData: PtyDataCallback) {
     this.onData = onData;
@@ -30,6 +31,7 @@ export class ClaudePty {
     agentConfig?: { roleId: string; agentsJson: string },
   ) {
     if (this.running) return;
+    this.exitFired = false;
 
     const dir = cwd || process.cwd();
     this.log(`Starting Claude PTY in ${dir} (${cols}x${rows})`);
@@ -75,7 +77,10 @@ export class ClaudePty {
           if (msg.type === "data") this.onData(msg.data);
           else if (msg.type === "exit") {
             this.log(`PTY helper reported exit (code ${msg.code})`);
-            this.onExitCb?.(msg.code);
+            if (!this.exitFired) {
+              this.exitFired = true;
+              this.onExitCb?.(msg.code);
+            }
           }
         } catch {}
       }
@@ -88,7 +93,10 @@ export class ClaudePty {
     this.proc.on("exit", (code) => {
       this.log(`PTY helper process exited (code ${code})`);
       this.proc = null;
-      this.onExitCb?.(code ?? 1);
+      if (!this.exitFired) {
+        this.exitFired = true;
+        this.onExitCb?.(code ?? 1);
+      }
     });
   }
 
