@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickelpack/tauri-v2-nightly/main/tauri-config-schema.json",
+  "productName": "AgentBridge",
+  "version": "0.1.0",
+  "identifier": "com.agentbridge.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AgentBridge",
+        "width": 1000,
+        "height": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
