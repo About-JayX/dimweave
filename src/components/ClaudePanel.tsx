@@ -15,6 +15,25 @@ function shortenPath(p: string): string {
   return p;
 }
 
+function kindStyle(kind: string): string {
+  switch (kind) {
+    case "text":
+      return "text-foreground/80 font-mono";
+    case "tool_use":
+      return "text-yellow-500/90 font-mono";
+    case "tool_result":
+      return "text-muted-foreground font-mono";
+    case "status":
+      return "text-blue-400";
+    case "error":
+      return "text-destructive";
+    case "cost":
+      return "text-muted-foreground";
+    default:
+      return "text-foreground/60 font-mono";
+  }
+}
+
 interface ClaudePanelProps {
   connected: boolean;
 }
@@ -22,7 +41,7 @@ interface ClaudePanelProps {
 export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [mcpRegistered, setMcpRegistered] = useState<boolean | null>(null);
   const [inputText, setInputText] = useState("");
-  const [cwd, setCwd] = useState<string>(process.cwd?.() ?? "");
+  const [cwd, setCwd] = useState("");
   const [terminalExpanded, setTerminalExpanded] = useState(true);
   const terminalRef = useRef<HTMLDivElement>(null);
 
@@ -161,10 +180,31 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           {terminalExpanded && (
             <div
               ref={terminalRef}
-              className="mt-1 max-h-40 overflow-y-auto rounded-md bg-background p-2 font-mono text-[11px] leading-relaxed text-foreground/80"
+              className="mt-1 max-h-40 overflow-y-auto rounded-md bg-background p-2 text-[11px] leading-relaxed"
             >
               {claudeLines.map((l, i) => (
-                <div key={i} className="whitespace-pre-wrap">
+                <div
+                  key={i}
+                  className={cn(
+                    "whitespace-pre-wrap py-0.5",
+                    kindStyle(l.kind),
+                  )}
+                >
+                  {l.kind === "tool_use" && (
+                    <span className="text-yellow-500 mr-1">⚡</span>
+                  )}
+                  {l.kind === "tool_result" && (
+                    <span className="text-muted-foreground mr-1">→</span>
+                  )}
+                  {l.kind === "status" && (
+                    <span className="text-blue-400 mr-1">●</span>
+                  )}
+                  {l.kind === "error" && (
+                    <span className="text-destructive mr-1">✕</span>
+                  )}
+                  {l.kind === "cost" && (
+                    <span className="text-muted-foreground mr-1">$</span>
+                  )}
                   {l.line}
                 </div>
               ))}

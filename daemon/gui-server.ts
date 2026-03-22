@@ -246,10 +246,10 @@ function handleGuiMessage(
       const cwd = message.cwd ?? process.cwd();
       log(`Launching Claude process in ${cwd}`);
 
-      claudeProcess = new ClaudeProcess((line) => {
+      claudeProcess = new ClaudeProcess((event) => {
         broadcastToGui({
           type: "terminal_output",
-          payload: { agent: "claude", line },
+          payload: { agent: "claude", kind: event.kind, line: event.content },
           timestamp: Date.now(),
         });
       });

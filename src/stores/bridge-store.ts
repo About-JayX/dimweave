@@ -8,6 +8,7 @@ export type CodexPhase = "thinking" | "streaming" | "idle";
 
 export interface TerminalLine {
   agent: string;
+  kind: string;
   line: string;
   timestamp: number;
 }
@@ -117,6 +118,7 @@ export const useBridgeStore = create<BridgeState>((set) => {
               ...s.terminalLines.slice(-200),
               {
                 agent: guiEvent.payload.agent,
+                kind: guiEvent.payload.kind ?? "text",
                 line: guiEvent.payload.line,
                 timestamp: guiEvent.timestamp,
               },

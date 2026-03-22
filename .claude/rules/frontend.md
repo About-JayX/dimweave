@@ -43,6 +43,7 @@ paths:
 - 每个可滚动区域独立设置 `overflow-y-auto min-h-0`，避免整个页面滚动
 
 ## 性能优化
+- **禁止**在前端代码中使用 Node.js API（`process.cwd()`、`require()`、`__dirname` 等），浏览器/Tauri webview 中不存在。需要系统信息时通过 Tauri `invoke` 获取
 - Zustand selector 必须返回引用稳定的值——**禁止**在 selector 内使用 `.filter()`/`.map()`/展开运算符，否则每次渲染返回新引用导致无限循环。需要派生数据时先取原始字段，再用 `useMemo` 处理
 - Zustand selector 按字段订阅，避免整个 store 重渲染
 - 大列表使用 `React.memo` 或虚拟滚动
