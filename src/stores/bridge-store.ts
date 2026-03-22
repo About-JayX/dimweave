@@ -35,9 +35,11 @@ interface BridgeState {
     reasoningEffort?: string;
     cwd?: string;
   }) => void;
-  launchClaude: (cwd?: string) => void;
-  sendClaudeInput: (text: string) => void;
+  launchClaude: (cwd?: string, cols?: number, rows?: number) => void;
+  sendPtyInput: (data: string) => void;
+  resizePty: (cols: number, rows: number) => void;
   stopClaude: () => void;
+  onPtyData: ((data: string) => void) | null;
 }
 
 let ws: WebSocket | null = null;
@@ -49,7 +51,7 @@ function sendWs(data: object) {
   }
 }
 
-export const useBridgeStore = create<BridgeState>((set) => {
+export const useBridgeStore = create<BridgeState>((set, get) => {
   function connect() {
     if (ws?.readyState === WebSocket.OPEN) return;
 
@@ -120,6 +122,12 @@ export const useBridgeStore = create<BridgeState>((set) => {
         case "claude_rate_limit":
           set({ claudeRateLimit: guiEvent.payload });
           break;
+
+        case "pty_data": {
+          const cb = get().onPtyData;
+          if (cb) cb(guiEvent.payload.data);
+          break;
+        }
 
         case "terminal_output":
           if (guiEvent.payload.agent === "claude_clear") {
@@ -223,8 +231,11 @@ export const useBridgeStore = create<BridgeState>((set) => {
       reasoningEffort?: string;
       cwd?: string;
     }) => sendWs({ type: "apply_config", ...config }),
-    launchClaude: (cwd?) => sendWs({ type: "launch_claude", cwd }),
-    sendClaudeInput: (text) => sendWs({ type: "claude_input", text }),
+    launchClaude: (cwd?, cols?, rows?) =>
+      sendWs({ type: "launch_claude", cwd, cols, rows }),
+    sendPtyInput: (data) => sendWs({ type: "pty_input", data }),
+    resizePty: (cols, rows) => sendWs({ type: "pty_resize", cols, rows }),
     stopClaude: () => sendWs({ type: "stop_claude" }),
+    onPtyData: null,
   };
 });

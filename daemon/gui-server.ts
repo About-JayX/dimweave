@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import type { CodexAdapter } from "./adapters/codex-adapter";
 import type { TuiConnectionState } from "./tui-connection-state";
-import { ClaudeProcess } from "./claude-process";
+import { ClaudePty } from "./claude-pty";
 import {
   state,
   sendGuiEvent,
@@ -10,7 +10,7 @@ import {
   type GuiEvent,
 } from "./daemon-state";
 
-let claudeProcess: ClaudeProcess | null = null;
+let claudePty: ClaudePty | null = null;
 
 interface GuiServerDeps {
   codex: CodexAdapter;
@@ -235,7 +235,7 @@ function handleGuiMessage(
       return;
     }
     case "launch_claude": {
-      if (claudeProcess?.running) {
+      if (claudePty?.running) {
         sendGuiEvent(ws, {
           type: "system_log",
           payload: { level: "warn", message: "Claude is already running." },
@@ -244,82 +244,51 @@ function handleGuiMessage(
         return;
       }
       const cwd = message.cwd ?? process.cwd();
-      log(`Launching Claude process in ${cwd}`);
+      const cols = message.cols ?? 120;
+      const rows = message.rows ?? 30;
+      log(`Launching Claude PTY in ${cwd} (${cols}x${rows})`);
 
-      claudeProcess = new ClaudeProcess((event) => {
-        // Everything goes to Logs (terminal_output)
+      claudePty = new ClaudePty((data) => {
+        // Forward raw PTY output to all GUI clients
         broadcastToGui({
-          type: "terminal_output",
-          payload: { agent: "claude", kind: event.kind, line: event.content },
+          type: "pty_data",
+          payload: { data },
           timestamp: Date.now(),
         });
-
-        // Text and tool results also go to main message panel
-        if (event.kind === "text") {
-          broadcastToGui({
-            type: "agent_message",
-            payload: {
-              id: `claude_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              source: "claude",
-              content: event.content,
-              timestamp: Date.now(),
-            },
-            timestamp: Date.now(),
-          });
-        } else if (event.kind === "rate_limit" && event.rateLimit) {
-          broadcastToGui({
-            type: "claude_rate_limit",
-            payload: event.rateLimit,
-            timestamp: Date.now(),
-          });
-        }
       });
 
-      claudeProcess.setOnExit((code) => {
+      claudePty.setOnExit((code: number) => {
+        claudePty = null;
         broadcastToGui({
           type: "agent_status",
           payload: { agent: "claude", status: "disconnected" },
           timestamp: Date.now(),
         });
         broadcastToGui({
-          type: "system_log",
-          payload: { level: "info", message: `Claude exited (code ${code})` },
+          type: "pty_data",
+          payload: { data: `\r\n[Process exited with code ${code}]\r\n` },
           timestamp: Date.now(),
         });
         broadcastStatus();
       });
 
-      claudeProcess.start(cwd);
-      broadcastToGui({
-        type: "system_log",
-        payload: { level: "info", message: "Claude starting..." },
-        timestamp: Date.now(),
-      });
+      claudePty.start(cwd, cols, rows);
       return;
     }
-    case "claude_input": {
-      if (!claudeProcess?.running) {
-        sendGuiEvent(ws, {
-          type: "system_log",
-          payload: { level: "error", message: "Claude is not running." },
-          timestamp: Date.now(),
-        });
-        return;
-      }
-      claudeProcess.sendInput(message.text);
+    case "pty_input": {
+      if (!claudePty?.running) return;
+      claudePty.write(message.data);
+      return;
+    }
+    case "pty_resize": {
+      if (!claudePty?.running) return;
+      claudePty.resize(message.cols, message.rows);
       return;
     }
     case "stop_claude": {
-      if (claudeProcess?.running) {
-        claudeProcess.stop();
-      }
-      claudeProcess = null;
+      if (claudePty?.running) claudePty.stop();
+      claudePty = null;
       log("Claude stopped from GUI");
-      broadcastToGui({
-        type: "terminal_output",
-        payload: { agent: "claude_clear" },
-        timestamp: Date.now(),
-      });
       broadcastToGui({
         type: "agent_status",
         payload: { agent: "claude", status: "disconnected" },

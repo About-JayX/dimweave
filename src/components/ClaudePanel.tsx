@@ -92,7 +92,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
 
   const allLines = useBridgeStore((s) => s.terminalLines);
   const launchClaude = useBridgeStore((s) => s.launchClaude);
-  const sendClaudeInput = useBridgeStore((s) => s.sendClaudeInput);
+  const sendPtyInput = useBridgeStore((s) => s.sendPtyInput);
   const stopClaude = useBridgeStore((s) => s.stopClaude);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
@@ -127,9 +127,9 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
   const handleSend = useCallback(() => {
     const text = inputText.trim();
     if (!text) return;
-    sendClaudeInput(text);
+    sendPtyInput(text);
     setInputText("");
-  }, [inputText, sendClaudeInput]);
+  }, [inputText, sendPtyInput]);
 
   return (
     <div className="rounded-lg border border-input bg-card p-3">

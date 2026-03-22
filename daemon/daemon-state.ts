@@ -18,6 +18,7 @@ export interface GuiEvent {
     | "codex_phase"
     | "terminal_output"
     | "claude_rate_limit"
+    | "pty_data"
     | "agent_status"
     | "system_log"
     | "daemon_status";
