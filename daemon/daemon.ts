@@ -143,45 +143,7 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   });
 });
 
-// Auto-review: after Claude processes Codex output, check for file changes and trigger reviewer
-let reviewTimer: ReturnType<typeof setTimeout> | null = null;
-const REVIEW_DELAY_MS = 45_000; // Wait 45s for Claude to finish making changes
-
-function scheduleAutoReview() {
-  if (reviewTimer) clearTimeout(reviewTimer);
-  // Only schedule if Codex is reviewer role
-  if (state.codexRole !== "reviewer") return;
-
-  reviewTimer = setTimeout(async () => {
-    reviewTimer = null;
-    try {
-      const { execSync } = await import("node:child_process");
-      const diff = execSync("git diff --stat HEAD 2>/dev/null || echo ''", {
-        encoding: "utf-8",
-        cwd: process.cwd(),
-      }).trim();
-      if (diff) {
-        log(`Auto-review: detected file changes, triggering Codex reviewer`);
-        codex.injectMessage(
-          `Please review the following recent code changes:\n\n${diff}\n\nCheck for bugs, code quality issues, and suggest improvements.`,
-        );
-        broadcastToGui({
-          type: "system_log",
-          payload: {
-            level: "info",
-            message: "Auto-triggered Codex review for recent changes",
-          },
-          timestamp: Date.now(),
-        });
-      } else {
-        log("Auto-review: no file changes detected, skipping");
-      }
-    } catch (err: any) {
-      log(`Auto-review error: ${err.message}`);
-    }
-  }, REVIEW_DELAY_MS);
-  log(`Auto-review scheduled in ${REVIEW_DELAY_MS / 1000}s`);
-}
+// No timer-based auto-review. Lead uses MCP reply tool to notify Codex when ready.
 
 codex.on("turnCompleted", () => {
   log("Codex turn completed");
@@ -206,9 +168,6 @@ codex.on("turnCompleted", () => {
     emitToClaude(lastCodexMessage);
 
     lastCodexMessage = null;
-
-    // Schedule auto-review after Claude has time to process and make changes
-    scheduleAutoReview();
   }
 });
 
