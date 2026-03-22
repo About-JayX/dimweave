@@ -3,6 +3,17 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { invoke } from "@tauri-apps/api/core";
 import { useBridgeStore, type TerminalLine } from "@/stores/bridge-store";
+import { useCodexAccountStore } from "@/stores/codex-account-store";
+
+function shortenPath(p: string): string {
+  const idx = p.indexOf("/Users/");
+  if (idx >= 0) {
+    const rest = p.slice(idx + 7);
+    const slash = rest.indexOf("/");
+    return slash >= 0 ? `~${rest.slice(slash)}` : "~";
+  }
+  return p;
+}
 
 interface ClaudePanelProps {
   connected: boolean;
@@ -11,15 +22,16 @@ interface ClaudePanelProps {
 export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [mcpRegistered, setMcpRegistered] = useState<boolean | null>(null);
   const [inputText, setInputText] = useState("");
+  const [cwd, setCwd] = useState<string>(process.cwd?.() ?? "");
+  const [terminalExpanded, setTerminalExpanded] = useState(true);
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Stable selector: get raw array reference, filter in render
   const allLines = useBridgeStore((s) => s.terminalLines);
   const launchClaude = useBridgeStore((s) => s.launchClaude);
   const sendClaudeInput = useBridgeStore((s) => s.sendClaudeInput);
   const stopClaude = useBridgeStore((s) => s.stopClaude);
+  const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
-  // Filter outside selector to avoid new-reference infinite loop
   const claudeLines: TerminalLine[] = [];
   for (const l of allLines) {
     if (l.agent === "claude") claudeLines.push(l);
@@ -38,6 +50,11 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
     }
   }, [allLines]);
 
+  const handlePickDir = useCallback(async () => {
+    const dir = await pickDirectory();
+    if (dir) setCwd(dir);
+  }, [pickDirectory]);
+
   const handleLaunch = useCallback(async () => {
     if (!mcpRegistered) {
       try {
@@ -45,8 +62,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         setMcpRegistered(true);
       } catch {}
     }
-    launchClaude();
-  }, [mcpRegistered, launchClaude]);
+    launchClaude(cwd || undefined);
+  }, [mcpRegistered, launchClaude, cwd]);
 
   const handleSend = useCallback(() => {
     const text = inputText.trim();
@@ -77,21 +94,86 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         </span>
       </div>
 
-      {/* Terminal output */}
-      {hasTerminal && (
-        <div
-          ref={terminalRef}
-          className="mt-2 max-h-32 overflow-y-auto rounded-md bg-background p-2 font-mono text-[11px] leading-relaxed text-foreground/80"
-        >
-          {claudeLines.map((l, i) => (
-            <div key={i} className="whitespace-pre-wrap">
-              {l.line}
-            </div>
-          ))}
+      {/* Project path + Launch (when not running) */}
+      {!hasTerminal && !connected && (
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">Project</span>
+            <button
+              type="button"
+              onClick={handlePickDir}
+              className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground hover:bg-accent hover:text-primary transition-colors truncate max-w-44"
+              title={cwd}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 16 16"
+                className="shrink-0 text-muted-foreground"
+              >
+                <path
+                  d="M2 4v8h12V6H8L6 4z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                />
+              </svg>
+              {cwd ? shortenPath(cwd) : "Select..."}
+            </button>
+          </div>
+          <Button
+            size="sm"
+            className="w-full bg-claude text-white hover:bg-claude/80"
+            onClick={handleLaunch}
+          >
+            Connect Claude
+          </Button>
         </div>
       )}
 
-      {/* Input (when running) */}
+      {/* Terminal output (collapsible) */}
+      {hasTerminal && (
+        <>
+          <button
+            type="button"
+            onClick={() => setTerminalExpanded(!terminalExpanded)}
+            className="mt-2 flex w-full items-center justify-between text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>Terminal ({claudeLines.length} lines)</span>
+            <svg
+              width="8"
+              height="8"
+              viewBox="0 0 12 12"
+              className={cn(
+                "transition-transform duration-150",
+                !terminalExpanded && "-rotate-90",
+              )}
+            >
+              <path
+                d="M3 5l3 3 3-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
+            </svg>
+          </button>
+
+          {terminalExpanded && (
+            <div
+              ref={terminalRef}
+              className="mt-1 max-h-40 overflow-y-auto rounded-md bg-background p-2 font-mono text-[11px] leading-relaxed text-foreground/80"
+            >
+              {claudeLines.map((l, i) => (
+                <div key={i} className="whitespace-pre-wrap">
+                  {l.line}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Input + controls (when running) */}
       {hasTerminal && (
         <div className="mt-2 flex gap-1.5">
           <input
@@ -104,7 +186,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
                 handleSend();
               }
             }}
-            placeholder="Send input to Claude..."
+            placeholder="Send to Claude..."
             className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus:border-ring"
           />
           <Button size="xs" variant="secondary" onClick={handleSend}>
@@ -112,19 +194,6 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           </Button>
           <Button size="xs" variant="destructive" onClick={stopClaude}>
             Stop
-          </Button>
-        </div>
-      )}
-
-      {/* Launch button */}
-      {!hasTerminal && !connected && (
-        <div className="mt-2">
-          <Button
-            size="sm"
-            className="w-full bg-claude text-white hover:bg-claude/80"
-            onClick={handleLaunch}
-          >
-            Connect Claude
           </Button>
         </div>
       )}
