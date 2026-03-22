@@ -19,13 +19,15 @@ export function sendToClaudePty(text: string) {
   return true;
 }
 
+import { ROLES, type RoleId } from "./role-config";
+import { state as daemonState } from "./daemon-state";
+
 interface GuiServerDeps {
   codex: CodexAdapter;
   tuiState: TuiConnectionState;
   currentStatus: () => any;
   broadcastStatus: () => void;
   log: (msg: string) => void;
-  codexDevInstructions: string;
 }
 
 export function startGuiServer(port: number, deps: GuiServerDeps) {
@@ -151,8 +153,13 @@ function handleGuiMessage(
         timestamp: Date.now(),
       });
 
+      const roleConf = ROLES[daemonState.codexRole];
       codex
-        .initSession({ developerInstructions: deps.codexDevInstructions })
+        .initSession({
+          developerInstructions: roleConf.developerInstructions,
+          sandboxMode: roleConf.sandboxMode,
+          approvalPolicy: roleConf.approvalPolicy,
+        })
         .then((result) => {
           if (result.success) {
             log("Codex session initialized successfully");
@@ -220,11 +227,14 @@ function handleGuiMessage(
       codex
         .ensureConnected()
         .then(() => {
+          const rc = ROLES[daemonState.codexRole];
           return codex.initSession({
             model,
             reasoningEffort,
             cwd,
-            developerInstructions: deps.codexDevInstructions,
+            developerInstructions: rc.developerInstructions,
+            sandboxMode: rc.sandboxMode,
+            approvalPolicy: rc.approvalPolicy,
           });
         })
         .then((result) => {
@@ -334,6 +344,40 @@ function handleGuiMessage(
         timestamp: Date.now(),
       });
       broadcastStatus();
+      return;
+    }
+    case "set_agent_role": {
+      const { agent, role } = message as { agent: string; role: RoleId };
+      if (agent === "claude") daemonState.claudeRole = role;
+      else if (agent === "codex") {
+        daemonState.codexRole = role;
+        // Reconnect Codex with new role's developer_instructions
+        if (codex.activeThreadId) {
+          codex.disconnect();
+          tuiState.handleCodexExit();
+          codex
+            .ensureConnected()
+            .then(() => {
+              const roleConfig = ROLES[role as keyof typeof ROLES];
+              return codex.initSession({
+                developerInstructions: roleConfig.developerInstructions,
+              });
+            })
+            .then((result) => {
+              if (result.success) {
+                tuiState.markBridgeReady();
+                broadcastStatus();
+              }
+            })
+            .catch(() => {});
+        }
+      }
+      log(`Role changed: ${agent} → ${role}`);
+      broadcastToGui({
+        type: "agent_status",
+        payload: { agent, role },
+        timestamp: Date.now(),
+      });
       return;
     }
     case "stop_codex_tui": {

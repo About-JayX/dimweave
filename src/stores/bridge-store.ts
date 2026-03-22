@@ -26,6 +26,8 @@ interface BridgeState {
     resetsAt: number;
   } | null;
   claudePtyRunning: boolean;
+  claudeRole: string;
+  codexRole: string;
 
   sendToCodex: (content: string) => void;
   clearMessages: () => void;
@@ -40,6 +42,7 @@ interface BridgeState {
   sendPtyInput: (data: string) => void;
   resizePty: (cols: number, rows: number) => void;
   stopClaude: () => void;
+  setAgentRole: (agent: string, role: string) => void;
   onPtyData: ((data: string) => void) | null;
 }
 
@@ -226,6 +229,8 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     terminalLines: [],
     claudeRateLimit: null,
     claudePtyRunning: false,
+    claudeRole: "lead",
+    codexRole: "coder",
 
     sendToCodex: (content) => sendWs({ type: "send_to_codex", content }),
     clearMessages: () => set({ messages: [] }),
@@ -245,6 +250,11 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     stopClaude: () => {
       sendWs({ type: "stop_claude" });
       set({ claudePtyRunning: false });
+    },
+    setAgentRole: (agent, role) => {
+      sendWs({ type: "set_agent_role", agent, role });
+      if (agent === "claude") set({ claudeRole: role });
+      else if (agent === "codex") set({ codexRole: role });
     },
     onPtyData: null,
   };

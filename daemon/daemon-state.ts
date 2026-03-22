@@ -1,5 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import type { BridgeMessage } from "./types";
+import type { RoleId } from "./role-config";
 
 export interface ControlSocketData {
   clientId: number;
@@ -42,6 +43,10 @@ class DaemonState {
   nextSystemMessageId = 0;
   codexBootstrapped = false;
   shuttingDown = false;
+
+  // Agent roles
+  claudeRole: RoleId = "lead";
+  codexRole: RoleId = "coder";
 
   readonly bufferedMessages: BridgeMessage[] = [];
   readonly guiClients = new Set<ServerWebSocket<GuiSocketData>>();

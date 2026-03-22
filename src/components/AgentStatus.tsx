@@ -4,6 +4,33 @@ import { Button } from "@/components/ui/button";
 import { ClaudePanel } from "@/components/ClaudePanel";
 import { CodexAccountPanel } from "@/components/CodexAccountPanel";
 import { useBridgeStore } from "@/stores/bridge-store";
+
+const ROLE_OPTIONS = [
+  { value: "lead", label: "Lead" },
+  { value: "coder", label: "Coder" },
+  { value: "reviewer", label: "Reviewer" },
+  { value: "tester", label: "Tester" },
+];
+
+function RoleSelect({ agent }: { agent: "claude" | "codex" }) {
+  const role = useBridgeStore((s) =>
+    agent === "claude" ? s.claudeRole : s.codexRole,
+  );
+  const setRole = useBridgeStore((s) => s.setAgentRole);
+  return (
+    <select
+      value={role}
+      onChange={(e) => setRole(agent, e.target.value)}
+      className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground border border-input outline-none cursor-pointer"
+    >
+      {ROLE_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import type { AgentInfo, DaemonStatus } from "@/types";
 
@@ -95,6 +122,7 @@ export function AgentStatusPanel({
             <span className="flex-1 text-[13px] font-medium text-card-foreground">
               Codex
             </span>
+            <RoleSelect agent="codex" />
             <span className="text-[11px] uppercase text-secondary-foreground">
               {codexTuiRunning
                 ? "connected"

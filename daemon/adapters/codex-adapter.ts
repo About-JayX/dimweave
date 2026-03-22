@@ -128,6 +128,8 @@ export class CodexAdapter extends EventEmitter {
     reasoningEffort?: string;
     cwd?: string;
     developerInstructions?: string;
+    sandboxMode?: string;
+    approvalPolicy?: string;
   }): Promise<{ success: boolean; error?: string }> {
     if (this.handler.activeThreadId) return { success: true };
 
@@ -186,6 +188,12 @@ export class CodexAdapter extends EventEmitter {
                     reasoningEffort: opts.reasoningEffort,
                   }),
                   ...(opts?.cwd && { cwd: opts.cwd }),
+                  ...(opts?.sandboxMode && {
+                    sandbox: { type: opts.sandboxMode },
+                  }),
+                  ...(opts?.approvalPolicy && {
+                    approvalPolicy: opts.approvalPolicy,
+                  }),
                   ...(opts?.developerInstructions && {
                     settings: {
                       developer_instructions: opts.developerInstructions,

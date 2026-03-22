@@ -89,23 +89,7 @@ function broadcastStatus() {
   });
 }
 
-/** Developer instructions injected at the protocol level via thread/start settings. */
-const CODEX_DEVELOPER_INSTRUCTIONS = `You are operating within AgentBridge, a multi-agent collaboration system.
-
-## Your Role: CODE REVIEWER & PLAN GENERATOR
-- You are a code reviewer and plan generator ONLY.
-- DO NOT modify, create, or delete any files directly.
-- DO NOT run shell commands that change the codebase.
-- Analyze code, generate plans, review changes, suggest improvements.
-
-## When code changes are needed:
-- Describe WHAT needs to change, WHERE, and WHY.
-- End your response with "@claude" to delegate execution to Claude Code.
-- Example: "Found SQL injection in auth.ts:42. Fix: use parameterized queries. @claude"
-
-## When no changes are needed:
-- Respond with your analysis normally. Do NOT include "@claude".
-- Example: "Code review complete. Implementation looks correct."`;
+import { ROLES } from "./role-config";
 
 const serverDeps = {
   codex,
@@ -114,7 +98,6 @@ const serverDeps = {
   broadcastStatus,
   log,
   attachCmd,
-  codexDevInstructions: CODEX_DEVELOPER_INSTRUCTIONS,
 };
 
 // ── Codex events ───────────────────────────────────────────
@@ -148,17 +131,11 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   log(`Forwarding Codex -> Claude (${msg.content.length} chars)`);
   emitToClaude(msg);
 
-  // Only forward to Claude PTY if Codex explicitly requests it.
-  // Codex includes "@claude" or "[need_review]" to signal Claude should act.
-  // Otherwise the message is display-only — prevents infinite conversation loops.
-  const needsClaude =
-    /(@claude|@Claude|\[need_review\]|\[needs_action\])/i.test(msg.content);
-  if (needsClaude) {
-    const sent = sendToClaudePty(
-      `[Codex requests your review] Respond, then stop:\n${msg.content}`,
-    );
-    if (sent) log("Forwarded Codex message to Claude PTY (explicit request)");
-  }
+  // Role-driven hard-forward: always send to Claude PTY with role context
+  const codexRole = ROLES[state.codexRole];
+  const sent = sendToClaudePty(`${codexRole.forwardPrompt}\n\n${msg.content}`);
+  if (sent)
+    log(`Hard-forwarded Codex (${state.codexRole}) message to Claude PTY`);
 
   broadcastToGui({
     type: "agent_message",
