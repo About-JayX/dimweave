@@ -19,7 +19,7 @@ export function sendToClaudePty(text: string) {
   return true;
 }
 
-import { ROLES, type RoleId } from "./role-config";
+import { ROLES, buildClaudeAgentsJson, type RoleId } from "./role-config";
 import { state as daemonState } from "./daemon-state";
 
 interface GuiServerDeps {
@@ -295,7 +295,6 @@ function handleGuiMessage(
       const cwd = message.cwd ?? process.cwd();
       const cols = message.cols ?? 120;
       const rows = message.rows ?? 30;
-      const claudeRoleConfig = ROLES[daemonState.claudeRole];
       log(
         `Launching Claude PTY in ${cwd} (${cols}x${rows}) role=${daemonState.claudeRole}`,
       );
@@ -324,12 +323,10 @@ function handleGuiMessage(
         broadcastStatus();
       });
 
-      claudePty.start(
-        cwd,
-        cols,
-        rows,
-        claudeRoleConfig.developerInstructions || undefined,
-      );
+      claudePty.start(cwd, cols, rows, {
+        roleId: daemonState.claudeRole,
+        agentsJson: buildClaudeAgentsJson(daemonState.claudeRole),
+      });
       return;
     }
     case "pty_input": {

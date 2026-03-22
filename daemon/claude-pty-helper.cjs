@@ -8,10 +8,15 @@ const { createInterface } = require("node:readline");
 const cols = parseInt(process.env.PTY_COLS || "120", 10);
 const rows = parseInt(process.env.PTY_ROWS || "30", 10);
 const claudePath = process.env.CLAUDE_PATH || "claude";
+const agentRole = process.env.CLAUDE_AGENT_ROLE || "";
+const agentsJson = process.env.CLAUDE_AGENTS_JSON || "";
 
-const systemPrompt = process.env.CLAUDE_SYSTEM_PROMPT || "";
 const args = ["--dangerously-skip-permissions"];
-if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
+
+// Use --agent + --agents for role-based hard enforcement
+if (agentRole && agentsJson) {
+  args.push("--agent", agentRole, "--agents", agentsJson);
+}
 
 const term = pty.spawn(claudePath, args, {
   name: "xterm-256color",
