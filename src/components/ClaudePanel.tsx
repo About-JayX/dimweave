@@ -15,6 +15,72 @@ function shortenPath(p: string): string {
   return p;
 }
 
+function formatTimeLeft(resetsAt: number): string {
+  const secs = Math.max(0, resetsAt - Date.now() / 1000);
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function barColor(status: string) {
+  return status === "allowed" ? "bg-claude" : "bg-destructive";
+}
+
+function ClaudeQuota() {
+  const rl = useBridgeStore((s) => s.claudeRateLimit);
+  if (!rl) return null;
+
+  const label = rl.rateLimitType === "five_hour" ? "5h" : rl.rateLimitType;
+  const timeLeft = formatTimeLeft(rl.resetsAt);
+  const isAllowed = rl.status === "allowed";
+
+  // Estimate window progress from time (5h = 18000s window)
+  const windowSecs = rl.rateLimitType === "five_hour" ? 18000 : 604800;
+  const elapsed = windowSecs - Math.max(0, rl.resetsAt - Date.now() / 1000);
+  const windowPercent = Math.min(
+    100,
+    Math.max(0, (elapsed / windowSecs) * 100),
+  );
+
+  return (
+    <div className="mt-2 rounded-md bg-muted/40 px-3 py-2 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+          Claude 额度
+        </span>
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-px text-[9px] font-semibold",
+            isAllowed
+              ? "bg-claude/10 text-claude"
+              : "bg-destructive/10 text-destructive",
+          )}
+        >
+          {isAllowed ? "正常" : "受限"}
+        </span>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between text-[10px] mb-1">
+          <span className="text-muted-foreground">{label} window</span>
+          <span className="font-mono text-muted-foreground">
+            resets {timeLeft}
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              barColor(rl.status),
+            )}
+            style={{ width: `${windowPercent}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ClaudePanelProps {
   connected: boolean;
 }
@@ -30,7 +96,6 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
   const stopClaude = useBridgeStore((s) => s.stopClaude);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
-  // Status lines only (status/error/cost stay in panel)
   const statusLines: TerminalLine[] = [];
   for (const l of allLines) {
     if (l.agent === "claude") statusLines.push(l);
@@ -87,12 +152,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         </span>
       </div>
 
-      {/* Status info (when running) */}
-      {isRunning && statusLines.length > 0 && (
-        <div className="mt-1.5 text-[10px] text-muted-foreground">
-          {statusLines[statusLines.length - 1].line}
-        </div>
-      )}
+      {/* Quota (when connected or running) */}
+      {(connected || isRunning) && <ClaudeQuota />}
 
       {/* Input (when running) */}
       {(isRunning || connected) && (

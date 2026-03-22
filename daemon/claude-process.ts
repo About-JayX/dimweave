@@ -4,9 +4,18 @@ import { appendFileSync } from "node:fs";
 
 const LOG_FILE = "/tmp/agentbridge.log";
 
+export interface ClaudeRateLimitInfo {
+  status: string;
+  rateLimitType: string;
+  resetsAt: number;
+  /** Percentage used in the current window (from rate_limit_event if available, otherwise estimated) */
+  usedPercent?: number;
+}
+
 export interface ClaudeTerminalEvent {
-  kind: "text" | "tool_use" | "tool_result" | "status" | "error" | "cost";
+  kind: "text" | "tool_use" | "tool_result" | "status" | "error" | "rate_limit";
   content: string;
+  rateLimit?: ClaudeRateLimitInfo;
 }
 
 export type TerminalEventCallback = (event: ClaudeTerminalEvent) => void;
@@ -198,19 +207,27 @@ export class ClaudeProcess {
       }
 
       case "result": {
-        const cost = data.total_cost_usd;
-        if (cost != null) {
-          this.onEvent({ kind: "cost", content: `$${cost.toFixed(4)}` });
-        }
-        if (data.result) {
-          this.onEvent({ kind: "text", content: data.result.slice(0, 300) });
-        }
+        // Skip duplicate result text (already streamed via assistant chunks)
         break;
       }
 
-      case "rate_limit_event":
-        // Silently ignore
+      case "rate_limit_event": {
+        const info = data.rate_limit_info;
+        if (info) {
+          // Track usage from result events
+          const usage = data.usage ?? {};
+          this.onEvent({
+            kind: "rate_limit",
+            content: `${info.rateLimitType}: ${info.status}`,
+            rateLimit: {
+              status: info.status,
+              rateLimitType: info.rateLimitType ?? "five_hour",
+              resetsAt: info.resetsAt ?? 0,
+            },
+          });
+        }
         break;
+      }
 
       default:
         // Unknown type, log for debugging

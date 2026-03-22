@@ -20,6 +20,11 @@ interface BridgeState {
   daemonStatus: DaemonStatus | null;
   codexPhase: CodexPhase;
   terminalLines: TerminalLine[];
+  claudeRateLimit: {
+    status: string;
+    rateLimitType: string;
+    resetsAt: number;
+  } | null;
 
   sendToCodex: (content: string) => void;
   clearMessages: () => void;
@@ -112,6 +117,10 @@ export const useBridgeStore = create<BridgeState>((set) => {
           set({ codexPhase: guiEvent.payload.phase as CodexPhase });
           break;
 
+        case "claude_rate_limit":
+          set({ claudeRateLimit: guiEvent.payload });
+          break;
+
         case "terminal_output":
           set((s) => ({
             terminalLines: [
@@ -194,6 +203,7 @@ export const useBridgeStore = create<BridgeState>((set) => {
     daemonStatus: null,
     codexPhase: "idle" as CodexPhase,
     terminalLines: [],
+    claudeRateLimit: null,
 
     sendToCodex: (content) => sendWs({ type: "send_to_codex", content }),
     clearMessages: () => set({ messages: [] }),

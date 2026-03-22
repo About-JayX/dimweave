@@ -63,6 +63,7 @@ export interface GuiEvent {
     | "agent_message_delta"
     | "codex_phase"
     | "terminal_output"
+    | "claude_rate_limit"
     | "agent_status"
     | "system_log"
     | "daemon_status";

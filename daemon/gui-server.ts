@@ -270,8 +270,14 @@ function handleGuiMessage(
             },
             timestamp: Date.now(),
           });
+        } else if (event.kind === "rate_limit" && event.rateLimit) {
+          broadcastToGui({
+            type: "claude_rate_limit",
+            payload: event.rateLimit,
+            timestamp: Date.now(),
+          });
         } else {
-          // status/error/cost → terminal panel
+          // status/error → terminal panel
           broadcastToGui({
             type: "terminal_output",
             payload: { agent: "claude", kind: event.kind, line: event.content },
