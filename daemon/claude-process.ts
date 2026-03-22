@@ -50,6 +50,8 @@ export class ClaudeProcess {
         "--print",
         "--output-format",
         "stream-json",
+        "--input-format",
+        "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
         "--mcp-config",
@@ -57,7 +59,7 @@ export class ClaudeProcess {
       ],
       {
         cwd: dir,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env, NO_COLOR: "1" },
       },
     );
@@ -95,7 +97,10 @@ export class ClaudeProcess {
       this.log("Cannot send input: Claude not running");
       return;
     }
-    this.proc.stdin.write(text + "\n");
+    // stream-json input format: one JSON object per line
+    const msg = JSON.stringify({ type: "user_message", content: text });
+    this.proc.stdin.write(msg + "\n");
+    this.log(`Sent input to Claude (${text.length} chars)`);
   }
 
   stop() {
