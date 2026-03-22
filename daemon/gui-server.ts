@@ -247,11 +247,37 @@ function handleGuiMessage(
       log(`Launching Claude process in ${cwd}`);
 
       claudeProcess = new ClaudeProcess((event) => {
-        broadcastToGui({
-          type: "terminal_output",
-          payload: { agent: "claude", kind: event.kind, line: event.content },
-          timestamp: Date.now(),
-        });
+        // Text and tool results → main message panel
+        if (event.kind === "text" || event.kind === "tool_result") {
+          broadcastToGui({
+            type: "agent_message",
+            payload: {
+              id: `claude_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              source: "claude",
+              content: event.content,
+              timestamp: Date.now(),
+            },
+            timestamp: Date.now(),
+          });
+        } else if (event.kind === "tool_use") {
+          broadcastToGui({
+            type: "agent_message",
+            payload: {
+              id: `claude_tool_${Date.now()}`,
+              source: "system",
+              content: `Claude → ${event.content}`,
+              timestamp: Date.now(),
+            },
+            timestamp: Date.now(),
+          });
+        } else {
+          // status/error/cost → terminal panel
+          broadcastToGui({
+            type: "terminal_output",
+            payload: { agent: "claude", kind: event.kind, line: event.content },
+            timestamp: Date.now(),
+          });
+        }
       });
 
       claudeProcess.setOnExit((code) => {
