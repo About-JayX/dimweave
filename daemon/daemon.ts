@@ -89,6 +89,18 @@ function broadcastStatus() {
   });
 }
 
+/** Inject collaboration protocol into Codex — called after every new session. */
+function injectCodexProtocol() {
+  codex.injectMessage(
+    `AgentBridge is active. You are connected to Claude Code via a bridge.
+
+## Collaboration Protocol:
+- When you need Claude to review code, fix bugs, or take action, include "@claude" in your response.
+- When your task is complete and no review is needed, respond normally WITHOUT "@claude".
+- Only use "@claude" when human-level review or a different perspective is genuinely needed.`,
+  );
+}
+
 const serverDeps = {
   codex,
   tuiState,
@@ -96,6 +108,7 @@ const serverDeps = {
   broadcastStatus,
   log,
   attachCmd,
+  injectCodexProtocol,
 };
 
 // ── Codex events ───────────────────────────────────────────
@@ -164,17 +177,7 @@ codex.on("ready", (threadId: string) => {
     payload: { agent: "codex", status: "connected", threadId },
     timestamp: Date.now(),
   });
-  // Inject collaboration protocol into Codex
-  codex.injectMessage(
-    `AgentBridge is active. You are connected to Claude Code via a bridge.
-
-## Collaboration Protocol:
-- When you need Claude to review code, fix bugs, or take action, include "@claude" in your response.
-- When your task is complete and no review is needed, respond normally WITHOUT "@claude".
-- Only use "@claude" when human-level review or a different perspective is genuinely needed.
-- Example: "I've implemented the API. @claude please review the error handling."
-- Example (no trigger): "Done. The function now handles all edge cases."`,
-  );
+  injectCodexProtocol();
 
   if (state.attachedClaude) {
     codex.injectMessage(

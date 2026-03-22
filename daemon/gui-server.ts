@@ -22,6 +22,7 @@ export function sendToClaudePty(text: string) {
 interface GuiServerDeps {
   codex: CodexAdapter;
   tuiState: TuiConnectionState;
+  injectCodexProtocol: () => void;
   currentStatus: () => any;
   broadcastStatus: () => void;
   log: (msg: string) => void;
@@ -154,6 +155,7 @@ function handleGuiMessage(
         if (result.success) {
           log("Codex session initialized successfully");
           tuiState.markBridgeReady();
+          deps.injectCodexProtocol();
           broadcastToGui({
             type: "agent_status",
             payload: {
@@ -210,6 +212,7 @@ function handleGuiMessage(
         .then((result) => {
           if (result.success) {
             tuiState.markBridgeReady();
+            deps.injectCodexProtocol();
             broadcastToGui({
               type: "agent_status",
               payload: {
