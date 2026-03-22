@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ClaudePanel } from "@/components/ClaudePanel";
 import { CodexAccountPanel } from "@/components/CodexAccountPanel";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
@@ -76,24 +77,7 @@ export function AgentStatusPanel({
 
       <div className="flex flex-col gap-2">
         {/* Claude Code */}
-        <div className="rounded-lg border border-input bg-card p-3">
-          <div className="flex items-center gap-2">
-            <StatusDot
-              status={claudeConnected ? "connected" : "disconnected"}
-            />
-            <span className="flex-1 text-[13px] font-medium text-card-foreground">
-              Claude Code
-            </span>
-            <span className="text-[11px] uppercase text-secondary-foreground">
-              {claudeConnected ? "connected" : "disconnected"}
-            </span>
-          </div>
-          {!claudeConnected && (
-            <div className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-              Register MCP in ~/.claude/mcp.json to connect
-            </div>
-          )}
-        </div>
+        <ClaudePanel connected={claudeConnected} />
 
         {/* Codex */}
         <div className="rounded-lg border border-input bg-card p-3">
