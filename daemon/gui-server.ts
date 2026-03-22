@@ -295,7 +295,10 @@ function handleGuiMessage(
       const cwd = message.cwd ?? process.cwd();
       const cols = message.cols ?? 120;
       const rows = message.rows ?? 30;
-      log(`Launching Claude PTY in ${cwd} (${cols}x${rows})`);
+      const claudeRoleConfig = ROLES[daemonState.claudeRole];
+      log(
+        `Launching Claude PTY in ${cwd} (${cols}x${rows}) role=${daemonState.claudeRole}`,
+      );
 
       claudePty = new ClaudePty((data) => {
         // Forward raw PTY output to all GUI clients
@@ -321,7 +324,12 @@ function handleGuiMessage(
         broadcastStatus();
       });
 
-      claudePty.start(cwd, cols, rows);
+      claudePty.start(
+        cwd,
+        cols,
+        rows,
+        claudeRoleConfig.developerInstructions || undefined,
+      );
       return;
     }
     case "pty_input": {

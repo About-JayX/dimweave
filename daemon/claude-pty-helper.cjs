@@ -9,7 +9,11 @@ const cols = parseInt(process.env.PTY_COLS || "120", 10);
 const rows = parseInt(process.env.PTY_ROWS || "30", 10);
 const claudePath = process.env.CLAUDE_PATH || "claude";
 
-const term = pty.spawn(claudePath, ["--dangerously-skip-permissions"], {
+const systemPrompt = process.env.CLAUDE_SYSTEM_PROMPT || "";
+const args = ["--dangerously-skip-permissions"];
+if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
+
+const term = pty.spawn(claudePath, args, {
   name: "xterm-256color",
   cols,
   rows,

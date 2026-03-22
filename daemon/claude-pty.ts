@@ -23,7 +23,7 @@ export class ClaudePty {
     return this.proc !== null && this.proc.exitCode === null;
   }
 
-  start(cwd?: string, cols = 120, rows = 30) {
+  start(cwd?: string, cols = 120, rows = 30, systemPrompt?: string) {
     if (this.running) return;
 
     const dir = cwd || process.cwd();
@@ -48,6 +48,7 @@ export class ClaudePty {
         PTY_ROWS: String(rows),
         NODE_PATH: nodePath,
         CLAUDE_PATH: process.env.CLAUDE_PATH || "claude",
+        CLAUDE_SYSTEM_PROMPT: systemPrompt || "",
       },
     });
 
