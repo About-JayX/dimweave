@@ -12,10 +12,11 @@ import {
 
 let claudePty: ClaudePty | null = null;
 
-/** Send a message to the running Claude PTY as user input. */
+/** Send a message to the running Claude PTY as user input and submit it. */
 export function sendToClaudePty(text: string) {
   if (!claudePty?.running) return false;
-  claudePty.write(text + "\n");
+  // \r = Enter key in PTY (submits the input to Claude)
+  claudePty.write(text + "\r");
   return true;
 }
 

@@ -131,9 +131,15 @@ codex.on("agentMessage", (msg: BridgeMessage) => {
   log(`Forwarding Codex -> Claude (${msg.content.length} chars)`);
   emitToClaude(msg);
 
-  // Role-driven hard-forward: always send to Claude PTY with role context
+  // Role-driven hard-forward: send concise summary to Claude PTY
   const codexRole = ROLES[state.codexRole];
-  const sent = sendToClaudePty(`${codexRole.forwardPrompt}\n\n${msg.content}`);
+  // Truncate to avoid flooding Claude's input — send first 500 chars as summary
+  const summary =
+    msg.content.length > 500
+      ? msg.content.slice(0, 500) +
+        "\n...(truncated, see Messages tab for full output)"
+      : msg.content;
+  const sent = sendToClaudePty(`${codexRole.forwardPrompt}\n${summary}`);
   if (sent)
     log(`Hard-forwarded Codex (${state.codexRole}) message to Claude PTY`);
 
