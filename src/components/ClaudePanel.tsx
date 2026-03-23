@@ -2,7 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useCodexAccountStore } from "@/stores/codex-account-store";
+import { buildClaudeAgentsJson } from "@/lib/agent-roles";
 
 const ROLE_OPTIONS = [
   { value: "lead", label: "Lead" },
@@ -32,7 +35,6 @@ function ClaudeRoleSelect({ disabled }: { disabled: boolean }) {
     </select>
   );
 }
-import { useCodexAccountStore } from "@/stores/codex-account-store";
 
 function shortenPath(p: string): string {
   const idx = p.indexOf("/Users/");
@@ -118,15 +120,25 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [mcpRegistered, setMcpRegistered] = useState<boolean | null>(null);
   const [cwd, setCwd] = useState("");
 
-  const isRunning = useBridgeStore((s) => s.claudePtyRunning);
-  const launchClaude = useBridgeStore((s) => s.launchClaude);
-  const stopClaude = useBridgeStore((s) => s.stopClaude);
+  const [isRunning, setIsRunning] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const claudeRole = useBridgeStore((s) => s.claudeRole);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
   useEffect(() => {
     invoke<boolean>("check_mcp_registered")
       .then(setMcpRegistered)
       .catch(() => {});
+  }, []);
+
+  // Listen for PTY exit to reset running state
+  useEffect(() => {
+    const unlisten = listen<number>("pty-exit", () => {
+      setIsRunning(false);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   const handlePickDir = useCallback(async () => {
@@ -139,12 +151,30 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
       try {
         await invoke("register_mcp");
         setMcpRegistered(true);
-      } catch {}
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setLaunchError(`MCP registration failed: ${msg}`);
+        return;
+      }
     }
     if (!cwd) return;
-    launchClaude(cwd);
-    window.dispatchEvent(new CustomEvent("switch-to-terminal"));
-  }, [mcpRegistered, launchClaude, cwd]);
+    try {
+      setLaunchError(null);
+      const agentsJson = buildClaudeAgentsJson(claudeRole);
+      await invoke("launch_pty", {
+        cwd,
+        cols: 120,
+        rows: 30,
+        roleId: claudeRole,
+        agentsJson,
+      });
+      setIsRunning(true);
+      window.dispatchEvent(new CustomEvent("switch-to-terminal"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLaunchError(msg);
+    }
+  }, [mcpRegistered, cwd, claudeRole]);
 
   return (
     <div className="rounded-lg border border-input bg-card p-3">
@@ -200,7 +230,13 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           size="xs"
           variant="destructive"
           className="w-full mt-2"
-          onClick={stopClaude}
+          onClick={() => {
+            invoke("stop_pty").catch((err) => {
+              console.warn("stop_pty failed:", err);
+              // If stop fails (process already dead), pty-exit event handles state reset
+            });
+            // Don't setIsRunning(false) here — wait for pty-exit event
+          }}
         >
           Stop Claude
         </Button>
@@ -244,6 +280,11 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           {!cwd && (
             <div className="text-[10px] text-muted-foreground text-center">
               Please select a project directory first
+            </div>
+          )}
+          {launchError && (
+            <div className="text-[10px] text-destructive text-center">
+              {launchError}
             </div>
           )}
         </div>

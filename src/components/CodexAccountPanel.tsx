@@ -147,17 +147,16 @@ export function CodexAccountPanel({
   onRefresh,
   protocolData,
 }: CodexAccountPanelProps) {
-  if (!profile && !usage && !protocolData?.model) return null;
-
   const [expanded, setExpanded] = useState(false);
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
 
+  const shouldRender = !!(profile || usage || protocolData?.model);
   useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
+    if (shouldRender) fetchModels();
+  }, [fetchModels, shouldRender]);
 
   const currentModel = models.find((m) => m.slug === protocolData?.model);
   const modelOpts: DropdownOption[] = models.map((m) => ({
@@ -184,6 +183,9 @@ export function CodexAccountPanel({
     const dir = await pickDirectory();
     if (dir) applyConfig({ cwd: dir });
   }, [pickDirectory, applyConfig]);
+
+  // Early return AFTER all hooks to comply with React Rules of Hooks
+  if (!shouldRender) return null;
 
   return (
     <div className="mt-2 rounded-lg bg-muted/40">

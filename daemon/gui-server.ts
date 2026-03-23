@@ -1,27 +1,62 @@
 import type { ServerWebSocket } from "bun";
 import type { CodexAdapter } from "./adapters/codex-adapter";
 import type { TuiConnectionState } from "./tui-connection-state";
-import { ClaudePty } from "./claude-pty";
 import {
   state,
   sendGuiEvent,
   broadcastToGui,
   type GuiSocketData,
-  type GuiEvent,
 } from "./daemon-state";
 
-let claudePty: ClaudePty | null = null;
-
-/** Send a message to the running Claude PTY as user input and submit it. */
+/**
+ * Send text to Claude PTY via GUI frontend → Tauri invoke("pty_write").
+ * PTY is managed by Rust (portable-pty), so daemon sends a WS event
+ * to exactly ONE GUI client which writes to the Rust PTY.
+ * Returns false if no GUI client is connected.
+ */
 export function sendToClaudePty(text: string) {
-  if (!claudePty?.running) return false;
-  // \r = Enter key in PTY (submits the input to Claude)
-  claudePty.write(text + "\r");
+  const clients = state.guiClients;
+  if (clients.size === 0) return false;
+
+  const event = JSON.stringify({
+    type: "pty_inject",
+    payload: { data: text + "\r" },
+    timestamp: Date.now(),
+  });
+
+  // Send to only the first connected client to avoid duplicate writes
+  const firstClient = clients.values().next().value;
+  if (firstClient) {
+    try {
+      firstClient.send(event);
+    } catch {
+      return false;
+    }
+  }
   return true;
 }
 
-import { ROLES, buildClaudeAgentsJson, type RoleId } from "./role-config";
+import { ROLES, type RoleId } from "./role-config";
 import { state as daemonState } from "./daemon-state";
+
+/** Broadcast role change result (success or failure with revert) */
+function broadcastRoleChange(
+  agent: string,
+  role: string,
+  level: "info" | "error",
+  message: string,
+) {
+  broadcastToGui({
+    type: "role_sync",
+    payload: { agent, role },
+    timestamp: Date.now(),
+  });
+  broadcastToGui({
+    type: "system_log",
+    payload: { level, message },
+    timestamp: Date.now(),
+  });
+}
 
 interface GuiServerDeps {
   codex: CodexAdapter;
@@ -206,11 +241,17 @@ function handleGuiMessage(
             },
             timestamp: Date.now(),
           });
-        });
+        })
+        .finally(() => broadcastStatus());
       return;
     }
     case "apply_config": {
-      const { model, reasoningEffort, cwd } = message;
+      // Merge incoming partial config with current session params to avoid losing values
+      const currentInfo = codex.accountInfo;
+      const model = message.model ?? currentInfo.model;
+      const reasoningEffort =
+        message.reasoningEffort ?? currentInfo.reasoningEffort;
+      const cwd = message.cwd ?? currentInfo.cwd;
       log(
         `Applying config: model=${model ?? "-"}, reasoning=${reasoningEffort ?? "-"}, cwd=${cwd ?? "-"}`,
       );
@@ -224,7 +265,7 @@ function handleGuiMessage(
         timestamp: Date.now(),
       });
 
-      // Reconnect with new settings
+      // Reconnect with new settings (merged with current values)
       codex
         .ensureConnected()
         .then(() => {
@@ -281,91 +322,37 @@ function handleGuiMessage(
             },
             timestamp: Date.now(),
           });
-        });
-      return;
-    }
-    case "launch_claude": {
-      if (claudePty?.running) {
-        sendGuiEvent(ws, {
-          type: "system_log",
-          payload: { level: "warn", message: "Claude is already running." },
-          timestamp: Date.now(),
-        });
-        return;
-      }
-      const cwd = message.cwd ?? process.cwd();
-      const cols = message.cols ?? 120;
-      const rows = message.rows ?? 30;
-      log(
-        `Launching Claude PTY in ${cwd} (${cols}x${rows}) role=${daemonState.claudeRole}`,
-      );
-
-      claudePty = new ClaudePty((data) => {
-        // Forward raw PTY output to all GUI clients
-        broadcastToGui({
-          type: "pty_data",
-          payload: { data },
-          timestamp: Date.now(),
-        });
-      });
-
-      claudePty.setOnExit((code: number) => {
-        claudePty = null;
-        broadcastToGui({
-          type: "agent_status",
-          payload: { agent: "claude", status: "disconnected" },
-          timestamp: Date.now(),
-        });
-        broadcastToGui({
-          type: "pty_data",
-          payload: { data: `\r\n[Process exited with code ${code}]\r\n` },
-          timestamp: Date.now(),
-        });
-        broadcastStatus();
-      });
-
-      claudePty.start(cwd, cols, rows, {
-        roleId: daemonState.claudeRole,
-        agentsJson: buildClaudeAgentsJson(daemonState.claudeRole),
-      });
-      return;
-    }
-    case "pty_input": {
-      if (!claudePty?.running) return;
-      claudePty.write(message.data);
-      return;
-    }
-    case "pty_resize": {
-      if (!claudePty?.running) return;
-      claudePty.resize(message.cols, message.rows);
-      return;
-    }
-    case "stop_claude": {
-      if (claudePty?.running) claudePty.stop();
-      claudePty = null;
-      log("Claude stopped from GUI");
-      broadcastToGui({
-        type: "agent_status",
-        payload: { agent: "claude", status: "disconnected" },
-        timestamp: Date.now(),
-      });
-      broadcastStatus();
+        })
+        .finally(() => broadcastStatus());
       return;
     }
     case "set_agent_role": {
       const { agent, role } = message as { agent: string; role: RoleId };
-      if (agent === "claude") daemonState.claudeRole = role;
-      else if (agent === "codex") {
+      const oldRole =
+        agent === "codex" ? daemonState.codexRole : daemonState.claudeRole;
+      if (agent === "claude") {
+        daemonState.claudeRole = role;
+        broadcastRoleChange(
+          agent,
+          role,
+          "info",
+          `Role changed: ${agent} → ${role}`,
+        );
+      } else if (agent === "codex") {
         daemonState.codexRole = role;
-        // Reconnect Codex with new role's developer_instructions
         if (codex.activeThreadId) {
+          const currentInfo = codex.accountInfo;
           codex.disconnect();
           tuiState.handleCodexExit();
+          broadcastStatus();
           codex
             .ensureConnected()
             .then(() => {
               const roleConfig = ROLES[role as keyof typeof ROLES];
               return codex.initSession({
+                model: currentInfo.model,
+                reasoningEffort: currentInfo.reasoningEffort,
+                cwd: currentInfo.cwd,
                 developerInstructions: roleConfig.developerInstructions,
                 sandboxMode: roleConfig.sandboxMode,
                 approvalPolicy: roleConfig.approvalPolicy,
@@ -375,17 +362,43 @@ function handleGuiMessage(
               if (result.success) {
                 tuiState.markBridgeReady();
                 broadcastStatus();
+                broadcastRoleChange(
+                  agent,
+                  role,
+                  "info",
+                  `Role changed: ${agent} → ${role}`,
+                );
+              } else {
+                daemonState.codexRole = oldRole;
+                broadcastRoleChange(
+                  agent,
+                  oldRole,
+                  "error",
+                  `Role change failed: ${result.error}`,
+                );
               }
             })
-            .catch(() => {});
+            .catch((err: any) => {
+              const error = err instanceof Error ? err.message : String(err);
+              log(`Role change reconnect failed: ${error}`);
+              daemonState.codexRole = oldRole;
+              broadcastRoleChange(
+                agent,
+                oldRole,
+                "error",
+                `Role change reconnect failed: ${error}`,
+              );
+            });
+        } else {
+          broadcastRoleChange(
+            agent,
+            role,
+            "info",
+            `Role changed: ${agent} → ${role}`,
+          );
         }
       }
-      log(`Role changed: ${agent} → ${role}`);
-      broadcastToGui({
-        type: "agent_status",
-        payload: { agent, role },
-        timestamp: Date.now(),
-      });
+      log(`Role change requested: ${agent} → ${role}`);
       return;
     }
     case "stop_codex_tui": {

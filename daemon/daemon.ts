@@ -150,18 +150,32 @@ codex.on("turnCompleted", () => {
     // Buffer for MCP check_messages (Claude pulls when ready)
     emitToClaude(lastCodexMessage);
 
-    // Notify Claude PTY with a short one-liner (not the full content)
+    // Inject Codex output into Claude PTY
+    // Short messages: inject full content directly
+    // Long messages: inject truncated summary + pointer to check_messages
+    const content = lastCodexMessage.content;
     const codexRole = ROLES[state.codexRole];
-    sendToClaudePty(
-      `[${codexRole.label} done — use check_messages tool to see results]\r`,
-    );
+    const MAX_INJECT_LEN = 500;
+
+    const replyReminder =
+      "You MUST respond using the agentbridge reply tool so your response reaches the other agent.";
+    let inject: string;
+    if (content.length <= MAX_INJECT_LEN) {
+      inject = `${codexRole.label} says: ${content}\n\n${replyReminder}`;
+    } else {
+      const summary = content.slice(0, MAX_INJECT_LEN).trimEnd();
+      inject = `${codexRole.label} says: ${summary}... (truncated, use check_messages for full content)\n\n${replyReminder}`;
+    }
+    const injected = sendToClaudePty(inject);
 
     // Notify GUI
     broadcastToGui({
       type: "system_log",
       payload: {
-        level: "info",
-        message: `Codex (${state.codexRole}) completed. Results available via check_messages.`,
+        level: injected ? "info" : "warn",
+        message: injected
+          ? `Codex (${state.codexRole}) completed. ${content.length > MAX_INJECT_LEN ? "Summary" : "Full content"} injected to Claude.`
+          : `Codex (${state.codexRole}) completed but no GUI client available — output not delivered to Claude.`,
       },
       timestamp: Date.now(),
     });

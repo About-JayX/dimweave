@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { invoke } from "@tauri-apps/api/core";
 import type { GuiEvent, BridgeMessage, AgentInfo, DaemonStatus } from "@/types";
 
 const GUI_WS_URL = "ws://127.0.0.1:4503";
@@ -25,10 +26,11 @@ interface BridgeState {
     rateLimitType: string;
     resetsAt: number;
   } | null;
-  claudePtyRunning: boolean;
   claudeRole: string;
   codexRole: string;
+  draft: string;
 
+  setDraft: (text: string) => void;
   sendToCodex: (content: string) => void;
   clearMessages: () => void;
   launchCodexTui: () => void;
@@ -38,12 +40,7 @@ interface BridgeState {
     reasoningEffort?: string;
     cwd?: string;
   }) => void;
-  launchClaude: (cwd?: string, cols?: number, rows?: number) => void;
-  sendPtyInput: (data: string) => void;
-  resizePty: (cols: number, rows: number) => void;
-  stopClaude: () => void;
   setAgentRole: (agent: string, role: string) => void;
-  onPtyData: ((data: string) => void) | null;
 }
 
 let ws: WebSocket | null = null;
@@ -127,11 +124,12 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
           set({ claudeRateLimit: guiEvent.payload });
           break;
 
-        case "pty_data": {
-          const cb = get().onPtyData;
-          if (cb) cb(guiEvent.payload.data);
+        case "pty_inject":
+          // Daemon wants to write to Claude PTY (e.g. Codex turn completed)
+          invoke("pty_write", { data: guiEvent.payload.data }).catch((err) => {
+            console.warn("[pty_inject] Failed to write to PTY:", err);
+          });
           break;
-        }
 
         case "terminal_output":
           if (guiEvent.payload.agent === "claude_clear") {
@@ -170,10 +168,14 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
                 threadId,
               },
             },
-            ...(agent === "claude" && status === "disconnected"
-              ? { claudePtyRunning: false }
-              : {}),
           }));
+          break;
+        }
+
+        case "role_sync": {
+          const { agent: ra, role: rr } = guiEvent.payload;
+          if (ra === "claude") set({ claudeRole: rr });
+          else if (ra === "codex") set({ codexRole: rr });
           break;
         }
 
@@ -228,10 +230,11 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     codexPhase: "idle" as CodexPhase,
     terminalLines: [],
     claudeRateLimit: null,
-    claudePtyRunning: false,
     claudeRole: "lead",
     codexRole: "coder",
+    draft: "",
 
+    setDraft: (text) => set({ draft: text }),
     sendToCodex: (content) => sendWs({ type: "send_to_codex", content }),
     clearMessages: () => set({ messages: [] }),
     launchCodexTui: () => sendWs({ type: "launch_codex_tui" }),
@@ -241,21 +244,9 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       reasoningEffort?: string;
       cwd?: string;
     }) => sendWs({ type: "apply_config", ...config }),
-    launchClaude: (cwd?, cols?, rows?) => {
-      sendWs({ type: "launch_claude", cwd, cols, rows });
-      set({ claudePtyRunning: true });
-    },
-    sendPtyInput: (data) => sendWs({ type: "pty_input", data }),
-    resizePty: (cols, rows) => sendWs({ type: "pty_resize", cols, rows }),
-    stopClaude: () => {
-      sendWs({ type: "stop_claude" });
-      set({ claudePtyRunning: false });
-    },
     setAgentRole: (agent, role) => {
+      // Don't optimistically set role — wait for daemon's role_sync event
       sendWs({ type: "set_agent_role", agent, role });
-      if (agent === "claude") set({ claudeRole: role });
-      else if (agent === "codex") set({ codexRole: role });
     },
-    onPtyData: null,
   };
 });

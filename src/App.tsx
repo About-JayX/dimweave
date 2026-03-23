@@ -31,7 +31,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <MessagePanel messages={messages} onTabChange={setActiveTab} />
-        {activeTab === "messages" && <ReplyInput disabled={!connected} />}
+        {activeTab === "messages" && <ReplyInput connected={connected} />}
       </div>
     </div>
   );

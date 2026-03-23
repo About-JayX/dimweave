@@ -13,6 +13,7 @@ dirs = "6"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 tauri-plugin-dialog = "2.6.0"
+portable-pty = "0.9.0"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

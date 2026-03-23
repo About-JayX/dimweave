@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MessageMarkdown } from "@/components/MessageMarkdown";
 import { useBridgeStore, type TerminalLine } from "@/stores/bridge-store";
 import type { BridgeMessage, MessageSource } from "@/types";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const sourceStyle: Record<string, { label: string; className: string }> = {
   claude: {
@@ -55,8 +58,6 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const codexPhase = useBridgeStore((s) => s.codexPhase);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
-  const sendPtyInput = useBridgeStore((s) => s.sendPtyInput);
-  const resizePty = useBridgeStore((s) => s.resizePty);
 
   const chatMessages = messages.filter((m) => m.source !== "system");
 
@@ -67,17 +68,15 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
 
   // Buffer PTY data immediately (before xterm is ready)
   useEffect(() => {
-    useBridgeStore.setState({
-      onPtyData: (data: string) => {
-        if (xtermRef.current) {
-          xtermRef.current.write(data);
-        } else {
-          ptyBufferRef.current.push(data);
-        }
-      },
+    const unlisten = listen<string>("pty-data", (event) => {
+      if (xtermRef.current) {
+        xtermRef.current.write(event.payload);
+      } else {
+        ptyBufferRef.current.push(event.payload);
+      }
     });
     return () => {
-      useBridgeStore.setState({ onPtyData: null });
+      unlisten.then((fn) => fn());
     };
   }, []);
 
@@ -109,8 +108,13 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
     term.open(xtermContainerRef.current);
     setTimeout(() => fitAddon.fit(), 100);
 
-    term.onData((data) => sendPtyInput(data));
-    term.onResize(({ cols, rows }) => resizePty(cols, rows));
+    // Keystrokes → Rust PTY (direct invoke, no WS)
+    term.onData((data) => {
+      invoke("pty_write", { data }).catch(() => {});
+    });
+    term.onResize(({ cols, rows }) => {
+      invoke("pty_resize", { cols, rows }).catch(() => {});
+    });
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -120,7 +124,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
       term.write(chunk);
     }
     ptyBufferRef.current = [];
-  }, [tab, sendPtyInput, resizePty]);
+  }, [tab]);
 
   // Handle resize (debounced)
   useEffect(() => {
@@ -189,9 +193,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
                   {new Date(msg.timestamp).toLocaleTimeString()}
                 </span>
               </div>
-              <div className="text-[13px] leading-relaxed text-foreground/90 whitespace-pre-wrap wrap-break-word">
-                {msg.content}
-              </div>
+              <MessageMarkdown content={msg.content} />
             </div>
           ))}
           {codexPhase !== "idle" && (

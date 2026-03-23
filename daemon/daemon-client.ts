@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { appendFileSync } from "node:fs";
 import type { BridgeMessage } from "./types";
 import type {
   ControlClientMessage,
@@ -13,7 +14,12 @@ interface DaemonClientEvents {
 }
 
 export class DaemonClient extends EventEmitter<DaemonClientEvents> {
+  private static readonly MAX_RECONNECT_ATTEMPTS = 10;
   private ws: WebSocket | null = null;
+  private connectingPromise: Promise<void> | null = null;
+  private intentionalDisconnect = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
   private nextRequestId = 1;
   private pendingReplies = new Map<
     string,
@@ -29,13 +35,23 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
 
   async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
+    // Deduplicate concurrent connect attempts — reuse in-flight promise
+    if (this.connectingPromise) return this.connectingPromise;
 
-    await new Promise<void>((resolve, reject) => {
+    this.intentionalDisconnect = false;
+    this.connectingPromise = new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.url);
       let settled = false;
 
       ws.onopen = () => {
         settled = true;
+        this.connectingPromise = null;
+        // If disconnect() was called while this socket was connecting, close it
+        if (this.intentionalDisconnect) {
+          ws.close();
+          reject(new Error("Connection cancelled by disconnect()"));
+          return;
+        }
         this.ws = ws;
         this.attachSocketHandlers(ws);
         resolve();
@@ -44,6 +60,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       ws.onerror = () => {
         if (settled) return;
         settled = true;
+        this.connectingPromise = null;
         reject(
           new Error(`Failed to connect to AgentBridge daemon at ${this.url}`),
         );
@@ -52,6 +69,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       ws.onclose = () => {
         if (settled) return;
         settled = true;
+        this.connectingPromise = null;
         reject(
           new Error(
             `AgentBridge daemon closed the connection during startup (${this.url})`,
@@ -59,6 +77,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
         );
       };
     });
+    return this.connectingPromise;
   }
 
   attachClaude() {
@@ -66,6 +85,15 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
   }
 
   async disconnect() {
+    this.intentionalDisconnect = true;
+    this.connectingPromise = null;
+
+    // Cancel any pending reconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     if (!this.ws) return;
 
     try {
@@ -168,6 +196,10 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       }
       this.rejectPendingReplies("AgentBridge daemon disconnected.");
       this.emit("disconnect");
+      // Only auto-reconnect if not intentionally disconnected
+      if (!this.intentionalDisconnect) {
+        this.reconnectTimer = setTimeout(() => this.tryReconnect(), 2000);
+      }
     };
 
     ws.onerror = () => {};
@@ -179,6 +211,36 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       pending.resolve({ success: false, error });
       this.pendingReplies.delete(requestId);
     }
+  }
+
+  private tryReconnect() {
+    if (this.intentionalDisconnect) return;
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (this.reconnectAttempts >= DaemonClient.MAX_RECONNECT_ATTEMPTS) {
+      this.log(
+        `Reconnect failed after ${this.reconnectAttempts} attempts, giving up`,
+      );
+      return;
+    }
+    this.reconnectAttempts++;
+    this.connect()
+      .then(() => {
+        this.reconnectAttempts = 0;
+        this.attachClaude();
+        this.log("Reconnected to daemon");
+      })
+      .catch(() => {
+        if (this.intentionalDisconnect) return;
+        this.reconnectTimer = setTimeout(() => this.tryReconnect(), 3000);
+      });
+  }
+
+  private log(msg: string) {
+    const line = `[${new Date().toISOString()}] [DaemonClient] ${msg}\n`;
+    process.stderr.write(line);
+    try {
+      appendFileSync("/tmp/agentbridge.log", line);
+    } catch {}
   }
 
   private send(message: ControlClientMessage) {

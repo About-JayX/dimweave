@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex;
+mod pty;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
@@ -129,6 +130,10 @@ fn main() {
             register_mcp,
             check_mcp_registered,
             launch_claude_terminal,
+            pty::launch_pty,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::stop_pty,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

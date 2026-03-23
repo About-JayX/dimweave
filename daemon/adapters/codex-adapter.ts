@@ -292,8 +292,10 @@ export class CodexAdapter extends EventEmitter {
   private connectToAppServer(isReconnect = false): Promise<void> {
     return new Promise((resolve, reject) => {
       const appWs = new WebSocket(this.appServerUrl);
+      let settled = false;
 
       appWs.onopen = () => {
+        settled = true;
         this.appServerWs = appWs;
         this.intentionalDisconnect = false;
         this.reconnectAttempts = 0;
@@ -309,13 +311,29 @@ export class CodexAdapter extends EventEmitter {
 
       appWs.onerror = () => {
         this.log("App-server connection error");
-        if (!isReconnect) reject(new Error("Failed to connect to app-server"));
+        if (!settled) {
+          settled = true;
+          reject(new Error("Failed to connect to app-server"));
+        }
       };
 
       appWs.onclose = () => {
         this.log("App-server connection closed");
         this.appServerWs = null;
-        if (!this.intentionalDisconnect) this.scheduleReconnect();
+        // Only auto-reconnect for established connections that drop unexpectedly.
+        // If the promise was rejected by onerror (settled && !open), the caller
+        // (scheduleReconnect) handles retry — don't double-schedule.
+        if (!settled && !this.intentionalDisconnect) {
+          settled = true;
+          reject(new Error("Connection closed before open"));
+        } else if (
+          appWs.readyState !== WebSocket.CONNECTING &&
+          !this.intentionalDisconnect &&
+          this.reconnectAttempts === 0
+        ) {
+          // Connection was established then dropped — schedule reconnect
+          this.scheduleReconnect();
+        }
       };
     });
   }
@@ -376,6 +394,11 @@ export class CodexAdapter extends EventEmitter {
 
   private scheduleReconnect() {
     if (!this.proc) return;
+    // Clear any existing reconnect timer to prevent double-scheduling
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.reconnectAttempts >= CodexAdapter.MAX_RECONNECT_ATTEMPTS) {
       this.log(
         `App-server reconnect failed after ${this.reconnectAttempts} attempts.`,
