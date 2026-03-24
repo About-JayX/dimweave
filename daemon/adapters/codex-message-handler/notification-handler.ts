@@ -56,7 +56,8 @@ export function handleNotification(
           cb.log(`Agent message completed (${content.length} chars)`);
           cb.emitAgentMessage({
             id: item.id,
-            source: "codex" as const,
+            from: "codex",
+            to: "",
             content,
             timestamp: Date.now(),
           } satisfies BridgeMessage);

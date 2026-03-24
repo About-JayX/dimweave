@@ -1,10 +1,12 @@
-export type MessageSource = "claude" | "codex" | "user" | "system";
-
 export interface BridgeMessage {
   id: string;
-  source: MessageSource;
+  from: string;
+  to: string;
   content: string;
   timestamp: number;
+  type?: "task" | "review" | "result" | "question" | "system";
+  replyTo?: string;
+  priority?: "normal" | "urgent";
 }
 
 export type AgentStatus = "disconnected" | "connecting" | "connected" | "error";

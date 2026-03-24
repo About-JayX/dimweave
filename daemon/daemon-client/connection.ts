@@ -49,10 +49,10 @@ export function attachSocketHandlers(state: ClientState, ws: WebSocket): void {
     }
 
     switch (message.type) {
-      case "codex_to_claude":
-        state.emitter.emit("codexMessage", message.message);
+      case "routed_message":
+        state.emitter.emit("routedMessage", message.message);
         return;
-      case "claude_to_codex_result": {
+      case "route_result": {
         const pending = state.pendingReplies.get(message.requestId);
         if (!pending) return;
         clearTimeout(pending.timer);

@@ -16,7 +16,8 @@ export function handleGuiEvent(guiEvent: GuiEvent, set: SetFn) {
           ...s.messages,
           {
             id: guiEvent.payload.id,
-            source: guiEvent.payload.source as BridgeMessage["source"],
+            from: guiEvent.payload.from ?? guiEvent.payload.source ?? "unknown",
+            to: guiEvent.payload.to ?? "",
             content: "",
             timestamp: guiEvent.payload.timestamp,
           },
@@ -119,7 +120,8 @@ export function handleGuiEvent(guiEvent: GuiEvent, set: SetFn) {
           ...s.messages,
           {
             id: `log_${Date.now()}`,
-            source: "system" as const,
+            from: "system",
+            to: "user",
             content: guiEvent.payload.message,
             timestamp: guiEvent.timestamp,
           },

@@ -143,7 +143,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
 
       this.pendingReplies.set(requestId, { resolve, timer });
       this.send({
-        type: "claude_to_codex",
+        type: "route_message",
         requestId,
         message,
       });

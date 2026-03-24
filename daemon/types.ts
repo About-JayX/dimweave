@@ -1,10 +1,12 @@
-export type MessageSource = "claude" | "codex";
-
 export interface BridgeMessage {
   id: string;
-  source: MessageSource;
+  from: string;
+  to: string;
   content: string;
   timestamp: number;
+  type?: "task" | "review" | "result" | "question" | "system";
+  replyTo?: string;
+  priority?: "normal" | "urgent";
 }
 
 // JSON-RPC 2.0
@@ -29,7 +31,10 @@ export interface JsonRpcNotification {
   params?: Record<string, any>;
 }
 
-export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification;
+export type JsonRpcMessage =
+  | JsonRpcRequest
+  | JsonRpcResponse
+  | JsonRpcNotification;
 
 // Codex App Server Types
 

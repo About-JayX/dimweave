@@ -10,7 +10,10 @@ export interface CodexEventDeps {
   tuiState: TuiConnectionState;
   broadcastToGui: (event: GuiEvent) => void;
   broadcastStatus: () => void;
-  emitToClaude: (msg: BridgeMessage) => void;
+  routeMessage: (
+    msg: BridgeMessage,
+    opts?: { skipGuiBroadcast?: boolean },
+  ) => void;
   sendToClaudePty: (text: string) => boolean;
   state: typeof DaemonState;
   log: (msg: string) => void;
@@ -26,13 +29,13 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
     tuiState,
     broadcastToGui,
     broadcastStatus,
-    emitToClaude,
+    routeMessage,
     sendToClaudePty,
     state,
     log,
   } = deps;
 
-  // Buffer the last agentMessage per turn — only forward to Claude on turnCompleted
+  // Buffer the last agentMessage per turn — only forward on turnCompleted
   let lastCodexMessage: BridgeMessage | null = null;
 
   codex.on("phaseChanged", (phase: string) => {
@@ -46,7 +49,13 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
   codex.on("agentMessageStarted", (id: string) => {
     broadcastToGui({
       type: "agent_message_started",
-      payload: { id, source: "codex", content: "", timestamp: Date.now() },
+      payload: {
+        id,
+        from: state.codexRole,
+        to: "lead",
+        content: "",
+        timestamp: Date.now(),
+      },
       timestamp: Date.now(),
     });
   });
@@ -60,11 +69,13 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
   });
 
   codex.on("agentMessage", (msg: BridgeMessage) => {
-    if (msg.source !== "codex") return;
+    // Enrich with role-based from/to
+    msg.from = state.codexRole;
+    msg.to = "lead";
     log(
       `Codex agentMessage (${msg.content.length} chars) — buffered for turn end`,
     );
-    lastCodexMessage = msg; // Overwrite: only the last one matters
+    lastCodexMessage = msg;
 
     broadcastToGui({
       type: "agent_message",
@@ -77,41 +88,50 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
     log("Codex turn completed");
 
     if (lastCodexMessage) {
-      // Buffer for MCP check_messages (Claude pulls when ready)
-      emitToClaude(lastCodexMessage);
-
-      // Inject Codex output into Claude PTY
-      // Short messages: inject full content directly
-      // Long messages: inject truncated summary + pointer to check_messages
       const content = lastCodexMessage.content;
       const codexRole = ROLES[state.codexRole];
-      const MAX_INJECT_LEN = 500;
+      const targetRole = lastCodexMessage.to || "lead";
 
-      const replyReminder =
-        "You MUST respond using the agentbridge reply tool so your response reaches the other agent.";
-      const preamble = codexRole.forwardPrompt
-        ? `${codexRole.forwardPrompt}\n`
-        : "";
-      let inject: string;
-      if (content.length <= MAX_INJECT_LEN) {
-        inject = `${preamble}${codexRole.label} says: ${content}\n\n${replyReminder}`;
+      // Route via bridge (skip GUI broadcast — already done during streaming)
+      routeMessage(lastCodexMessage, { skipGuiBroadcast: true });
+
+      // Also inject into Claude PTY if target matches claudeRole
+      if (state.claudeRole === targetRole && state.attachedClaude) {
+        const MAX_INJECT_LEN = 500;
+        const replyReminder =
+          "You MUST respond using the agentbridge reply tool so your response reaches the other agent.";
+        const preamble = codexRole.forwardPrompt
+          ? `${codexRole.forwardPrompt}\n`
+          : "";
+        let inject: string;
+        if (content.length <= MAX_INJECT_LEN) {
+          inject = `${preamble}${codexRole.label} says: ${content}\n\n${replyReminder}`;
+        } else {
+          const summary = content.slice(0, MAX_INJECT_LEN).trimEnd();
+          inject = `${preamble}${codexRole.label} says: ${summary}... (truncated, use check_messages for full content)\n\n${replyReminder}`;
+        }
+        const injected = sendToClaudePty(inject);
+
+        broadcastToGui({
+          type: "system_log",
+          payload: {
+            level: injected ? "info" : "warn",
+            message: injected
+              ? `Codex (${state.codexRole}) → ${targetRole}. ${content.length > MAX_INJECT_LEN ? "Summary" : "Full content"} injected.`
+              : `Codex (${state.codexRole}) → ${targetRole} but PTY inject failed.`,
+          },
+          timestamp: Date.now(),
+        });
       } else {
-        const summary = content.slice(0, MAX_INJECT_LEN).trimEnd();
-        inject = `${preamble}${codexRole.label} says: ${summary}... (truncated, use check_messages for full content)\n\n${replyReminder}`;
+        broadcastToGui({
+          type: "system_log",
+          payload: {
+            level: "info",
+            message: `Codex (${state.codexRole}) → ${targetRole}. Routed via bridge.`,
+          },
+          timestamp: Date.now(),
+        });
       }
-      const injected = sendToClaudePty(inject);
-
-      // Notify GUI
-      broadcastToGui({
-        type: "system_log",
-        payload: {
-          level: injected ? "info" : "warn",
-          message: injected
-            ? `Codex (${state.codexRole}) completed. ${content.length > MAX_INJECT_LEN ? "Summary" : "Full content"} injected to Claude.`
-            : `Codex (${state.codexRole}) completed but no GUI client available — output not delivered to Claude.`,
-        },
-        timestamp: Date.now(),
-      });
 
       lastCodexMessage = null;
     }
@@ -120,10 +140,11 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
   codex.on("ready", (threadId: string) => {
     tuiState.markBridgeReady();
     log(`Codex ready - thread ${threadId}. Bridge fully operational`);
-    emitToClaude(
+    routeMessage(
       state.systemMessage(
         "system_ready",
         `Codex TUI connected, session thread created (${threadId}). Bridge is fully operational.`,
+        state.claudeRole,
       ),
     );
     broadcastToGui({
@@ -164,10 +185,11 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
   codex.on("exit", (code: number | null) => {
     log(`Codex process exited (code ${code})`);
     tuiState.handleCodexExit();
-    emitToClaude(
+    routeMessage(
       state.systemMessage(
         "system_codex_exit",
         `Codex app-server exited (code ${code ?? "unknown"}).`,
+        state.claudeRole,
       ),
     );
     broadcastToGui({

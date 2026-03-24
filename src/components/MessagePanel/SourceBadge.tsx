@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import type { MessageSource } from "@/types";
 
 const sourceStyle: Record<string, { label: string; className: string }> = {
   claude: {
@@ -22,9 +21,27 @@ const sourceStyle: Record<string, { label: string; className: string }> = {
     label: "System",
     className: "border-system/40 bg-system/10 text-system",
   },
+  lead: {
+    label: "Lead",
+    className:
+      "border-claude/40 bg-claude/10 text-claude shadow-[0_0_8px_var(--color-claude-glow)]",
+  },
+  coder: {
+    label: "Coder",
+    className:
+      "border-codex/40 bg-codex/10 text-codex shadow-[0_0_8px_var(--color-codex-glow)]",
+  },
+  reviewer: {
+    label: "Reviewer",
+    className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
+  },
+  tester: {
+    label: "Tester",
+    className: "border-orange-500/40 bg-orange-500/10 text-orange-400",
+  },
 };
 
-export function SourceBadge({ source }: { source: MessageSource }) {
+export function SourceBadge({ source }: { source: string }) {
   const style = sourceStyle[source] ?? sourceStyle.system;
   return (
     <Badge variant="outline" className={cn("uppercase", style.className)}>

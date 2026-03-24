@@ -66,12 +66,14 @@ class DaemonState {
     return this.bufferedMessages.splice(0, this.bufferedMessages.length);
   }
 
-  systemMessage(idPrefix: string, content: string): BridgeMessage {
+  systemMessage(idPrefix: string, content: string, to?: string): BridgeMessage {
     return {
       id: `${idPrefix}_${++this.nextSystemMessageId}`,
-      source: "codex",
+      from: "system",
+      to: to ?? "user",
       content,
       timestamp: Date.now(),
+      type: "system",
     };
   }
 }

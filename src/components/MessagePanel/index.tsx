@@ -27,7 +27,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const codexPhase = useBridgeStore((s) => s.codexPhase);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
 
-  const chatMessages = messages.filter((m) => m.source !== "system");
+  const chatMessages = messages.filter((m) => m.from !== "system");
 
   const errorLines: TerminalLine[] = [];
   for (const l of allTerminalLines) {
@@ -78,7 +78,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
             </div>
           )}
           {chatMessages.map((msg) => {
-            const isUser = msg.source === "user";
+            const isUser = msg.from === "user";
             return (
               <div
                 key={msg.id}
@@ -94,7 +94,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
                   <div
                     className={`flex items-center gap-2 mb-1 ${isUser ? "justify-end" : ""}`}
                   >
-                    <SourceBadge source={msg.source} />
+                    <SourceBadge source={msg.from} />
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {new Date(msg.timestamp).toLocaleTimeString()}
                     </span>

@@ -45,11 +45,13 @@ claude.setStatusFetcher(async () => {
   const res = await fetch(CONTROL_HEALTH_URL).catch(() => null);
   if (!res?.ok)
     return { bridgeReady: false, codexTuiRunning: false, threadId: null };
-  return res.json();
+  const data = await res.json();
+  // Pass role info so get_status can display available roles
+  return data;
 });
 
 // Buffer pushed messages locally so check_messages can return them
-daemonClient.on("codexMessage", (message) => {
+daemonClient.on("routedMessage", (message) => {
   pushedMessages.push(message);
   if (pushedMessages.length > MAX_PUSHED) {
     pushedMessages.splice(0, pushedMessages.length - MAX_PUSHED);

@@ -1,7 +1,15 @@
 import type { ServerWebSocket } from "bun";
 import { state, broadcastToGui, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
-import { sendBridgeMessage, sendStatus } from "./message-routing";
+import { sendProtocolMessage, sendStatus } from "./message-routing";
+import type { BridgeMessage } from "../types";
+
+function sendToClient(
+  ws: ServerWebSocket<ControlSocketData>,
+  msg: BridgeMessage,
+) {
+  sendProtocolMessage(ws, { type: "routed_message", message: msg });
+}
 
 export function attachClaude(
   ws: ServerWebSocket<ControlSocketData>,
@@ -26,25 +34,30 @@ export function attachClaude(
 
   if (state.bufferedMessages.length > 0) {
     for (const msg of state.flushBufferedMessages()) {
-      sendBridgeMessage(ws, msg);
+      sendToClient(ws, msg);
     }
   } else if (tuiState.canReply()) {
-    sendBridgeMessage(
+    sendToClient(
       ws,
       state.systemMessage(
         "system_ready",
         `Codex TUI connected, session thread created (${codex.activeThreadId}). Bridge is fully operational.`,
+        state.claudeRole,
       ),
     );
   } else if (state.codexBootstrapped) {
-    sendBridgeMessage(
+    sendToClient(
       ws,
       state.systemMessage(
         "system_waiting",
         "AgentBridge started, waiting for Codex TUI to connect.",
+        state.claudeRole,
       ),
     );
-    sendBridgeMessage(ws, state.systemMessage("system_attach_cmd", attachCmd));
+    sendToClient(
+      ws,
+      state.systemMessage("system_attach_cmd", attachCmd, state.claudeRole),
+    );
   }
 
   if (tuiState.canReply()) {

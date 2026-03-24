@@ -1,2 +1,2 @@
 export { startControlServer } from "./server";
-export { emitToClaude } from "./message-routing";
+export { routeMessage } from "./message-routing";

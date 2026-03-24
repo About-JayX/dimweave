@@ -2,6 +2,7 @@ import type { ServerWebSocket } from "bun";
 import {
   sendGuiEvent,
   broadcastToGui,
+  state as daemonState,
   type GuiSocketData,
 } from "../daemon-state";
 import type { GuiServerDeps } from "./types";
@@ -28,9 +29,11 @@ export function handleGuiMessage(
         type: "agent_message",
         payload: {
           id: `gui_${Date.now()}`,
-          source: "user",
+          from: "user",
+          to: daemonState.codexRole,
           content: message.content,
           timestamp: Date.now(),
+          type: "task",
         },
         timestamp: Date.now(),
       });

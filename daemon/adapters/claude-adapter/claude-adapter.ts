@@ -13,6 +13,10 @@ export type StatusFetcher = () => Promise<{
   bridgeReady: boolean;
   codexTuiRunning: boolean;
   threadId: string | null;
+  claudeRole?: string;
+  codexRole?: string;
+  claudeOnline?: boolean;
+  codexOnline?: boolean;
 }>;
 
 const LOG_FILE = "/tmp/agentbridge.log";
@@ -22,6 +26,7 @@ export class ClaudeAdapter extends EventEmitter {
   private replySender: ReplySender | null = null;
   private messageFetcher: MessageFetcher | null = null;
   private statusFetcher: StatusFetcher | null = null;
+  private claudeRole = "lead";
 
   constructor() {
     super();
@@ -45,18 +50,38 @@ export class ClaudeAdapter extends EventEmitter {
   setStatusFetcher(fetcher: StatusFetcher) {
     this.statusFetcher = fetcher;
   }
+  setClaudeRole(role: string) {
+    this.claudeRole = role;
+  }
 
   private registerTools() {
     this.server.registerTool(
       "reply",
       {
         description:
-          "Send a message to Codex. Your reply will be injected into the Codex session as a new user turn.",
+          "Send a message to a target agent role. Use get_status to see available roles and their online status.",
         inputSchema: {
-          text: z.string().describe("The message to send to Codex."),
+          to: z
+            .string()
+            .describe(
+              'Target role: "lead", "coder", "reviewer", "tester", or "user".',
+            ),
+          text: z.string().describe("The message content."),
+          type: z
+            .enum(["task", "review", "result", "question"])
+            .optional()
+            .describe("Message intent."),
+          replyTo: z
+            .string()
+            .optional()
+            .describe("ID of the message being replied to."),
+          priority: z
+            .enum(["normal", "urgent"])
+            .optional()
+            .describe("Message priority. Defaults to normal."),
         },
       },
-      async ({ text }) => {
+      async ({ to, text, type: msgType, replyTo, priority }) => {
         if (!this.replySender) {
           return {
             content: [{ type: "text", text: "Error: bridge not connected." }],
@@ -66,9 +91,13 @@ export class ClaudeAdapter extends EventEmitter {
 
         const msg: BridgeMessage = {
           id: `claude_${Date.now()}`,
-          source: "claude",
+          from: this.claudeRole,
+          to,
           content: text,
           timestamp: Date.now(),
+          type: msgType,
+          replyTo,
+          priority: priority ?? "normal",
         };
 
         const result = await this.replySender(msg);
@@ -80,7 +109,9 @@ export class ClaudeAdapter extends EventEmitter {
           };
         }
 
-        return { content: [{ type: "text", text: "Message sent to Codex." }] };
+        return {
+          content: [{ type: "text", text: `Message routed to ${to}.` }],
+        };
       },
     );
 
@@ -88,7 +119,7 @@ export class ClaudeAdapter extends EventEmitter {
       "check_messages",
       {
         description:
-          "Check for new messages from Codex. Returns any messages received since the last check. Call this after sending a reply to see Codex's response.",
+          "Check for new messages from other agents. Returns any messages received since the last check.",
       },
       async () => {
         if (!this.messageFetcher) {
@@ -102,14 +133,14 @@ export class ClaudeAdapter extends EventEmitter {
         const messages = await this.messageFetcher();
         if (messages.length === 0) {
           return {
-            content: [{ type: "text", text: "No new messages from Codex." }],
+            content: [{ type: "text", text: "No new messages." }],
           };
         }
 
         const formatted = messages
           .map((m) => {
             const time = new Date(m.timestamp).toLocaleTimeString();
-            return `[${time}] ${m.source}: ${m.content}`;
+            return `[${time}] ${m.from}: ${m.content}`;
           })
           .join("\n\n---\n\n");
 
@@ -118,7 +149,7 @@ export class ClaudeAdapter extends EventEmitter {
           content: [
             {
               type: "text",
-              text: `${messages.length} new message(s) from Codex:\n\n${formatted}`,
+              text: `${messages.length} new message(s):\n\n${formatted}`,
             },
           ],
         };
@@ -129,7 +160,7 @@ export class ClaudeAdapter extends EventEmitter {
       "get_status",
       {
         description:
-          "Get the current AgentBridge status: whether Codex is connected, the active thread ID, etc.",
+          "Get AgentBridge status: available roles, online agents, and connection state.",
       },
       async () => {
         if (!this.statusFetcher) {
@@ -138,10 +169,21 @@ export class ClaudeAdapter extends EventEmitter {
 
         const status = await this.statusFetcher();
         const lines = [
-          `Codex connected: ${status.codexTuiRunning ? "yes" : "no"}`,
           `Bridge ready: ${status.bridgeReady ? "yes" : "no"}`,
           status.threadId ? `Thread: ${status.threadId}` : "No active thread",
+          "",
+          "Available roles:",
         ];
+        if (status.claudeRole) {
+          lines.push(
+            `  ${status.claudeRole} (claude) - ${status.claudeOnline ? "online" : "offline"}`,
+          );
+        }
+        if (status.codexRole) {
+          lines.push(
+            `  ${status.codexRole} (codex) - ${status.codexOnline ? "online" : "offline"}`,
+          );
+        }
 
         return { content: [{ type: "text", text: lines.join("\n") }] };
       },

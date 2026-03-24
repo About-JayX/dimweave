@@ -10,7 +10,7 @@ paths:
 - 新增 Agent 适配器放 `daemon/adapters/`
 - 日志统一写 `/tmp/agentbridge.log`，格式 `[ISO timestamp] [ModuleName] message`
 - GUI 事件通过 `broadcastToGui()` 推送，事件类型: `agent_message` | `agent_status` | `system_log` | `daemon_status`
-- 每条消息带 `source` 字段 ("claude" | "codex")，不回传给来源方（防循环）
+- 每条消息带 `from`/`to` 字段（角色名），bridge 按 `to` 字段路由到目标 agent，`skipSender` 防循环
 
 ## 文件规模
 - **每个文件最多 500 行**，超过必须拆分

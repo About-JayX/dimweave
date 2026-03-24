@@ -1,9 +1,13 @@
 import type { ServerWebSocket } from "bun";
 import type { ControlClientMessage } from "../control-protocol";
-import { state, broadcastToGui, type ControlSocketData } from "../daemon-state";
+import { state, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
 import { attachClaude, detachClaude } from "./claude-session";
-import { sendStatus, sendProtocolMessage } from "./message-routing";
+import {
+  sendStatus,
+  sendProtocolMessage,
+  routeMessage,
+} from "./message-routing";
 
 export function handleControlMessage(
   ws: ServerWebSocket<ControlSocketData>,
@@ -36,39 +40,30 @@ export function handleControlMessage(
       });
       return;
     }
-    case "claude_to_codex": {
-      if (message.message.source !== "claude") {
+    case "route_message": {
+      const msg = message.message;
+
+      // Sender validation: from must match claudeRole
+      if (msg.from !== state.claudeRole) {
         sendProtocolMessage(ws, {
-          type: "claude_to_codex_result",
+          type: "route_result",
           requestId: message.requestId,
           success: false,
-          error: "Invalid message source",
+          error: `Invalid sender: ${msg.from} does not match claude role ${state.claudeRole}`,
         });
         return;
       }
-      if (!deps.tuiState.canReply()) {
-        sendProtocolMessage(ws, {
-          type: "claude_to_codex_result",
-          requestId: message.requestId,
-          success: false,
-          error: "Codex is not ready.",
-        });
-        return;
-      }
-      deps.log(
-        `Forwarding Claude -> Codex (${message.message.content.length} chars)`,
-      );
-      const injected = deps.codex.injectMessage(message.message.content);
-      broadcastToGui({
-        type: "agent_message",
-        payload: message.message,
-        timestamp: Date.now(),
-      });
+
+      deps.log(`Routing ${msg.from} → ${msg.to} (${msg.content.length} chars)`);
+
+      // Use shared routing — skip sending back to claude (the sender)
+      const result = routeMessage(msg, deps, { skipSender: "claude" });
+
       sendProtocolMessage(ws, {
-        type: "claude_to_codex_result",
+        type: "route_result",
         requestId: message.requestId,
-        success: injected,
-        error: injected ? undefined : "Injection failed.",
+        success: result.success,
+        error: result.error,
       });
       return;
     }
