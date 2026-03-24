@@ -52,7 +52,7 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
       payload: {
         id,
         from: state.codexRole,
-        to: "lead",
+        to: ROLES[state.codexRole].defaultTarget,
         content: "",
         timestamp: Date.now(),
       },
@@ -71,7 +71,7 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
   codex.on("agentMessage", (msg: BridgeMessage) => {
     // Enrich with role-based from/to
     msg.from = state.codexRole;
-    msg.to = "lead";
+    msg.to = ROLES[state.codexRole].defaultTarget;
     log(
       `Codex agentMessage (${msg.content.length} chars) — buffered for turn end`,
     );

@@ -11,7 +11,9 @@ export interface AgentRole {
   approvalPolicy: "on-request" | "never";
   /** Whether shell tool is enabled for Codex */
   shellTool: boolean;
-  /** Prompt appended when forwarding this agent's output to Lead */
+  /** Default routing target for this role's output */
+  defaultTarget: RoleId;
+  /** Prompt appended when forwarding this agent's output */
   forwardPrompt: string;
   /** Claude --agents JSON config for this role (hard enforcement) */
   claudeAgent: {

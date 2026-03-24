@@ -10,6 +10,7 @@ Follow the user's instructions precisely. You have full access to all tools and 
     sandboxMode: "workspace-write",
     approvalPolicy: "never",
     shellTool: true,
+    defaultTarget: "lead",
     forwardPrompt:
       "[User (Admin) completed task]\nReview the output below and decide how to proceed.",
     claudeAgent: {
@@ -32,6 +33,7 @@ Follow the user's instructions precisely. You have full access to all tools and 
     sandboxMode: "workspace-write",
     approvalPolicy: "never",
     shellTool: true,
+    defaultTarget: "coder",
     forwardPrompt:
       "[Lead completed task]\nReview the output below and decide how to proceed.",
     claudeAgent: {
@@ -79,6 +81,7 @@ Your output will be reviewed by a Lead agent who decides whether to apply it.`,
     sandboxMode: "workspace-write",
     approvalPolicy: "never",
     shellTool: true,
+    defaultTarget: "lead",
     forwardPrompt:
       "[Coder completed task]\nReview the implementation below and decide whether to apply, modify, or reject it.",
     claudeAgent: {
@@ -104,6 +107,7 @@ Your review will be sent to the Lead agent for final decision.`,
     sandboxMode: "read-only",
     approvalPolicy: "never",
     shellTool: false,
+    defaultTarget: "lead",
     forwardPrompt:
       "[Reviewer completed review]\nReview results below. Apply suggested fixes if appropriate.",
     claudeAgent: {
@@ -132,6 +136,7 @@ Report test results with pass/fail status and error details.`,
     sandboxMode: "read-only",
     approvalPolicy: "never",
     shellTool: true,
+    defaultTarget: "lead",
     forwardPrompt:
       "[Tester completed testing]\nTest results below. Fix any failures if needed.",
     claudeAgent: {
