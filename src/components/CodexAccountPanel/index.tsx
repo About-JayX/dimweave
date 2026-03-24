@@ -14,6 +14,7 @@ export function CodexAccountPanel({
   refreshing,
   onRefresh,
   protocolData,
+  locked = false,
 }: CodexAccountPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const models = useCodexAccountStore((s) => s.models);
@@ -67,6 +68,7 @@ export function CodexAccountPanel({
                 value={protocolData.model}
                 options={modelOpts}
                 onSelect={onModel}
+                disabled={locked}
               />
             ) : (
               <span className="font-mono text-[11px] font-medium text-foreground">
@@ -84,6 +86,7 @@ export function CodexAccountPanel({
                 value={protocolData.reasoningEffort}
                 options={reasoningOpts}
                 onSelect={onReasoning}
+                disabled={locked}
               />
             ) : (
               <span className="text-[11px] font-medium text-foreground">
@@ -128,6 +131,7 @@ export function CodexAccountPanel({
           onRefresh={onRefresh}
           onCwd={onCwd}
           protocolData={protocolData}
+          locked={locked}
         />
       )}
     </div>

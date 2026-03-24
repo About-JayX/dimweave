@@ -6,10 +6,12 @@ export function InlineSelect({
   value,
   options,
   onSelect,
+  disabled = false,
 }: {
   value: string;
   options: DropdownOption[];
   onSelect: (value: string) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -28,8 +30,13 @@ export function InlineSelect({
     <div ref={ref} className="relative inline-flex">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-mono text-[11px] font-medium text-foreground hover:bg-accent transition-colors cursor-pointer"
+        onClick={() => !disabled && setOpen(!open)}
+        className={cn(
+          "inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-mono text-[11px] font-medium text-foreground transition-colors",
+          disabled
+            ? "opacity-50 cursor-not-allowed"
+            : "hover:bg-accent cursor-pointer",
+        )}
       >
         {value}
         <svg

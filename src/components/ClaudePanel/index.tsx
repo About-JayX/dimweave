@@ -7,7 +7,9 @@ import { useBridgeStore } from "@/stores/bridge-store";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { buildClaudeAgentsJson, buildMcpConfigJson } from "@/lib/agent-roles";
 import { ClaudeRoleSelect } from "./ClaudeRoleSelect";
+import { ConfigSelect } from "./ClaudeModelSelect";
 import { ClaudeQuota } from "./ClaudeQuota";
+import { useClaudeConfig } from "./useClaudeConfig";
 import { shortenPath } from "./helpers";
 
 interface ClaudePanelProps {
@@ -16,17 +18,18 @@ interface ClaudePanelProps {
 
 export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
-
+  const [model, setModel] = useState("sonnet");
+  const [effort, setEffort] = useState("max");
   const [isRunning, setIsRunning] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const claudeRole = useBridgeStore((s) => s.claudeRole);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
+  const { config: claudeConfig, loading: configLoading } = useClaudeConfig();
 
-  // Listen for PTY exit to reset running state
+  const locked = connected || isRunning;
+
   useEffect(() => {
-    const unlisten = listen<number>("pty-exit", () => {
-      setIsRunning(false);
-    });
+    const unlisten = listen<number>("pty-exit", () => setIsRunning(false));
     return () => {
       unlisten.then((fn) => fn());
     };
@@ -50,6 +53,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         roleId: claudeRole,
         agentsJson,
         mcpConfigJson,
+        model,
+        effort,
       });
       setIsRunning(true);
       window.dispatchEvent(new CustomEvent("switch-to-terminal"));
@@ -57,7 +62,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
       const msg = e instanceof Error ? e.message : String(e);
       setLaunchError(msg);
     }
-  }, [cwd, claudeRole]);
+  }, [cwd, claudeRole, model, effort]);
 
   return (
     <div className="rounded-lg border border-input bg-card p-3">
@@ -76,8 +81,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         <span className="flex-1 text-[13px] font-medium text-card-foreground">
           Claude Code
         </span>
-        <ClaudeRoleSelect disabled={connected || isRunning} />
-        {(connected || isRunning) && (
+        <ClaudeRoleSelect disabled={locked} />
+        {locked && (
           <button
             type="button"
             onClick={() =>
@@ -105,33 +110,69 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
       </div>
 
       {/* Quota (when connected or running) */}
-      {(connected || isRunning) && <ClaudeQuota />}
+      {locked && <ClaudeQuota />}
 
-      {/* Stop button (when running) */}
-      {(isRunning || connected) && (
-        <Button
-          size="xs"
-          variant="destructive"
-          className="w-full mt-2"
-          onClick={() => {
-            invoke("stop_pty").catch((err) => {
-              console.warn("stop_pty failed:", err);
-            });
-          }}
-        >
-          Stop Claude
-        </Button>
-      )}
+      {/* Config rows — always visible, locked after connection */}
+      <div className="mt-2 space-y-1.5">
+        {/* CLI version */}
+        {!configLoading && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">CLI</span>
+            {claudeConfig.installed ? (
+              <span
+                className="text-[10px] text-secondary-foreground font-mono truncate max-w-48"
+                title={claudeConfig.binaryPath}
+              >
+                {claudeConfig.version}
+              </span>
+            ) : (
+              <span className="text-[10px] text-destructive">
+                Not installed
+              </span>
+            )}
+          </div>
+        )}
 
-      {/* Launch (when not running) */}
-      {!isRunning && (
-        <div className="mt-2 space-y-2">
+        {/* Model */}
+        {claudeConfig.installed && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">Model</span>
+            <ConfigSelect
+              options={claudeConfig.models}
+              value={model}
+              onChange={setModel}
+              disabled={locked}
+            />
+          </div>
+        )}
+
+        {/* Effort level */}
+        {claudeConfig.installed && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">Effort</span>
+            <ConfigSelect
+              options={claudeConfig.effortLevels}
+              value={effort}
+              onChange={setEffort}
+              disabled={locked}
+            />
+          </div>
+        )}
+
+        {/* Project */}
+        {claudeConfig.installed && (
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">Project</span>
             <button
               type="button"
               onClick={handlePickDir}
-              className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground hover:bg-accent hover:text-primary transition-colors truncate max-w-44"
+              disabled={locked}
+              className={cn(
+                "inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground transition-colors truncate max-w-44",
+                locked
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-accent hover:text-primary cursor-pointer",
+              )}
               title={cwd}
             >
               <svg
@@ -150,24 +191,49 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
               {cwd ? shortenPath(cwd) : "Select project..."}
             </button>
           </div>
-          <Button
-            size="sm"
-            className="w-full bg-claude text-white hover:bg-claude/80"
-            disabled={!cwd}
-            onClick={handleLaunch}
-          >
-            Connect Claude
-          </Button>
-          {!cwd && (
-            <div className="text-[10px] text-muted-foreground text-center">
-              Please select a project directory first
-            </div>
-          )}
-          {launchError && (
-            <div className="text-[10px] text-destructive text-center">
-              {launchError}
-            </div>
-          )}
+        )}
+      </div>
+
+      {/* Stop button */}
+      {locked && (
+        <Button
+          size="xs"
+          variant="destructive"
+          className="w-full mt-2"
+          onClick={() => {
+            invoke("stop_pty").catch(console.warn);
+          }}
+        >
+          Stop Claude
+        </Button>
+      )}
+
+      {/* Launch button */}
+      {!locked && claudeConfig.installed && (
+        <Button
+          size="sm"
+          className="w-full mt-2 bg-claude text-white hover:bg-claude/80"
+          disabled={!cwd}
+          onClick={handleLaunch}
+        >
+          Connect Claude
+        </Button>
+      )}
+
+      {/* Status messages */}
+      {!claudeConfig.installed && !configLoading && (
+        <div className="mt-1.5 text-[10px] text-destructive text-center">
+          Claude CLI not found. Install it first.
+        </div>
+      )}
+      {claudeConfig.installed && !cwd && !locked && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
+          Select a project directory first
+        </div>
+      )}
+      {launchError && (
+        <div className="mt-1.5 text-[10px] text-destructive text-center">
+          {launchError}
         </div>
       )}
     </div>

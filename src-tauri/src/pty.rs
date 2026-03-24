@@ -1,4 +1,5 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use serde::Serialize;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -16,6 +17,74 @@ fn get_state() -> &'static Arc<Mutex<Option<PtyState>>> {
     PTY_STATE.get_or_init(|| Arc::new(Mutex::new(None)))
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeConfig {
+    pub installed: bool,
+    pub binary_path: String,
+    pub version: String,
+    pub models: Vec<SelectOption>,
+    pub effort_levels: Vec<SelectOption>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectOption {
+    pub id: &'static str,
+    pub label: &'static str,
+}
+
+const CLAUDE_MODELS: &[SelectOption] = &[
+    SelectOption { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+    SelectOption { id: "claude-opus-4-6", label: "Opus 4.6" },
+    SelectOption { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+    SelectOption { id: "sonnet", label: "Sonnet (latest)" },
+    SelectOption { id: "opus", label: "Opus (latest)" },
+    SelectOption { id: "haiku", label: "Haiku (latest)" },
+];
+
+const EFFORT_LEVELS: &[SelectOption] = &[
+    SelectOption { id: "max", label: "Max" },
+    SelectOption { id: "high", label: "High" },
+    SelectOption { id: "medium", label: "Medium" },
+    SelectOption { id: "low", label: "Low" },
+];
+
+#[tauri::command]
+pub fn detect_claude_config() -> ClaudeConfig {
+    let claude_bin = std::env::var("CLAUDE_PATH").unwrap_or_else(|_| "claude".to_string());
+
+    // Try `which claude` to get full path
+    let binary_path = std::process::Command::new("which")
+        .arg(&claude_bin)
+        .output()
+        .ok()
+        .and_then(|o| if o.status.success() {
+            String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+        } else { None })
+        .unwrap_or_default();
+
+    // Try `claude --version`
+    let version = std::process::Command::new(&claude_bin)
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|o| if o.status.success() {
+            String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+        } else { None })
+        .unwrap_or_default();
+
+    let installed = !binary_path.is_empty() && !version.is_empty();
+
+    ClaudeConfig {
+        installed,
+        binary_path,
+        version,
+        models: CLAUDE_MODELS.to_vec(),
+        effort_levels: EFFORT_LEVELS.to_vec(),
+    }
+}
+
 #[tauri::command]
 pub fn launch_pty(
     app: AppHandle,
@@ -25,6 +94,8 @@ pub fn launch_pty(
     role_id: String,
     agents_json: String,
     mcp_config_json: String,
+    model: String,
+    effort: String,
 ) -> Result<(), String> {
     let state = get_state();
     {
@@ -53,6 +124,14 @@ pub fn launch_pty(
         cmd.arg("--strict-mcp-config");
         cmd.arg("--mcp-config");
         cmd.arg(&mcp_config_json);
+    }
+    if !model.is_empty() {
+        cmd.arg("--model");
+        cmd.arg(&model);
+    }
+    if !effort.is_empty() {
+        cmd.arg("--effort");
+        cmd.arg(&effort);
     }
     if !role_id.is_empty() && !agents_json.is_empty() {
         cmd.arg("--agent");

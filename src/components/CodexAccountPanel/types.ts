@@ -31,4 +31,5 @@ export interface CodexAccountPanelProps {
   refreshing: boolean;
   onRefresh: () => void;
   protocolData?: CodexAccountInfo;
+  locked?: boolean;
 }

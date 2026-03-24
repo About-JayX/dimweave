@@ -130,6 +130,7 @@ fn main() {
             register_mcp,
             check_mcp_registered,
             launch_claude_terminal,
+            pty::detect_claude_config,
             pty::launch_pty,
             pty::pty_write,
             pty::pty_resize,

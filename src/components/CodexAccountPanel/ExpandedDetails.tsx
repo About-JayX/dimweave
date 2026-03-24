@@ -11,6 +11,7 @@ interface ExpandedDetailsProps {
   onRefresh: () => void;
   onCwd: () => void;
   protocolData?: CodexAccountInfo;
+  locked?: boolean;
 }
 
 export function ExpandedDetails({
@@ -20,6 +21,7 @@ export function ExpandedDetails({
   onRefresh,
   onCwd,
   protocolData,
+  locked = false,
 }: ExpandedDetailsProps) {
   return (
     <div className="border-t border-border/50 px-3 py-2 space-y-2.5">
@@ -42,7 +44,13 @@ export function ExpandedDetails({
           <button
             type="button"
             onClick={onCwd}
-            className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground hover:bg-accent hover:text-primary transition-colors truncate max-w-44"
+            disabled={locked}
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground transition-colors truncate max-w-44",
+              locked
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-accent hover:text-primary cursor-pointer",
+            )}
             title={protocolData.cwd}
           >
             <svg
