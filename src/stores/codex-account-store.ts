@@ -40,18 +40,27 @@ interface CodexModel {
   reasoningLevels: ReasoningLevel[];
 }
 
+interface OAuthLaunchInfo {
+  verificationUri: string | null;
+}
+
 interface CodexAccountState {
   profile: CodexProfile | null;
   usage: UsageSnapshot | null;
   models: CodexModel[];
   loading: boolean;
   refreshing: boolean;
+  loginPending: boolean;
+  loginUri: string | null;
 
   fetchProfile: () => Promise<void>;
   fetchUsage: () => Promise<void>;
   refreshUsage: () => Promise<void>;
   fetchModels: () => Promise<void>;
   pickDirectory: () => Promise<string | null>;
+  login: () => Promise<void>;
+  cancelLogin: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 export type { CodexProfile, UsageSnapshot, CodexModel, ReasoningLevel };
@@ -62,6 +71,8 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
   models: [],
   loading: false,
   refreshing: false,
+  loginPending: false,
+  loginUri: null,
 
   fetchProfile: async () => {
     try {
@@ -104,5 +115,29 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     } catch {
       return null;
     }
+  },
+
+  login: async () => {
+    set({ loginPending: true, loginUri: null });
+    try {
+      const info = await invoke<OAuthLaunchInfo>("codex_login");
+      set({ loginUri: info.verificationUri });
+    } catch {
+      set({ loginPending: false, loginUri: null });
+    }
+  },
+
+  cancelLogin: async () => {
+    try {
+      await invoke<boolean>("codex_cancel_login");
+    } catch {}
+    set({ loginPending: false, loginUri: null });
+  },
+
+  logout: async () => {
+    try {
+      await invoke("codex_logout");
+      set({ profile: null, usage: null });
+    } catch {}
   },
 }));

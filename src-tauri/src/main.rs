@@ -5,7 +5,10 @@ mod pty;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
+use codex::oauth::{OAuthHandle, OAuthLaunchInfo};
 use codex::usage::UsageSnapshot;
+use std::sync::Arc;
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -118,10 +121,27 @@ fn launch_claude_terminal(cwd: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn codex_login(app: tauri::AppHandle) -> Result<OAuthLaunchInfo, String> {
+    let handle = app.state::<Arc<OAuthHandle>>();
+    codex::oauth::start_login(handle.inner().clone()).await
+}
+
+#[tauri::command]
+fn codex_cancel_login(app: tauri::AppHandle) -> bool {
+    app.state::<Arc<OAuthHandle>>().cancel()
+}
+
+#[tauri::command]
+async fn codex_logout() -> Result<(), String> {
+    codex::oauth::do_logout().await
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(Arc::new(OAuthHandle::new()))
         .invoke_handler(tauri::generate_handler![
             get_codex_account,
             refresh_usage,
@@ -130,6 +150,9 @@ fn main() {
             register_mcp,
             check_mcp_registered,
             launch_claude_terminal,
+            codex_login,
+            codex_cancel_login,
+            codex_logout,
             pty::detect_claude_config,
             pty::launch_pty,
             pty::pty_write,

@@ -40,6 +40,7 @@ export class CodexAdapter extends EventEmitter {
       intentionalDisconnect: false,
       reconnectAttempts: 0,
       reconnectTimer: null,
+      emitter: this,
       handler: new CodexMessageHandler(() => this.state.tuiConnId, {
         log: (msg) => this.log(msg),
         emitAgentMessage: (msg) => this.emit("agentMessage", msg),

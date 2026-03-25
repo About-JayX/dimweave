@@ -82,7 +82,7 @@ export async function initSession(
                     name: "reply",
                     description:
                       "Send a message to another agent role. Use get_status to see available roles.",
-                    parameters: {
+                    inputSchema: {
                       type: "object",
                       properties: {
                         to: {
@@ -101,13 +101,13 @@ export async function initSession(
                   {
                     name: "check_messages",
                     description: "Check for new messages from other agents.",
-                    parameters: { type: "object", properties: {} },
+                    inputSchema: { type: "object", properties: {} },
                   },
                   {
                     name: "get_status",
                     description:
                       "Get AgentBridge status: available roles and online agents.",
-                    parameters: { type: "object", properties: {} },
+                    inputSchema: { type: "object", properties: {} },
                   },
                 ],
               },

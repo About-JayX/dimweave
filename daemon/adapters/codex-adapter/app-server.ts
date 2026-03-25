@@ -116,7 +116,25 @@ function handleAppServerMessage(
           ? ` type=${parsed.params?.item?.type}`
           : parsed.method === "item/agentMessage/delta"
             ? ` itemId=${parsed.params?.itemId} len=${parsed.params?.delta?.length}`
-            : "";
+            : parsed.method === "error"
+              ? ` ${JSON.stringify(parsed.params).slice(0, 200)}`
+              : "";
+      // Detect 402 / deactivated workspace → emit auth_error
+      if (parsed.method === "error") {
+        const errMsg = parsed.params?.error?.message ?? "";
+        const errInfo = parsed.params?.error?.codexErrorInfo ?? {};
+        const httpStatus = errInfo?.responseStreamDisconnected?.httpStatusCode;
+        if (
+          httpStatus === 402 ||
+          errMsg.includes("deactivated_workspace") ||
+          errMsg.includes("402")
+        ) {
+          state.emitter?.emit("authError", {
+            code: 402,
+            message: errMsg.slice(0, 200),
+          });
+        }
+      }
       log(`[proto] notification: ${parsed.method}${extra}`);
     } else if (parsed.result) {
       log(

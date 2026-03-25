@@ -119,6 +119,23 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
 
   codex.on("accountInfoUpdated", () => broadcastStatus());
 
+  codex.on("authError", (info: { code: number; message: string }) => {
+    log(`Codex auth error (${info.code}): ${info.message}`);
+    broadcastToGui({
+      type: "system_log",
+      payload: {
+        level: "error",
+        message: `Codex auth error (${info.code}): ${info.message.includes("deactivated_workspace") ? "Workspace deactivated. Please re-login." : info.message}`,
+      },
+      timestamp: Date.now(),
+    });
+    broadcastToGui({
+      type: "agent_status",
+      payload: { agent: "codex", status: "auth_error", error: info.message },
+      timestamp: Date.now(),
+    });
+  });
+
   codex.on("exit", (code: number | null) => {
     log(`Codex process exited (code ${code})`);
     tuiState.handleCodexExit();

@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import type { EventEmitter } from "node:events";
 import type { ServerWebSocket } from "bun";
 import type { CodexAccountInfo, TuiSocketData, IdMapping } from "./codex-types";
 import type { CodexMessageHandler } from "../codex-message-handler";
@@ -44,6 +45,7 @@ export interface AdapterState {
   reconnectAttempts: number;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   handler: CodexMessageHandler;
+  emitter: EventEmitter | null;
 }
 
 export const MAX_RECONNECT_ATTEMPTS = 10;
