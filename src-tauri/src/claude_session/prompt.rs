@@ -24,6 +24,7 @@ pub fn spawn_auto_confirm_thread(
             let mut transcript = String::new();
             let mut pending_log = String::new();
             let mut confirmed = false;
+            let mut attention_fired = false;
 
             loop {
                 match reader.read(&mut buf) {
@@ -45,7 +46,8 @@ pub fn spawn_auto_confirm_thread(
                                 }
                             }
                         }
-                        if should_emit_attention(&transcript, confirmed, dev_prompt) {
+                        if !attention_fired && should_emit_attention(&transcript, confirmed, dev_prompt) {
+                            attention_fired = true;
                             crate::daemon::gui::emit_claude_terminal_attention(&app);
                         }
                         if confirmed || !dev_prompt {
