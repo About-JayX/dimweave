@@ -86,17 +86,24 @@ pub async fn run(
         return;
     }
 
+    // Required per Codex app-server protocol: send `initialized` after init response
+    let init_notif = json!({"method": "initialized", "params": {}}).to_string();
+    if ws_tx.send(init_notif).await.is_err() {
+        gui::emit_system_log(&app, "error", "[Codex] failed to send initialized notification");
+        return;
+    }
+
     // === Handshake: thread/start ===
     let thread_id_rpc = next_id;
     next_id += 1;
     let mut params = json!({
         "dynamicTools": [
             { "name": "reply", "description": "Send a message to another agent role.",
-              "inputSchema": {"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string"}},"required":["to","text"]} },
+              "parameters": {"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string"}},"required":["to","text"]} },
             { "name": "check_messages", "description": "Check for new messages from other agents.",
-              "inputSchema": {"type":"object","properties":{}} },
+              "parameters": {"type":"object","properties":{}} },
             { "name": "get_status", "description": "Get AgentBridge status: available roles and online agents.",
-              "inputSchema": {"type":"object","properties":{}} }
+              "parameters": {"type":"object","properties":{}} }
         ]
     });
     if let Some(cwd) = (!opts.cwd.is_empty()).then(|| opts.cwd.as_str()) {

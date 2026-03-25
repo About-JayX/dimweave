@@ -202,6 +202,14 @@ cargo test          # 运行 Rust 测试
 - 执行完任务后必须调用 superpowers 代码审计（`superpowers:requesting-code-review`）
 - Rust 改动后必须重新运行 Tauri / Cargo 校验，前端改动后至少跑一次 TS / build 校验
 
+**Agent 链路修复文档要求:**
+
+- 修复任意 agent 链路时，必须在 `docs/agents/<agent>-chain.md` 记录修复点
+- 未修复的已知问题也必须记录，标注 `[未修复]` 和原因
+- 每个 agent 一个文档：`claude-chain.md`、`codex-chain.md`
+- 修复内容必须对照官方文档，标注官方文档 URL
+- 运行时验证结果（成功/失败）必须回填到文档
+
 ## 技能系统
 
 项目技能按三层组织：

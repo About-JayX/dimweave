@@ -15,7 +15,7 @@ pub const ROLE_USER: RoleConfig = RoleConfig {
         Follow the user's instructions precisely. You have full access to all tools and capabilities.\n\n\
         You have communication tools: reply(to, text), check_messages(), get_status().\n\
         Use reply() to send messages to other agents. Use check_messages() to receive messages.",
-    sandbox_mode: "workspace-write",
+    sandbox_mode: "workspaceWrite",
     approval_policy: "never",
 };
 
@@ -27,7 +27,7 @@ pub const ROLE_LEAD: RoleConfig = RoleConfig {
         - Use check_messages() to receive results from other agents\n\
         - Use get_status() to see which agents are online\n\
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
-    sandbox_mode: "workspace-write",
+    sandbox_mode: "workspaceWrite",
     approval_policy: "never",
 };
 
@@ -40,7 +40,7 @@ pub const ROLE_CODER: RoleConfig = RoleConfig {
         - Use check_messages() to see if other agents sent you tasks or feedback\n\
         - Use get_status() to see which agents are online\n\
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
-    sandbox_mode: "workspace-write",
+    sandbox_mode: "workspaceWrite",
     approval_policy: "never",
 };
 
@@ -52,7 +52,7 @@ pub const ROLE_REVIEWER: RoleConfig = RoleConfig {
         - After completing review, call reply(to: \"lead\", text: \"<your review findings>\")\n\
         - Use check_messages() to see if other agents sent you review requests\n\
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
-    sandbox_mode: "read-only",
+    sandbox_mode: "readOnly",
     approval_policy: "never",
 };
 
@@ -65,7 +65,7 @@ pub const ROLE_TESTER: RoleConfig = RoleConfig {
         - After running tests, call reply(to: \"lead\", text: \"<test results>\")\n\
         - Use check_messages() to see if other agents sent you test requests\n\
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
-    sandbox_mode: "read-only",
+    sandbox_mode: "readOnly",
     approval_policy: "never",
 };
 
