@@ -137,6 +137,29 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 - [已修复] pre-init buffer replay break 不传播到外层循环
 - [已修复] Claude 启动改为静默后台进程（dev 模式弹终端，release 静默）
 
+### 2026-03-25: Claude 断开交互与进程所有权
+
+- [已修复] `Disconnect Claude` 之前没有 loading，用户点击后缺少可见反馈；现在前端会进入 `Disconnecting...`，直到控制链路把状态回落为 disconnected 或 stop 直接报错
+- [已修复] Claude 关闭链路之前依赖模糊 `pkill`，容易把关闭问题误判成 channel API 问题；当前实现改为宿主进程记录 Claude PID，并在断开时优先精确终止 tracked session
+- [已修复] Claude 关闭成功命中 tracked PID 后不再继续扫射其他相关进程；`Disconnect Claude` 的职责收敛为“关闭当前 Claude 终端会话”，不负责顺带回收 app / bridge
+- [记录] Claude channel 官方 contract 只定义 channel event、reply tool、permission relay；“关闭 Claude”不是 channel RPC，而是本地宿主进程生命周期管理
+
+### 2026-03-25: Claude hidden PTY 与开发确认自动选择
+
+- [已修复] Claude 启动不再依赖 macOS Terminal 可见窗口；当前统一由 Tauri 进程托管 hidden PTY，会话不再要求用户盯着终端确认
+- [已修复] research preview 下 `--dangerously-load-development-channels server:agentbridge` 的本地开发确认提示，现在由 PTY watcher 自动输入 `1`
+- [约束] 自动确认只对 `Channels: server:agentbridge` 生效，不会对其他 development channel 做泛化放行
+- [已修复] app 退出时会顺带停止当前 Claude PTY 会话，避免隐藏 Claude 进程在 GUI 关闭后残留
+- [已修复] dev 模式下 Claude PTY 输出会实时转发到 GUI 的 `Logs` 标签，便于观察启动、确认提示和异常输出；release 仍保持隐藏
+- [已修复] dev 模式下 `Connect Claude` 会先弹应用内确认框，而不是把 Claude CLI 的开发确认直接暴露给用户；支持按项目记住选择，用户确认后后台 PTY 再自动续跑
+- [已修复] Claude CLI 的确认 prompt 在 PTY 输出里有时会丢空格，导致自动确认失效；matcher 现在同时支持正常文案和空格塌缩后的输出
+- [已修复] `Connect Claude` 每次都会重写项目根目录 `.mcp.json`，在 `vite dev` 下会触发前端整页刷新；当前改为幂等写入，配置无变化时不再落盘
+- [已修复] Claude PTY 现在会把原始终端数据直接送进 GUI，前端新增嵌入式 terminal 面板并支持键盘输入与 resize；不再只能依赖日志查看启动过程
+- [已修复] Claude 终端不再强制抢焦点切页；现在会在消息区弹出 `Claude Terminal` 标签并带活动提示，由用户自己决定是否切过去
+- [已修复] `Claude Terminal` 切换到其他 tab 再切回时之前会空白；根因是组件卸载后重建时终端初始化与重放时序错开，当前改为在挂载时先完成 xterm 初始化，再重放已有 PTY 数据
+- [已修复] Claude 终端渲染之前使用了非等宽字体优先级，字符宽度容易偏；当前改为等宽字体优先，并补上 xterm 的 Unicode 11 和 WebGL 渲染增强，向 VS Code 终端方案靠拢
+- [已修复] 引入 `Unicode11Addon` 后终端黑屏并报 `You must set the allowProposedApi option to true to use proposed API`；根因是 xterm 需要在 terminal options 中显式开启 `allowProposedApi`，当前已抽成独立配置并加回归测试锁住
+
 ## 当前已知限制
 
 - Channel preview 是实验性功能，需要 `--dangerously-load-development-channels`

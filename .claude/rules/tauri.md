@@ -19,6 +19,9 @@ paths:
 - `codex/oauth.rs` — OAuth 登录 / 取消 / 登出
 - `codex/usage.rs` — 用量查询
 - `codex/models.rs` — 模型缓存读取
+- `commands.rs` — Tauri command handlers（从 main.rs 拆出）
+- `claude_session/` — Claude PTY 会话管理（spawn/stop/prompt 自动确认）
+- `claude_launch.rs` — Terminal 启动 helpers（macOS/other）
 - `daemon/mod.rs` — command channel + daemon 主循环
 - `daemon/state.rs` — 运行时共享状态
 - `daemon/routing.rs` — 唯一消息投递入口
@@ -36,6 +39,9 @@ paths:
 - `register_mcp`
 - `check_mcp_registered`
 - `launch_claude_terminal`
+- `stop_claude`
+- `claude_terminal_input`
+- `claude_terminal_resize`
 - `codex_login`
 - `codex_cancel_login`
 - `codex_logout`
@@ -44,6 +50,7 @@ paths:
 - `daemon_stop_codex`
 - `daemon_set_claude_role`
 - `daemon_respond_permission`
+- `daemon_get_status_snapshot`
 
 新增 command 时，必须同步注册到 `main.rs` 的 `invoke_handler`。
 

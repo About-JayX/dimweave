@@ -54,17 +54,7 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
 }
 
 async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
-    let mut s = state.write().await;
-    let msgs: Vec<BridgeMessage> = s
-        .buffered_messages
-        .iter()
-        .filter(|m| m.to == role_id)
-        .cloned()
-        .collect();
-
-    // Remove delivered messages
-    s.buffered_messages.retain(|m| m.to != role_id);
-
+    let msgs = state.write().await.take_buffered_for(role_id);
     if msgs.is_empty() {
         return "No new messages.".to_string();
     }

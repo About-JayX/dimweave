@@ -1,5 +1,7 @@
 /// MCP registration helpers and related Tauri commands.
-use crate::claude_cli::ensure_claude_channel_ready;
+use crate::claude_session::ClaudeSessionManager;
+use std::sync::Arc;
+use tauri::State;
 
 fn resolve_release_bridge_cmd() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -62,12 +64,30 @@ pub fn register_mcp(cwd: Option<String>) -> Result<bool, String> {
 fn write_mcp_config(project_dir: &str, command: &str, args: &[&str]) -> Result<bool, String> {
     let mcp_path = std::path::Path::new(project_dir).join(".mcp.json");
 
-    let mut config: serde_json::Value = if mcp_path.exists() {
+    let config: serde_json::Value = if mcp_path.exists() {
         let raw = std::fs::read_to_string(&mcp_path).map_err(|e| format!("read error: {e}"))?;
         serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}))
     } else {
         serde_json::json!({})
     };
+
+    let (config, changed) = upsert_mcp_server(config, command, args)?;
+    if mcp_path.exists() && !changed {
+        return Ok(true);
+    }
+
+    let json =
+        serde_json::to_string_pretty(&config).map_err(|e| format!("serialize error: {e}"))?;
+    std::fs::write(&mcp_path, json).map_err(|e| format!("write error: {e}"))?;
+    Ok(true)
+}
+
+fn upsert_mcp_server(
+    mut config: serde_json::Value,
+    command: &str,
+    args: &[&str],
+) -> Result<(serde_json::Value, bool), String> {
+    let before = config.clone();
 
     let servers = config
         .as_object_mut()
@@ -85,10 +105,7 @@ fn write_mcp_config(project_dir: &str, command: &str, args: &[&str]) -> Result<b
         .ok_or("invalid mcpServers")?
         .insert("agentbridge".to_string(), entry);
 
-    let json =
-        serde_json::to_string_pretty(&config).map_err(|e| format!("serialize error: {e}"))?;
-    std::fs::write(&mcp_path, json).map_err(|e| format!("write error: {e}"))?;
-    Ok(true)
+    Ok((config.clone(), config != before))
 }
 
 #[tauri::command]
@@ -107,74 +124,53 @@ pub fn check_mcp_registered(cwd: Option<String>) -> bool {
 }
 
 /// Launch Claude Code channel preview.
-/// In dev mode (`cfg!(debug_assertions)`), opens a visible terminal for debugging.
-/// In release mode, runs as a silent background process.
+/// Runs Claude in a managed hidden PTY so the local development prompt can be
+/// auto-confirmed for `server:agentbridge`.
 #[tauri::command]
-pub fn launch_claude_terminal(
+pub async fn launch_claude_terminal(
     cwd: Option<String>,
     model: Option<String>,
     effort: Option<String>,
+    session: State<'_, Arc<ClaudeSessionManager>>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
-    let version = ensure_claude_channel_ready()?;
-    let claude_bin =
-        which::which("claude").map_err(|_| "Claude CLI not found in PATH".to_string())?;
-
-    let mut extra_args: Vec<String> = Vec::new();
-    if let Some(m) = &model {
-        if !m.is_empty() {
-            extra_args.push("--model".into());
-            extra_args.push(m.clone());
-        }
-    }
-    if let Some(e) = &effort {
-        if !e.is_empty() {
-            extra_args.push("--effort".into());
-            extra_args.push(e.clone());
-        }
-    }
-
-    if cfg!(debug_assertions) {
-        eprintln!("[MCP] launching Claude channel {version} in terminal (dev) model={model:?} effort={effort:?}");
-        launch_in_terminal(&dir, &claude_bin, &extra_args)?;
-    } else {
-        let mut cmd = std::process::Command::new(&claude_bin);
-        cmd.current_dir(&dir)
-            .arg("--dangerously-load-development-channels")
-            .arg("server:agentbridge")
-            .args(&extra_args)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .stdin(std::process::Stdio::null());
-        cmd.spawn().map_err(|e| format!("failed to start claude: {e}"))?;
-    }
-    Ok(())
+    crate::claude_launch::launch(&dir, model, effort, session.inner().as_ref(), app).await
 }
 
-#[cfg(target_os = "macos")]
-fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path, extra: &[String]) -> Result<(), String> {
-    let extra_str = extra.iter().map(|a| format!("'{a}'")).collect::<Vec<_>>().join(" ");
-    let cmd = format!(
-        "cd '{}' && '{}' --dangerously-load-development-channels server:agentbridge {}",
-        dir.replace('\'', "'\\''"), claude_bin.display(), extra_str,
-    );
-    let script = format!(
-        "tell application \"Terminal\"\ndo script \"{}\"\nend tell",
-        cmd.replace('\\', "\\\\").replace('"', "\\\"")
-    );
-    std::process::Command::new("osascript").arg("-e").arg(&script)
-        .spawn().map_err(|e| format!("failed: {e}"))?;
-    Ok(())
-}
+#[cfg(test)]
+mod tests {
+    use super::upsert_mcp_server;
 
-#[cfg(not(target_os = "macos"))]
-fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path, extra: &[String]) -> Result<(), String> {
-    std::process::Command::new(claude_bin)
-        .current_dir(dir)
-        .arg("--dangerously-load-development-channels")
-        .arg("server:agentbridge")
-        .args(extra)
-        .spawn()
-        .map_err(|e| format!("failed: {e}"))?;
-    Ok(())
+    #[test]
+    fn upsert_mcp_server_marks_unchanged_when_entry_matches() {
+        let config = serde_json::json!({
+            "mcpServers": {
+                "agentbridge": {
+                    "command": "/tmp/bridge",
+                    "args": ["--foo"]
+                }
+            }
+        });
+
+        let (next, changed) =
+            upsert_mcp_server(config.clone(), "/tmp/bridge", &["--foo"]).unwrap();
+        assert_eq!(next, config);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn upsert_mcp_server_marks_changed_when_command_differs() {
+        let config = serde_json::json!({
+            "mcpServers": {
+                "agentbridge": {
+                    "command": "/tmp/old"
+                }
+            }
+        });
+
+        let (next, changed) = upsert_mcp_server(config, "/tmp/new", &[]).unwrap();
+        assert!(changed);
+        assert_eq!(next["mcpServers"]["agentbridge"]["command"], "/tmp/new");
+    }
 }

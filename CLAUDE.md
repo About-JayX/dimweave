@@ -113,7 +113,7 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 | `4502` | bridge ↔ daemon 控制通道 | `src-tauri/src/daemon/control/` |
 | `1420` | Vite dev server | `bun run dev` |
 
-当前 **没有** GUI WebSocket `4503`，也没有 PTY 通道端口。
+当前 **没有** GUI WebSocket `4503`。Claude PTY 由 `claude_session/` 内嵌管理。
 
 ## 角色系统
 
@@ -251,9 +251,10 @@ src/                       # React frontend
 bridge/src/
 ├── main.rs                # sidecar entry
 ├── daemon_client.rs       # WS client → 4502
-├── mcp.rs                 # MCP stdio server / channel notification
-├── mcp_protocol.rs        # RPC message parsing + initialize result
-├── channel_state.rs       # Claude channel state + reply target tracking
+├── mcp.rs                 # MCP stdio loop
+├── mcp_io.rs              # write_line, tool response, inbound dispatch
+├── mcp_protocol.rs        # RPC parsing + initialize result
+├── channel_state.rs       # reply target tracking / permission cache
 ├── tools.rs               # reply tool schema + parsing
 └── types.rs               # bridge ↔ daemon protocol mirror
 ```
@@ -262,9 +263,15 @@ bridge/src/
 
 ```text
 src-tauri/src/
-├── main.rs
-├── mcp.rs
-├── claude_cli.rs           # Claude CLI version check + channel preview launch
+├── main.rs                 # entry + setup
+├── commands.rs             # Tauri command handlers
+├── mcp.rs                  # .mcp.json 注册 + Claude launch
+├── claude_cli.rs           # Claude CLI version check
+├── claude_launch.rs        # Terminal launch helpers (macOS/other)
+├── claude_session/         # Claude PTY session management
+│   ├── mod.rs
+│   ├── process.rs          # spawn/kill/signal helpers
+│   └── prompt.rs           # dev confirmation auto-answer
 ├── codex/
 │   ├── auth.rs
 │   ├── models.rs
@@ -284,6 +291,7 @@ src-tauri/src/
     │   └── server.rs
     ├── codex/
     │   ├── handler.rs
+    │   ├── handshake.rs    # initialize + thread/start WS handshake
     │   ├── lifecycle.rs
     │   ├── mod.rs
     │   └── session.rs
@@ -305,6 +313,7 @@ src/
 ├── stores/
 │   ├── bridge-store/
 │   │   ├── index.ts
+│   │   ├── helpers.ts
 │   │   └── types.ts
 │   └── codex-account-store.ts
 ├── components/
@@ -318,12 +327,17 @@ src/
 │   │   ├── RoleSelect.tsx
 │   │   └── StatusDot.tsx
 │   ├── ClaudePanel/
-│   │   └── index.tsx
+│   │   ├── index.tsx
+│   │   ├── ClaudeConfigRows.tsx
+│   │   ├── DevConfirmDialog.tsx
+│   │   └── dev-confirm.ts
 │   ├── CodexAccountPanel/
 │   │   ├── MiniMeter.tsx
 │   │   └── helpers.ts
 │   ├── MessagePanel/
 │   │   ├── index.tsx
+│   │   ├── ClaudeTerminalPane.tsx
+│   │   ├── claude-terminal-config.ts
 │   │   ├── PermissionQueue.tsx
 │   │   ├── SourceBadge.tsx
 │   │   └── TabBtn.tsx
@@ -362,7 +376,7 @@ src/
 
 - `daemon/**/*.ts` Bun daemon 体系
 - GUI WebSocket `:4503`
-- PTY 注入链路、`portable-pty`、`node-pty`
+- 旧 PTY 注入链路（`node-pty` 和旧 TS daemon 的 PTY 方案；当前 `portable-pty` 用于 `claude_session/`）
 - 旧 `test-e2e.ts` / `test-routing.ts` / `test-codex-mcp.ts` 手工脚本
 - `tsconfig.daemon.json`
 

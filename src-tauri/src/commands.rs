@@ -1,3 +1,4 @@
+use crate::claude_session::ClaudeSessionManager;
 use crate::codex::oauth::{OAuthHandle, OAuthLaunchInfo};
 use crate::daemon::{
     types::{BridgeMessage, DaemonStatusSnapshot, PermissionBehavior},
@@ -94,20 +95,31 @@ pub async fn daemon_get_status_snapshot(
         .map_err(|_| "daemon dropped status snapshot reply".to_string())
 }
 
-/// Kill bridge sidecar + Claude channel processes to disconnect Claude.
-/// Killing the bridge triggers daemon WS disconnect → agent_status(false).
+/// Stop the tracked Claude CLI session.
+/// When Claude exits, its channel subprocess should drop too and daemon status
+/// will fall back to disconnected once the control websocket closes.
 #[tauri::command]
-pub async fn stop_claude() -> Result<(), String> {
-    // Kill bridge sidecar — this triggers daemon disconnect detection
-    let _ = tokio::process::Command::new("pkill")
-        .arg("-f").arg("agent-bridge-bridge")
-        .output().await;
-    // Also kill any claude channel process
-    let _ = tokio::process::Command::new("pkill")
-        .arg("-f").arg("dangerously-load-development-channels")
-        .output().await;
-    eprintln!("[Claude] stop: killed bridge + channel processes");
+pub async fn stop_claude(session: State<'_, Arc<ClaudeSessionManager>>) -> Result<(), String> {
+    crate::claude_session::stop(session.inner().as_ref()).await?;
+    eprintln!("[Claude] stop: terminated managed Claude PTY session");
     Ok(())
+}
+
+#[tauri::command]
+pub async fn claude_terminal_input(
+    data: String,
+    session: State<'_, Arc<ClaudeSessionManager>>,
+) -> Result<(), String> {
+    crate::claude_session::write_input(session.inner().as_ref(), &data).await
+}
+
+#[tauri::command]
+pub async fn claude_terminal_resize(
+    cols: u16,
+    rows: u16,
+    session: State<'_, Arc<ClaudeSessionManager>>,
+) -> Result<(), String> {
+    crate::claude_session::resize(session.inner().as_ref(), cols, rows).await
 }
 
 #[tauri::command]

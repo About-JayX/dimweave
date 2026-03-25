@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod claude_cli;
+mod claude_launch;
+mod claude_session;
 mod codex;
 mod commands;
 mod daemon;
@@ -30,6 +32,10 @@ fn request_app_shutdown(app: tauri::AppHandle) {
         return;
     }
     let sender = app.state::<DaemonSender>().0.clone();
+    let claude_session = app
+        .state::<Arc<claude_session::ClaudeSessionManager>>()
+        .inner()
+        .clone();
     tauri::async_runtime::spawn(async move {
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         if sender
@@ -39,6 +45,7 @@ fn request_app_shutdown(app: tauri::AppHandle) {
         {
             let _ = reply_rx.await;
         }
+        claude_session::stop_if_running(claude_session.as_ref()).await;
         app.exit(0);
     });
 }
@@ -76,6 +83,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(OAuthHandle::new()))
+        .manage(Arc::new(claude_session::ClaudeSessionManager::default()))
         .manage(ExitState::default())
         .setup(|app| {
             let (cmd_tx, cmd_rx) = daemon::channel();
@@ -117,6 +125,8 @@ fn main() {
             commands::daemon_respond_permission,
             commands::daemon_get_status_snapshot,
             commands::stop_claude,
+            commands::claude_terminal_input,
+            commands::claude_terminal_resize,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

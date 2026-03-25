@@ -108,7 +108,6 @@ export function CodexPanel({
     try {
       await applyConfig({
         model: selectedModel || undefined,
-        reasoningEffort: selectedReasoning || undefined,
         cwd: cwd || undefined,
       });
     } catch {

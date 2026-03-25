@@ -12,6 +12,9 @@ interface SystemLogPayload {
   level: string;
   message: string;
 }
+interface ClaudeTerminalDataPayload {
+  data: string;
+}
 interface AgentStatusPayload {
   agent: string;
   online: boolean;
@@ -64,6 +67,23 @@ export function initListeners(
             timestamp: Date.now(),
           },
         ],
+      }));
+    }),
+    listen<ClaudeTerminalDataPayload>("claude_terminal_data", (e) => {
+      set((s) => ({
+        claudeTerminalChunks: [
+          ...s.claudeTerminalChunks.slice(-999),
+          {
+            id: nextLogId(),
+            data: e.payload.data,
+            timestamp: Date.now(),
+          },
+        ],
+      }));
+    }),
+    listen("claude_terminal_reset", () => {
+      set(() => ({
+        claudeTerminalChunks: [],
       }));
     }),
     listen<AgentStatusPayload>("agent_status", (e) => {

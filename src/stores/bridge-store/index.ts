@@ -28,6 +28,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       codex: { name: "codex", displayName: "Codex", status: "disconnected" },
     },
     terminalLines: [],
+    claudeTerminalChunks: [],
     permissionPrompts: [],
     claudeRole: "lead",
     codexRole: "coder",

@@ -1,28 +1,16 @@
-import { useState, useCallback, useMemo } from "react";
-import { cn, shortenPath } from "@/lib/utils";
+import { useState, useCallback, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { CyberSelect } from "@/components/ui/cyber-select";
 import { invoke } from "@tauri-apps/api/core";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { RoleSelect } from "@/components/AgentStatus/RoleSelect";
 import { StatusDot } from "@/components/AgentStatus/StatusDot";
-
-const MODEL_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "sonnet", label: "Sonnet (latest)" },
-  { value: "opus", label: "Opus (latest)" },
-  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-  { value: "claude-opus-4-6", label: "Opus 4.6" },
-  { value: "claude-haiku-4-5", label: "Haiku 4.5" },
-];
-
-const EFFORT_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "max", label: "Max (Opus only)" },
-];
+import { DevConfirmDialog } from "./DevConfirmDialog";
+import { ClaudeConfigRows } from "./ClaudeConfigRows";
+import {
+  rememberClaudeDevConfirm,
+  shouldPromptForClaudeDevConfirm,
+} from "./dev-confirm";
 
 interface ClaudePanelProps {
   connected: boolean;
@@ -32,20 +20,28 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
-  const [launchError, setLaunchError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [showDevConfirm, setShowDevConfirm] = useState(false);
+  const [rememberChoice, setRememberChoice] = useState(true);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
+
+  useEffect(() => {
+    if (!connected) {
+      setDisconnecting(false);
+    }
+  }, [connected]);
 
   const handlePickDir = useCallback(async () => {
     const dir = await pickDirectory();
     if (dir) setCwd(dir);
   }, [pickDirectory]);
 
-  const handleLaunch = useCallback(async () => {
-    if (!cwd) return;
+  const doLaunch = useCallback(async () => {
     setConnecting(true);
     try {
-      setLaunchError(null);
+      setActionError(null);
       await invoke("register_mcp", { cwd });
       await invoke("launch_claude_terminal", {
         cwd,
@@ -53,143 +49,152 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         effort: effort || null,
       });
     } catch (e) {
-      setLaunchError(e instanceof Error ? e.message : String(e));
+      setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
   }, [cwd, model, effort]);
 
+  const handleLaunch = useCallback(async () => {
+    if (!cwd) return;
+    if (shouldPromptForClaudeDevConfirm(cwd)) {
+      setShowDevConfirm(true);
+      return;
+    }
+    doLaunch();
+  }, [cwd, doLaunch]);
+
+  const confirmDevLaunch = useCallback(async () => {
+    if (rememberChoice) {
+      rememberClaudeDevConfirm(cwd);
+    }
+    setShowDevConfirm(false);
+    doLaunch();
+  }, [cwd, rememberChoice, doLaunch]);
+
+  const handleDisconnect = useCallback(async () => {
+    setDisconnecting(true);
+    setActionError(null);
+    try {
+      await invoke("stop_claude");
+    } catch (e) {
+      setDisconnecting(false);
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   return (
-    <div
-      className={cn(
-        "rounded-lg border bg-card p-3 card-depth transition-all duration-300",
-        connected
-          ? "border-claude/40 glow-claude-subtle border-glow-claude"
-          : "border-input hover:border-input/80",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <StatusDot
-          status={connected ? "connected" : "disconnected"}
-          variant="claude"
-        />
-        <span className="flex-1 text-[13px] font-medium text-card-foreground">
-          Claude Code
-        </span>
-        <RoleSelect agent="claude" disabled={connected} />
-        <span
-          key={connected ? "c" : "d"}
-          className="text-[11px] uppercase text-secondary-foreground status-flash"
-        >
-          {connected ? "connected" : "disconnected"}
-        </span>
-      </div>
-
-      {/* Config rows */}
-      <div className="mt-2 space-y-1.5">
-        {/* Model */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Model</span>
-          <CyberSelect
-            value={model}
-            options={MODEL_OPTIONS}
-            onChange={setModel}
-            disabled={connected}
+    <>
+      <div
+        className={cn(
+          "rounded-lg border bg-card p-3 card-depth transition-all duration-300",
+          connected
+            ? "border-claude/40 glow-claude-subtle border-glow-claude"
+            : "border-input hover:border-input/80",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <StatusDot
+            status={connected ? "connected" : "disconnected"}
+            variant="claude"
           />
-        </div>
-
-        {/* Effort */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Effort</span>
-          <CyberSelect
-            value={effort}
-            options={EFFORT_OPTIONS}
-            onChange={setEffort}
-            disabled={connected}
+          <span className="flex-1 text-[13px] font-medium text-card-foreground">
+            Claude Code
+          </span>
+          <RoleSelect
+            agent="claude"
+            disabled={connected || connecting || disconnecting}
           />
-        </div>
-
-        {/* Project directory */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Project</span>
-          <button
-            type="button"
-            onClick={handlePickDir}
-            disabled={connected}
-            className={cn(
-              "inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[11px] text-secondary-foreground transition-colors truncate max-w-44",
-              connected
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-accent hover:text-primary cursor-pointer",
-            )}
-            title={cwd}
+          <span
+            key={disconnecting ? "x" : connected ? "c" : "d"}
+            className="text-[11px] uppercase text-secondary-foreground status-flash"
           >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 16 16"
-              className="shrink-0 text-muted-foreground"
-            >
-              <path
-                d="M2 4v8h12V6H8L6 4z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-              />
-            </svg>
-            {cwd ? shortenPath(cwd) : "Select project..."}
-          </button>
+            {disconnecting
+              ? "disconnecting"
+              : connected
+                ? "connected"
+                : "disconnected"}
+          </span>
         </div>
+
+        <ClaudeConfigRows
+          model={model}
+          effort={effort}
+          cwd={cwd}
+          disabled={connected || connecting || disconnecting}
+          onModelChange={setModel}
+          onEffortChange={setEffort}
+          onPickDir={handlePickDir}
+        />
+
+        {connected && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-2 w-full active:scale-[0.98] transition-all duration-200"
+            disabled={disconnecting}
+            onClick={handleDisconnect}
+          >
+            {disconnecting ? (
+              <span className="flex items-center gap-2">
+                <span className="size-3 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" />
+                Disconnecting…
+              </span>
+            ) : (
+              "Disconnect Claude"
+            )}
+          </Button>
+        )}
+
+        {!connected && (
+          <Button
+            size="sm"
+            className="mt-2 w-full bg-claude text-white hover:bg-claude/90 hover:shadow-[0_0_16px_#8b5cf640] active:scale-[0.98] transition-all duration-200 btn-ripple"
+            disabled={!cwd || connecting || disconnecting}
+            onClick={handleLaunch}
+          >
+            {connecting ? (
+              <span className="flex items-center gap-2">
+                <span className="size-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Connecting…
+              </span>
+            ) : (
+              "Connect Claude"
+            )}
+          </Button>
+        )}
+
+        {!connected && !cwd && (
+          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            Select a project directory first
+          </div>
+        )}
+        {!connected && cwd && !actionError && (
+          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            Registers .mcp.json and launches Claude in channel preview mode
+          </div>
+        )}
+        {connected && disconnecting && !actionError && (
+          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            Waiting for the Claude terminal session to exit
+          </div>
+        )}
+        {actionError && (
+          <div className="mt-1.5 text-center text-[10px] text-destructive">
+            {actionError}
+          </div>
+        )}
       </div>
 
-      {/* Disconnect button (when connected) */}
-      {connected && (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="w-full mt-2 active:scale-[0.98] transition-all duration-200"
-          onClick={() => invoke("stop_claude").catch(console.error)}
-        >
-          Disconnect Claude
-        </Button>
+      {showDevConfirm && (
+        <DevConfirmDialog
+          cwd={cwd}
+          rememberChoice={rememberChoice}
+          onRememberChoiceChange={setRememberChoice}
+          onCancel={() => setShowDevConfirm(false)}
+          onConfirm={confirmDevLaunch}
+        />
       )}
-
-      {/* Launch button (when not connected) */}
-      {!connected && (
-        <Button
-          size="sm"
-          className="w-full mt-2 bg-claude text-white hover:bg-claude/90 hover:shadow-[0_0_16px_#8b5cf640] active:scale-[0.98] transition-all duration-200 btn-ripple"
-          disabled={!cwd || connecting}
-          onClick={handleLaunch}
-        >
-          {connecting ? (
-            <span className="flex items-center gap-2">
-              <span className="size-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Connecting…
-            </span>
-          ) : (
-            "Connect Claude"
-          )}
-        </Button>
-      )}
-
-      {/* Hints */}
-      {!connected && !cwd && (
-        <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
-          Select a project directory first
-        </div>
-      )}
-      {!connected && cwd && !launchError && (
-        <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
-          Registers .mcp.json and launches Claude in channel preview mode
-        </div>
-      )}
-      {launchError && (
-        <div className="mt-1.5 text-[10px] text-destructive text-center">
-          {launchError}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

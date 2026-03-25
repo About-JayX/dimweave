@@ -18,6 +18,12 @@ pub struct SystemLogEvent {
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ClaudeTerminalDataEvent {
+    pub data: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStatusEvent {
     pub agent: String,
     pub online: bool,
@@ -55,6 +61,17 @@ pub fn emit_system_log(app: &AppHandle, level: &str, message: &str) {
             message: message.into(),
         },
     );
+}
+
+pub fn emit_claude_terminal_data(app: &AppHandle, data: &str) {
+    let _ = app.emit(
+        "claude_terminal_data",
+        ClaudeTerminalDataEvent { data: data.into() },
+    );
+}
+
+pub fn emit_claude_terminal_reset(app: &AppHandle) {
+    let _ = app.emit("claude_terminal_reset", ());
 }
 
 pub fn emit_agent_status(app: &AppHandle, agent: &str, online: bool, exit_code: Option<i32>) {

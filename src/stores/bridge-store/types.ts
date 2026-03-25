@@ -13,11 +13,18 @@ export interface TerminalLine {
   timestamp: number;
 }
 
+export interface ClaudeTerminalChunk {
+  id: number;
+  data: string;
+  timestamp: number;
+}
+
 export interface BridgeState {
   connected: boolean;
   messages: BridgeMessage[];
   agents: Record<string, AgentInfo>;
   terminalLines: TerminalLine[];
+  claudeTerminalChunks: ClaudeTerminalChunk[];
   permissionPrompts: PermissionPrompt[];
   claudeRole: string;
   codexRole: string;
@@ -32,11 +39,7 @@ export interface BridgeState {
     requestId: string,
     behavior: PermissionBehavior,
   ) => Promise<void>;
-  applyConfig: (config: {
-    model?: string;
-    reasoningEffort?: string;
-    cwd?: string;
-  }) => Promise<void>;
+  applyConfig: (config: { model?: string; cwd?: string }) => Promise<void>;
   setRole: (agent: "claude" | "codex", role: string) => void;
   cleanup: () => void;
 }

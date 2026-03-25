@@ -53,6 +53,7 @@ pub async fn stop(child: &mut Child, port: u16) {
 }
 
 async fn kill_port_holder(port: u16) {
+    let self_pid = std::process::id() as i32;
     let Ok(output) = tokio::process::Command::new("lsof")
         .arg(format!("-ti:{port}"))
         .output()
@@ -63,10 +64,10 @@ async fn kill_port_holder(port: u16) {
     let pids = String::from_utf8_lossy(&output.stdout);
     for pid_str in pids.split_whitespace() {
         if let Ok(pid) = pid_str.parse::<i32>() {
+            if pid == self_pid || pid <= 1 { continue; }
             eprintln!("[Codex] killing orphan process {pid} on port {port}");
             unsafe { libc::kill(pid, libc::SIGKILL); }
         }
     }
-    // Wait for port release
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 }

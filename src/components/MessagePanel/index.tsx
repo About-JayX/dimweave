@@ -6,8 +6,9 @@ import type { BridgeMessage } from "@/types";
 import { PermissionQueue } from "./PermissionQueue";
 import { SourceBadge } from "./SourceBadge";
 import { TabBtn } from "./TabBtn";
+import { ClaudeTerminalPane } from "./ClaudeTerminalPane";
 
-type Tab = "messages" | "logs" | "approvals";
+type Tab = "messages" | "claude" | "logs" | "approvals";
 
 interface MessagePanelProps {
   messages: BridgeMessage[];
@@ -16,6 +17,9 @@ interface MessagePanelProps {
 
 export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const [tab, setTabState] = useState<Tab>("messages");
+  const previousClaudeConnectedRef = useRef(false);
+  const previousClaudeChunkCountRef = useRef(0);
+  const [claudeTabAttention, setClaudeTabAttention] = useState(false);
   const setTab = (t: Tab) => {
     setTabState(t);
     onTabChange?.(t);
@@ -26,8 +30,13 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
 
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
+  const claudeTerminalChunks = useBridgeStore((s) => s.claudeTerminalChunks);
   const permissionPrompts = useBridgeStore((s) => s.permissionPrompts);
   const respondToPermission = useBridgeStore((s) => s.respondToPermission);
+  const claudeConnected =
+    useBridgeStore((s) => s.agents.claude?.status) === "connected";
+  const claudeTerminalAvailable =
+    claudeConnected || claudeTerminalChunks.length > 0;
 
   const chatMessages = useMemo(
     () => messages.filter((m) => m.from !== "system"),
@@ -51,6 +60,29 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
     }
   }, [messages, tab, isNearBottom]);
 
+  useEffect(() => {
+    if (!previousClaudeConnectedRef.current && claudeConnected) {
+      setClaudeTabAttention(true);
+    }
+    previousClaudeConnectedRef.current = claudeConnected;
+  }, [claudeConnected]);
+
+  useEffect(() => {
+    if (
+      claudeTerminalChunks.length > previousClaudeChunkCountRef.current &&
+      tab !== "claude"
+    ) {
+      setClaudeTabAttention(true);
+    }
+    previousClaudeChunkCountRef.current = claudeTerminalChunks.length;
+  }, [claudeTerminalChunks.length, tab]);
+
+  useEffect(() => {
+    if (tab === "claude") {
+      setClaudeTabAttention(false);
+    }
+  }, [tab]);
+
   return (
     <div className="flex flex-1 flex-col min-h-0">
       {/* Tabs */}
@@ -61,6 +93,14 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           Logs {errorLines.length > 0 && `(${errorLines.length})`}
         </TabBtn>
+        {claudeTerminalAvailable && (
+          <TabBtn active={tab === "claude"} onClick={() => setTab("claude")}>
+            Claude Terminal
+            {claudeTabAttention && (
+              <span className="ml-2 inline-flex size-2 rounded-full bg-claude animate-pulse" />
+            )}
+          </TabBtn>
+        )}
         <TabBtn
           active={tab === "approvals"}
           onClick={() => setTab("approvals")}
@@ -116,7 +156,6 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         </div>
       )}
 
-      {/* Logs */}
       {tab === "logs" && (
         <div
           ref={logRef}
@@ -144,6 +183,12 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         </div>
       )}
 
+      {tab === "claude" && claudeTerminalAvailable && (
+        <ClaudeTerminalPane
+          chunks={claudeTerminalChunks}
+          connected={claudeConnected}
+        />
+      )}
       {tab === "approvals" && (
         <PermissionQueue
           prompts={permissionPrompts}
