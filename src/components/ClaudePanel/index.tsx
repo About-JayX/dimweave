@@ -1,10 +1,28 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { cn, shortenPath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CyberSelect } from "@/components/ui/cyber-select";
 import { invoke } from "@tauri-apps/api/core";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { RoleSelect } from "@/components/AgentStatus/RoleSelect";
 import { StatusDot } from "@/components/AgentStatus/StatusDot";
+
+const MODEL_OPTIONS = [
+  { value: "", label: "Default" },
+  { value: "sonnet", label: "Sonnet (latest)" },
+  { value: "opus", label: "Opus (latest)" },
+  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+  { value: "claude-opus-4-6", label: "Opus 4.6" },
+  { value: "claude-haiku-4-5", label: "Haiku 4.5" },
+];
+
+const EFFORT_OPTIONS = [
+  { value: "", label: "Default" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "max", label: "Max (Opus only)" },
+];
 
 interface ClaudePanelProps {
   connected: boolean;
@@ -12,6 +30,8 @@ interface ClaudePanelProps {
 
 export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
+  const [model, setModel] = useState("");
+  const [effort, setEffort] = useState("");
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
@@ -26,16 +46,18 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
     setConnecting(true);
     try {
       setLaunchError(null);
-      // Register agentbridge into the project-local .mcp.json
       await invoke("register_mcp", { cwd });
-      // Open an external terminal running `claude` in the project directory
-      await invoke("launch_claude_terminal", { cwd });
+      await invoke("launch_claude_terminal", {
+        cwd,
+        model: model || null,
+        effort: effort || null,
+      });
     } catch (e) {
       setLaunchError(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
-  }, [cwd]);
+  }, [cwd, model, effort]);
 
   return (
     <div
@@ -66,6 +88,28 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
 
       {/* Config rows */}
       <div className="mt-2 space-y-1.5">
+        {/* Model */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">Model</span>
+          <CyberSelect
+            value={model}
+            options={MODEL_OPTIONS}
+            onChange={setModel}
+            disabled={connected}
+          />
+        </div>
+
+        {/* Effort */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">Effort</span>
+          <CyberSelect
+            value={effort}
+            options={EFFORT_OPTIONS}
+            onChange={setEffort}
+            disabled={connected}
+          />
+        </div>
+
         {/* Project directory */}
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">Project</span>
@@ -99,7 +143,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         </div>
       </div>
 
-      {/* Launch button — open external Terminal running `claude` */}
+      {/* Launch button */}
       {!connected && (
         <Button
           size="sm"
@@ -107,24 +151,28 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           disabled={!cwd || connecting}
           onClick={handleLaunch}
         >
-          {connecting ? "Connecting..." : "Connect Claude"}
+          {connecting ? (
+            <span className="flex items-center gap-2">
+              <span className="size-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Connecting…
+            </span>
+          ) : (
+            "Connect Claude"
+          )}
         </Button>
       )}
 
-      {/* Hint while waiting for bridge connection */}
+      {/* Hints */}
       {!connected && !cwd && (
         <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
           Select a project directory first
         </div>
       )}
-
       {!connected && cwd && !launchError && (
         <div className="mt-1.5 text-[10px] text-muted-foreground text-center">
-          AgentBridge will register a project-local .mcp.json and launch Claude
-          in channel preview mode.
+          Registers .mcp.json and launches Claude in channel preview mode
         </div>
       )}
-
       {launchError && (
         <div className="mt-1.5 text-[10px] text-destructive text-center">
           {launchError}

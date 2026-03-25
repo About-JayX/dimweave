@@ -110,55 +110,70 @@ pub fn check_mcp_registered(cwd: Option<String>) -> bool {
 /// In dev mode (`cfg!(debug_assertions)`), opens a visible terminal for debugging.
 /// In release mode, runs as a silent background process.
 #[tauri::command]
-pub fn launch_claude_terminal(cwd: Option<String>) -> Result<(), String> {
+pub fn launch_claude_terminal(
+    cwd: Option<String>,
+    model: Option<String>,
+    effort: Option<String>,
+) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
     let version = ensure_claude_channel_ready()?;
     let claude_bin =
         which::which("claude").map_err(|_| "Claude CLI not found in PATH".to_string())?;
 
+    let mut extra_args: Vec<String> = Vec::new();
+    if let Some(m) = &model {
+        if !m.is_empty() {
+            extra_args.push("--model".into());
+            extra_args.push(m.clone());
+        }
+    }
+    if let Some(e) = &effort {
+        if !e.is_empty() {
+            extra_args.push("--effort".into());
+            extra_args.push(e.clone());
+        }
+    }
+
     if cfg!(debug_assertions) {
-        eprintln!("[MCP] launching Claude channel {version} in terminal (dev mode)");
-        launch_in_terminal(&dir, &claude_bin)?;
+        eprintln!("[MCP] launching Claude channel {version} in terminal (dev) model={model:?} effort={effort:?}");
+        launch_in_terminal(&dir, &claude_bin, &extra_args)?;
     } else {
-        eprintln!("[MCP] launching Claude channel {version} silently");
-        std::process::Command::new(&claude_bin)
-            .current_dir(&dir)
+        let mut cmd = std::process::Command::new(&claude_bin);
+        cmd.current_dir(&dir)
             .arg("--dangerously-load-development-channels")
             .arg("server:agentbridge")
+            .args(&extra_args)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .stdin(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("failed to start claude: {e}"))?;
+            .stdin(std::process::Stdio::null());
+        cmd.spawn().map_err(|e| format!("failed to start claude: {e}"))?;
     }
     Ok(())
 }
 
 #[cfg(target_os = "macos")]
-fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path) -> Result<(), String> {
+fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path, extra: &[String]) -> Result<(), String> {
+    let extra_str = extra.iter().map(|a| format!("'{a}'")).collect::<Vec<_>>().join(" ");
     let cmd = format!(
-        "cd '{}' && '{}' --dangerously-load-development-channels server:agentbridge",
-        dir.replace('\'', "'\\''"),
-        claude_bin.display()
+        "cd '{}' && '{}' --dangerously-load-development-channels server:agentbridge {}",
+        dir.replace('\'', "'\\''"), claude_bin.display(), extra_str,
     );
     let script = format!(
         "tell application \"Terminal\"\ndo script \"{}\"\nend tell",
         cmd.replace('\\', "\\\\").replace('"', "\\\"")
     );
-    std::process::Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .spawn()
-        .map_err(|e| format!("failed: {e}"))?;
+    std::process::Command::new("osascript").arg("-e").arg(&script)
+        .spawn().map_err(|e| format!("failed: {e}"))?;
     Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
-fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path) -> Result<(), String> {
+fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path, extra: &[String]) -> Result<(), String> {
     std::process::Command::new(claude_bin)
         .current_dir(dir)
         .arg("--dangerously-load-development-channels")
         .arg("server:agentbridge")
+        .args(extra)
         .spawn()
         .map_err(|e| format!("failed: {e}"))?;
     Ok(())
