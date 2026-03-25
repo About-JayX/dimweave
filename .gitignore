@@ -4,7 +4,8 @@ node_modules/
 # Build output
 dist/
 
-# Tauri
+# Rust build output (workspace root + tauri crate)
+target/
 src-tauri/target/
 
 # Logs
@@ -36,3 +37,4 @@ Thumbs.db
 
 # Lock files (bun)
 *.lockb
+src-tauri/target/*
