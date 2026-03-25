@@ -1,15 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex;
-mod pty;
+mod daemon;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
 use codex::oauth::{OAuthHandle, OAuthLaunchInfo};
 use codex::usage::UsageSnapshot;
+use daemon::{types::BridgeMessage, DaemonCmd};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
+use tokio::sync::mpsc;
+
+// ── Daemon command sender ────────────────────────────────────────────────────
+
+struct DaemonSender(mpsc::Sender<DaemonCmd>);
+
+// ── Codex / account commands ─────────────────────────────────────────────────
 
 #[tauri::command]
 fn get_codex_account() -> Result<CodexProfile, String> {
@@ -35,23 +43,91 @@ async fn pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String>
     rx.await.map_err(|_| "dialog cancelled".to_string())
 }
 
+// ── Daemon messaging commands ─────────────────────────────────────────────────
+
+#[tauri::command]
+async fn daemon_send_message(
+    msg: BridgeMessage,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::SendMessage(msg))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn daemon_launch_codex(
+    role_id: String,
+    cwd: String,
+    model: Option<String>,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::LaunchCodex { role_id, cwd, model })
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn daemon_stop_codex(sender: State<'_, DaemonSender>) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::StopCodex)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn daemon_set_claude_role(
+    role: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::SetClaudeRole(role))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ── Auth / OAuth commands ─────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn codex_login(app: tauri::AppHandle) -> Result<OAuthLaunchInfo, String> {
+    let handle = app.state::<Arc<OAuthHandle>>();
+    codex::oauth::start_login(handle.inner().clone()).await
+}
+
+#[tauri::command]
+fn codex_cancel_login(app: tauri::AppHandle) -> bool {
+    app.state::<Arc<OAuthHandle>>().cancel()
+}
+
+#[tauri::command]
+async fn codex_logout() -> Result<(), String> {
+    codex::oauth::do_logout().await
+}
+
+// ── Misc commands ─────────────────────────────────────────────────────────────
+
 #[tauri::command]
 fn register_mcp() -> Result<bool, String> {
     let bridge_cmd = if cfg!(debug_assertions) {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let project_root = std::path::Path::new(manifest_dir).parent().unwrap_or(std::path::Path::new("."));
-        let bridge_ts = project_root.join("daemon").join("bridge.ts");
-        if bridge_ts.exists() {
-            return write_mcp_config("bun", &["run", &bridge_ts.to_string_lossy()]);
-        }
-        "agentbridge-bridge".to_string()
+        let project_root =
+            std::path::Path::new(manifest_dir).parent().unwrap_or(std::path::Path::new("."));
+        let bridge_bin = project_root.join("target").join("debug").join("agent-bridge-bridge");
+        bridge_bin.to_string_lossy().to_string()
     } else {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        exe.parent().unwrap_or(std::path::Path::new("."))
-            .join("../Resources/bridge")
-            .to_string_lossy().to_string()
+        exe.parent()
+            .unwrap_or(std::path::Path::new("."))
+            .join("../Resources/agent-bridge-bridge")
+            .to_string_lossy()
+            .to_string()
     };
-
     write_mcp_config(&bridge_cmd, &[])
 }
 
@@ -67,25 +143,42 @@ fn write_mcp_config(command: &str, args: &[&str]) -> Result<bool, String> {
         serde_json::json!({})
     };
 
-    let servers = config.as_object_mut().ok_or("invalid mcp.json")?
-        .entry("mcpServers").or_insert_with(|| serde_json::json!({}));
+    let servers = config
+        .as_object_mut()
+        .ok_or("invalid mcp.json")?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
 
     let mut entry = serde_json::json!({ "command": command });
-    if !args.is_empty() { entry["args"] = serde_json::json!(args); }
+    if !args.is_empty() {
+        entry["args"] = serde_json::json!(args);
+    }
 
-    servers.as_object_mut().ok_or("invalid mcpServers")?
+    servers
+        .as_object_mut()
+        .ok_or("invalid mcpServers")?
         .insert("agentbridge".to_string(), entry);
 
-    let json = serde_json::to_string_pretty(&config).map_err(|e| format!("serialize error: {e}"))?;
+    let json =
+        serde_json::to_string_pretty(&config).map_err(|e| format!("serialize error: {e}"))?;
     std::fs::write(&mcp_path, json).map_err(|e| format!("write error: {e}"))?;
     Ok(true)
 }
 
 #[tauri::command]
 fn check_mcp_registered() -> bool {
-    let home = match dirs::home_dir() { Some(h) => h, None => return false };
-    let raw = match std::fs::read_to_string(home.join(".claude").join("mcp.json")) { Ok(r) => r, Err(_) => return false };
-    let config: serde_json::Value = match serde_json::from_str(&raw) { Ok(c) => c, Err(_) => return false };
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return false,
+    };
+    let raw = match std::fs::read_to_string(home.join(".claude").join("mcp.json")) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let config: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
     config.pointer("/mcpServers/agentbridge").is_some()
 }
 
@@ -121,27 +214,21 @@ fn launch_claude_terminal(cwd: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-async fn codex_login(app: tauri::AppHandle) -> Result<OAuthLaunchInfo, String> {
-    let handle = app.state::<Arc<OAuthHandle>>();
-    codex::oauth::start_login(handle.inner().clone()).await
-}
-
-#[tauri::command]
-fn codex_cancel_login(app: tauri::AppHandle) -> bool {
-    app.state::<Arc<OAuthHandle>>().cancel()
-}
-
-#[tauri::command]
-async fn codex_logout() -> Result<(), String> {
-    codex::oauth::do_logout().await
-}
+// ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(OAuthHandle::new()))
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let sender = daemon::start(handle.clone()).await;
+                handle.manage(DaemonSender(sender));
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_codex_account,
             refresh_usage,
@@ -153,11 +240,10 @@ fn main() {
             codex_login,
             codex_cancel_login,
             codex_logout,
-            pty::detect_claude_config,
-            pty::launch_pty,
-            pty::pty_write,
-            pty::pty_resize,
-            pty::stop_pty,
+            daemon_send_message,
+            daemon_launch_codex,
+            daemon_stop_codex,
+            daemon_set_claude_role,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

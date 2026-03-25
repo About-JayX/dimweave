@@ -11,9 +11,13 @@ serde_json = "1"
 base64 = "0.22"
 dirs = "6"
 reqwest = { version = "0.12", features = ["json"] }
-tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "macros", "sync", "time", "net"] }
 tauri-plugin-dialog = "2.6.0"
-portable-pty = "0.9.0"
+axum = { version = "0.7", features = ["ws"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+chrono = { version = "0.4" }
+anyhow = "1"
 which = "8.0.2"
 
 [build-dependencies]

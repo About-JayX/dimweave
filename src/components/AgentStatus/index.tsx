@@ -12,11 +12,7 @@ interface AgentStatusProps {
   connected: boolean;
 }
 
-export function AgentStatusPanel({
-  agents,
-  daemonStatus,
-  connected,
-}: AgentStatusProps) {
+export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
   const launchCodexTui = useBridgeStore((s) => s.launchCodexTui);
   const stopCodexTui = useBridgeStore((s) => s.stopCodexTui);
   const profile = useCodexAccountStore((s) => s.profile);
@@ -26,21 +22,20 @@ export function AgentStatusPanel({
   const fetchUsage = useCodexAccountStore((s) => s.fetchUsage);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
 
-  const codexTuiRunning = daemonStatus?.codexTuiRunning ?? false;
-  const codexReady = daemonStatus?.codexBootstrapped ?? false;
-  const claudeConnected = daemonStatus?.claudeConnected ?? false;
+  // Derive agent states from the agents map (populated via agent_status Tauri events)
+  const claudeConnected = agents.claude?.status === "connected";
+  const codexConnected = agents.codex?.status === "connected";
 
-  // Fetch profile on mount, usage when codex connects
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
   useEffect(() => {
-    if (codexTuiRunning) fetchUsage();
-  }, [codexTuiRunning, fetchUsage]);
+    if (codexConnected) fetchUsage();
+  }, [codexConnected, fetchUsage]);
 
   return (
     <div className="flex flex-1 flex-col gap-3 p-4 overflow-y-auto min-h-0">
-      {/* Daemon connection */}
+      {/* Daemon connection status */}
       <div className="flex items-center gap-2 pb-3 border-b border-border/50 relative">
         <h3 className="flex-1 m-0 text-sm font-semibold text-foreground">
           AgentBridge
@@ -58,16 +53,16 @@ export function AgentStatusPanel({
 
         {/* Codex */}
         <CodexPanel
-          codexTuiRunning={codexTuiRunning}
-          codexReady={codexReady}
-          threadId={daemonStatus?.threadId ?? null}
+          codexTuiRunning={codexConnected}
+          codexReady={codexConnected}
+          threadId={null}
           launchCodexTui={launchCodexTui}
           stopCodexTui={stopCodexTui}
           profile={profile}
           usage={usage}
           refreshing={refreshing}
           refreshUsage={refreshUsage}
-          codexAccount={daemonStatus?.codexAccount}
+          codexAccount={undefined}
         />
 
         {/* Other agents */}
@@ -90,24 +85,6 @@ export function AgentStatusPanel({
             </div>
           ))}
       </div>
-
-      {/* Daemon info */}
-      {daemonStatus && (
-        <div className="mt-auto rounded-md bg-muted/60 p-2.5 border border-border/30 backdrop-blur-sm">
-          <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
-            Daemon
-          </div>
-          <div className="font-mono text-[11px] text-muted-foreground">
-            PID: {daemonStatus.pid}
-          </div>
-          <div className="font-mono text-[11px] text-muted-foreground">
-            Queued: {daemonStatus.queuedMessageCount}
-          </div>
-          <div className="font-mono text-[11px] text-muted-foreground">
-            Proxy: {daemonStatus.proxyUrl}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

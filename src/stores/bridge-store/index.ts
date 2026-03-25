@@ -1,61 +1,65 @@
 import { create } from "zustand";
-import type { GuiEvent } from "@/types";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
-import {
-  GUI_WS_URL,
-  RECONNECT_INTERVAL,
-  ws,
-  reconnectTimer,
-  setWs,
-  setReconnectTimer,
-  sendWs,
-} from "./ws-connection";
-import { handleGuiEvent } from "./message-handler";
 
 export type { CodexPhase, TerminalLine, BridgeState } from "./types";
 
+// Tauri event payload shapes emitted by the Rust daemon (camelCase from serde)
+interface AgentMessagePayload {
+  payload: BridgeMessage;
+  timestamp: number;
+}
+interface SystemLogPayload {
+  level: string;
+  message: string;
+}
+interface AgentStatusPayload {
+  agent: string;
+  online: boolean;
+  exitCode?: number;
+}
+
 export const useBridgeStore = create<BridgeState>((set, get) => {
-  function connect() {
-    if (ws?.readyState === WebSocket.OPEN) return;
+  // Subscribe to Tauri events — daemon is embedded in Tauri, always available
+  listen<AgentMessagePayload>("agent_message", (e) => {
+    set((s) => ({ messages: [...s.messages, e.payload.payload] }));
+  });
 
-    const socket = new WebSocket(GUI_WS_URL);
+  listen<SystemLogPayload>("system_log", (e) => {
+    const { level, message } = e.payload;
+    set((s) => ({
+      terminalLines: [
+        ...s.terminalLines.slice(-200),
+        {
+          agent: "system",
+          kind: level === "error" ? "error" : "text",
+          line: message,
+          timestamp: Date.now(),
+        },
+      ],
+    }));
+  });
 
-    socket.onopen = () => {
-      set({ connected: true });
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        setReconnectTimer(null);
-      }
-    };
-
-    socket.onmessage = (event) => {
-      let guiEvent: GuiEvent;
-      try {
-        guiEvent = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-      handleGuiEvent(guiEvent, set);
-    };
-
-    socket.onclose = () => {
-      set({ connected: false });
-      setWs(null);
-      setReconnectTimer(setTimeout(connect, RECONNECT_INTERVAL));
-    };
-
-    socket.onerror = () => {
-      socket.close();
-    };
-
-    setWs(socket);
-  }
-
-  // Auto-connect on store creation
-  connect();
+  listen<AgentStatusPayload>("agent_status", (e) => {
+    const { agent, online } = e.payload;
+    set((s) => ({
+      agents: {
+        ...s.agents,
+        [agent]: {
+          ...s.agents[agent],
+          name: agent,
+          displayName: s.agents[agent]?.displayName ?? agent,
+          status: online ? "connected" : "disconnected",
+        },
+      },
+    }));
+  });
 
   return {
-    connected: false,
+    // Daemon is always available (embedded in Tauri process)
+    connected: true,
     messages: [],
     agents: {
       claude: {
@@ -74,18 +78,49 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     draft: "",
 
     setDraft: (text) => set({ draft: text }),
-    sendToCodex: (content) => sendWs({ type: "send_to_codex", content }),
+
+    sendToCodex: (content) => {
+      const { codexRole } = get();
+      invoke("daemon_send_message", {
+        msg: {
+          id: `user_${Date.now()}`,
+          from: "user",
+          to: codexRole,
+          content,
+          timestamp: Date.now(),
+        },
+      }).catch(console.warn);
+    },
+
     clearMessages: () => set({ messages: [] }),
-    launchCodexTui: () => sendWs({ type: "launch_codex_tui" }),
-    stopCodexTui: () => sendWs({ type: "stop_codex_tui" }),
-    applyConfig: (config: {
-      model?: string;
-      reasoningEffort?: string;
-      cwd?: string;
-    }) => sendWs({ type: "apply_config", ...config }),
+
+    launchCodexTui: () => {
+      const { codexRole } = get();
+      invoke("daemon_launch_codex", {
+        roleId: codexRole,
+        cwd: ".",
+        model: null,
+      }).catch(console.warn);
+    },
+
+    stopCodexTui: () => invoke("daemon_stop_codex").catch(console.warn),
+
+    applyConfig: (config) => {
+      const { codexRole } = get();
+      invoke("daemon_launch_codex", {
+        roleId: codexRole,
+        cwd: config.cwd ?? ".",
+        model: config.model ?? null,
+      }).catch(console.warn);
+    },
+
     setRole: (agent, role) => {
-      // Don't optimistically set role -- wait for daemon's role_sync event
-      sendWs({ type: "set_role", agent, role });
+      if (agent === "claude") {
+        set({ claudeRole: role });
+        invoke("daemon_set_claude_role", { role }).catch(console.warn);
+      } else {
+        set({ codexRole: role });
+      }
     },
   };
 });

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useBridgeStore } from "./stores/bridge-store";
 import { AgentStatusPanel } from "./components/AgentStatus";
 import { MessagePanel } from "./components/MessagePanel";
@@ -9,9 +8,6 @@ export default function App() {
   const messages = useBridgeStore((s) => s.messages);
   const agents = useBridgeStore((s) => s.agents);
   const daemonStatus = useBridgeStore((s) => s.daemonStatus);
-  const [activeTab, setActiveTab] = useState<"messages" | "terminal" | "logs">(
-    "messages",
-  );
 
   return (
     <div
@@ -39,8 +35,8 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 animate-in fade-in duration-500">
-        <MessagePanel messages={messages} onTabChange={setActiveTab} />
-        {activeTab === "messages" && <ReplyInput connected={connected} />}
+        <MessagePanel messages={messages} />
+        <ReplyInput connected={connected} />
       </div>
     </div>
   );

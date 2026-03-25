@@ -5,9 +5,8 @@ import { useBridgeStore, type TerminalLine } from "@/stores/bridge-store";
 import type { BridgeMessage } from "@/types";
 import { SourceBadge } from "./SourceBadge";
 import { TabBtn } from "./TabBtn";
-import { TerminalView } from "./TerminalView";
 
-type Tab = "messages" | "terminal" | "logs";
+type Tab = "messages" | "logs";
 
 interface MessagePanelProps {
   messages: BridgeMessage[];
@@ -34,7 +33,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
     if (l.kind === "error") errorLines.push(l);
   }
 
-  // Scroll messages
+  // Scroll to bottom when messages change
   useEffect(() => {
     if (tab === "messages")
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -42,22 +41,12 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [messages, allTerminalLines, tab]);
 
-  // Listen for switch-to-terminal event
-  useEffect(() => {
-    const handler = () => setTab("terminal");
-    window.addEventListener("switch-to-terminal", handler);
-    return () => window.removeEventListener("switch-to-terminal", handler);
-  }, []);
-
   return (
     <div className="flex flex-1 flex-col min-h-0">
       {/* Tabs */}
       <div className="flex items-center px-4 py-2 border-b border-border/50 gap-3 relative">
         <TabBtn active={tab === "messages"} onClick={() => setTab("messages")}>
           Messages ({chatMessages.length})
-        </TabBtn>
-        <TabBtn active={tab === "terminal"} onClick={() => setTab("terminal")}>
-          Terminal
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           Logs {errorLines.length > 0 && `(${errorLines.length})`}
@@ -119,10 +108,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         </div>
       )}
 
-      {/* Terminal (xterm.js - real PTY) */}
-      <TerminalView visible={tab === "terminal"} />
-
-      {/* Logs (errors only) */}
+      {/* Logs */}
       {tab === "logs" && (
         <div
           ref={logRef}
