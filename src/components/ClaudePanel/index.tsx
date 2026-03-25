@@ -143,7 +143,19 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         </div>
       </div>
 
-      {/* Launch button */}
+      {/* Disconnect button (when connected) */}
+      {connected && (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="w-full mt-2 active:scale-[0.98] transition-all duration-200"
+          onClick={() => invoke("stop_claude").catch(console.error)}
+        >
+          Disconnect Claude
+        </Button>
+      )}
+
+      {/* Launch button (when not connected) */}
       {!connected && (
         <Button
           size="sm"

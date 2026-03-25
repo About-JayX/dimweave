@@ -94,6 +94,22 @@ pub async fn daemon_get_status_snapshot(
         .map_err(|_| "daemon dropped status snapshot reply".to_string())
 }
 
+/// Kill any running Claude channel preview processes.
+#[tauri::command]
+pub async fn stop_claude() -> Result<(), String> {
+    let output = tokio::process::Command::new("pkill")
+        .arg("-f")
+        .arg("claude.*server:agentbridge")
+        .output()
+        .await
+        .map_err(|e| format!("pkill failed: {e}"))?;
+    eprintln!(
+        "[Claude] stop: pkill exit={}, killed channel processes",
+        output.status.code().unwrap_or(-1)
+    );
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn codex_login(app: tauri::AppHandle) -> Result<OAuthLaunchInfo, String> {
     let handle = app.state::<Arc<OAuthHandle>>();
