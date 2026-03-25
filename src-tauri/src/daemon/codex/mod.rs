@@ -7,17 +7,20 @@ use session::SessionOpts;
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
+use tokio_util::sync::CancellationToken;
 
 pub struct CodexHandle {
     process: Arc<Mutex<Option<tokio::process::Child>>>,
     session_mgr: Arc<Mutex<crate::daemon::session_manager::SessionManager>>,
     session_id: String,
+    cancel: CancellationToken,
 }
 
 impl CodexHandle {
     pub async fn stop(&self) {
-        if let Some(ref mut child) = *self.process.lock().await {
-            lifecycle::stop(child).await;
+        self.cancel.cancel();
+        if let Some(mut child) = self.process.lock().await.take() {
+            lifecycle::stop(&mut child).await;
         }
         self.session_mgr
             .lock()
@@ -75,6 +78,7 @@ pub async fn start(
 
     // Poll until Codex app-server is accepting connections (up to 10 s)
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut poll_delay = std::time::Duration::from_millis(50);
     loop {
         if tokio::net::TcpStream::connect(format!("127.0.0.1:{codex_port}"))
             .await
@@ -91,7 +95,8 @@ pub async fn start(
         if tokio::time::Instant::now() >= deadline {
             anyhow::bail!("Codex app-server did not start within 10 s");
         }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(poll_delay).await;
+        poll_delay = (poll_delay * 2).min(std::time::Duration::from_millis(500));
     }
 
     let (inject_tx, inject_rx) = mpsc::channel::<String>(64);
@@ -103,18 +108,24 @@ pub async fn start(
         developer_instructions,
     };
 
+    let cancel = CancellationToken::new();
+
     let state2 = state.clone();
     let app2 = app.clone();
+    let cancel_session = cancel.clone();
     tokio::spawn(async move {
-        session::run(codex_port, opts, state2, app2, inject_rx).await;
+        tokio::select! {
+            _ = cancel_session.cancelled() => {}
+            _ = session::run(codex_port, opts, state2, app2, inject_rx) => {}
+        }
     });
 
-    {
+    let buffered = {
         let mut s = state.write().await;
         s.codex_role = role_id.clone();
         s.codex_inject_tx = Some(inject_tx.clone());
-    }
-    let buffered = state.write().await.take_buffered_for(&role_id);
+        s.take_buffered_for(&role_id)
+    };
     for msg in buffered {
         inject_tx
             .send(crate::daemon::routing::format_codex_input(&msg))
@@ -132,9 +143,13 @@ pub async fn start(
     let child_health = child_arc.clone();
     let state_health = state.clone();
     let app_health = app.clone();
+    let cancel_health = cancel.clone();
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::select! {
+                _ = cancel_health.cancelled() => return,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
+            }
             let mut guard = child_health.lock().await;
             if let Some(ref mut child) = *guard {
                 match child.try_wait() {
@@ -162,5 +177,6 @@ pub async fn start(
         process: child_arc,
         session_mgr,
         session_id,
+        cancel,
     })
 }

@@ -56,6 +56,7 @@ impl DaemonState {
         self.buffered_messages.push(msg);
         if self.buffered_messages.len() > 200 {
             self.buffered_messages.drain(0..100);
+            eprintln!("[Daemon] buffer overflow: 100 oldest messages dropped");
         }
     }
 
@@ -78,6 +79,7 @@ impl DaemonState {
         request: PermissionRequest,
         created_at: u64,
     ) {
+        self.prune_expired_permissions(created_at);
         self.pending_permissions.insert(
             request.request_id.clone(),
             PendingPermission {
@@ -108,10 +110,9 @@ impl DaemonState {
     }
 
     pub fn buffer_permission_verdict(&mut self, agent_id: &str, verdict: PermissionVerdict) {
-        self.buffered_verdicts
-            .entry(agent_id.to_string())
-            .or_default()
-            .push(verdict);
+        let entry = self.buffered_verdicts.entry(agent_id.to_string()).or_default();
+        entry.push(verdict);
+        if entry.len() > 50 { entry.drain(0..25); }
     }
 
     pub fn take_buffered_verdicts_for(&mut self, agent_id: &str) -> Vec<PermissionVerdict> {
@@ -189,12 +190,9 @@ mod tests {
             100,
         );
 
-        assert!(s
-            .resolve_permission(
-                "req-expired",
-                PermissionBehavior::Deny,
-                100 + PERMISSION_TTL_MS + 1
-            )
-            .is_none());
+        let result = s.resolve_permission(
+            "req-expired", PermissionBehavior::Deny, 100 + PERMISSION_TTL_MS + 1,
+        );
+        assert!(result.is_none());
     }
 }

@@ -13,6 +13,7 @@ interface ClaudePanelProps {
 export function ClaudePanel({ connected }: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
   const handlePickDir = useCallback(async () => {
@@ -22,6 +23,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
 
   const handleLaunch = useCallback(async () => {
     if (!cwd) return;
+    setConnecting(true);
     try {
       setLaunchError(null);
       // Register agentbridge into the project-local .mcp.json
@@ -30,6 +32,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
       await invoke("launch_claude_terminal", { cwd });
     } catch (e) {
       setLaunchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConnecting(false);
     }
   }, [cwd]);
 
@@ -100,10 +104,10 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
         <Button
           size="sm"
           className="w-full mt-2 bg-claude text-white hover:bg-claude/90 hover:shadow-[0_0_16px_#8b5cf640] active:scale-[0.98] transition-all duration-200 btn-ripple"
-          disabled={!cwd}
+          disabled={!cwd || connecting}
           onClick={handleLaunch}
         >
-          Connect Claude
+          {connecting ? "Connecting..." : "Connect Claude"}
         </Button>
       )}
 

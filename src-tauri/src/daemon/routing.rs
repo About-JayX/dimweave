@@ -16,35 +16,33 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
     if msg.to == "user" {
         return RouteResult::ToGui;
     }
+
     enum Target {
         Claude(tokio::sync::mpsc::Sender<ToAgent>),
         Codex(tokio::sync::mpsc::Sender<String>, String),
-        Buffer,
-        Drop,
+        NeedBuffer,
     }
 
+    // First try with read lock — avoids write contention on the hot path
     let target = {
-        let mut s = state.write().await;
-
+        let s = state.read().await;
         if s.claude_role == msg.to {
             if msg.from != "user" && msg.from != "system" && msg.from != s.codex_role {
-                Target::Drop
-            } else if let Some(tx) = s.attached_agents.get("claude") {
+                return RouteResult::Dropped;
+            }
+            if let Some(tx) = s.attached_agents.get("claude") {
                 Target::Claude(tx.clone())
             } else {
-                s.buffer_message(msg.clone());
-                Target::Buffer
+                Target::NeedBuffer
             }
         } else if s.codex_role == msg.to {
             if let Some(tx) = s.codex_inject_tx.clone() {
                 Target::Codex(tx, format_codex_input(&msg))
             } else {
-                s.buffer_message(msg.clone());
-                Target::Buffer
+                Target::NeedBuffer
             }
         } else {
-            s.buffer_message(msg.clone());
-            Target::Buffer
+            Target::NeedBuffer
         }
     };
 
@@ -71,8 +69,10 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
                 RouteResult::Buffered
             }
         }
-        Target::Drop => RouteResult::Dropped,
-        Target::Buffer => RouteResult::Buffered,
+        Target::NeedBuffer => {
+            state.write().await.buffer_message(msg);
+            RouteResult::Buffered
+        }
     }
 }
 

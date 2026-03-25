@@ -65,6 +65,20 @@ interface CodexAccountState {
 
 export type { CodexProfile, UsageSnapshot, CodexModel, ReasoningLevel };
 
+let _loginPollInterval: ReturnType<typeof setInterval> | null = null;
+let _loginPollTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function clearLoginPolling() {
+  if (_loginPollInterval) {
+    clearInterval(_loginPollInterval);
+    _loginPollInterval = null;
+  }
+  if (_loginPollTimeout) {
+    clearTimeout(_loginPollTimeout);
+    _loginPollTimeout = null;
+  }
+}
+
 export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
   profile: null,
   usage: null,
@@ -78,7 +92,9 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     try {
       const profile = await invoke<CodexProfile>("get_codex_account");
       set({ profile });
-    } catch {}
+    } catch (e) {
+      console.error("[CodexAccount]", e);
+    }
   },
 
   fetchUsage: async () => {
@@ -87,7 +103,8 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     try {
       const usage = await invoke<UsageSnapshot>("refresh_usage");
       set({ usage, loading: false });
-    } catch {
+    } catch (e) {
+      console.error("[CodexAccount]", e);
       set({ loading: false });
     }
   },
@@ -97,7 +114,8 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     try {
       const usage = await invoke<UsageSnapshot>("refresh_usage");
       set({ usage, refreshing: false });
-    } catch {
+    } catch (e) {
+      console.error("[CodexAccount]", e);
       set({ refreshing: false });
     }
   },
@@ -106,13 +124,16 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     try {
       const models = await invoke<CodexModel[]>("list_codex_models");
       set({ models });
-    } catch {}
+    } catch (e) {
+      console.error("[CodexAccount]", e);
+    }
   },
 
   pickDirectory: async () => {
     try {
       return await invoke<string | null>("pick_directory");
-    } catch {
+    } catch (e) {
+      console.error("[CodexAccount]", e);
       return null;
     }
   },
@@ -123,32 +144,39 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
       const info = await invoke<OAuthLaunchInfo>("codex_login");
       set({ loginUri: info.verificationUri });
       // Poll for auth completion — stop when profile has email
-      const poll = setInterval(async () => {
+      clearLoginPolling();
+      _loginPollInterval = setInterval(async () => {
         try {
           const profile = await invoke<CodexProfile>("get_codex_account");
           if (profile?.email) {
-            clearInterval(poll);
+            clearLoginPolling();
             set({ profile, loginPending: false, loginUri: null });
             // Refresh dependent data
             get().fetchUsage();
             get().fetchModels();
           }
-        } catch {}
+        } catch (e) {
+          console.error("[CodexAccount]", e);
+        }
       }, 2000);
       // Safety timeout
-      setTimeout(() => {
-        clearInterval(poll);
+      _loginPollTimeout = setTimeout(() => {
+        clearLoginPolling();
         if (get().loginPending) set({ loginPending: false });
       }, 120000);
-    } catch {
+    } catch (e) {
+      console.error("[CodexAccount]", e);
       set({ loginPending: false, loginUri: null });
     }
   },
 
   cancelLogin: async () => {
+    clearLoginPolling();
     try {
       await invoke<boolean>("codex_cancel_login");
-    } catch {}
+    } catch (e) {
+      console.error("[CodexAccount]", e);
+    }
     set({ loginPending: false, loginUri: null });
   },
 
@@ -156,6 +184,8 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     try {
       await invoke("codex_logout");
       set({ profile: null, usage: null, models: [] });
-    } catch {}
+    } catch (e) {
+      console.error("[CodexAccount]", e);
+    }
   },
 }));

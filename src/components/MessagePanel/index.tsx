@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageMarkdown } from "@/components/MessageMarkdown";
-import { useBridgeStore, type TerminalLine } from "@/stores/bridge-store";
+import { useBridgeStore } from "@/stores/bridge-store";
 import type { BridgeMessage } from "@/types";
 import { PermissionQueue } from "./PermissionQueue";
 import { SourceBadge } from "./SourceBadge";
@@ -22,26 +22,34 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   };
   const bottomRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const permissionPrompts = useBridgeStore((s) => s.permissionPrompts);
   const respondToPermission = useBridgeStore((s) => s.respondToPermission);
 
-  const chatMessages = messages.filter((m) => m.from !== "system");
+  const chatMessages = useMemo(
+    () => messages.filter((m) => m.from !== "system"),
+    [messages],
+  );
+  const errorLines = useMemo(
+    () => allTerminalLines.filter((l) => l.kind === "error"),
+    [allTerminalLines],
+  );
 
-  const errorLines: TerminalLine[] = [];
-  for (const l of allTerminalLines) {
-    if (l.kind === "error") errorLines.push(l);
-  }
+  // Smart auto-scroll: only if user is near the bottom
+  const isNearBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  }, []);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
-    if (tab === "messages")
+    if (tab === "messages" && isNearBottom()) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    else if (tab === "logs" && logRef.current)
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [messages, allTerminalLines, tab]);
+    }
+  }, [messages, tab, isNearBottom]);
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
@@ -53,7 +61,10 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           Logs {errorLines.length > 0 && `(${errorLines.length})`}
         </TabBtn>
-        <TabBtn active={tab === "approvals"} onClick={() => setTab("approvals")}>
+        <TabBtn
+          active={tab === "approvals"}
+          onClick={() => setTab("approvals")}
+        >
           Approvals
           {permissionPrompts.length > 0 && ` (${permissionPrompts.length})`}
         </TabBtn>
@@ -68,7 +79,7 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
 
       {/* Messages */}
       {tab === "messages" && (
-        <div className="flex-1 overflow-y-auto px-4 py-2">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2">
           {chatMessages.length === 0 && (
             <div className="py-10 text-center text-[13px] text-muted-foreground animate-in fade-in duration-500">
               No messages yet. Connect Claude and Codex to start bridging.
@@ -116,9 +127,9 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
               No logs.
             </div>
           )}
-          {allTerminalLines.map((l, i) => (
+          {allTerminalLines.map((l) => (
             <div
-              key={i}
+              key={l.id}
               className={`py-0.5 ${l.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
             >
               <span className="opacity-50 mr-2">

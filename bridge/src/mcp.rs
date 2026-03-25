@@ -15,6 +15,7 @@ pub async fn run(
     let mut writer = tokio::io::BufWriter::new(stdout);
     let mut initialized = false;
     let mut channel_state = ChannelState::new();
+    let mut pre_init_buffer: Vec<DaemonInbound> = Vec::new();
 
     loop {
         let mut line = String::new();
@@ -24,25 +25,45 @@ pub async fn run(
                 let trimmed = line.trim();
                 if trimmed.is_empty() { continue; }
                 let Ok(msg) = serde_json::from_str::<RpcMessage>(trimmed) else { continue };
-                handle_rpc_message(
+                let was_initialized = initialized;
+                if !handle_rpc_message(
                     &agent_id,
                     &mut initialized,
                     &mut channel_state,
                     &mut writer,
                     &reply_tx,
                     msg,
-                ).await;
+                ).await {
+                    eprintln!("[Bridge/{agent_id}] stdout write failed, exiting MCP loop");
+                    break;
+                }
+                // Replay any messages buffered before initialization
+                if !was_initialized && initialized {
+                    for buffered in pre_init_buffer.drain(..) {
+                        if !handle_daemon_inbound_checked(
+                            &agent_id, &mut channel_state, &mut writer, buffered,
+                        ).await {
+                            break;
+                        }
+                    }
+                }
             }
             Some(inbound) = push_rx.recv() => {
                 if !initialized {
+                    pre_init_buffer.push(inbound);
                     continue;
                 }
-                handle_daemon_inbound(&agent_id, &mut channel_state, &mut writer, inbound).await;
+                if !handle_daemon_inbound_checked(
+                    &agent_id, &mut channel_state, &mut writer, inbound,
+                ).await {
+                    break;
+                }
             }
         }
     }
 }
 
+/// Returns false if stdout write failed.
 async fn handle_rpc_message(
     agent_id: &str,
     initialized: &mut bool,
@@ -50,7 +71,7 @@ async fn handle_rpc_message(
     writer: &mut tokio::io::BufWriter<tokio::io::Stdout>,
     reply_tx: &tokio::sync::mpsc::Sender<BridgeOutbound>,
     msg: RpcMessage,
-) {
+) -> bool {
     match msg.method.as_deref() {
         Some("initialize") => {
             *initialized = true;
@@ -60,7 +81,7 @@ async fn handle_rpc_message(
                 "id": id_to_value(&msg.id),
                 "result": initialize_result()
             });
-            write_line(writer, &resp).await;
+            if !write_line(writer, &resp).await { return false; }
         }
         Some("tools/list") => {
             let resp = serde_json::json!({
@@ -68,11 +89,11 @@ async fn handle_rpc_message(
                 "id": id_to_value(&msg.id),
                 "result": { "tools": [crate::tools::reply_tool_schema()] }
             });
-            write_line(writer, &resp).await;
+            if !write_line(writer, &resp).await { return false; }
         }
         Some("tools/call") => {
             let resp = tool_call_response(agent_id, channel_state, reply_tx, &msg).await;
-            write_line(writer, &resp).await;
+            if !write_line(writer, &resp).await { return false; }
         }
         Some("notifications/claude/channel/permission_request") => {
             if let Some(request) = msg.params.as_ref().and_then(parse_permission_request) {
@@ -89,6 +110,7 @@ async fn handle_rpc_message(
         Some("notifications/initialized") | None => {}
         _ => {}
     }
+    true
 }
 
 async fn tool_call_response(
@@ -129,12 +151,13 @@ async fn tool_call_response(
     }
 }
 
-async fn handle_daemon_inbound(
+/// Handle a daemon inbound message. Returns false if stdout write failed.
+async fn handle_daemon_inbound_checked(
     agent_id: &str,
     channel_state: &mut ChannelState,
     writer: &mut tokio::io::BufWriter<tokio::io::Stdout>,
     inbound: DaemonInbound,
-) {
+) -> bool {
     let payload = match inbound {
         DaemonInbound::RoutedMessage(msg) => {
             let notif = channel_state.prepare_channel_message(&msg);
@@ -159,13 +182,19 @@ async fn handle_daemon_inbound(
     };
 
     if let Some(notif) = payload {
-        write_line(writer, &notif).await;
+        if !write_line(writer, &notif).await {
+            eprintln!("[Bridge/{agent_id}] stdout write failed, exiting MCP loop");
+            return false;
+        }
     }
+    true
 }
 
-async fn write_line(w: &mut tokio::io::BufWriter<tokio::io::Stdout>, val: &serde_json::Value) {
-    let mut line = serde_json::to_string(val).unwrap();
+/// Write a JSON value as a newline-delimited line. Returns false on error.
+async fn write_line(w: &mut tokio::io::BufWriter<tokio::io::Stdout>, val: &serde_json::Value) -> bool {
+    let Ok(mut line) = serde_json::to_string(val) else { return false };
     line.push('\n');
-    let _ = w.write_all(line.as_bytes()).await;
-    let _ = w.flush().await;
+    if w.write_all(line.as_bytes()).await.is_err() { return false; }
+    if w.flush().await.is_err() { return false; }
+    true
 }

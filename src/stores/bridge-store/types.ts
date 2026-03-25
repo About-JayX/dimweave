@@ -6,6 +6,7 @@ import type {
 } from "@/types";
 
 export interface TerminalLine {
+  id: number;
   agent: string;
   kind: "text" | "error";
   line: string;

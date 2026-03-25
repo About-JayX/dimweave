@@ -26,15 +26,17 @@ interface AgentStatusPayload {
 }
 interface PermissionPromptPayload extends PermissionPrompt {}
 
-// Module-level unlisten handles; called on cleanup() to prevent leaks during HMR.
-let _unlisteners: UnlistenFn[] = [];
+let _unlisteners: UnlistenFn[] = []; // cleanup() to prevent leaks during HMR
+let _logId = 0; // monotonic ID for TerminalLine keys
 
 function initListeners(
   set: (fn: (s: BridgeState) => Partial<BridgeState>) => void,
 ) {
   Promise.all([
     listen<AgentMessagePayload>("agent_message", (e) => {
-      set((s) => ({ messages: [...s.messages, e.payload.payload] }));
+      set((s) => ({
+        messages: [...s.messages.slice(-999), e.payload.payload],
+      }));
     }),
     listen<SystemLogPayload>("system_log", (e) => {
       const { level, message } = e.payload;
@@ -42,6 +44,7 @@ function initListeners(
         terminalLines: [
           ...s.terminalLines.slice(-200),
           {
+            id: ++_logId,
             agent: "system",
             kind: level === "error" ? ("error" as const) : ("text" as const),
             line: message,
@@ -86,6 +89,7 @@ function logError(set: (fn: (s: BridgeState) => Partial<BridgeState>) => void) {
       terminalLines: [
         ...s.terminalLines.slice(-200),
         {
+          id: ++_logId,
           agent: "system",
           kind: "error" as const,
           line: `[Error] ${String(e)}`,
@@ -157,6 +161,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
           terminalLines: [
             ...s.terminalLines.slice(-200),
             {
+              id: ++_logId,
               agent: "system",
               kind: "error",
               line: `[Permission] ${String(error)}`,

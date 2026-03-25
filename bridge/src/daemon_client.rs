@@ -1,6 +1,6 @@
 use crate::types::{BridgeMsg, BridgeOutbound, DaemonInbound, DaemonMsg};
 use futures_util::{SinkExt, StreamExt};
-use tokio::time::{sleep, Duration};
+use tokio::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const MAX_RETRIES: u32 = 20;
@@ -41,10 +41,16 @@ pub async fn run(
                                         Ok(dm) => {
                                             match dm {
                                                 DaemonMsg::RoutedMessage { message } => {
-                                                    let _ = push_tx.send(DaemonInbound::RoutedMessage(message)).await;
+                                                    if push_tx.send(DaemonInbound::RoutedMessage(message)).await.is_err() {
+                                                        eprintln!("[Bridge/{agent_id}] push channel closed, exiting");
+                                                        return;
+                                                    }
                                                 }
                                                 DaemonMsg::PermissionVerdict { verdict } => {
-                                                    let _ = push_tx.send(DaemonInbound::PermissionVerdict(verdict)).await;
+                                                    if push_tx.send(DaemonInbound::PermissionVerdict(verdict)).await.is_err() {
+                                                        eprintln!("[Bridge/{agent_id}] push channel closed, exiting");
+                                                        return;
+                                                    }
                                                 }
                                                 DaemonMsg::Status { .. } => {}
                                             }
@@ -92,7 +98,20 @@ pub async fn run(
                 eprintln!(
                     "[Bridge/{agent_id}] connect failed (attempt {attempt}): {e}, retry in {delay:?}"
                 );
-                sleep(delay).await;
+                // Drain outbound queue during backoff to prevent MCP stdin blocking
+                let deadline = tokio::time::Instant::now() + delay;
+                loop {
+                    tokio::select! {
+                        _ = tokio::time::sleep_until(deadline) => break,
+                        msg = reply_rx.recv() => {
+                            if msg.is_none() {
+                                eprintln!("[Bridge/{agent_id}] reply channel closed during backoff");
+                                return;
+                            }
+                            // Discard — we have no connection to send on
+                        }
+                    }
+                }
             }
         }
     }
