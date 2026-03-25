@@ -30,13 +30,15 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeTerminalChunks = useBridgeStore((s) => s.claudeTerminalChunks);
+  const claudeTerminalRunning = useBridgeStore((s) => s.claudeTerminalRunning);
+  const claudeTerminalDetail = useBridgeStore((s) => s.claudeTerminalDetail);
   const permissionPrompts = useBridgeStore((s) => s.permissionPrompts);
   const respondToPermission = useBridgeStore((s) => s.respondToPermission);
   const claudeConnected =
     useBridgeStore((s) => s.agents.claude?.status) === "connected";
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const claudeTerminalAvailable =
-    claudeConnected || claudeTerminalChunks.length > 0;
+    claudeConnected || claudeTerminalRunning || claudeTerminalChunks.length > 0;
 
   const chatMessages = useMemo(
     () => messages.filter((m) => m.from !== "system"),
@@ -76,15 +78,11 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
 
   useEffect(() => {
     if (tab === "claude") setClaudeTabAttention(false);
-  }, [tab]);
-
-  // Auto-switch to Claude tab when interactive prompt detected
-  useEffect(() => {
     if (claudeNeedsAttention && tab !== "claude") {
       setTab("claude");
       useBridgeStore.setState({ claudeNeedsAttention: false });
     }
-  }, [claudeNeedsAttention, tab]);
+  }, [tab, claudeNeedsAttention]);
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
@@ -187,6 +185,8 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
         <ClaudeTerminalPane
           chunks={claudeTerminalChunks}
           connected={claudeConnected}
+          running={claudeTerminalRunning}
+          detail={claudeTerminalDetail}
         />
       )}
       {tab === "approvals" && (

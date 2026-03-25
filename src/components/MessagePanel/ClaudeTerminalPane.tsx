@@ -11,9 +11,16 @@ import { createClaudeTerminalOptions } from "./claude-terminal-config";
 interface ClaudeTerminalPaneProps {
   chunks: ClaudeTerminalChunk[];
   connected: boolean;
+  running: boolean;
+  detail?: string;
 }
 
-export function ClaudeTerminalPane({ chunks, connected }: ClaudeTerminalPaneProps) {
+export function ClaudeTerminalPane({
+  chunks,
+  connected,
+  running,
+  detail,
+}: ClaudeTerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -109,6 +116,11 @@ export function ClaudeTerminalPane({ chunks, connected }: ClaudeTerminalPaneProp
       {!connected && chunks.length === 0 && (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-muted-foreground">
           Claude terminal is idle. Connect Claude to start an embedded session.
+        </div>
+      )}
+      {!running && chunks.length > 0 && detail && (
+        <div className="border-b border-border/40 bg-card/60 px-3 py-2 text-[11px] text-muted-foreground">
+          {detail}
         </div>
       )}
       <div

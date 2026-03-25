@@ -99,8 +99,24 @@ pub async fn daemon_get_status_snapshot(
 /// When Claude exits, its channel subprocess should drop too and daemon status
 /// will fall back to disconnected once the control websocket closes.
 #[tauri::command]
-pub async fn stop_claude(session: State<'_, Arc<ClaudeSessionManager>>) -> Result<(), String> {
+pub async fn stop_claude(
+    session: State<'_, Arc<ClaudeSessionManager>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     crate::claude_session::stop(session.inner().as_ref()).await?;
+    crate::daemon::gui::emit_claude_terminal_status(
+        &app,
+        false,
+        None,
+        Some("Claude terminal stopped by user".into()),
+    );
+    crate::daemon::gui::emit_claude_terminal_data(
+        &app,
+        "\r\n[AgentBridge] Claude terminal stopped by user\r\n",
+    );
+    crate::daemon::gui::emit_system_log(&app, "info", "[Claude PTY] stopped by user");
+    // Defensive: emit claude offline immediately (WS disconnect will also emit later)
+    crate::daemon::gui::emit_agent_status(&app, "claude", false, None);
     eprintln!("[Claude] stop: terminated managed Claude PTY session");
     Ok(())
 }

@@ -135,7 +135,7 @@ pub async fn launch_claude_terminal(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
-    crate::claude_launch::launch(&dir, model, effort, session.inner().as_ref(), app).await
+    crate::claude_launch::launch(&dir, model, effort, session.inner().clone(), app).await
 }
 
 #[cfg(test)]

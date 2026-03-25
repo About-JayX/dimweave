@@ -13,6 +13,7 @@ interface AgentStatusProps {
 
 export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
   const stopCodexTui = useBridgeStore((s) => s.stopCodexTui);
+  const claudeTerminalRunning = useBridgeStore((s) => s.claudeTerminalRunning);
   const profile = useCodexAccountStore((s) => s.profile);
   const usage = useCodexAccountStore((s) => s.usage);
   const refreshing = useCodexAccountStore((s) => s.refreshing);
@@ -47,7 +48,10 @@ export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
 
       <div className="flex flex-col gap-2">
         {/* Claude Code */}
-        <ClaudePanel connected={claudeConnected} />
+        <ClaudePanel
+          connected={claudeConnected}
+          terminalRunning={claudeTerminalRunning}
+        />
 
         {/* Codex */}
         <CodexPanel

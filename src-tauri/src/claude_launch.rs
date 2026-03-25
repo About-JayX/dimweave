@@ -1,5 +1,6 @@
 use crate::claude_cli::ensure_claude_channel_ready;
 use crate::claude_session::{self, ClaudeSessionManager};
+use std::sync::Arc;
 use tauri::AppHandle;
 
 /// Core logic for launching Claude Code in channel preview mode via a managed
@@ -8,7 +9,7 @@ pub async fn launch(
     dir: &str,
     model: Option<String>,
     effort: Option<String>,
-    session: &ClaudeSessionManager,
+    session: Arc<ClaudeSessionManager>,
     app: AppHandle,
 ) -> Result<(), String> {
     let version = ensure_claude_channel_ready()?;

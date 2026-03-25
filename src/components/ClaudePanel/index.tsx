@@ -7,6 +7,7 @@ import { RoleSelect } from "@/components/AgentStatus/RoleSelect";
 import { StatusDot } from "@/components/AgentStatus/StatusDot";
 import { DevConfirmDialog } from "./DevConfirmDialog";
 import { ClaudeConfigRows } from "./ClaudeConfigRows";
+import { ClaudeHint } from "./ClaudeHint";
 import {
   rememberClaudeDevConfirm,
   shouldPromptForClaudeDevConfirm,
@@ -14,9 +15,10 @@ import {
 
 interface ClaudePanelProps {
   connected: boolean;
+  terminalRunning: boolean;
 }
 
-export function ClaudePanel({ connected }: ClaudePanelProps) {
+export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
@@ -28,10 +30,10 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected && !terminalRunning) {
       setDisconnecting(false);
     }
-  }, [connected]);
+  }, [connected, terminalRunning]);
 
   const handlePickDir = useCallback(async () => {
     const dir = await pickDirectory();
@@ -103,7 +105,9 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           </span>
           <RoleSelect
             agent="claude"
-            disabled={connected || connecting || disconnecting}
+            disabled={
+              connected || terminalRunning || connecting || disconnecting
+            }
           />
           <span
             key={disconnecting ? "x" : connected ? "c" : "d"}
@@ -113,7 +117,9 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
               ? "disconnecting"
               : connected
                 ? "connected"
-                : "disconnected"}
+                : terminalRunning
+                  ? "starting"
+                  : "disconnected"}
           </span>
         </div>
 
@@ -121,7 +127,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           model={model}
           effort={effort}
           cwd={cwd}
-          disabled={connected || connecting || disconnecting}
+          disabled={connected || terminalRunning || connecting || disconnecting}
           onModelChange={setModel}
           onEffortChange={setEffort}
           onPickDir={handlePickDir}
@@ -150,7 +156,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
           <Button
             size="sm"
             className="mt-2 w-full bg-claude text-white hover:bg-claude/90 hover:shadow-[0_0_16px_#8b5cf640] active:scale-[0.98] transition-all duration-200 btn-ripple"
-            disabled={!cwd || connecting || disconnecting}
+            disabled={!cwd || terminalRunning || connecting || disconnecting}
             onClick={handleLaunch}
           >
             {connecting ? (
@@ -158,32 +164,24 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
                 <span className="size-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                 Connecting…
               </span>
+            ) : terminalRunning ? (
+              <span className="flex items-center gap-2">
+                <span className="size-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Claude Starting…
+              </span>
             ) : (
               "Connect Claude"
             )}
           </Button>
         )}
 
-        {!connected && !cwd && (
-          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
-            Select a project directory first
-          </div>
-        )}
-        {!connected && cwd && !actionError && (
-          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
-            Registers .mcp.json and launches Claude in channel preview mode
-          </div>
-        )}
-        {connected && disconnecting && !actionError && (
-          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
-            Waiting for the Claude terminal session to exit
-          </div>
-        )}
-        {actionError && (
-          <div className="mt-1.5 text-center text-[10px] text-destructive">
-            {actionError}
-          </div>
-        )}
+        <ClaudeHint
+          connected={connected}
+          cwd={cwd}
+          terminalRunning={terminalRunning}
+          disconnecting={disconnecting}
+          actionError={actionError}
+        />
       </div>
 
       {showDevConfirm && (

@@ -62,6 +62,7 @@ paths:
 - `permission_prompt`
 - `claude_terminal_data`
 - `claude_terminal_reset`
+- `claude_terminal_status`
 - `claude_terminal_attention`
 
 新增事件时：

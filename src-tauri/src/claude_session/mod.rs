@@ -15,7 +15,6 @@ pub struct ClaudeSessionManager(Mutex<Option<ActiveClaudeSession>>);
 
 struct ActiveClaudeSession {
     pid: i32,
-    _child: Box<dyn portable_pty::Child + Send>,
     writer: Arc<StdMutex<Box<dyn Write + Send>>>,
     master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
 }
@@ -27,7 +26,7 @@ impl Default for ClaudeSessionManager {
 }
 
 pub async fn launch(
-    manager: &ClaudeSessionManager,
+    manager: Arc<ClaudeSessionManager>,
     dir: &str,
     claude_bin: &std::path::Path,
     extra: &[String],
@@ -42,10 +41,13 @@ pub async fn launch(
         *guard = None;
     }
 
-    let session = spawn_session(dir, claude_bin, extra, app.clone(), emit_debug_logs)?;
+    let spawned = spawn_session(dir, claude_bin, extra, app.clone(), emit_debug_logs)?;
     crate::daemon::gui::emit_claude_terminal_reset(&app);
-    eprintln!("[Claude] PTY session started pid={}", session.pid);
-    *guard = Some(session);
+    crate::daemon::gui::emit_claude_terminal_status(&app, true, None, None);
+    eprintln!("[Claude] PTY session started pid={}", spawned.session.pid);
+    *guard = Some(spawned.session);
+    drop(guard);
+    spawn_exit_watcher(manager, spawned.child, app);
     Ok(())
 }
 
@@ -71,6 +73,15 @@ pub async fn stop_if_running(manager: &ClaudeSessionManager) {
             eprintln!("[Claude] shutdown stop failed: {err}");
         }
     }
+}
+
+pub(super) async fn clear_if_pid_matches(manager: &ClaudeSessionManager, pid: i32) -> bool {
+    let mut guard = manager.0.lock().await;
+    if guard.as_ref().map(|session| session.pid) == Some(pid) {
+        *guard = None;
+        return true;
+    }
+    false
 }
 
 pub async fn write_input(manager: &ClaudeSessionManager, data: &str) -> Result<(), String> {
@@ -112,4 +123,68 @@ pub async fn resize(manager: &ClaudeSessionManager, cols: u16, rows: u16) -> Res
         })
         .map_err(|e| format!("failed to resize Claude PTY: {e}"));
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use portable_pty::PtySize;
+    use std::io::Read;
+
+    struct DummyMasterPty;
+
+    impl MasterPty for DummyMasterPty {
+        fn resize(&self, _size: PtySize) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn get_size(&self) -> anyhow::Result<PtySize> {
+            Ok(PtySize::default())
+        }
+
+        fn try_clone_reader(&self) -> anyhow::Result<Box<dyn Read + Send>> {
+            Ok(Box::new(std::io::empty()))
+        }
+
+        fn take_writer(&self) -> anyhow::Result<Box<dyn Write + Send>> {
+            Ok(Box::new(Vec::<u8>::new()))
+        }
+
+        #[cfg(unix)]
+        fn process_group_leader(&self) -> Option<libc::pid_t> {
+            None
+        }
+
+        #[cfg(unix)]
+        fn as_raw_fd(&self) -> Option<std::os::fd::RawFd> {
+            None
+        }
+
+        #[cfg(unix)]
+        fn tty_name(&self) -> Option<std::path::PathBuf> {
+            None
+        }
+    }
+
+    fn dummy_session(pid: i32) -> ActiveClaudeSession {
+        ActiveClaudeSession {
+            pid,
+            writer: Arc::new(StdMutex::new(Box::new(Vec::<u8>::new()))),
+            master: Arc::new(StdMutex::new(Box::new(DummyMasterPty))),
+        }
+    }
+
+    #[tokio::test]
+    async fn clear_if_pid_matches_removes_matching_session() {
+        let manager = ClaudeSessionManager(Mutex::new(Some(dummy_session(42))));
+        assert!(clear_if_pid_matches(&manager, 42).await);
+        assert!(manager.0.lock().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn clear_if_pid_matches_keeps_different_session() {
+        let manager = ClaudeSessionManager(Mutex::new(Some(dummy_session(7))));
+        assert!(!clear_if_pid_matches(&manager, 42).await);
+        assert_eq!(manager.0.lock().await.as_ref().map(|session| session.pid), Some(7));
+    }
 }

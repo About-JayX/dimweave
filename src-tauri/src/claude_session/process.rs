@@ -5,8 +5,14 @@ use std::{
     time::Duration,
 };
 use tauri::AppHandle;
+use tauri::async_runtime;
 
-use super::ActiveClaudeSession;
+use super::{clear_if_pid_matches, ActiveClaudeSession, ClaudeSessionManager};
+
+pub(super) struct SpawnedSession {
+    pub(super) session: ActiveClaudeSession,
+    pub(super) child: Box<dyn portable_pty::Child + Send + Sync>,
+}
 
 pub fn spawn_session(
     dir: &str,
@@ -14,7 +20,7 @@ pub fn spawn_session(
     extra: &[String],
     app: AppHandle,
     emit_debug_logs: bool,
-) -> Result<ActiveClaudeSession, String> {
+) -> Result<SpawnedSession, String> {
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -25,13 +31,7 @@ pub fn spawn_session(
         })
         .map_err(|e| format!("failed to open Claude PTY: {e}"))?;
 
-    let mut cmd = CommandBuilder::new(claude_bin.to_string_lossy().to_string());
-    cmd.cwd(dir);
-    cmd.arg("--dangerously-load-development-channels");
-    cmd.arg("server:agentbridge");
-    for arg in extra {
-        cmd.arg(arg);
-    }
+    let cmd = build_claude_command(dir, claude_bin, extra);
 
     let child = pair
         .slave
@@ -52,12 +52,83 @@ pub fn spawn_session(
     let master = Arc::new(StdMutex::new(pair.master));
 
     super::prompt::spawn_auto_confirm_thread(reader, writer.clone(), app, emit_debug_logs);
-    Ok(ActiveClaudeSession {
-        pid,
-        _child: child,
-        writer,
-        master,
+    Ok(SpawnedSession {
+        session: ActiveClaudeSession { pid, writer, master },
+        child,
     })
+}
+
+fn build_claude_command(dir: &str, claude_bin: &Path, extra: &[String]) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new(claude_bin.to_string_lossy().to_string());
+    cmd.cwd(dir);
+    cmd.arg("--dangerously-load-development-channels");
+    cmd.arg("server:agentbridge");
+    cmd.arg("--dangerously-skip-permissions");
+    for arg in extra {
+        cmd.arg(arg);
+    }
+    cmd
+}
+
+pub fn spawn_exit_watcher(
+    manager: Arc<ClaudeSessionManager>,
+    mut child: Box<dyn portable_pty::Child + Send + Sync>,
+    app: AppHandle,
+) {
+    let _ = std::thread::Builder::new()
+        .name("claude-pty-exit-watch".into())
+        .spawn(move || {
+            let pid = child.process_id().unwrap_or_default() as i32;
+            let status = child.wait();
+            async_runtime::spawn(async move {
+                let cleared = clear_if_pid_matches(manager.as_ref(), pid).await;
+                if !cleared {
+                    return;
+                }
+                let (level, exit_code, summary) = describe_exit(status);
+
+                eprintln!("[Claude] {summary}");
+                crate::daemon::gui::emit_claude_terminal_status(
+                    &app,
+                    false,
+                    exit_code,
+                    Some(summary.clone()),
+                );
+                crate::daemon::gui::emit_claude_terminal_data(
+                    &app,
+                    &format!("\r\n[AgentBridge] {summary}\r\n"),
+                );
+                crate::daemon::gui::emit_system_log(
+                    &app,
+                    level,
+                    &format!("[Claude PTY] {summary}"),
+                );
+                crate::daemon::gui::emit_agent_status(&app, "claude", false, exit_code);
+            });
+        });
+}
+
+fn describe_exit(status: std::io::Result<portable_pty::ExitStatus>) -> (&'static str, Option<i32>, String) {
+    match status {
+        Ok(status) if status.signal().is_some() => {
+            let signal = status.signal().unwrap_or("unknown");
+            (
+                "warn",
+                None,
+                format!("Claude terminal exited after signal {signal}"),
+            )
+        }
+        Ok(status) => {
+            let code = status.exit_code() as i32;
+            let level = if code == 0 { "info" } else { "warn" };
+            (level, Some(code), format!("Claude terminal exited with code {code}"))
+        }
+        Err(err) => (
+            "error",
+            None,
+            format!("Claude terminal exit watcher failed: {err}"),
+        ),
+    }
 }
 
 pub async fn terminate_pid(pid: i32) -> Result<(), String> {
@@ -109,3 +180,7 @@ pub async fn wait_for_exit(pid: i32, timeout: Duration) -> Result<bool, String> 
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod process_tests;

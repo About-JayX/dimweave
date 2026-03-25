@@ -25,6 +25,9 @@ export interface BridgeState {
   agents: Record<string, AgentInfo>;
   terminalLines: TerminalLine[];
   claudeTerminalChunks: ClaudeTerminalChunk[];
+  claudeTerminalRunning: boolean;
+  claudeTerminalExitCode?: number;
+  claudeTerminalDetail?: string;
   permissionPrompts: PermissionPrompt[];
   claudeNeedsAttention: boolean;
   claudeRole: string;

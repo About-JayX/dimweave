@@ -15,6 +15,11 @@ interface SystemLogPayload {
 interface ClaudeTerminalDataPayload {
   data: string;
 }
+interface ClaudeTerminalStatusPayload {
+  running: boolean;
+  exitCode?: number;
+  detail?: string;
+}
 interface AgentStatusPayload {
   agent: string;
   online: boolean;
@@ -84,6 +89,16 @@ export function initListeners(
     listen("claude_terminal_reset", () => {
       set(() => ({
         claudeTerminalChunks: [],
+        claudeTerminalExitCode: undefined,
+        claudeTerminalDetail: undefined,
+      }));
+    }),
+    listen<ClaudeTerminalStatusPayload>("claude_terminal_status", (e) => {
+      set(() => ({
+        claudeTerminalRunning: e.payload.running,
+        claudeTerminalExitCode: e.payload.exitCode,
+        claudeTerminalDetail: e.payload.detail,
+        claudeNeedsAttention: e.payload.running ? true : false,
       }));
     }),
     listen<AgentStatusPayload>("agent_status", (e) => {

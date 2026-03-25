@@ -24,6 +24,16 @@ pub struct ClaudeTerminalDataEvent {
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ClaudeTerminalStatusEvent {
+    pub running: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStatusEvent {
     pub agent: String,
     pub online: bool,
@@ -72,6 +82,22 @@ pub fn emit_claude_terminal_data(app: &AppHandle, data: &str) {
 
 pub fn emit_claude_terminal_reset(app: &AppHandle) {
     let _ = app.emit("claude_terminal_reset", ());
+}
+
+pub fn emit_claude_terminal_status(
+    app: &AppHandle,
+    running: bool,
+    exit_code: Option<i32>,
+    detail: Option<String>,
+) {
+    let _ = app.emit(
+        "claude_terminal_status",
+        ClaudeTerminalStatusEvent {
+            running,
+            exit_code,
+            detail,
+        },
+    );
 }
 
 /// Emitted when Claude terminal shows an interactive prompt needing user input.
