@@ -11,7 +11,10 @@ async fn main() {
     let control_port: u16 = std::env::var("AGENTBRIDGE_CONTROL_PORT")
         .unwrap_or_else(|_| "4502".into())
         .parse()
-        .expect("invalid AGENTBRIDGE_CONTROL_PORT");
+        .unwrap_or_else(|e| {
+            eprintln!("[Bridge] invalid AGENTBRIDGE_CONTROL_PORT: {e}");
+            std::process::exit(1);
+        });
     let agent_id = std::env::var("AGENTBRIDGE_AGENT").unwrap_or_else(|_| "claude".into());
 
     eprintln!("[Bridge/{agent_id}] starting, daemon port {control_port}");

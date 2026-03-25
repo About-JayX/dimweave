@@ -33,6 +33,7 @@ pub fn spawn_auto_confirm_thread(
                         crate::daemon::gui::emit_claude_terminal_data(&app, &chunk);
                         transcript.push_str(&chunk);
                         trim_transcript(&mut transcript, 8192);
+                        let dev_prompt = should_auto_confirm_development_prompt(&transcript);
                         if emit_debug_logs {
                             for line in drain_log_lines(&mut pending_log, &chunk) {
                                 if !line.is_empty() {
@@ -44,11 +45,10 @@ pub fn spawn_auto_confirm_thread(
                                 }
                             }
                         }
-                        // Check for prompts needing user attention
-                        if needs_user_attention(&transcript) {
+                        if should_emit_attention(&transcript, confirmed, dev_prompt) {
                             crate::daemon::gui::emit_claude_terminal_attention(&app);
                         }
-                        if confirmed || !should_auto_confirm_development_prompt(&transcript) {
+                        if confirmed || !dev_prompt {
                             continue;
                         }
                         if let Ok(mut tty) = writer.lock() {
@@ -116,64 +116,47 @@ pub fn drain_log_lines(pending: &mut String, chunk: &str) -> Vec<String> {
 /// Excludes the auto-confirmed development channel prompt.
 fn needs_user_attention(transcript: &str) -> bool {
     let clean = strip_ansi(transcript);
-    // Only check the last ~500 chars (recent output)
-    let tail = if clean.len() > 500 { &clean[clean.len() - 500..] } else { &clean };
-    let lower = tail.to_ascii_lowercase();
-    // Skip if this is the agentbridge auto-confirm prompt
+    let tail = tail_chars(&clean, 500);
+    let last_block = tail
+        .lines()
+        .rev()
+        .skip_while(|line| line.trim().is_empty())
+        .take_while(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    let recent_window = last_block
+        .into_iter()
+        .rev()
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    let recent_text = recent_window.join("\n");
+    let lower = recent_text.to_ascii_lowercase();
+
+    // Skip only when the most recent prompt window is the agentbridge dev confirmation itself.
     if lower.contains("server:agentbridge") && lower.contains("local development") {
         return false;
     }
-    // Detect numbered options like "1.", "2." at line start
-    let has_options = tail.lines().any(|l| {
-        let t = l.trim();
+
+    let has_options = recent_window.iter().any(|line| {
+        let t = line.trim();
         t.starts_with("1.") || t.starts_with("2.") || t.starts_with("1)")
     });
-    // Detect y/n prompts
-    let has_yn = lower.contains("(y/n)") || lower.contains("[y/n]")
-        || lower.contains("(yes/no)") || lower.contains("[yes/no]");
-    // Detect question at end of recent line
-    let has_question = tail.lines().rev().take(3).any(|l| l.trim().ends_with('?'));
+    let has_yn = lower.contains("(y/n)")
+        || lower.contains("[y/n]")
+        || lower.contains("(yes/no)")
+        || lower.contains("[yes/no]");
+    let has_question = recent_window.iter().rev().take(3).any(|line| {
+        let t = line.trim();
+        t.ends_with('?')
+    });
+
     has_options || has_yn || has_question
 }
 
-fn normalize_prompt_text(raw: &str) -> String {
-    strip_ansi(raw)
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
+fn should_emit_attention(transcript: &str, confirmed: bool, dev_prompt: bool) -> bool {
+    (!confirmed && dev_prompt) || needs_user_attention(transcript)
 }
 
-fn normalize_prompt_compact_text(raw: &str) -> String {
-    strip_ansi(raw)
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .collect::<String>()
-        .to_ascii_lowercase()
-}
-
-fn strip_ansi(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            if matches!(chars.peek(), Some('[')) {
-                chars.next();
-                for esc in chars.by_ref() {
-                    if ('@'..='~').contains(&esc) {
-                        break;
-                    }
-                }
-                continue;
-            }
-            continue;
-        }
-        out.push(ch);
-    }
-
-    out
-}
+use super::text_utils::{normalize_prompt_compact_text, normalize_prompt_text, strip_ansi, tail_chars};
 
 #[cfg(test)]
 #[path = "prompt_tests.rs"]

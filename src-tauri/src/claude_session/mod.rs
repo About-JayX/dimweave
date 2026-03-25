@@ -1,5 +1,6 @@
 mod process;
 mod prompt;
+mod text_utils;
 
 use portable_pty::{MasterPty, PtySize};
 use process::*;

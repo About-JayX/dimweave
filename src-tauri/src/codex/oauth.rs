@@ -31,7 +31,7 @@ impl OAuthHandle {
     }
 
     pub fn cancel(&self) -> bool {
-        if let Some(tx) = self.cancel_tx.lock().unwrap().take() {
+        if let Some(tx) = self.cancel_tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = tx.send(());
             true
         } else {
@@ -84,7 +84,7 @@ pub async fn start_login(handle: Arc<OAuthHandle>) -> Result<OAuthLaunchInfo, St
 
     // Set up cancellation
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-    *handle.cancel_tx.lock().unwrap() = Some(cancel_tx);
+    *handle.cancel_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(cancel_tx);
 
     // Spawn background task to wait for login completion
     tokio::spawn(async move {

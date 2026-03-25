@@ -60,6 +60,9 @@ paths:
 - `system_log`
 - `agent_status`
 - `permission_prompt`
+- `claude_terminal_data`
+- `claude_terminal_reset`
+- `claude_terminal_attention`
 
 新增事件时：
 

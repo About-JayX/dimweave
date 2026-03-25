@@ -16,12 +16,15 @@ paths:
 ## 当前前端边界
 
 - 前端不再维护 GUI WebSocket 客户端
-- 前端不再维护 PTY / xterm 终端链路
+- Claude PTY 终端由 Rust `claude_session/` 管理，前端通过 xterm.js 渲染
 - agent 运行状态来自 Rust 事件：
   - `agent_message`
   - `agent_status`
   - `system_log`
   - `permission_prompt`
+  - `claude_terminal_data`
+  - `claude_terminal_reset`
+  - `claude_terminal_attention`
 - 用户操作通过 Tauri command：
   - `daemon_send_message`
   - `daemon_launch_codex`
