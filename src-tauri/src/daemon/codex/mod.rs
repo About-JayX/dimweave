@@ -55,11 +55,10 @@ pub async fn start(
     let session_mgr = state.read().await.session_mgr.clone();
 
     let session_id = session_mgr.lock().await.next_session_id();
-    let codex_home =
-        session_mgr
-            .lock()
-            .await
-            .create_session(&session_id, &sandbox_mode, &approval_policy)?;
+    let codex_home = session_mgr
+        .lock()
+        .await
+        .create_session(&session_id, &sandbox_mode, &approval_policy)?;
 
     // Wait for port to be free before spawning (previous process may still hold it)
     let port_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -73,14 +72,8 @@ pub async fn start(
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
-    let child = lifecycle::start(
-        codex_port,
-        &codex_home,
-        &cwd,
-        &sandbox_mode,
-        &approval_policy,
-    )
-    .await?;
+    let child =
+        lifecycle::start(codex_port, &codex_home, &cwd, &sandbox_mode, &approval_policy).await?;
     let child_arc = Arc::new(Mutex::new(Some(child)));
 
     gui::emit_system_log(&app, "info", &format!("[Codex] spawned port={codex_port} role={role_id}"));
@@ -134,6 +127,11 @@ pub async fn start(
     let thread_id = match ready_rx.await {
         Ok(tid) if !tid.is_empty() => tid,
         _ => {
+            cancel.cancel();
+            if let Some(mut child) = child_arc.lock().await.take() {
+                lifecycle::stop(&mut child, codex_port).await;
+            }
+            session_mgr.lock().await.cleanup_session(&session_id);
             anyhow::bail!("Codex session handshake failed");
         }
     };

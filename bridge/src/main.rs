@@ -1,6 +1,7 @@
 mod channel_state;
 mod daemon_client;
 mod mcp;
+mod mcp_io;
 mod mcp_protocol;
 mod tools;
 mod types;

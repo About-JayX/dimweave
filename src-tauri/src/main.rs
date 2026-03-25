@@ -2,28 +2,25 @@
 
 mod claude_cli;
 mod codex;
+mod commands;
 mod daemon;
 mod mcp;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
-use codex::oauth::{OAuthHandle, OAuthLaunchInfo};
+use codex::oauth::OAuthHandle;
 use codex::usage::UsageSnapshot;
-use daemon::{
-    types::{BridgeMessage, DaemonStatusSnapshot, PermissionBehavior},
-    DaemonCmd,
-};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::{Manager, State, WindowEvent};
+use tauri::{Manager, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
 
 // ── Daemon command sender ────────────────────────────────────────────────────
 
-struct DaemonSender(mpsc::Sender<DaemonCmd>);
+pub struct DaemonSender(mpsc::Sender<daemon::DaemonCmd>);
 
 #[derive(Default)]
 struct ExitState(AtomicBool);
@@ -36,7 +33,7 @@ fn request_app_shutdown(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
         if sender
-            .send(DaemonCmd::Shutdown { reply: reply_tx })
+            .send(daemon::DaemonCmd::Shutdown { reply: reply_tx })
             .await
             .is_ok()
         {
@@ -72,114 +69,6 @@ async fn pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String>
     rx.await.map_err(|_| "dialog cancelled".to_string())
 }
 
-// ── Daemon messaging commands ─────────────────────────────────────────────────
-
-#[tauri::command]
-async fn daemon_send_message(
-    msg: BridgeMessage,
-    sender: State<'_, DaemonSender>,
-) -> Result<(), String> {
-    sender
-        .0
-        .send(DaemonCmd::SendMessage(msg))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn daemon_launch_codex(
-    role_id: String,
-    cwd: String,
-    model: Option<String>,
-    sender: State<'_, DaemonSender>,
-) -> Result<(), String> {
-    eprintln!("[Tauri] daemon_launch_codex called: role={role_id} cwd={cwd} model={model:?}");
-    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    sender
-        .0
-        .send(DaemonCmd::LaunchCodex {
-            role_id,
-            cwd,
-            model,
-            reply: reply_tx,
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-    reply_rx
-        .await
-        .map_err(|_| "daemon dropped codex launch result".to_string())?
-}
-
-#[tauri::command]
-async fn daemon_stop_codex(sender: State<'_, DaemonSender>) -> Result<(), String> {
-    sender
-        .0
-        .send(DaemonCmd::StopCodex)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn daemon_set_claude_role(
-    role: String,
-    sender: State<'_, DaemonSender>,
-) -> Result<(), String> {
-    sender
-        .0
-        .send(DaemonCmd::SetClaudeRole(role))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn daemon_respond_permission(
-    request_id: String,
-    behavior: PermissionBehavior,
-    sender: State<'_, DaemonSender>,
-) -> Result<(), String> {
-    sender
-        .0
-        .send(DaemonCmd::RespondPermission {
-            request_id,
-            behavior,
-        })
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn daemon_get_status_snapshot(
-    sender: State<'_, DaemonSender>,
-) -> Result<DaemonStatusSnapshot, String> {
-    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    sender
-        .0
-        .send(DaemonCmd::ReadStatusSnapshot { reply: reply_tx })
-        .await
-        .map_err(|e| e.to_string())?;
-    reply_rx
-        .await
-        .map_err(|_| "daemon dropped status snapshot reply".to_string())
-}
-
-// ── Auth / OAuth commands ─────────────────────────────────────────────────────
-
-#[tauri::command]
-async fn codex_login(app: tauri::AppHandle) -> Result<OAuthLaunchInfo, String> {
-    let handle = app.state::<Arc<OAuthHandle>>();
-    codex::oauth::start_login(handle.inner().clone()).await
-}
-
-#[tauri::command]
-fn codex_cancel_login(app: tauri::AppHandle) -> bool {
-    app.state::<Arc<OAuthHandle>>().cancel()
-}
-
-#[tauri::command]
-async fn codex_logout() -> Result<(), String> {
-    codex::oauth::do_logout().await
-}
-
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
@@ -189,9 +78,6 @@ fn main() {
         .manage(Arc::new(OAuthHandle::new()))
         .manage(ExitState::default())
         .setup(|app| {
-            // Create channel synchronously so DaemonSender is available immediately.
-            // If manage() were called inside an async spawn, any command arriving
-            // before the spawn completes would panic with "state not managed".
             let (cmd_tx, cmd_rx) = daemon::channel();
             app.handle().manage(DaemonSender(cmd_tx));
 
@@ -221,15 +107,15 @@ fn main() {
             mcp::register_mcp,
             mcp::check_mcp_registered,
             mcp::launch_claude_terminal,
-            codex_login,
-            codex_cancel_login,
-            codex_logout,
-            daemon_send_message,
-            daemon_launch_codex,
-            daemon_stop_codex,
-            daemon_set_claude_role,
-            daemon_respond_permission,
-            daemon_get_status_snapshot,
+            commands::codex_login,
+            commands::codex_cancel_login,
+            commands::codex_logout,
+            commands::daemon_send_message,
+            commands::daemon_launch_codex,
+            commands::daemon_stop_codex,
+            commands::daemon_set_claude_role,
+            commands::daemon_respond_permission,
+            commands::daemon_get_status_snapshot,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

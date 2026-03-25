@@ -92,9 +92,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 model,
                 reply,
             } => {
-                eprintln!(
-                    "[Daemon] LaunchCodex received: role={role_id} cwd={cwd} model={model:?}"
-                );
                 stop_codex_session(&mut codex_handle, &state, &app).await;
                 let launch_result =
                     match codex::start(role_id, cwd, model, state.clone(), app.clone(), 4500).await
