@@ -1,5 +1,5 @@
 /// MCP registration helpers and related Tauri commands.
-use crate::claude_cli::{apple_script_escape, claude_launch_command, ensure_claude_channel_ready};
+use crate::claude_cli::ensure_claude_channel_ready;
 
 fn resolve_release_bridge_cmd() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -106,43 +106,60 @@ pub fn check_mcp_registered(cwd: Option<String>) -> bool {
     config.pointer("/mcpServers/agentbridge").is_some()
 }
 
+/// Launch Claude Code channel preview.
+/// In dev mode (`cfg!(debug_assertions)`), opens a visible terminal for debugging.
+/// In release mode, runs as a silent background process.
 #[tauri::command]
 pub fn launch_claude_terminal(cwd: Option<String>) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
     let version = ensure_claude_channel_ready()?;
-    let command = claude_launch_command(&dir);
-    eprintln!(
-        "[MCP] launching Claude channel preview in {} with version {}",
-        dir, version
-    );
+    let claude_bin =
+        which::which("claude").map_err(|_| "Claude CLI not found in PATH".to_string())?;
 
-    #[cfg(target_os = "macos")]
-    {
-        let script = format!(
-            r#"tell application "Terminal"
-                activate
-                do script "{}"
-            end tell"#,
-            apple_script_escape(&command)
-        );
-        std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .spawn()
-            .map_err(|e| format!("failed: {e}"))?;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let claude_bin =
-            which::which("claude").map_err(|_| "Claude CLI not found in PATH".to_string())?;
-        std::process::Command::new(claude_bin)
+    if cfg!(debug_assertions) {
+        eprintln!("[MCP] launching Claude channel {version} in terminal (dev mode)");
+        launch_in_terminal(&dir, &claude_bin)?;
+    } else {
+        eprintln!("[MCP] launching Claude channel {version} silently");
+        std::process::Command::new(&claude_bin)
             .current_dir(&dir)
             .arg("--dangerously-load-development-channels")
             .arg("server:agentbridge")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
             .spawn()
-            .map_err(|e| format!("failed: {e}"))?;
+            .map_err(|e| format!("failed to start claude: {e}"))?;
     }
+    Ok(())
+}
 
+#[cfg(target_os = "macos")]
+fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path) -> Result<(), String> {
+    let cmd = format!(
+        "cd '{}' && '{}' --dangerously-load-development-channels server:agentbridge",
+        dir.replace('\'', "'\\''"),
+        claude_bin.display()
+    );
+    let script = format!(
+        "tell application \"Terminal\"\ndo script \"{}\"\nend tell",
+        cmd.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .spawn()
+        .map_err(|e| format!("failed: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn launch_in_terminal(dir: &str, claude_bin: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new(claude_bin)
+        .current_dir(dir)
+        .arg("--dangerously-load-development-channels")
+        .arg("server:agentbridge")
+        .spawn()
+        .map_err(|e| format!("failed: {e}"))?;
     Ok(())
 }

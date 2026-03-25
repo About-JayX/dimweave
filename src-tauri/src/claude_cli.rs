@@ -1,8 +1,5 @@
 use std::{fmt, process::Command};
 
-const PREVIEW_CHANNEL_FLAG: &str = "--dangerously-load-development-channels";
-const PREVIEW_CHANNEL_SERVER: &str = "server:agentbridge";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ClaudeVersion {
     major: u64,
@@ -39,13 +36,6 @@ pub fn parse_claude_version(output: &str) -> Option<ClaudeVersion> {
     })
 }
 
-pub fn claude_launch_command(dir: &str) -> String {
-    format!(
-        "cd '{}' && claude {PREVIEW_CHANNEL_FLAG} {PREVIEW_CHANNEL_SERVER}",
-        shell_escape_single_quotes(dir)
-    )
-}
-
 pub fn ensure_claude_channel_ready() -> Result<ClaudeVersion, String> {
     let claude =
         which::which("claude").map_err(|_| "Claude Code CLI not found in PATH".to_string())?;
@@ -74,14 +64,6 @@ pub fn ensure_claude_channel_ready() -> Result<ClaudeVersion, String> {
     Ok(version)
 }
 
-pub fn apple_script_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn shell_escape_single_quotes(value: &str) -> String {
-    value.replace('\'', "'\\''")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,12 +78,5 @@ mod tests {
     fn reject_old_claude_version() {
         let version = parse_claude_version("2.1.79").expect("version should parse");
         assert!(!version.supports_channels_preview());
-    }
-
-    #[test]
-    fn launch_command_includes_preview_flag() {
-        let command = claude_launch_command("/tmp/project");
-        assert!(command.contains("--dangerously-load-development-channels"));
-        assert!(command.contains("server:agentbridge"));
     }
 }
