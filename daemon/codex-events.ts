@@ -59,10 +59,20 @@ export function registerCodexEvents(deps: CodexEventDeps): void {
       `Codex agentMessage [from:${msg.from} to:${msg.to}] (${msg.content.length} chars)`,
     );
 
-    // GUI display only — routing is handled by Codex's MCP reply tool
+    // GUI display + log
     broadcastToGui({
       type: "agent_message",
       payload: msg,
+      timestamp: Date.now(),
+    });
+    const preview =
+      msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content;
+    broadcastToGui({
+      type: "system_log",
+      payload: {
+        level: "info",
+        message: `[Codex] ${msg.from} → ${msg.to} | "${preview}"`,
+      },
       timestamp: Date.now(),
     });
   });

@@ -126,6 +126,15 @@ export function handleGuiEvent(guiEvent: GuiEvent, set: SetFn) {
             timestamp: guiEvent.timestamp,
           },
         ],
+        terminalLines: [
+          ...s.terminalLines.slice(-200),
+          {
+            agent: "system",
+            kind: guiEvent.payload.level === "error" ? "error" : "text",
+            line: guiEvent.payload.message,
+            timestamp: guiEvent.timestamp,
+          },
+        ],
       }));
       break;
   }

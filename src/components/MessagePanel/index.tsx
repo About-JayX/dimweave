@@ -128,17 +128,22 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
           ref={logRef}
           className="flex-1 overflow-y-auto px-4 py-2 font-mono text-[11px] leading-relaxed"
         >
-          {errorLines.length === 0 && (
+          {allTerminalLines.length === 0 && (
             <div className="py-10 text-center text-[13px] text-muted-foreground font-sans">
-              No errors.
+              No logs.
             </div>
           )}
-          {errorLines.map((l, i) => (
-            <div key={i} className="py-0.5 text-destructive">
-              <span className="text-destructive/50 mr-2">
+          {allTerminalLines.map((l, i) => (
+            <div
+              key={i}
+              className={`py-0.5 ${l.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              <span className="opacity-50 mr-2">
                 {new Date(l.timestamp).toLocaleTimeString()}
               </span>
-              <span className="mr-1">[{l.agent}]</span>
+              <span className="mr-1 text-secondary-foreground">
+                [{l.agent}]
+              </span>
               {l.line}
             </div>
           ))}

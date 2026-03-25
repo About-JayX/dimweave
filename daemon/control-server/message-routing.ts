@@ -4,6 +4,20 @@ import type { BridgeMessage } from "../types";
 import { state, broadcastToGui, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
 
+/** Log MCP routing result to GUI Logs tab */
+function logRoute(msg: BridgeMessage, status: string, detail: string) {
+  const preview =
+    msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content;
+  broadcastToGui({
+    type: "system_log",
+    payload: {
+      level: status === "error" ? "error" : "info",
+      message: `[MCP Route] ${msg.from} → ${msg.to} [${status}] ${detail} | "${preview}"`,
+    },
+    timestamp: Date.now(),
+  });
+}
+
 export interface RouteTarget {
   agent: string;
   online: boolean;
@@ -49,6 +63,7 @@ export function routeMessage(
       payload: msg,
       timestamp: Date.now(),
     });
+    logRoute(msg, "delivered", "→ GUI (user)");
     return { success: true };
   }
 
@@ -65,6 +80,7 @@ export function routeMessage(
       payload: errorMsg,
       timestamp: Date.now(),
     });
+    logRoute(msg, "error", `${to} role is not online`);
     return { success: false, error: `${to} role is not online` };
   }
 
@@ -76,9 +92,11 @@ export function routeMessage(
     const ws = state.attachedAgents.get(target.agent);
     if (ws && ws.readyState === WebSocket.OPEN) {
       sendProtocolMessage(ws, { type: "routed_message", message: msg });
+      logRoute(msg, "delivered", `→ ${target.agent} (${to})`);
       routed = true;
     } else {
       state.bufferMessage(msg);
+      logRoute(msg, "buffered", `${target.agent} offline, buffered`);
     }
   }
 
