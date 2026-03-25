@@ -15,9 +15,11 @@ import {
   stopCodex,
 } from "./lifecycle";
 import { initSession, injectMessage } from "./session";
+import { setDynamicToolHandler, type DynamicToolHandler } from "./app-server";
 
 export type { CodexAccountInfo } from "./types";
 export type { CodexStartOptions } from "./types";
+export type { DynamicToolHandler } from "./app-server";
 
 export class CodexAdapter extends EventEmitter {
   private state: AdapterState;
@@ -89,6 +91,10 @@ export class CodexAdapter extends EventEmitter {
 
   injectMessage(text: string): boolean {
     return injectMessage(this.state, (m) => this.log(m), text);
+  }
+
+  setDynamicToolHandler(handler: DynamicToolHandler) {
+    setDynamicToolHandler(handler);
   }
 
   private log(msg: string) {

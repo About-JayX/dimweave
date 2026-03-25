@@ -3,6 +3,21 @@ import type { AdapterState } from "./types";
 import { patchResponse } from "./codex-response-patcher";
 import { scheduleReconnect } from "./lifecycle";
 
+/** Handler for dynamic tool calls — set by the adapter owner (daemon) */
+export type DynamicToolHandler = (
+  toolName: string,
+  args: Record<string, any>,
+) => Promise<{
+  content: Array<{ type: string; text: string }>;
+  success?: boolean;
+}>;
+
+let dynamicToolHandler: DynamicToolHandler | null = null;
+
+export function setDynamicToolHandler(handler: DynamicToolHandler) {
+  dynamicToolHandler = handler;
+}
+
 export function connectToAppServer(
   state: AdapterState,
   emitter: EventEmitter,
@@ -68,6 +83,31 @@ function handleAppServerMessage(
 
   try {
     const parsed = JSON.parse(data);
+
+    // Handle dynamic tool calls from app-server (server→client request)
+    if (
+      parsed.method === "item/tool/call" &&
+      parsed.id !== undefined &&
+      dynamicToolHandler
+    ) {
+      const toolName = parsed.params?.name ?? parsed.params?.tool;
+      const toolArgs = parsed.params?.arguments ?? {};
+      log(`[dynamicTool] ${toolName} called (id=${parsed.id})`);
+      dynamicToolHandler(toolName, toolArgs)
+        .then((result) => {
+          state.appServerWs?.send(JSON.stringify({ id: parsed.id, result }));
+          log(`[dynamicTool] ${toolName} responded`);
+        })
+        .catch((err: any) => {
+          state.appServerWs?.send(
+            JSON.stringify({
+              id: parsed.id,
+              error: { code: -1, message: err.message ?? String(err) },
+            }),
+          );
+        });
+      return; // don't forward to TUI
+    }
 
     // Protocol discovery: log method + key params
     if (parsed.method) {

@@ -77,6 +77,39 @@ export async function initSession(
                     developer_instructions: opts.developerInstructions,
                   },
                 }),
+                dynamicTools: [
+                  {
+                    name: "reply",
+                    description:
+                      "Send a message to another agent role. Use get_status to see available roles.",
+                    parameters: {
+                      type: "object",
+                      properties: {
+                        to: {
+                          type: "string",
+                          description:
+                            'Target role: "lead", "coder", "reviewer", "tester", or "user"',
+                        },
+                        text: {
+                          type: "string",
+                          description: "The message content",
+                        },
+                      },
+                      required: ["to", "text"],
+                    },
+                  },
+                  {
+                    name: "check_messages",
+                    description: "Check for new messages from other agents.",
+                    parameters: { type: "object", properties: {} },
+                  },
+                  {
+                    name: "get_status",
+                    description:
+                      "Get AgentBridge status: available roles and online agents.",
+                    parameters: { type: "object", properties: {} },
+                  },
+                ],
               },
             }),
           );

@@ -104,6 +104,63 @@ const serverDeps = {
   attachCmd,
 };
 
+// ── Dynamic tool handler (Codex calls reply/check_messages/get_status) ──
+
+codex.setDynamicToolHandler(async (toolName, args) => {
+  if (toolName === "reply") {
+    const msg: import("./types").BridgeMessage = {
+      id: `codex_${Date.now()}`,
+      from: state.codexRole,
+      to: args.to ?? "lead",
+      content: args.text ?? "",
+      timestamp: Date.now(),
+    };
+    const result = routeMessage(msg, { skipSender: "codex" });
+    return {
+      content: [
+        {
+          type: "text",
+          text: result.success
+            ? `Message routed to ${args.to}.`
+            : `Error: ${result.error}`,
+        },
+      ],
+    };
+  }
+  if (toolName === "check_messages") {
+    const messages = state.flushBufferedMessages();
+    if (messages.length === 0) {
+      return { content: [{ type: "text", text: "No new messages." }] };
+    }
+    const formatted = messages
+      .map(
+        (m) =>
+          `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.from}: ${m.content}`,
+      )
+      .join("\n\n---\n\n");
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${messages.length} message(s):\n\n${formatted}`,
+        },
+      ],
+    };
+  }
+  if (toolName === "get_status") {
+    const s = currentStatus();
+    const lines = [
+      `Bridge ready: ${s.bridgeReady ? "yes" : "no"}`,
+      "",
+      "Available roles:",
+      `  ${s.claudeRole} (claude) - ${s.claudeOnline ? "online" : "offline"}`,
+      `  ${s.codexRole} (codex) - online`,
+    ];
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  }
+  return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }] };
+});
+
 // ── Codex events (GUI display + lifecycle only) ───────────
 
 registerCodexEvents({

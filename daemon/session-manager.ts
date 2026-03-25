@@ -83,21 +83,7 @@ export class SessionManager {
       );
     }
 
-    // Write config.toml with MCP server for agentbridge communication
-    if (config.bridgePath) {
-      const configToml = join(codexHome, "config.toml");
-      const port = String(config.controlPort ?? 4502);
-      const toml = `[mcp_servers.agentbridge]
-command = "bun"
-args = ["run", ${JSON.stringify(config.bridgePath)}]
-
-[mcp_servers.agentbridge.env]
-AGENTBRIDGE_CONTROL_PORT = "${port}"
-AGENTBRIDGE_AGENT = "codex"
-`;
-      writeFileSync(configToml, toml, "utf-8");
-      this.log(`Wrote config.toml with MCP for session ${config.sessionId}`);
-    }
+    // Dynamic tools are registered via thread/start params — no config.toml MCP needed
 
     const paths: SessionPaths = { codexHome, authJson, rulesDir, rulesFile };
     this.sessions.set(config.sessionId, paths);
