@@ -30,7 +30,7 @@ export interface ClientState {
   /** Connect method reference for reconnection */
   connect: () => Promise<void>;
   /** Re-attach Claude after reconnect */
-  attachClaude: () => void;
+  attachAgent: () => void;
 }
 
 /**
@@ -117,7 +117,7 @@ export function tryReconnect(state: ClientState): void {
     .connect()
     .then(() => {
       state.reconnectAttempts = 0;
-      state.attachClaude();
+      state.attachAgent();
       log("Reconnected to daemon");
     })
     .catch(() => {

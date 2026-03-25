@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import { state, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
-import { detachClaude } from "./claude-session";
+import { detachAgent } from "./agent-session";
 import { handleControlMessage } from "./handler";
 
 export function startControlServer(port: number, deps: ControlServerDeps) {
@@ -26,12 +26,17 @@ export function startControlServer(port: number, deps: ControlServerDeps) {
     websocket: {
       open: (ws: ServerWebSocket<ControlSocketData>) => {
         ws.data.clientId = ++state.nextControlClientId;
-        log(`Frontend socket opened (#${ws.data.clientId})`);
+        log(`Control socket opened (#${ws.data.clientId})`);
       },
       close: (ws: ServerWebSocket<ControlSocketData>) => {
-        log(`Frontend socket closed (#${ws.data.clientId})`);
-        if (state.attachedClaude === ws)
-          detachClaude(ws, "frontend socket closed", deps);
+        log(`Control socket closed (#${ws.data.clientId})`);
+        // Detach any agent using this socket
+        for (const [agentId, agentWs] of state.attachedAgents) {
+          if (agentWs === ws) {
+            detachAgent(ws, agentId, "socket closed", deps);
+            break;
+          }
+        }
       },
       message: (ws: ServerWebSocket<ControlSocketData>, raw) => {
         handleControlMessage(ws, raw, deps);

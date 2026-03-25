@@ -21,12 +21,12 @@ export type StatusFetcher = () => Promise<{
 
 const LOG_FILE = "/tmp/agentbridge.log";
 
-export class ClaudeAdapter extends EventEmitter {
+export class AgentMcpAdapter extends EventEmitter {
   private server: McpServer;
   private replySender: ReplySender | null = null;
   private messageFetcher: MessageFetcher | null = null;
   private statusFetcher: StatusFetcher | null = null;
-  private claudeRole = "lead";
+  private agentRole = "lead";
 
   constructor() {
     super();
@@ -50,8 +50,8 @@ export class ClaudeAdapter extends EventEmitter {
   setStatusFetcher(fetcher: StatusFetcher) {
     this.statusFetcher = fetcher;
   }
-  setClaudeRole(role: string) {
-    this.claudeRole = role;
+  setAgentRole(role: string) {
+    this.agentRole = role;
   }
 
   private registerTools() {
@@ -90,8 +90,8 @@ export class ClaudeAdapter extends EventEmitter {
         }
 
         const msg: BridgeMessage = {
-          id: `claude_${Date.now()}`,
-          from: this.claudeRole,
+          id: `${this.agentRole}_${Date.now()}`,
+          from: this.agentRole,
           to,
           content: text,
           timestamp: Date.now(),
@@ -191,7 +191,7 @@ export class ClaudeAdapter extends EventEmitter {
   }
 
   private log(msg: string) {
-    const line = `[${new Date().toISOString()}] [ClaudeAdapter] ${msg}\n`;
+    const line = `[${new Date().toISOString()}] [AgentMcpAdapter] ${msg}\n`;
     process.stderr.write(line);
     try {
       appendFileSync(LOG_FILE, line);

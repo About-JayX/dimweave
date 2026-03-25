@@ -5,48 +5,40 @@ import { state, broadcastToGui, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
 
 export interface RouteTarget {
-  agent: "claude" | "codex";
+  agent: string;
   online: boolean;
 }
 
 /**
  * Resolve which agent(s) a message should be routed to based on the `to` field.
- * Returns empty array for "user" (GUI only) or unknown roles.
  */
-export function resolveTarget(
-  to: string,
-  deps: ControlServerDeps,
-): RouteTarget[] {
+export function resolveTarget(to: string): RouteTarget[] {
   if (to === "user") return [];
   const targets: RouteTarget[] = [];
   if (state.claudeRole === to) {
+    const ws = state.attachedAgents.get("claude");
     targets.push({
       agent: "claude",
-      online:
-        state.attachedClaude !== null &&
-        state.attachedClaude.readyState === WebSocket.OPEN,
+      online: ws !== undefined && ws.readyState === WebSocket.OPEN,
     });
   }
   if (state.codexRole === to) {
+    const ws = state.attachedAgents.get("codex");
     targets.push({
       agent: "codex",
-      online: deps.codex.activeThreadId !== null,
+      online: ws !== undefined && ws.readyState === WebSocket.OPEN,
     });
   }
   return targets;
 }
 
 /**
- * Route a message to its target agent(s).
- * - Matches target by role → agent mapping
- * - Buffers if target is offline
- * - Broadcasts to GUI
- * - Returns system error message if no target found
+ * Route a message to its target agent(s) via MCP bridge WebSocket.
+ * Both Claude and Codex receive messages through the same protocol.
  */
 export function routeMessage(
   msg: BridgeMessage,
-  deps: ControlServerDeps,
-  opts?: { skipSender?: "claude" | "codex"; skipGuiBroadcast?: boolean },
+  opts?: { skipSender?: string; skipGuiBroadcast?: boolean },
 ): { success: boolean; error?: string } {
   const { to } = msg;
 
@@ -60,10 +52,9 @@ export function routeMessage(
     return { success: true };
   }
 
-  const targets = resolveTarget(to, deps);
+  const targets = resolveTarget(to);
 
   if (targets.length === 0) {
-    // No agent has this role — system error
     const errorMsg = state.systemMessage(
       "system_route_error",
       `${to} role is not online`,
@@ -80,35 +71,17 @@ export function routeMessage(
   let routed = false;
 
   for (const target of targets) {
-    // Skip sending back to sender
     if (opts?.skipSender === target.agent) continue;
 
-    if (!target.online) {
+    const ws = state.attachedAgents.get(target.agent);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendProtocolMessage(ws, { type: "routed_message", message: msg });
+      routed = true;
+    } else {
       state.bufferMessage(msg);
-      continue;
-    }
-
-    if (target.agent === "claude") {
-      if (state.attachedClaude) {
-        sendProtocolMessage(state.attachedClaude, {
-          type: "routed_message",
-          message: msg,
-        });
-        routed = true;
-      } else {
-        state.bufferMessage(msg);
-      }
-    } else if (target.agent === "codex") {
-      if (deps.codex.activeThreadId) {
-        deps.codex.injectMessage(msg.content);
-        routed = true;
-      } else {
-        state.bufferMessage(msg);
-      }
     }
   }
 
-  // Broadcast to GUI (skip if caller already handled it, e.g. streaming)
   if (!opts?.skipGuiBroadcast) {
     broadcastToGui({
       type: "agent_message",

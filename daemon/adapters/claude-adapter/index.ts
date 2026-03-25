@@ -1,7 +1,7 @@
 export { AgentAdapter, AgentStatus } from "./base-adapter";
 export {
-  ClaudeAdapter,
+  AgentMcpAdapter,
   type ReplySender,
   type MessageFetcher,
   type StatusFetcher,
-} from "./claude-adapter";
+} from "./agent-mcp-adapter";

@@ -57,7 +57,7 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
     try {
       setLaunchError(null);
       const agentsJson = buildClaudeAgentsJson(claudeRole);
-      const mcpConfigJson = buildMcpConfigJson();
+      const mcpConfigJson = buildMcpConfigJson(claudeConfig.bridgePath);
       await invoke("launch_pty", {
         cwd,
         cols: 120,

@@ -25,6 +25,7 @@ pub struct ClaudeConfig {
     pub version: String,
     pub models: Vec<SelectOption>,
     pub effort_levels: Vec<SelectOption>,
+    pub bridge_path: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -76,12 +77,38 @@ pub fn detect_claude_config() -> ClaudeConfig {
 
     let installed = !binary_path.is_empty() && !version.is_empty();
 
+    // Resolve bridge.ts path relative to the executable's directory
+    let bridge_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .map(|d| {
+            // In dev: target/debug/ → project root is ../../
+            // In prod: Contents/MacOS/ → bridge bundled alongside
+            let candidates = [
+                d.join("../../../daemon/bridge.ts"),     // dev: target/debug/ → project root
+                d.join("../../daemon/bridge.ts"),         // dev alt
+                d.join("../Resources/daemon/bridge.ts"), // prod macOS
+                d.join("daemon/bridge.ts"),              // fallback
+            ];
+            for c in &candidates {
+                if c.exists() {
+                    return c.canonicalize().unwrap_or_else(|_| c.clone()).to_string_lossy().to_string();
+                }
+            }
+            // Last resort: use CWD
+            std::env::current_dir()
+                .map(|cwd| cwd.join("daemon/bridge.ts").to_string_lossy().to_string())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+
     ClaudeConfig {
         installed,
         binary_path,
         version,
         models: CLAUDE_MODELS.to_vec(),
         effort_levels: EFFORT_LEVELS.to_vec(),
+        bridge_path,
     }
 }
 

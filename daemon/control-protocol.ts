@@ -11,8 +11,8 @@ export interface DaemonStatus {
 }
 
 export type ControlClientMessage =
-  | { type: "claude_connect" }
-  | { type: "claude_disconnect" }
+  | { type: "agent_connect"; agentId: string }
+  | { type: "agent_disconnect"; agentId: string }
   | { type: "route_message"; requestId: string; message: BridgeMessage }
   | { type: "fetch_messages"; requestId: string }
   | { type: "status" };

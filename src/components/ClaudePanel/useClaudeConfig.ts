@@ -12,6 +12,7 @@ export interface ClaudeConfig {
   version: string;
   models: SelectOption[];
   effortLevels: SelectOption[];
+  bridgePath: string;
 }
 
 const FALLBACK_CONFIG: ClaudeConfig = {
@@ -20,6 +21,7 @@ const FALLBACK_CONFIG: ClaudeConfig = {
   version: "",
   models: [],
   effortLevels: [],
+  bridgePath: "",
 };
 
 export function useClaudeConfig() {

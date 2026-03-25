@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import type { ControlClientMessage } from "../control-protocol";
 import { state, type ControlSocketData } from "../daemon-state";
 import type { ControlServerDeps } from "./types";
-import { attachClaude, detachClaude } from "./claude-session";
+import { attachAgent, detachAgent } from "./agent-session";
 import {
   sendStatus,
   sendProtocolMessage,
@@ -22,11 +22,11 @@ export function handleControlMessage(
   }
 
   switch (message.type) {
-    case "claude_connect":
-      attachClaude(ws, deps);
+    case "agent_connect":
+      attachAgent(ws, message.agentId, deps);
       return;
-    case "claude_disconnect":
-      detachClaude(ws, "frontend requested disconnect", deps);
+    case "agent_disconnect":
+      detachAgent(ws, message.agentId, "requested disconnect", deps);
       return;
     case "status":
       sendStatus(ws, deps);
@@ -43,21 +43,27 @@ export function handleControlMessage(
     case "route_message": {
       const msg = message.message;
 
-      // Sender validation: from must match claudeRole
-      if (msg.from !== state.claudeRole) {
+      // Resolve sender's agent id from role
+      const senderAgentId =
+        msg.from === state.claudeRole
+          ? "claude"
+          : msg.from === state.codexRole
+            ? "codex"
+            : null;
+
+      if (!senderAgentId) {
         sendProtocolMessage(ws, {
           type: "route_result",
           requestId: message.requestId,
           success: false,
-          error: `Invalid sender: ${msg.from} does not match claude role ${state.claudeRole}`,
+          error: `Invalid sender: ${msg.from} is not an assigned role`,
         });
         return;
       }
 
       deps.log(`Routing ${msg.from} → ${msg.to} (${msg.content.length} chars)`);
 
-      // Use shared routing — skip sending back to claude (the sender)
-      const result = routeMessage(msg, deps, { skipSender: "claude" });
+      const result = routeMessage(msg, { skipSender: senderAgentId });
 
       sendProtocolMessage(ws, {
         type: "route_result",

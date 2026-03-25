@@ -37,7 +37,10 @@ const MAX_BUFFERED_MESSAGES = parseInt(
 class DaemonState {
   controlServer: ReturnType<typeof Bun.serve> | null = null;
   guiServer: ReturnType<typeof Bun.serve> | null = null;
-  attachedClaude: ServerWebSocket<ControlSocketData> | null = null;
+  readonly attachedAgents = new Map<
+    string,
+    ServerWebSocket<ControlSocketData>
+  >();
 
   nextControlClientId = 0;
   nextGuiClientId = 0;

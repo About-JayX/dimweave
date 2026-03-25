@@ -3,10 +3,11 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, readFileSync, unlinkSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ClaudeAdapter } from "./adapters/claude-adapter";
+import { AgentMcpAdapter } from "./adapters/claude-adapter";
 import { DaemonClient } from "./daemon-client";
 import type { BridgeMessage } from "./types";
 
+const AGENT_ID = process.env.AGENTBRIDGE_AGENT ?? "claude";
 const CONTROL_PORT = parseInt(
   process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502",
   10,
@@ -19,35 +20,31 @@ const CONTROL_WS_URL = `ws://127.0.0.1:${CONTROL_PORT}/ws`;
 const LOG_FILE = "/tmp/agentbridge.log";
 const DAEMON_PATH = fileURLToPath(new URL("./daemon.ts", import.meta.url));
 
-const claude = new ClaudeAdapter();
+const adapter = new AgentMcpAdapter();
 const daemonClient = new DaemonClient(CONTROL_WS_URL);
 
 let shuttingDown = false;
 
-// Local buffer for messages pushed via WebSocket while Claude is attached.
+// Local buffer for messages pushed via WebSocket while agent is attached.
 // check_messages drains this buffer first, then falls back to daemon fetch.
 const pushedMessages: BridgeMessage[] = [];
 const MAX_PUSHED = 100;
 
 // Wire up tools → daemon
-claude.setReplySender(async (msg) => daemonClient.sendReply(msg));
-claude.setMessageFetcher(async () => {
-  // Drain locally pushed messages first (these arrive via WS push)
+adapter.setReplySender(async (msg) => daemonClient.sendReply(msg));
+adapter.setMessageFetcher(async () => {
   if (pushedMessages.length > 0) {
     const drained = pushedMessages.splice(0, pushedMessages.length);
-    log(`Returning ${drained.length} pushed message(s) to Claude`);
+    log(`Returning ${drained.length} pushed message(s) to ${AGENT_ID}`);
     return drained;
   }
-  // Fallback: fetch from daemon buffer (for messages that arrived while offline)
   return daemonClient.fetchMessages();
 });
-claude.setStatusFetcher(async () => {
+adapter.setStatusFetcher(async () => {
   const res = await fetch(CONTROL_HEALTH_URL).catch(() => null);
   if (!res?.ok)
     return { bridgeReady: false, codexTuiRunning: false, threadId: null };
-  const data = await res.json();
-  // Pass role info so get_status can display available roles
-  return data;
+  return res.json();
 });
 
 // Buffer pushed messages locally so check_messages can return them
@@ -57,7 +54,7 @@ daemonClient.on("routedMessage", (message) => {
     pushedMessages.splice(0, pushedMessages.length - MAX_PUSHED);
   }
   log(
-    `Buffered pushed Codex message (${message.content.length} chars, queue: ${pushedMessages.length})`,
+    `Buffered routed message for ${AGENT_ID} (${message.content.length} chars, queue: ${pushedMessages.length})`,
   );
 });
 
@@ -65,13 +62,13 @@ daemonClient.on("disconnect", () => {
   if (!shuttingDown) log("Daemon control connection closed");
 });
 
-claude.on("ready", async () => {
-  log("MCP server ready - ensuring AgentBridge daemon...");
+adapter.on("ready", async () => {
+  log(`MCP server ready for ${AGENT_ID} - ensuring AgentBridge daemon...`);
   try {
     await ensureDaemonRunning();
     await daemonClient.connect();
-    daemonClient.attachClaude();
-    log("Connected to daemon, tools ready");
+    daemonClient.attachAgent(AGENT_ID);
+    log(`Connected to daemon as ${AGENT_ID}, tools ready`);
   } catch (err: any) {
     log(`Failed to connect to daemon: ${err.message}`);
   }
@@ -160,7 +157,7 @@ function removeStalePidFile() {
 function shutdown(reason: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  log(`Shutting down bridge (${reason})...`);
+  log(`Shutting down bridge/${AGENT_ID} (${reason})...`);
   const hardExit = setTimeout(() => process.exit(0), 3000);
   void daemonClient.disconnect().finally(() => {
     clearTimeout(hardExit);
@@ -183,12 +180,12 @@ process.on("unhandledRejection", (reason: any) =>
 );
 
 function log(msg: string) {
-  const line = `[${new Date().toISOString()}] [Bridge] ${msg}\n`;
+  const line = `[${new Date().toISOString()}] [Bridge/${AGENT_ID}] ${msg}\n`;
   process.stderr.write(line);
   try {
     appendFileSync(LOG_FILE, line);
   } catch {}
 }
 
-log(`Starting bridge (daemon ws ${CONTROL_WS_URL})`);
-void claude.start().catch((err: any) => log(`Fatal: ${err.message}`));
+log(`Starting bridge for ${AGENT_ID} (daemon ws ${CONTROL_WS_URL})`);
+void adapter.start().catch((err: any) => log(`Fatal: ${err.message}`));

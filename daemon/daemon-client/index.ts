@@ -16,6 +16,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
   private ws: WebSocket | null = null;
   private connectingPromise: Promise<void> | null = null;
   private intentionalDisconnect = false;
+  private agentId = "claude";
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private nextRequestId = 1;
@@ -78,8 +79,9 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     return this.connectingPromise;
   }
 
-  attachClaude() {
-    this.send({ type: "claude_connect" });
+  attachAgent(agentId: string = "claude") {
+    this.agentId = agentId;
+    this.send({ type: "agent_connect", agentId });
   }
 
   async disconnect() {
@@ -95,7 +97,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     if (!this.ws) return;
 
     try {
-      this.send({ type: "claude_disconnect" });
+      this.send({ type: "agent_disconnect", agentId: this.agentId });
     } catch {}
 
     try {
@@ -165,7 +167,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       emitter: this,
       send: (msg) => this.send(msg),
       connect: () => this.connect(),
-      attachClaude: () => this.attachClaude(),
+      attachAgent: () => this.attachAgent(this.agentId),
     };
   }
 

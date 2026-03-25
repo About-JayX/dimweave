@@ -5,8 +5,8 @@ import { CodexAdapter } from "./adapters/codex-adapter";
 import { TuiConnectionState } from "./tui-connection-state";
 import { SessionManager } from "./session-manager";
 import { state, broadcastToGui } from "./daemon-state";
-import { startControlServer, routeMessage as routeMsg } from "./control-server";
-import { startGuiServer, sendToClaudePty } from "./gui-server";
+import { startControlServer, routeMessage } from "./control-server";
+import { startGuiServer } from "./gui-server";
 import { registerCodexEvents } from "./codex-events";
 
 // ── Config ─────────────────────────────────────────────────
@@ -37,7 +37,7 @@ const tuiState = new TuiConnectionState({
   disconnectGraceMs: TUI_DISCONNECT_GRACE_MS,
   log,
   onDisconnectPersisted: (connId) => {
-    route(
+    routeMessage(
       state.systemMessage(
         "system_tui_disconnected",
         `Codex TUI disconnected (conn #${connId}). Codex is still running in the background.`,
@@ -46,15 +46,12 @@ const tuiState = new TuiConnectionState({
     );
   },
   onReconnectAfterNotice: (connId) => {
-    route(
+    routeMessage(
       state.systemMessage(
         "system_tui_reconnected",
         `Codex TUI reconnected (conn #${connId}). Bridge restored.`,
         state.claudeRole,
       ),
-    );
-    codex.injectMessage(
-      "Claude Code is still online, bridge restored. Bidirectional communication can continue.",
     );
   },
 });
@@ -73,21 +70,20 @@ function currentStatus() {
     pid: process.pid,
     codexBootstrapped: state.codexBootstrapped,
     codexTuiRunning: tuiState.canReply() || codex.activeThreadId !== null,
-    claudeConnected: state.attachedClaude !== null,
+    claudeConnected: state.attachedAgents.has("claude"),
     codexAccount: codex.accountInfo,
     claudeRole: state.claudeRole,
     codexRole: state.codexRole,
-    claudeOnline: state.attachedClaude !== null,
-    codexOnline: tuiState.canReply() || codex.activeThreadId !== null,
+    claudeOnline: state.attachedAgents.has("claude"),
+    codexOnline: state.attachedAgents.has("codex"),
   };
 }
 
 function broadcastStatus() {
-  if (state.attachedClaude) {
+  // Send status to all attached agents
+  for (const [, ws] of state.attachedAgents) {
     try {
-      state.attachedClaude.send(
-        JSON.stringify({ type: "status", status: currentStatus() }),
-      );
+      ws.send(JSON.stringify({ type: "status", status: currentStatus() }));
     } catch {}
   }
   broadcastToGui({
@@ -107,23 +103,13 @@ const serverDeps = {
   attachCmd,
 };
 
-/** Route a message through the bridge routing system */
-function route(
-  msg: import("./types").BridgeMessage,
-  opts?: { skipGuiBroadcast?: boolean },
-) {
-  routeMsg(msg, serverDeps, opts);
-}
-
-// ── Codex events (extracted to codex-events.ts) ───────────
+// ── Codex events (GUI display + lifecycle only) ───────────
 
 registerCodexEvents({
   codex,
   tuiState,
   broadcastToGui,
   broadcastStatus,
-  routeMessage: route,
-  sendToClaudePty,
   state,
   log,
 });
@@ -139,26 +125,9 @@ async function bootCodex() {
   try {
     await codex.start();
     state.codexBootstrapped = true;
-    route(
-      state.systemMessage(
-        "system_waiting",
-        "AgentBridge started, waiting for Codex TUI to connect.",
-        state.claudeRole,
-      ),
-    );
-    route(
-      state.systemMessage("system_attach_cmd", attachCmd, state.claudeRole),
-    );
     broadcastStatus();
   } catch (err: any) {
     log(`Failed to start Codex: ${err.message}`);
-    route(
-      state.systemMessage(
-        "system_codex_start_failed",
-        `AgentBridge failed to start Codex: ${err.message}`,
-        state.claudeRole,
-      ),
-    );
     broadcastToGui({
       type: "agent_status",
       payload: { agent: "codex", status: "error", error: err.message },

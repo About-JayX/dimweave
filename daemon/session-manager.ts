@@ -19,6 +19,8 @@ export interface SessionConfig {
   sessionId: string;
   roleId: RoleId;
   projectDir?: string;
+  bridgePath?: string;
+  controlPort?: number;
 }
 
 export interface SessionPaths {
@@ -79,6 +81,32 @@ export class SessionManager {
       this.log(
         `Wrote Starlark rules for role ${config.roleId} in session ${config.sessionId}`,
       );
+    }
+
+    // Write MCP config for agentbridge communication
+    if (config.bridgePath) {
+      const mcpJson = join(codexHome, "mcp.json");
+      writeFileSync(
+        mcpJson,
+        JSON.stringify(
+          {
+            mcpServers: {
+              agentbridge: {
+                command: "bun",
+                args: ["run", config.bridgePath],
+                env: {
+                  AGENTBRIDGE_CONTROL_PORT: String(config.controlPort ?? 4502),
+                  AGENTBRIDGE_AGENT: "codex",
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      this.log(`Wrote mcp.json for session ${config.sessionId}`);
     }
 
     const paths: SessionPaths = { codexHome, authJson, rulesDir, rulesFile };
