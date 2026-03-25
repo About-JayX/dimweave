@@ -20,28 +20,39 @@ https://developers.openai.com/codex/app-server
 
 **影响:** 这是 Codex 无法连接的根本原因。
 
-#### [已修复] dynamicTools schema 字段名错误
+#### [已修复] dynamicTools schema 字段名 — 文档与实现不一致
 
-**问题:** 官方文档使用 `parameters` 作为 tool schema 字段名：
-```json
-{ "name": "my_tool", "parameters": { "type": "object", ... } }
-```
-当前实现使用 `inputSchema`，导致工具可能无法被正确注册。
+**问题:** 官方文档写 `parameters`，但 Codex CLI 实际要求 `inputSchema`。
+使用 `parameters` 时报错：`Invalid request: missing field 'inputSchema'`。
 
-**修复:** 将 `inputSchema` 改为 `parameters`。
+**验证:** `bun` 脚本直接测试 app-server，确认 `inputSchema` 正确。
 
-#### [已修复] sandbox 值格式错误
+**修复:** 保持 `inputSchema`（之前错误地改成了 `parameters`，已改回）。
 
-**问题:** 官方文档使用 camelCase: `workspaceWrite`, `readOnly`。
-当前实现使用 kebab-case: `workspace-write`, `read-only`。
+**教训:** 官方文档不可信，必须运行时测试验证。
 
-**修复:** `roles.rs` 中的 `sandbox_mode` 改为 camelCase 格式，同时更新 `lifecycle.rs` 和 `session_manager.rs` 中的相关引用。
+#### [已修复] sandbox 值格式 — 两套上下文不同格式
 
-#### [未修复] `--config` CLI flags 格式未验证
+**问题:** Codex 有两个不同接口使用 sandbox 值：
+- **CLI `--config` / `config.toml`**: 要求 kebab-case (`workspace-write`, `read-only`)
+- **JSON-RPC `thread/start` params.sandbox**: 要求 camelCase (`workspaceWrite`, `readOnly`)
 
-**问题:** `lifecycle.rs` 通过 `--config sandbox_mode="workspace-write"` 传递配置，但 `--config` flag 的精确格式未在官方文档中明确。可能需要验证这个格式是否正确。
+**第一次修复(错误):** 把 `roles.rs` 全部改成 camelCase，导致 config.toml 写入无效值，
+app-server 启动时报 `unknown variant 'workspaceWrite', expected 'workspace-write'`。
 
-**状态:** 需要运行时测试验证。
+**第二次修复:** `roles.rs` 保持 kebab-case，`session.rs` 转 camelCase → 仍然失败。
+
+**第三次修复(正确):** `thread/start` 的 `sandbox` 参数也要求 kebab-case！
+camelCase `workspaceWrite` 报错：`unknown variant 'workspaceWrite', expected 'workspace-write'`
+
+**结论:** Codex CLI 实现 **全部使用 kebab-case**，与官方文档的 camelCase 描述完全相反。
+`roles.rs` 和 `session.rs` 统一使用 kebab-case 即可，无需转换。
+
+**运行时验证:** `inputSchema` + kebab-case `workspace-write` → thread/start 成功。
+
+#### [已修复] `--config` CLI flags 格式
+
+**验证结果:** `--config sandbox_mode="workspace-write"` 格式正确。
 
 #### [待确认] `settings.developer_instructions` 有效性
 

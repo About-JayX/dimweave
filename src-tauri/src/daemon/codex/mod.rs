@@ -70,6 +70,7 @@ pub async fn start(
     .await?;
     let child_arc = Arc::new(Mutex::new(Some(child)));
 
+    eprintln!("[Codex] process spawned, polling port {codex_port}...");
     gui::emit_system_log(
         &app,
         "info",
@@ -132,6 +133,7 @@ pub async fn start(
             .await
             .ok();
     }
+    eprintln!("[Codex] session wired, emitting agent_status(true)");
     gui::emit_agent_status(&app, "codex", true, None);
     gui::emit_system_log(
         &app,

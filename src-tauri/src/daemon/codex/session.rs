@@ -54,7 +54,6 @@ pub async fn run(
             json!({
                 "method": "initialize", "id": init_id,
                 "params": { "clientInfo": {"name":"agentbridge","version":"0.1.0"},
-                            "protocolVersion": "0.1.0",
                             "capabilities": {"experimentalApi": true} }
             })
             .to_string(),
@@ -69,15 +68,11 @@ pub async fn run(
     // Wait for init response
     let init_result = timeout(Duration::from_secs(30), async {
         loop {
-            let Some(Ok(msg)) = stream.next().await else {
-                return false;
-            };
+            let Some(Ok(msg)) = stream.next().await else { return false };
             let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
                 continue;
             };
-            if v["id"].as_u64() == Some(init_id) {
-                return true;
-            }
+            if v["id"].as_u64() == Some(init_id) { return true; }
         }
     })
     .await;
@@ -96,21 +91,23 @@ pub async fn run(
     // === Handshake: thread/start ===
     let thread_id_rpc = next_id;
     next_id += 1;
+    // NOTE: Codex CLI uses `inputSchema` (not `parameters`) and kebab-case sandbox values
+    // despite the official docs showing otherwise. Verified by runtime testing 2026-03-25.
     let mut params = json!({
         "dynamicTools": [
             { "name": "reply", "description": "Send a message to another agent role.",
-              "parameters": {"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string"}},"required":["to","text"]} },
+              "inputSchema": {"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string"}},"required":["to","text"]} },
             { "name": "check_messages", "description": "Check for new messages from other agents.",
-              "parameters": {"type":"object","properties":{}} },
+              "inputSchema": {"type":"object","properties":{}} },
             { "name": "get_status", "description": "Get AgentBridge status: available roles and online agents.",
-              "parameters": {"type":"object","properties":{}} }
+              "inputSchema": {"type":"object","properties":{}} }
         ]
     });
     if let Some(cwd) = (!opts.cwd.is_empty()).then(|| opts.cwd.as_str()) {
         params["cwd"] = json!(cwd);
     }
     if let Some(m) = &opts.model {
-        params["model"] = json!(m);
+        if !m.is_empty() { params["model"] = json!(m); }
     }
     if let Some(sb) = &opts.sandbox_mode {
         params["sandbox"] = json!(sb);
@@ -132,19 +129,17 @@ pub async fn run(
     // Wait for thread/start response
     let thread_result = timeout(Duration::from_secs(30), async {
         loop {
-            let Some(Ok(msg)) = stream.next().await else {
-                return String::new();
-            };
+            let Some(Ok(msg)) = stream.next().await else { return String::new() };
             let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
                 continue;
             };
             if v["id"].as_u64() == Some(thread_id_rpc) {
+                if v.get("error").is_some() {
+                    let err = serde_json::to_string(&v["error"]).unwrap_or_default();
+                    eprintln!("[Codex] thread/start error: {err}");
+                }
                 if let Some(tid) = v["result"]["thread"]["id"].as_str() {
-                    gui::emit_system_log(
-                        &app,
-                        "info",
-                        &format!("[Codex] session started thread={tid}"),
-                    );
+                    gui::emit_system_log(&app, "info", &format!("[Codex] thread={tid}"));
                     return tid.to_string();
                 }
                 return String::new();
@@ -159,7 +154,7 @@ pub async fn run(
             return;
         }
         Err(_) => {
-            gui::emit_system_log(&app, "error", "[Codex] thread/start handshake timed out");
+            gui::emit_system_log(&app, "error", "[Codex] thread/start timed out");
             return;
         }
     };
@@ -171,7 +166,6 @@ pub async fn run(
             msg_opt = stream.next() => {
                 let Some(Ok(msg)) = msg_opt else { break };
                 let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else { continue };
-                // Dynamic tool call from Codex
                 if v["method"].as_str() == Some("item/tool/call") {
                     if let (Some(id), Some(name)) = (v["id"].as_u64(), v["params"]["name"].as_str()) {
                         let args = v["params"]["arguments"].clone();
