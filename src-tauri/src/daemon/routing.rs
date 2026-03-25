@@ -11,24 +11,54 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
     if msg.to == "user" {
         return RouteResult::ToGui;
     }
-    let mut s = state.write().await;
-    let target_agent = if s.claude_role == msg.to {
-        Some("claude".to_string())
-    } else if s.codex_role == msg.to {
-        Some("codex".to_string())
-    } else {
-        None
+    enum Target {
+        Claude(tokio::sync::mpsc::Sender<BridgeMessage>),
+        Codex(tokio::sync::mpsc::Sender<String>, String),
+        Buffer,
+    }
+
+    let target = {
+        let mut s = state.write().await;
+
+        if s.claude_role == msg.to {
+            if let Some(tx) = s.attached_agents.get("claude") {
+                Target::Claude(tx.clone())
+            } else {
+                s.buffer_message(msg.clone());
+                Target::Buffer
+            }
+        } else if s.codex_role == msg.to {
+            if let Some(tx) = s.codex_inject_tx.clone() {
+                Target::Codex(tx, format_codex_input(&msg))
+            } else {
+                s.buffer_message(msg.clone());
+                Target::Buffer
+            }
+        } else {
+            s.buffer_message(msg.clone());
+            Target::Buffer
+        }
     };
 
-    if let Some(agent_id) = target_agent {
-        if let Some(tx) = s.attached_agents.get(&agent_id) {
+    match target {
+        Target::Claude(tx) => {
             if tx.send(msg.clone()).await.is_ok() {
-                return RouteResult::Delivered;
+                RouteResult::Delivered
+            } else {
+                state.write().await.buffer_message(msg);
+                RouteResult::Buffered
             }
         }
+        Target::Codex(tx, input) => {
+            if tx.send(input).await.is_ok() {
+                RouteResult::Delivered
+            } else {
+                state.write().await.buffer_message(msg);
+                RouteResult::Buffered
+            }
+        }
+        Target::Buffer => RouteResult::Buffered,
     }
-    s.buffer_message(msg);
-    RouteResult::Buffered
 }
 
 pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
@@ -50,6 +80,14 @@ pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMess
             );
         }
         RouteResult::ToGui => {}
+    }
+}
+
+pub fn format_codex_input(msg: &BridgeMessage) -> String {
+    if msg.from == "user" {
+        msg.content.clone()
+    } else {
+        format!("Message from {}:\n{}", msg.from, msg.content)
     }
 }
 

@@ -1,5 +1,7 @@
 # Codex MCP 集成
 
+> Historical note: this dated spec describes an intermediate MCP design, not the live architecture. Current source of truth is `CLAUDE.md`, `.claude/rules/**`, `src-tauri/src/daemon/**`, and `bridge/**`.
+
 ## Summary
 
 让 Codex 和 Claude 使用完全相同的 MCP tools（`reply`/`check_messages`/`get_status`）进行结构化通信。复用现有 `bridge.ts`，通过环境变量区分 agent 身份。Codex 通过 `CODEX_HOME/mcp.json` 注入，Claude 通过 `--mcp-config` 内联注入。

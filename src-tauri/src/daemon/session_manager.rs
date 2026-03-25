@@ -2,23 +2,38 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Manages temporary CODEX_HOME directories for Codex sessions.
 /// Each session gets `/tmp/agentbridge-<id>/` with auth.json symlinked.
+///
+/// This struct is a singleton held in `DaemonState`.  Creating per-launch
+/// instances would call `cleanup_stale()` on each launch, destroying live sessions.
 pub struct SessionManager {
     sessions: HashMap<String, PathBuf>,
+    next_id: u64,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self::cleanup_stale();
-        Self { sessions: HashMap::new() }
+        Self { sessions: HashMap::new(), next_id: 0 }
+    }
+
+    /// Generate a unique, monotonically increasing session ID.
+    pub fn next_session_id(&mut self) -> String {
+        self.next_id += 1;
+        format!("{}", self.next_id)
     }
 
     /// Create a session directory and return the CODEX_HOME path.
-    /// Returns `Err` if directory creation or auth symlink fails.
-    pub fn create_session(&mut self, session_id: &str) -> anyhow::Result<PathBuf> {
+    /// Writes `config.toml` with the supplied role constraints.
+    pub fn create_session(
+        &mut self,
+        session_id: &str,
+        sandbox_mode: &str,
+        approval_policy: &str,
+    ) -> anyhow::Result<PathBuf> {
         let tmp = PathBuf::from(format!("/tmp/agentbridge-{session_id}"));
         fs::create_dir_all(&tmp)?;
 
-        // Attempt to symlink ~/.codex/auth.json for transparent auth pass-through
+        // Transparent auth pass-through via symlink (no credential copy)
         if let Some(home) = dirs::home_dir() {
             let src = home.join(".codex").join("auth.json");
             let dst = tmp.join("auth.json");
@@ -27,6 +42,12 @@ impl SessionManager {
                 std::os::unix::fs::symlink(&src, &dst).ok();
             }
         }
+
+        // Write config.toml so Codex loads role constraints from CODEX_HOME
+        let config_toml = format!(
+            "sandbox_mode = \"{sandbox_mode}\"\napproval_policy = \"{approval_policy}\"\n\n[features]\napply_patch_freeform = false\n"
+        );
+        fs::write(tmp.join("config.toml"), &config_toml)?;
 
         self.sessions.insert(session_id.to_string(), tmp.clone());
         Ok(tmp)

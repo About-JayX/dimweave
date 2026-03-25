@@ -33,11 +33,20 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
         match from_agent {
             FromAgent::AgentConnect { agent_id: id } => {
                 agent_id = Some(id.clone());
-                state
-                    .write()
-                    .await
-                    .attached_agents
-                    .insert(id.clone(), tx.clone());
+                let buffered = {
+                    let mut daemon = state.write().await;
+                    daemon.attached_agents.insert(id.clone(), tx.clone());
+                    let role = match id.as_str() {
+                        "claude" => Some(daemon.claude_role.clone()),
+                        "codex" => Some(daemon.codex_role.clone()),
+                        _ => None,
+                    };
+                    role.map(|role_id| daemon.take_buffered_for(&role_id))
+                        .unwrap_or_default()
+                };
+                for message in buffered {
+                    tx.send(message).await.ok();
+                }
                 gui::emit_agent_status(&app, &id, true, None);
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} connected"));
             }

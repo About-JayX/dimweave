@@ -1,2 +1,2 @@
 pub mod roles;
-pub use roles::{get_role, RoleConfig, ROLE_IDS};
+pub use roles::get_role;

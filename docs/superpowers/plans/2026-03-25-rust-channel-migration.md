@@ -1,5 +1,7 @@
 # Rust + Channel API Migration Implementation Plan
 
+> Historical note: this dated plan describes the migration path, not the current source of truth. Use `CLAUDE.md`, `.claude/rules/**`, `src-tauri/src/daemon/**`, and `bridge/**` for the live architecture.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Migrate the entire Bun daemon to Rust (embedded in Tauri), replace PTY-inject with Claude Channel API push, and ship as a single `.dmg` with zero Bun runtime dependency.

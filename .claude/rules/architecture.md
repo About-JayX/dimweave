@@ -1,90 +1,89 @@
 # 架构概览
 
-```
-Claude Code <--MCP--> bridge.ts <--WS--> daemon.ts <--WS Proxy--> Codex app-server
-                                             |
-                                        GUI WS (4503)
-                                             |
-                                      Tauri/React 前端
-                                             |
-                                      Tauri Rust 后端 ──► ChatGPT API (用量)
-                                             |           ► ~/.codex/auth.json (JWT)
-                                             |           ► ~/.codex/models_cache.json
+## 当前运行拓扑
+
+```text
+React UI
+  ↕ Tauri invoke / listen
+Tauri main.rs
+  ├── mcp.rs                  # .mcp.json 注册 + 启动 Claude 终端
+  ├── codex/*                 # 账号 / OAuth / 用量 / 模型
+  └── daemon/*
+      ├── control server      # WS :4502，bridge 连入
+      ├── routing             # Claude / Codex / GUI 路由
+      ├── codex session       # WS :4500，连 codex app-server
+      └── session manager     # 临时 CODEX_HOME
+
+Claude Code
+  ↕ MCP stdio
+bridge/agent-bridge-bridge
+  ↕ WS :4502
+Rust daemon
+
+Codex app-server
+  ↕ WS :4500
+Rust daemon
 ```
 
 ## 端口分配
 
-| 端口 | 用途 | 服务 |
-|------|------|------|
-| 4500 | Codex app-server WebSocket | codex-adapter.ts |
-| 4501 | Codex proxy (TUI 连接) | codex-adapter.ts |
-| 4502 | daemon 控制端口 (bridge <-> daemon) | daemon.ts |
-| 4503 | GUI WebSocket (daemon -> 前端) | daemon.ts |
-| 1420 | Vite dev server | vite |
+| 端口 | 用途 | 所属模块 |
+|------|------|----------|
+| `4500` | Codex app-server WebSocket | `src-tauri/src/daemon/codex/` |
+| `4502` | bridge ↔ daemon 控制通道 | `src-tauri/src/daemon/control/` |
+| `1420` | Vite dev server | 前端开发环境 |
 
-## 数据流
+当前没有 GUI WebSocket `4503`。
 
-### 消息路由 (Bun Daemon WS)
-- **Codex -> Claude**: codex-adapter 拦截 agentMessage -> daemon 转发 -> bridge -> MCP notification -> Claude
-- **Claude -> Codex**: Claude 调用 reply 工具 -> bridge -> daemon -> codex.injectMessage
-- **GUI 实时同步**: daemon 所有消息事件同时广播到 4503 GUI WebSocket
-- **协议数据**: model / reasoningEffort / cwd 等从 thread/start 响应和 turn 通知中拦截
+## 核心数据流
 
-### 账号/用量 (Tauri Rust invoke)
-- **Profile**: 前端 invoke `get_codex_account` → Rust 读 `~/.codex/auth.json` 解码 JWT → 返回 email/name/plan
-- **Usage**: 前端 invoke `refresh_usage` → Rust 调 `chatgpt.com/backend-api/wham/usage` (fallback SQLite 缓存)
-- **Models**: 前端 invoke `list_codex_models` → Rust 读 `~/.codex/models_cache.json`
-- **目录**: 前端 invoke `pick_directory` → Rust 调 Tauri dialog
+### Claude 方向
 
-### 配置热切换 (GUI -> Daemon -> Codex)
-- 前端发 `apply_config { model, reasoningEffort, cwd }` → daemon gui-server
-- daemon 断开当前 session → `initSession(opts)` 传入新参数 → `thread/start` params 带 model/reasoning/cwd
-- Codex app-server 用新配置创建 thread → 响应回传给前端
+- 前端调用 `register_mcp`
+- Tauri 在项目根写 `.mcp.json`
+- 外部终端运行 `claude`
+- Claude 通过 MCP 启动 `agent-bridge-bridge`
+- bridge 用 WS 连内嵌 daemon
 
-## 模块结构
+### Codex 方向
 
-### Daemon (Bun)
-```
-daemon/
-├── daemon.ts              # 入口: 配置/事件绑定/启动关闭
-├── daemon-state.ts        # 共享状态 + 广播 helper
-├── gui-server.ts          # GUI WS 服务 + apply_config
-├── control-server.ts      # 控制 WS + Claude 管理
-├── tui-connection-state.ts
-├── bridge.ts              # MCP bridge (Claude spawn)
-├── types.ts               # 共享类型
-├── control-protocol.ts
-└── adapters/
-    ├── codex-adapter.ts          # 编排: 生命周期/WS/代理
-    ├── codex-message-handler.ts  # 通知解析/turn 追踪/账号捕获
-    ├── codex-response-patcher.ts # 响应兼容 patch
-    ├── codex-port-utils.ts       # 端口检查
-    └── codex-types.ts            # 类型定义
-```
+- 前端调用 `daemon_launch_codex`
+- daemon 创建临时 `CODEX_HOME`
+- 启动 `codex app-server`
+- `session.rs` 完成 `initialize` / `thread/start`
+- daemon 通过注入 channel 给 Codex 发送输入
 
-### Tauri Rust
-```
-src-tauri/src/
-├── main.rs                # Tauri commands
-└── codex/
-    ├── mod.rs
-    ├── auth.rs            # JWT 解码 + profile
-    ├── usage.rs           # ChatGPT API 用量 + SQLite 缓存
-    └── models.rs          # 模型列表
-```
+### 路由方向
 
-### Frontend (React)
-```
-src/
-├── stores/
-│   ├── bridge-store.ts         # daemon WS 状态
-│   └── codex-account-store.ts  # Tauri invoke 状态
-├── components/
-│   ├── AgentStatus.tsx         # 侧边栏面板
-│   ├── CodexAccountPanel.tsx   # 可折叠配置面板
-│   ├── MessagePanel.tsx        # 消息列表
-│   ├── ReplyInput.tsx          # 输入框
-│   └── ui/                    # shadcn 组件
-├── types.ts
-└── lib/utils.ts
-```
+- `routing.rs` 是消息投递权威入口
+- `to = "user"` 只显示到 GUI
+- `to = claude_role` 走 bridge WS
+- `to = codex_role` 走 `codex_inject_tx`
+- 离线消息进入 `buffered_messages`
+
+## 模块边界
+
+### `bridge/**`
+
+- 只负责协议转换，不承载业务状态
+- `bridge/src/types.rs` 必须和 `src-tauri/src/daemon/types.rs` 保持字段兼容
+- 新增或修改 bridge tool 时，同时检查 daemon 路由和前端文档
+
+### `src-tauri/src/daemon/**`
+
+- 只在这里维护运行时状态、角色状态、缓冲队列、Codex session
+- 所有消息路由统一走 `routing.rs`
+- bridge control server 只做接入和转发，不写业务分支
+
+### `src/**`
+
+- 前端只做 UI、状态呈现、用户触发
+- 不在前端复制 daemon 业务逻辑
+- agent 状态来源于 Rust 事件，不手写“猜测状态”
+
+## 架构变更要求
+
+- 改 `bridge` 接入方式时，同时更新 `src-tauri/src/mcp.rs`、`bridge/**`、`CLAUDE.md`
+- 改消息协议时，同时更新 Rust daemon types、bridge types、前端 `BridgeMessage`
+- 改端口时，同时更新规则、文档、桥接代码和健康检查路径
+- 删除旧模块后，要同步删除对应测试脚本、tsconfig、依赖和说明文档

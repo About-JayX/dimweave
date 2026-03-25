@@ -19,10 +19,14 @@ pub struct BridgeMessage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DaemonMsg {
     RoutedMessage { message: BridgeMessage },
-    Status { status: serde_json::Value },
+    Status {
+        #[serde(rename = "status")]
+        _status: serde_json::Value,
+    },
 }
 
 /// Messages bridge sends TO daemon over WS :4502
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BridgeMsg<'a> {

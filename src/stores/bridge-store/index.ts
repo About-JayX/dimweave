@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
 
-export type { CodexPhase, TerminalLine, BridgeState } from "./types";
+export type { TerminalLine, BridgeState } from "./types";
 
 // Tauri event payload shapes emitted by the Rust daemon (camelCase from serde)
 interface AgentMessagePayload {
@@ -21,41 +21,52 @@ interface AgentStatusPayload {
   exitCode?: number;
 }
 
+// Module-level unlisten handles; called on cleanup() to prevent leaks during HMR.
+let _unlisteners: UnlistenFn[] = [];
+
+function initListeners(
+  set: (fn: (s: BridgeState) => Partial<BridgeState>) => void,
+) {
+  Promise.all([
+    listen<AgentMessagePayload>("agent_message", (e) => {
+      set((s) => ({ messages: [...s.messages, e.payload.payload] }));
+    }),
+    listen<SystemLogPayload>("system_log", (e) => {
+      const { level, message } = e.payload;
+      set((s) => ({
+        terminalLines: [
+          ...s.terminalLines.slice(-200),
+          {
+            agent: "system",
+            kind: level === "error" ? ("error" as const) : ("text" as const),
+            line: message,
+            timestamp: Date.now(),
+          },
+        ],
+      }));
+    }),
+    listen<AgentStatusPayload>("agent_status", (e) => {
+      const { agent, online } = e.payload;
+      set((s) => ({
+        agents: {
+          ...s.agents,
+          [agent]: {
+            ...s.agents[agent],
+            name: agent,
+            displayName: s.agents[agent]?.displayName ?? agent,
+            status: online ? ("connected" as const) : ("disconnected" as const),
+          },
+        },
+      }));
+    }),
+  ]).then((fns) => {
+    _unlisteners.forEach((fn) => fn());
+    _unlisteners = fns;
+  });
+}
+
 export const useBridgeStore = create<BridgeState>((set, get) => {
-  // Subscribe to Tauri events — daemon is embedded in Tauri, always available
-  listen<AgentMessagePayload>("agent_message", (e) => {
-    set((s) => ({ messages: [...s.messages, e.payload.payload] }));
-  });
-
-  listen<SystemLogPayload>("system_log", (e) => {
-    const { level, message } = e.payload;
-    set((s) => ({
-      terminalLines: [
-        ...s.terminalLines.slice(-200),
-        {
-          agent: "system",
-          kind: level === "error" ? "error" : "text",
-          line: message,
-          timestamp: Date.now(),
-        },
-      ],
-    }));
-  });
-
-  listen<AgentStatusPayload>("agent_status", (e) => {
-    const { agent, online } = e.payload;
-    set((s) => ({
-      agents: {
-        ...s.agents,
-        [agent]: {
-          ...s.agents[agent],
-          name: agent,
-          displayName: s.agents[agent]?.displayName ?? agent,
-          status: online ? "connected" : "disconnected",
-        },
-      },
-    }));
-  });
+  initListeners(set);
 
   return {
     // Daemon is always available (embedded in Tauri process)
@@ -69,10 +80,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       },
       codex: { name: "codex", displayName: "Codex", status: "disconnected" },
     },
-    daemonStatus: null,
-    codexPhase: "idle" as const,
     terminalLines: [],
-    claudeRateLimit: null,
     claudeRole: "lead",
     codexRole: "coder",
     draft: "",
@@ -121,6 +129,11 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       } else {
         set({ codexRole: role });
       }
+    },
+
+    cleanup: () => {
+      _unlisteners.forEach((fn) => fn());
+      _unlisteners = [];
     },
   };
 });

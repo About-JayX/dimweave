@@ -1,23 +1,15 @@
 /// Codex-side configuration for a role (used when starting a Codex session)
 #[derive(Debug, Clone)]
 pub struct RoleConfig {
-    pub id: &'static str,
-    pub label: &'static str,
     /// Injected as `developer_instructions` in Codex `thread/start`
     pub developer_instructions: &'static str,
     /// Codex sandbox mode (OS-enforced)
     pub sandbox_mode: &'static str,
     /// Codex approval policy
     pub approval_policy: &'static str,
-    /// Default routing target for this role's output
-    pub default_target: &'static str,
-    /// Whether shell tool is enabled for Codex
-    pub shell_tool: bool,
 }
 
 pub const ROLE_USER: RoleConfig = RoleConfig {
-    id: "user",
-    label: "User (Admin)",
     developer_instructions: "You are operating under direct user control in AgentBridge multi-agent system.\n\
         The user is the administrator with full authority over all agents and decisions.\n\
         Follow the user's instructions precisely. You have full access to all tools and capabilities.\n\n\
@@ -25,23 +17,15 @@ pub const ROLE_USER: RoleConfig = RoleConfig {
         Use reply() to send messages to other agents. Use check_messages() to receive messages.",
     sandbox_mode: "workspace-write",
     approval_policy: "never",
-    default_target: "lead",
-    shell_tool: true,
 };
 
 pub const ROLE_LEAD: RoleConfig = RoleConfig {
-    id: "lead",
-    label: "Lead",
     developer_instructions: "",
     sandbox_mode: "workspace-write",
     approval_policy: "never",
-    default_target: "coder",
-    shell_tool: true,
 };
 
 pub const ROLE_CODER: RoleConfig = RoleConfig {
-    id: "coder",
-    label: "Coder",
     developer_instructions: "You are a code implementation agent within AgentBridge multi-agent system.\n\
         Your job: write code, implement features, fix bugs based on the task given.\n\n\
         CRITICAL: You MUST use the \"reply\" tool to send your output to other agents.\n\
@@ -51,13 +35,9 @@ pub const ROLE_CODER: RoleConfig = RoleConfig {
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
     sandbox_mode: "workspace-write",
     approval_policy: "never",
-    default_target: "lead",
-    shell_tool: true,
 };
 
 pub const ROLE_REVIEWER: RoleConfig = RoleConfig {
-    id: "reviewer",
-    label: "Reviewer",
     developer_instructions: "You are a code review agent within AgentBridge multi-agent system.\n\
         Your job: analyze code quality, find bugs, suggest improvements.\n\
         You CANNOT modify files (read-only sandbox enforced at OS level).\n\n\
@@ -67,13 +47,9 @@ pub const ROLE_REVIEWER: RoleConfig = RoleConfig {
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
     sandbox_mode: "read-only",
     approval_policy: "never",
-    default_target: "lead",
-    shell_tool: false,
 };
 
 pub const ROLE_TESTER: RoleConfig = RoleConfig {
-    id: "tester",
-    label: "Tester",
     developer_instructions: "You are a testing agent within AgentBridge multi-agent system.\n\
         Your job: run tests, verify functionality, report bugs.\n\
         You CANNOT modify files (read-only sandbox enforced at OS level).\n\
@@ -84,8 +60,6 @@ pub const ROLE_TESTER: RoleConfig = RoleConfig {
         - Terminal output alone is NOT visible to other agents. Only reply() reaches them.",
     sandbox_mode: "read-only",
     approval_policy: "never",
-    default_target: "lead",
-    shell_tool: true,
 };
 
 /// Look up a static role config by id.
@@ -99,6 +73,3 @@ pub fn get_role(role_id: &str) -> Option<&'static RoleConfig> {
         _ => None,
     }
 }
-
-/// All role ids in display order.
-pub const ROLE_IDS: &[&str] = &["user", "lead", "coder", "reviewer", "tester"];

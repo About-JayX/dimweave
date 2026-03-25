@@ -1,4 +1,3 @@
-mod channel;
 mod daemon_client;
 mod mcp;
 mod tools;

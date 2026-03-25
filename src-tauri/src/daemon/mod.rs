@@ -32,12 +32,13 @@ pub enum DaemonCmd {
     SetClaudeRole(String),
 }
 
-/// Start the daemon.  Returns an mpsc sender for driving it from Tauri commands.
-///
-/// Spawns:
-/// - WS control server on :4502 (bridge ↔ daemon)
-/// - Command handler task (processes `DaemonCmd`)
-pub async fn start(app: AppHandle) -> mpsc::Sender<DaemonCmd> {
+/// Create the command channel.  Call before spawning to avoid the DaemonSender race.
+pub fn channel() -> (mpsc::Sender<DaemonCmd>, mpsc::Receiver<DaemonCmd>) {
+    mpsc::channel(64)
+}
+
+/// Run the daemon.  Consumes `cmd_rx`; should be spawned via `tauri::async_runtime::spawn`.
+pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
 
     // WS control server — bridge processes connect here
@@ -45,56 +46,55 @@ pub async fn start(app: AppHandle) -> mpsc::Sender<DaemonCmd> {
         let s = state.clone();
         let a = app.clone();
         tokio::spawn(async move {
-            control::server::start(4502, s, a).await;
-        });
-    }
-
-    let (cmd_tx, mut cmd_rx) = mpsc::channel::<DaemonCmd>(64);
-
-    {
-        let s = state.clone();
-        let a = app.clone();
-        tokio::spawn(async move {
-            let mut codex_handle: Option<codex::CodexHandle> = None;
-
-            while let Some(cmd) = cmd_rx.recv().await {
-                match cmd {
-                    DaemonCmd::SendMessage(msg) => {
-                        routing::route_message(&s, &a, msg).await;
-                    }
-
-                    DaemonCmd::LaunchCodex { role_id, cwd, model } => {
-                        // Stop existing session first
-                        if let Some(h) = codex_handle.take() {
-                            h.stop().await;
-                        }
-                        match codex::start(role_id, cwd, model, s.clone(), a.clone(), 4500).await {
-                            Ok(h) => {
-                                codex_handle = Some(h);
-                            }
-                            Err(e) => {
-                                gui::emit_system_log(
-                                    &a,
-                                    "error",
-                                    &format!("[Daemon] Codex start failed: {e}"),
-                                );
-                            }
-                        }
-                    }
-
-                    DaemonCmd::StopCodex => {
-                        if let Some(h) = codex_handle.take() {
-                            h.stop().await;
-                        }
-                    }
-
-                    DaemonCmd::SetClaudeRole(role) => {
-                        s.write().await.claude_role = role;
-                    }
-                }
+            if let Err(e) = control::server::start(4502, s, a).await {
+                eprintln!("[Daemon] control server error: {e}");
             }
         });
     }
 
-    cmd_tx
+    let mut codex_handle: Option<codex::CodexHandle> = None;
+
+    while let Some(cmd) = cmd_rx.recv().await {
+        match cmd {
+            DaemonCmd::SendMessage(msg) => {
+                routing::route_message(&state, &app, msg).await;
+            }
+
+            DaemonCmd::LaunchCodex { role_id, cwd, model } => {
+                if let Some(h) = codex_handle.take() {
+                    h.stop().await;
+                    let mut daemon = state.write().await;
+                    daemon.codex_inject_tx = None;
+                    drop(daemon);
+                    gui::emit_agent_status(&app, "codex", false, None);
+                }
+                match codex::start(role_id, cwd, model, state.clone(), app.clone(), 4500).await {
+                    Ok(h) => {
+                        codex_handle = Some(h);
+                    }
+                    Err(e) => {
+                        gui::emit_system_log(
+                            &app,
+                            "error",
+                            &format!("[Daemon] Codex start failed: {e}"),
+                        );
+                    }
+                }
+            }
+
+            DaemonCmd::StopCodex => {
+                if let Some(h) = codex_handle.take() {
+                    h.stop().await;
+                }
+                let mut daemon = state.write().await;
+                daemon.codex_inject_tx = None;
+                drop(daemon);
+                gui::emit_agent_status(&app, "codex", false, None);
+            }
+
+            DaemonCmd::SetClaudeRole(role) => {
+                state.write().await.claude_role = role;
+            }
+        }
+    }
 }

@@ -24,7 +24,6 @@ interface CodexPanelProps {
   codexTuiRunning: boolean;
   codexReady: boolean;
   threadId: string | null;
-  launchCodexTui: () => void;
   stopCodexTui: () => void;
   profile: { name?: string; planType?: string } | null;
   usage: {
@@ -50,7 +49,6 @@ export function CodexPanel({
   codexTuiRunning,
   codexReady,
   threadId,
-  launchCodexTui,
   stopCodexTui,
   profile,
   usage,
@@ -151,8 +149,7 @@ export function CodexPanel({
       reasoningEffort: selectedReasoning || undefined,
       cwd: cwd || undefined,
     });
-    launchCodexTui();
-  }, [applyConfig, selectedModel, selectedReasoning, cwd, launchCodexTui]);
+  }, [applyConfig, selectedModel, selectedReasoning, cwd]);
 
   return (
     <div

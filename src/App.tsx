@@ -1,13 +1,17 @@
+import { useEffect } from "react";
 import { useBridgeStore } from "./stores/bridge-store";
 import { AgentStatusPanel } from "./components/AgentStatus";
 import { MessagePanel } from "./components/MessagePanel";
 import { ReplyInput } from "./components/ReplyInput";
 
 export default function App() {
-  const connected = useBridgeStore((s) => s.connected);
+  const cleanup = useBridgeStore((s) => s.cleanup);
+  useEffect(() => cleanup, [cleanup]);
+
   const messages = useBridgeStore((s) => s.messages);
   const agents = useBridgeStore((s) => s.agents);
-  const daemonStatus = useBridgeStore((s) => s.daemonStatus);
+  const connected = useBridgeStore((s) => s.connected);
+  const codexConnected = agents.codex?.status === "connected";
 
   return (
     <div
@@ -29,14 +33,13 @@ export default function App() {
         </div>
         <AgentStatusPanel
           agents={agents}
-          daemonStatus={daemonStatus}
           connected={connected}
         />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 animate-in fade-in duration-500">
         <MessagePanel messages={messages} />
-        <ReplyInput connected={connected} />
+        <ReplyInput connected={codexConnected} />
       </div>
     </div>
   );

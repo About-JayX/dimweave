@@ -2,18 +2,16 @@ import { useEffect } from "react";
 import { ClaudePanel } from "@/components/ClaudePanel";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
-import type { AgentInfo, DaemonStatus } from "@/types";
+import type { AgentInfo } from "@/types";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
 
 interface AgentStatusProps {
   agents: Record<string, AgentInfo>;
-  daemonStatus: DaemonStatus | null;
   connected: boolean;
 }
 
 export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
-  const launchCodexTui = useBridgeStore((s) => s.launchCodexTui);
   const stopCodexTui = useBridgeStore((s) => s.stopCodexTui);
   const profile = useCodexAccountStore((s) => s.profile);
   const usage = useCodexAccountStore((s) => s.usage);
@@ -56,7 +54,6 @@ export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
           codexTuiRunning={codexConnected}
           codexReady={codexConnected}
           threadId={null}
-          launchCodexTui={launchCodexTui}
           stopCodexTui={stopCodexTui}
           profile={profile}
           usage={usage}

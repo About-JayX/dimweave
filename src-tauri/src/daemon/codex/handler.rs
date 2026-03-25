@@ -1,4 +1,4 @@
-use crate::daemon::{gui, types::BridgeMessage, SharedState};
+use crate::daemon::{types::BridgeMessage, SharedState};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::mpsc;
@@ -47,7 +47,6 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         priority: None,
     };
 
-    gui::emit_agent_message(app, &msg);
     crate::daemon::routing::route_message(state, app, msg).await;
     format!("Message sent to {to}")
 }

@@ -1,5 +1,7 @@
 # Bridge 角色路由
 
+> Historical note: this dated spec was written for the Bun-daemon migration period. Current source of truth is `CLAUDE.md`, `.claude/rules/**`, `src-tauri/src/daemon/**`, and `bridge/**`.
+
 ## Summary
 
 将 bridge 从"全量转发"改为"结构化路由"。Agent 之间完全解耦，不互相监听，所有消息通过 bridge 按 `from`/`to` 角色分发。目标角色不在线时 bridge 以 system 消息回复。GUI 只渲染 `content`。

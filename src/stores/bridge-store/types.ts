@@ -1,6 +1,4 @@
-import type { BridgeMessage, AgentInfo, DaemonStatus } from "@/types";
-
-export type CodexPhase = "thinking" | "streaming" | "idle";
+import type { BridgeMessage, AgentInfo } from "@/types";
 
 export interface TerminalLine {
   agent: string;
@@ -13,14 +11,7 @@ export interface BridgeState {
   connected: boolean;
   messages: BridgeMessage[];
   agents: Record<string, AgentInfo>;
-  daemonStatus: DaemonStatus | null;
-  codexPhase: CodexPhase;
   terminalLines: TerminalLine[];
-  claudeRateLimit: {
-    status: string;
-    rateLimitType: string;
-    resetsAt: number;
-  } | null;
   claudeRole: string;
   codexRole: string;
   draft: string;
@@ -36,4 +27,5 @@ export interface BridgeState {
     cwd?: string;
   }) => void;
   setRole: (agent: "claude" | "codex", role: string) => void;
+  cleanup: () => void;
 }

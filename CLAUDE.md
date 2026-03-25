@@ -1,513 +1,338 @@
 # AgentBridge
 
-通用 AI Agent 桥接 GUI 桌面应用，让多个 AI 编程助手（Claude Code、Codex、未来 Gemini 等）在同一台机器上实时双向通信，支持角色分工和自动协作。
+通用 AI Agent 桥接桌面应用。当前实现把 **Tauri/Rust 主进程** 作为唯一常驻后端，把 **Claude Code** 和 **Codex app-server** 接到同一个消息路由层里，让用户在一个桌面界面里协调两个 agent。
 
-### 三种核心模式
+### 当前产品形态
 
-| 模式 | 说明 |
-|------|------|
-| **并行思考** | 同一 prompt 同时发给多个 AI，各自独立输出，由 Lead Agent 或用户选择最优方案。验证者不看工作者上下文，防止确认偏差 |
-| **顺序讨论** | AI 按预定顺序轮流发言，传递结构化结果（方案提案/审查意见/测试报告），非自由聊天。共识检测器在输出趋于一致时结束，或达到最大轮次后由 Lead 决策 |
-| **角色执行** | Lead 分解任务 → Coder 并行实现 → Reviewer 独立审查 → Tester 执行测试 → 失败反馈修正循环 |
+| 组件 | 当前实现 |
+|------|----------|
+| 桌面壳 | Tauri 2 |
+| 主后端 | Rust 内嵌 async daemon（`src-tauri/src/daemon/`） |
+| Claude 接入 | 外部终端启动 `claude` + 项目 `.mcp.json` 注册 Rust bridge sidecar |
+| Codex 接入 | Rust daemon 启动 `codex app-server` 并通过 WS 建立 session |
+| 桥接 sidecar | Rust 二进制 `agent-bridge-bridge`（`bridge/` crate） |
+| 前端 | React 19 + Vite + TypeScript + Tailwind CSS v4 |
 
 ### 硬性约束
 
 | 约束 | 说明 |
 |------|------|
-| 不写 `~/` | 不写 `~/.claude/`、`~/.codex/`、`~/.config/` |
-| 不写用户项目文件 | 不在项目目录写入任何配置文件 |
-| 用户无感 | 所有配置通过 CLI 参数 + 环境变量 + 临时目录注入 |
-| CLI 优先 | 只跑命令行闭合协议环路 |
-| 单体优先 | 一个 Bun Daemon + 一个 Tauri 壳 |
+| 不写 `~/` | 文档和规则统一写仓库相对路径或 `$HOME/...` |
+| 当前运行时无 Bun daemon | Bun 只保留为前端包管理/脚本运行器，不再承载后端常驻进程 |
+| Source of Truth 只认当前代码 | 以 `src-tauri/src/daemon/`、`bridge/`、`src/`、`.claude/rules/` 为准 |
+| 历史设计文档不当现状 | `docs/superpowers/**` 主要是迁移记录，不代表当前实现 |
 
 ## 技术栈
 
-- **桌面壳**: Tauri 2 (Rust) — 窗口管理 + Codex auth/usage/models 查询 + Claude PTY (portable-pty)
-- **前端**: React 19 + Vite + TypeScript + Tailwind CSS v4 + shadcn/ui + Zustand + xterm.js
-- **后端 daemon**: Bun + TypeScript — 角色管理 + 消息硬转发 + Codex WS 代理 + 会话管理 + 编排
-- **通信协议**: MCP Tools + WebSocket + JSON-RPC 2.0 + Tauri Events/Commands
+- **桌面应用**: Tauri 2 + Rust
+- **内嵌 daemon**: tokio + axum + tokio-tungstenite
+- **Claude bridge sidecar**: Rust MCP stdio server + daemon WS client
+- **前端**: React 19 + Vite + TypeScript + Tailwind CSS v4 + Zustand + shadcn/ui
+- **外部工具**: Claude Code CLI、Codex CLI
+- **通信协议**: MCP stdio、WebSocket、Tauri `invoke` / `listen`、Codex JSON-RPC 2.0
 
-## 架构
+## 当前架构
 
-```
-┌─ Tauri Rust ──────────────────────────────┐
-│ codex/auth.rs   → JWT 解码                 │
-│ codex/usage.rs  → ChatGPT API 用量         │◄── invoke ──┐
-│ codex/models.rs → 模型列表                  │             │
-│ pty.rs          → Claude PTY 管理           │── event ──►│
-│   (portable-pty: launch/write/resize/stop)  │             │
-│   (--strict-mcp-config + inline JSON)       │             │
-└─────────────────────────────────────────────┘             │
-                                                             │
-┌─ Bun Daemon ──────────────────────────────┐               │
-│ daemon.ts          → 入口/角色转发          │               │
-│ role-config.ts     → 角色定义/能力矩阵       │               │
-│ session-manager.ts → 🆕 临时目录生命周期     │               │
-│ orchestrator.ts    → 🆕 三模式编排器         │               │
-│ gui-server.ts      → GUI WS 服务           │──WS 4503──►│
-│ control-server.ts  → Claude MCP 桥          │             │
-│ mcp-register.ts    → 🆕 MCP 注册入口        │             │
-│ codex-adapter.ts   → WS 代理/拦截           │             │
-│   message-handler  → turn/model 捕获        │             │
-│   response-patcher → 响应兼容 patch          │             │
-│ bridge.ts          → MCP server             │             │
-└───────────────────────────────────────────┘               │
-                                                             │
-┌─ React 前端 ───────────────────────────────────────────────┘
-│ bridge-store        → daemon WS 状态 (消息/agent/角色)
-│ codex-account-store → Tauri invoke (profile/usage/models)
-│ agent-roles.ts      → Claude --agents JSON 生成
-│ AgentStatus         → 侧边栏 + 角色下拉选择
-│ ClaudePanel         → Claude PTY 启停 (Tauri invoke) + 配额/角色
-│ CodexAccountPanel   → 可折叠配置面板 (model/reasoning)
-│ MessagePanel        → Messages | Terminal (xterm.js + Tauri event) | Logs
-└────────────────────────────────────────────────────────────
-```
+```text
+┌─ Claude Code（外部终端） ───────────────────────────────────────┐
+│  读取项目 .mcp.json                                            │
+│  spawn: agent-bridge-bridge                                    │
+└───────────────┬─────────────────────────────────────────────────┘
+                │ MCP stdio
+                ▼
+┌─ bridge/agent-bridge-bridge ────────────────────────────────────┐
+│ tools.rs         → reply tool                                   │
+│ mcp.rs           → Claude Channel notification / tools/list     │
+│ daemon_client.rs → WS client → 127.0.0.1:4502                   │
+└───────────────┬─────────────────────────────────────────────────┘
+                │ WS :4502
+                ▼
+┌─ Tauri 主进程 / Rust daemon ────────────────────────────────────┐
+│ main.rs                   → commands 注册 + daemon task 启动     │
+│ mcp.rs                    → .mcp.json 注册 + 启动 Claude 终端    │
+│ codex/auth|oauth|usage    → 账号/OAuth/用量/模型                 │
+│ daemon/control/           → bridge 接入与消息投递                │
+│ daemon/routing.rs         → Claude / Codex / GUI 路由            │
+│ daemon/codex/             → app-server 生命周期 + session        │
+│ daemon/session_manager.rs → 临时 CODEX_HOME 生命周期             │
+└───────────────┬─────────────────────────────────────────────────┘
+                │ invoke / listen
+                ▼
+┌─ React 前端 ────────────────────────────────────────────────────┐
+│ bridge-store      → 监听 agent_message / system_log / status     │
+│ ClaudePanel       → register_mcp + launch_claude_terminal        │
+│ CodexPanel        → daemon_launch_codex / daemon_stop_codex      │
+│ MessagePanel      → 消息与日志                                   │
+└──────────────────────────────────────────────────────────────────┘
 
-## PTY 架构
-
-Claude Code PTY 由 Tauri Rust 层直接管理（`portable-pty` crate），不经过 daemon。
-
-MCP 配置通过 **内联 JSON** 传入（`--strict-mcp-config` + `--mcp-config <json>`），零文件写入。Daemon 侧通过 `buildMcpConfigJson(controlPort)` 构建 JSON 字符串，前端传给 Tauri invoke。
-
-```
-ClaudePanel.tsx                         pty.rs (Rust)
-  invoke("launch_pty", {cwd, cols,     →  portable_pty::openpty()
-    rows, roleId, agentsJson,           →  spawn "claude --dangerously-skip-permissions
-    mcpConfigJson})                     →    --strict-mcp-config --mcp-config <inline_json>
-                                        →    --agent <role> --agents <json>"
-                                           │
-MessagePanel.tsx (xterm.js)             ←  emit("pty-data", chunk)   ← reader thread
-  term.onData(keystroke)                →  invoke("pty_write", data) → writer
-  term.onResize({cols,rows})            →  invoke("pty_resize")      → master.resize()
-                                           │
-ClaudePanel.tsx                         ←  emit("pty-exit", code)    ← child monitor thread
-  invoke("stop_pty")                    →  drop writer+pair → kills child
+Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 ```
 
-**为什么用 Rust PTY 而非 Node PTY**：Node.js `node-pty` 通过 JSON 序列化传输 PTY 数据到前端，高频输出时导致终端卡死。Rust `portable-pty` 直接通过 Tauri event 传输，性能与原生终端一致。
+## 运行链路
 
-**内联 MCP JSON 构建**：
+### Claude 链路
 
-```typescript
-function buildMcpConfigJson(controlPort: number): string {
-  return JSON.stringify({
-    mcpServers: {
-      agentbridge: {
-        command: "bun",
-        args: ["run", path.resolve(__dirname, "bridge.ts")],
-        env: { AGENTBRIDGE_CONTROL_PORT: String(controlPort) },
-      },
-    },
-  });
-}
-```
+1. 前端选择项目目录后调用 `register_mcp`。
+2. Tauri 在项目根写入 **`.mcp.json`**，注册 `agent-bridge-bridge`。
+3. 前端再调用 `launch_claude_terminal`，打开外部终端并在该目录运行 `claude`。
+4. Claude Code 读取项目 `.mcp.json`，以 MCP stdio 方式启动 bridge sidecar。
+5. bridge 通过 `ws://127.0.0.1:4502/ws` 连入内嵌 daemon。
+
+### Codex 链路
+
+1. 前端调用 `daemon_launch_codex`。
+2. `session_manager.rs` 创建 `/tmp/agentbridge-<sessionId>/` 临时 `CODEX_HOME`。
+3. 当前实现会写入：
+   - `auth.json` symlink → `$HOME/.codex/auth.json`
+   - `config.toml` → `sandbox_mode` / `approval_policy` / `apply_patch_freeform=false`
+4. daemon 启动 `codex app-server --listen ws://127.0.0.1:4500`。
+5. `session.rs` 通过 WS 完成 `initialize` + `thread/start`，并注册动态工具：
+   - `reply`
+   - `check_messages`
+   - `get_status`
+
+### 消息路由
+
+- **用户 → Codex**: 前端 `daemon_send_message` → `routing.rs` → `codex_inject_tx`
+- **Claude → Codex**: bridge `reply` tool → WS :4502 → `routing.rs` → `codex_inject_tx`
+- **Codex → Claude**: Codex 动态 `reply` → `routing.rs` → bridge WS channel → Claude Channel notification
+- **任一 agent → user**: `to = "user"` 时只发到 GUI
+- **离线缓冲**: 目标离线时写入 `buffered_messages`，Claude bridge 重连或 Codex session 启动后回放
+
+## 端口分配
+
+| 端口 | 用途 | 当前实现 |
+|------|------|----------|
+| `4500` | Codex app-server WebSocket | `src-tauri/src/daemon/codex/` |
+| `4502` | bridge ↔ daemon 控制通道 | `src-tauri/src/daemon/control/` |
+| `1420` | Vite dev server | `bun run dev` |
+
+当前 **没有** GUI WebSocket `4503`，也没有 PTY 通道端口。
 
 ## 角色系统
 
-### 角色定义
+角色定义以 [`src-tauri/src/daemon/role_config/roles.rs`](/Users/jason/floder/agent-bridge/src-tauri/src/daemon/role_config/roles.rs) 为准：
 
-角色配置分两处：
-- `daemon/role-config/` — Codex 侧配置（developer_instructions、sandbox、approval）+ Claude agent 定义 + Starlark 规则 + MCP 配置 + 指令合并
-- `src/lib/agent-roles.ts` — 前端可访问的 Claude `--agents` JSON 生成器（ClaudePanel 启动 PTY 时使用）
+| 角色 | 当前作用 | Codex 约束 |
+|------|----------|------------|
+| `user` | 管理员直控 | `workspace-write` / `never` |
+| `lead` | 决策与汇总 | `workspace-write` / `never` |
+| `coder` | 代码实现 | `workspace-write` / `never` |
+| `reviewer` | 审查 | `read-only` / `never` |
+| `tester` | 测试 | `read-only` / `never` |
 
-| 角色 | 定位 | Codex 硬限制 | Claude 硬限制 |
-|------|------|-------------|-------------|
-| **Lead** | 主控决策者，审核其他 Agent 输出，有最终执行权 | sandbox: workspace-write | permissionMode: bypass, 全工具 |
-| **Coder** | 代码执行者，写代码交给 Lead 审核 | sandbox: workspace-write | permissionMode: bypass, 全工具 |
-| **Reviewer** | 只读审核，不改文件 | sandbox: **read-only** (OS强制) | tools: Read,Grep,Glob only (**硬限制**) |
-| **Tester** | 跑测试，不改文件 | sandbox: **read-only** (OS强制) | tools: Read,Grep,Glob,Bash (**硬限制**) |
+注意当前实现的真实边界：
 
-### 四层防御体系
-
-```
-第一层  OS 内核沙箱 ————— sandbox_mode = "read-only" (Seatbelt/Bubblewrap)
-                         模型无法绕过，文件系统级阻断
-
-第二层  Starlark 规则 —— CODEX_HOME/rules/role.rules 白名单命令
-                         最严格决策优先，shell 命令级
-
-第三层  工具开关+协议 —— apply_patch_freeform=false + --disallowedTools + --permission-mode plan
-                         内置工具禁用 + 协议级拦截
-
-第四层  提示词引导 ————— --agents JSON (disallowedTools) + developer_instructions
-                         Claude Code: 客户端级强制 (非prompt级)
-                         Codex: prompt 级（被上三层兜底）
-```
-
-| 层级 | 机制 | 强制等级 | 用于 |
-|------|------|---------|------|
-| 第一层 | Codex `sandbox_mode: read-only` | **OS 内核强制** | Reviewer/Tester 不可写文件 |
-| 第二层 | Starlark `prefix_rule` 白名单 | **进程级强制** | Reviewer/Tester 只允许安全命令 |
-| 第三层 | `apply_patch_freeform=false` + Claude `--disallowedTools` + `--permission-mode plan` | **客户端强制** | 禁用文件编辑工具 |
-| 第四层 | `developer_instructions` / `--agents` JSON | 软引导 | 角色行为指引 |
-
-### Codex 注入方式
-
-通过 `CODEX_HOME` 临时目录 + `--config` CLI 覆盖实现零侵入注入：
-
-**认证方案（优先级）**：
-1. **symlink auth.json**（推荐）— 从 `~/.codex/auth.json` 创建符号链接到临时目录，只读引用不复制
-2. **环境变量** — `OPENAI_API_KEY` 直接传入
-3. **OS 钥匙串** — `cli_auth_credentials_store = "keyring"`，不依赖 auth.json 文件位置
-
-**`--config` CLI 覆盖**（不写 config.toml）：
-
-```bash
-codex app-server --listen ws://127.0.0.1:4500 \
-  --config 'sandbox_mode="read-only"' \
-  --config 'approval_policy="untrusted"' \
-  --config 'features.apply_patch_freeform=false'
-```
-
-注意：`--config` 不支持 Starlark rules 和 AGENTS.md，这两者仍需临时 `CODEX_HOME`。
-
-**Reviewer Starlark 规则示例**：
-
-```python
-# 写入临时 CODEX_HOME/rules/role.rules
-prefix_rule(pattern = ["cat"], decision = "allow", justification = "读取文件")
-prefix_rule(pattern = ["grep"], decision = "allow", justification = "搜索")
-prefix_rule(pattern = ["find"], decision = "allow", justification = "查找")
-prefix_rule(pattern = ["git", "log"], decision = "allow", justification = "历史")
-prefix_rule(pattern = ["git", "diff"], decision = "allow", justification = "差异")
-prefix_rule(pattern = ["git", "show"], decision = "allow", justification = "查看")
-prefix_rule(pattern = ["ls"], decision = "allow", justification = "列目录")
-prefix_rule(pattern = ["head"], decision = "allow", justification = "头部")
-prefix_rule(pattern = ["tail"], decision = "allow", justification = "尾部")
-prefix_rule(pattern = ["wc"], decision = "allow", justification = "统计")
-```
-
-Tester 额外允许：`pytest`、`npm test`、`npm run test`、`cargo test`、`bun test`、`vitest`、`jest`。
-
-### 数据流（双向已验证）
-
-```
-用户发任务 → GUI 发给 Codex
-  ↓
-Codex 执行（受角色 sandbox/Starlark/--config 限制）
-  ↓ turn 完成
-Daemon 注入 Codex 输出到 Claude PTY（pty_inject → frontend → Rust PTY stdin）
-  短消息(≤500字符): 全文注入 "Coder says: ..."
-  长消息(>500字符): 截断摘要 + check_messages 指引
-  ↓
-Claude（Lead）审核
-  ├── 合理 → 自己执行代码修改 → 通过 MCP reply tool 通知 Codex
-  ├── 有疑问 → 通过 MCP reply tool 发回 Codex 讨论 → Codex 回复 → daemon 再注入 → 自动协商
-  └── 不合理 → 通过 MCP reply tool 说明原因
-```
-
-### Claude 启动命令（由 Rust PTY 自动构建）
-
-```bash
-claude --dangerously-skip-permissions \
-  --strict-mcp-config \
-  --mcp-config '{"mcpServers":{"agentbridge":{"command":"bun","args":["run","<bridge_path>"]}}}' \
-  --agent <roleId> \
-  --agents '{"<roleId>":{"description":"...","prompt":"...","tools":"...","permissionMode":"..."}}'
-```
-
-`--strict-mcp-config` 忽略用户已有的所有 MCP 配置，只加载 agentbridge。存在已知 bug (#14490): `disabledMcpServers` 可能不被覆盖，需测试。
-
-### 防无限循环
-
-- Codex → Claude：daemon 硬转发（pty_inject），每次 turn 完成触发一次
-- Claude → Codex：Claude 主动调用 MCP reply tool（非自动）
-- Claude 不调用 reply tool = 流程结束
-
-## 编排模式
-
-### 并行思考
-
-同一 prompt 同时发给 Claude + Codex（+ 未来 Gemini），各自独立输出。验证者不看工作者上下文，防止确认偏差。由 Lead Agent 或用户选择最优方案。
-
-### 顺序讨论
-
-AI 按预定顺序轮流发言，传递结构化结果（方案提案/审查意见/测试报告），非自由聊天。共识检测器在输出趋于一致时结束，或达到最大轮次后由 Lead 决策。
-
-### 角色执行
-
-Lead 分解任务 → Coder 并行实现 → Reviewer 独立审查 → Tester 执行测试 → 失败反馈修正循环。
+- Codex 角色约束已经接到启动链路中。
+- Claude 角色目前主要用于 **路由标签和 UI 状态**。
+- 当前仓库 **没有** 把 Claude 角色通过 `--agent --agents` 注入到 CLI。
+- 当前仓库 **没有** 实现 Starlark rules、AGENTS 合并、编排器三模式。
 
 ## 会话管理
 
-`daemon/session-manager.ts` 负责 Codex 会话的临时目录生命周期：
+[`src-tauri/src/daemon/session_manager.rs`](/Users/jason/floder/agent-bridge/src-tauri/src/daemon/session_manager.rs) 负责临时 `CODEX_HOME` 生命周期：
 
-```
-创建会话 → mkdirSync(/tmp/agentbridge-<sessionId>/codex)
-         → symlinkSync(~/.codex/auth.json → 临时目录/auth.json)
-         → writeFileSync(临时目录/config.toml, 角色配置)
-         → writeFileSync(临时目录/rules/role.rules, Starlark 规则)
-         → 设置 CODEX_HOME=临时目录 启动 Codex
+```text
+创建会话
+  → /tmp/agentbridge-<sessionId>/
+  → auth.json symlink（如存在）
+  → config.toml
+  → 启动 codex app-server
 
-清理会话 → SIGINT/SIGTERM/beforeExit 时 rm -rf 所有临时目录
-         → 启动时扫描 /tmp/agentbridge-* 清理残留
-```
-
-### 用户指令合并
-
-启动时**只读**扫描用户项目文件，合并到内存中：
-
-```
-优先级: .jason/instructions.md > CLAUDE.md > AGENTS.md > .codex/AGENTS.md
+结束会话
+  → stop child
+  → cleanup_session(sessionId)
+  → Drop 时 cleanup_all()
 ```
 
-- Claude 侧：合并到 `--agents` JSON 的 prompt 字段（纯内存，不写文件）
-- Codex 侧：合并到临时 `CODEX_HOME/AGENTS.md`（唯一需要写文件的地方，在 `/tmp`）
+当前实现 **不会** 写：
+
+- `rules/role.rules`
+- `AGENTS.md`
+- `mcp.json` 到 `CODEX_HOME`
 
 ## MCP 注册
 
-### 两种模式
+当前 MCP 注册是 **项目级**、**显式用户触发** 的：
 
-| 场景 | 方式 | 写入位置 | 用户感知 |
-|------|------|---------|---------|
-| 通过 AgentBridge GUI | 自动（`--strict-mcp-config` + 内联 JSON） | **无** | 零感知 |
-| 脱离 GUI 独立使用 | 手动（`agentbridge mcp register`） | 项目 `.mcp.json` | 用户主动触发 |
+- Tauri command: [`src-tauri/src/mcp.rs`](/Users/jason/floder/agent-bridge/src-tauri/src/mcp.rs)
+- 配置文件位置: 项目根 **`.mcp.json`**
+- sidecar 命令: `agent-bridge-bridge`
 
-### 注册/注销命令
-
-```bash
-# 注册到项目（写入 .mcp.json，用户主动执行）
-agentbridge mcp register
-
-# 等价于：
-claude mcp add --scope project agentbridge \
-  -- bun run /path/to/agentbridge/daemon/bridge.ts
-
-# 注销
-agentbridge mcp unregister
-```
-
-**重要**：项目级 MCP 配置文件是 **`.mcp.json`**（项目根目录），不是 `.claude/mcp.json`。
+当前仓库没有单独的 `agentbridge mcp register` CLI。
 
 ## 常用命令
 
 ```bash
-bun run daemon    # 启动 daemon（后端必须先启动）
-bun run dev       # 启动前端开发模式（浏览器）
-bun run tauri dev # 启动 Tauri 桌面应用（含前端）
-bun run build     # 构建前端
-bun run bridge    # MCP bridge（由 Claude Code 通过 MCP 配置自动启动）
+bun run dev         # Vite dev server
+bun run build       # 前端构建
+bun run tauri dev   # Tauri 桌面应用开发模式（会先构建 bridge sidecar）
+bun run bridge      # 单独构建 Rust bridge sidecar
+cargo test          # 运行 Rust 测试
 ```
 
 ## 开发规范
 
 详细规范按路径自动加载，见 `.claude/rules/`:
-- `architecture.md` — 架构、端口、消息流、模块结构
-- `daemon.md` — daemon 端规范（匹配 `daemon/**/*.ts`）
+
+- `architecture.md` — 全局架构、数据流、模块边界
 - `frontend.md` — 前端规范（匹配 `src/**/*.{ts,tsx}`）
-- `tauri.md` — Tauri 规范（匹配 `src-tauri/**`）
+- `tauri.md` — Tauri / Rust / 内嵌 daemon 规范（匹配 `src-tauri/**`）
+- `daemon.md` — bridge sidecar 与 daemon 协议规范（匹配 `bridge/**`）
+
+**迁移约定:**
+
+- Bun 只作为前端包管理和脚本工具使用，不再承担后端 daemon 职责
+- 任何架构描述都必须优先对照当前代码树，不要照搬迁移期 spec
+- 修改 `bridge/**`、`src-tauri/src/daemon/**`、`.claude/rules/**` 时，必须同步更新本文件或 `UPDATE.md`
+- 历史迁移文档可以保留，但必须明确标注为 archival，不可当作 Source of Truth
 
 **闭环要求:**
-- 遇到 bug 或设计问题，修复后必须将根因和解法写入对应 rules 文件和踩坑记录
-- 每次架构变更必须同步更新本文件的架构图
-- **每个文件最多 200 行**，超过必须拆分为独立模块/组件，做好封装抽离复用
-- 完成功能后必须补充对应的 UI（前端展示、状态指示、操作按钮、日志输出）
-- 执行完任务后必须调用 superpowers 代码审计（`superpowers:requesting-code-review`），审计通过后才算完成
-- Daemon 代码修改后必须重启 daemon，Rust 代码修改后必须重启 Tauri
+
+- 遇到 bug 或设计问题，修复后必须把根因和解法写入对应 rules 文件和踩坑记录
+- 每次架构变更必须同步更新本文件的架构图和 `UPDATE.md`
+- **每个文件最多 200 行**，超过必须拆分模块
+- 完成功能后必须补充对应 UI 或可见状态
+- 执行完任务后必须调用 superpowers 代码审计（`superpowers:requesting-code-review`）
+- Rust 改动后必须重新运行 Tauri / Cargo 校验，前端改动后至少跑一次 TS / build 校验
+
+## 技能系统
+
+项目技能按三层组织：
+
+- `.claude/skills/` — Claude Code 自动发现入口
+- `.agents/skills/` — 仓库内托管的共享 skill 实体目录
+- `skills-lock.json` — skill 来源与 hash 锁定文件
+
+当前仓库内置技能：
+
+- 项目自定义：`add-adapter`、`debug-daemon`
+- 共享镜像：`aceternity-ui`、`rust-async-patterns`、`rust-pro`、`shadcn`、`tailwind-css-patterns`、`vercel-react-best-practices`
+
+**维护约定:**
+
+- `.claude/skills/<name>` 如果是 symlink，真实内容以 `.agents/skills/<name>/` 为准
+- 新增共享 skill 时，同时更新 `.agents/skills/`、`.claude/skills/` 和 `skills-lock.json`
+- 新增项目私有 skill 时，直接创建 `.claude/skills/<name>/SKILL.md`
+- 用户全局 skills 目录只作为个人环境兜底，不属于仓库协作约定
 
 ## 当前状态
 
-### v0 (MVP) 已完成
+### 已实现
 
-- Tauri 壳 + Rust auth/usage/models 模块
-- **Rust PTY** (portable-pty) 管理 Claude Code 进程，Tauri event 直传前端 xterm.js
-- **双向通信链路** — Codex→daemon→pty_inject→Claude PTY + Claude→MCP reply→daemon→Codex
-- **MCP bridge 自动加载** — `--mcp-config` 确保 Claude 启动时加载 agentbridge tools
-- **Bridge 自动重连** — daemon 重启后 bridge WS 自动重连
-- Daemon 消息路由 (模块化: daemon-state / gui-server / control-server)
-- Codex 适配器 (模块化: adapter / message-handler / response-patcher / port-utils)
-- Codex 流式消息 (started/delta/completed + thinking/streaming 阶段指示)
-- Codex 配置面板 (model/reasoning 下拉选择、CWD 目录选择、5h/7d 用量进度条)
-- Claude MCP Tools (reply / check_messages / get_status)
-- Claude 面板 (项目选择 → 角色选择 → Tauri invoke 一键启动 → PTY 终端 tab → 停止)
-- 角色系统 (Lead/Coder/Reviewer/Tester + 硬限制 + 角色驱动硬转发)
-- Claude `--agent --agents` 角色注入 (tools/permissionMode 硬限制)
-- Codex `sandbox` + `developer_instructions` 角色注入 (OS 强制 + 软引导)
-- 三标签消息面板 (Messages / Terminal / Logs)
+- Rust 内嵌 daemon（无独立 Bun daemon）
+- Rust bridge sidecar（Cargo workspace 成员）
+- Claude 项目级 `.mcp.json` 注册
+- 外部终端启动 Claude CLI
+- Codex account / OAuth / models / usage
+- 临时 `CODEX_HOME` + `auth.json` symlink + `config.toml`
+- Rust control server + routing + message buffering
+- Tauri event 驱动的消息 / 日志 / agent 状态同步
 
-### v1 开发中
+### 已删除或不再适用
 
-- MCP 内联 JSON 注入 (`--strict-mcp-config` + `--mcp-config <json>`，零文件写入)
-- CODEX_HOME 临时目录隔离 (symlink auth + Starlark rules + config.toml)
-- 四层防御体系 (OS 沙箱 → Starlark 规则 → 工具开关 → 提示词引导)
-- 会话管理器 (session-manager.ts: 临时目录创建/清理/进程退出回收)
-- 三模式编排器 (orchestrator.ts: 并行思考 / 顺序讨论 / 角色执行)
-- 用户指令合并 (只读扫描 CLAUDE.md/AGENTS.md → 合并到角色配置)
-- MCP 注册入口 (mcp-register.ts: register/unregister CLI)
-- `--config` CLI 覆盖 (sandbox_mode / approval_policy / apply_patch_freeform)
+- `daemon/**/*.ts` Bun daemon 体系
+- GUI WebSocket `:4503`
+- PTY 注入链路、`portable-pty`、`node-pty`
+- 旧 `test-e2e.ts` / `test-routing.ts` / `test-codex-mcp.ts` 手工脚本
+- `tsconfig.daemon.json`
 
-### v2 规划
+### 尚未实现，但旧文档中曾经提过的内容
 
-- Gemini CLI 适配器 (headless JSON 模式)
-- 多会话支持
-- 消息搜索
-- Agent 编排面板
-- 设置页面
-- 打包分发 (.dmg)
+- Claude CLI `--agent --agents` 角色注入
+- Starlark rules / `rules/role.rules`
+- AGENTS/指令合并注入
+- 三模式 orchestrator
+- 独立 MCP register/unregister CLI
 
 ## 模块结构
 
-### Tauri Rust
+### Cargo Workspace
+
+```text
+Cargo.toml                 # workspace root
+bridge/                    # Rust bridge sidecar crate
+src-tauri/                 # Tauri app crate
+src/                       # React frontend
 ```
+
+### bridge
+
+```text
+bridge/src/
+├── main.rs                # sidecar entry
+├── daemon_client.rs       # WS client → 4502
+├── mcp.rs                 # MCP stdio server / channel notification
+├── tools.rs               # reply tool schema + parsing
+└── types.rs               # bridge ↔ daemon protocol mirror
+```
+
+### Tauri / Rust
+
+```text
 src-tauri/src/
-├── main.rs                # Tauri commands 注册
-├── pty.rs                 # Claude PTY (portable-pty: launch/write/resize/stop + mcp_config_json)
-└── codex/
+├── main.rs
+├── mcp.rs
+├── codex/
+│   ├── auth.rs
+│   ├── models.rs
+│   ├── oauth.rs
+│   └── usage.rs
+└── daemon/
     ├── mod.rs
-    ├── auth.rs            # JWT 解码 + profile
-    ├── usage.rs           # ChatGPT API 用量 + SQLite 缓存
-    └── models.rs          # 模型列表
+    ├── gui.rs
+    ├── routing.rs
+    ├── session_manager.rs
+    ├── state.rs
+    ├── types.rs
+    ├── control/
+    │   ├── handler.rs
+    │   ├── mod.rs
+    │   └── server.rs
+    ├── codex/
+    │   ├── handler.rs
+    │   ├── lifecycle.rs
+    │   ├── mod.rs
+    │   └── session.rs
+    └── role_config/
+        ├── mod.rs
+        └── roles.rs
 ```
 
-### Daemon (Bun)
-```
-daemon/
-├── daemon.ts              # 入口: 配置/事件绑定/启动关闭
-├── daemon-state.ts        # 共享状态 + 广播 helper
-├── codex-events.ts        # Codex 事件处理 (从 daemon.ts 抽离)
-├── session-manager.ts     # CODEX_HOME 临时目录生命周期
-├── mcp-register.ts        # MCP register/unregister CLI 入口
-├── tui-connection-state.ts
-├── bridge.ts              # MCP bridge server (Claude spawn)
-├── index.ts               # 导出入口
-├── types.ts               # 共享类型
-├── control-protocol.ts
-├── daemon-client/         # bridge→daemon WS 客户端
-│   ├── types.ts
-│   ├── connection.ts
-│   └── index.ts
-├── gui-server/            # GUI WS 服务 + apply_config
-│   ├── types.ts
-│   ├── pty-bridge.ts
-│   ├── server.ts
-│   ├── handlers.ts
-│   ├── codex-actions.ts
-│   ├── role-actions.ts
-│   └── index.ts
-├── control-server/        # 控制 WS + Claude MCP 管理
-│   ├── types.ts
-│   ├── claude-session.ts
-│   ├── message-routing.ts
-│   ├── handler.ts
-│   ├── server.ts
-│   └── index.ts
-├── role-config/           # 角色定义 + Starlark + MCP + 指令合并
-│   ├── types.ts
-│   ├── roles.ts
-│   ├── starlark.ts
-│   ├── mcp-config.ts
-│   ├── instructions.ts
-│   └── index.ts
-├── orchestrator/          # 三模式编排器 (并行/顺序/角色)
-│   ├── types.ts
-│   ├── modes.ts
-│   └── index.ts
-└── adapters/
-    ├── claude-adapter/         # Claude MCP 工具注册
-    │   ├── base-adapter.ts
-    │   ├── claude-adapter.ts
-    │   └── index.ts
-    ├── codex-adapter/          # 编排: 生命周期/WS/代理
-    │   ├── types.ts
-    │   ├── lifecycle.ts
-    │   ├── app-server.ts
-    │   ├── session.ts
-    │   ├── proxy.ts
-    │   ├── codex-types.ts
-    │   ├── codex-port-utils.ts
-    │   ├── codex-response-patcher.ts
-    │   └── index.ts
-    └── codex-message-handler/  # 通知解析/turn 追踪/账号捕获
-        ├── types.ts
-        ├── account-capture.ts
-        ├── notification-handler.ts
-        └── index.ts
-```
+### Frontend
 
-### Frontend (React)
-```
+```text
 src/
-├── lib/
-│   ├── utils.ts                # cn() 工具函数
-│   └── agent-roles.ts          # Claude --agents JSON + MCP 配置 (前端用)
-├── stores/
-│   ├── bridge-store/           # daemon WS 状态 (消息/agent/角色)
-│   │   ├── types.ts
-│   │   ├── ws-connection.ts
-│   │   ├── message-handler.ts
-│   │   └── index.ts
-│   └── codex-account-store.ts  # Tauri invoke 状态 (profile/usage/models)
-├── components/
-│   ├── AgentStatus/            # 侧边栏面板 + 角色下拉
-│   │   ├── RoleSelect.tsx
-│   │   ├── StatusDot.tsx
-│   │   ├── CodexPanel.tsx
-│   │   └── index.tsx
-│   ├── ClaudePanel/            # Claude PTY 启停 (Tauri invoke) + 配额/角色
-│   │   ├── helpers.ts
-│   │   ├── ClaudeRoleSelect.tsx
-│   │   ├── ClaudeQuota.tsx
-│   │   └── index.tsx
-│   ├── CodexAccountPanel/      # 可折叠配置面板 (model/reasoning)
-│   │   ├── types.ts
-│   │   ├── helpers.ts
-│   │   ├── InlineSelect.tsx
-│   │   ├── MiniMeter.tsx
-│   │   ├── ExpandedDetails.tsx
-│   │   └── index.tsx
-│   ├── MessagePanel/           # Messages | Terminal (xterm.js) | Logs
-│   │   ├── SourceBadge.tsx
-│   │   ├── TabBtn.tsx
-│   │   ├── TerminalView.tsx
-│   │   └── index.tsx
-│   ├── MessageMarkdown.tsx     # 消息 Markdown 渲染
-│   ├── ReplyInput.tsx          # 输入框
-│   └── ui/                    # shadcn 组件
-├── types.ts
+├── App.tsx
 ├── main.tsx
-└── App.tsx
+├── types.ts
+├── stores/
+│   ├── bridge-store/
+│   │   ├── index.ts
+│   │   └── types.ts
+│   └── codex-account-store.ts
+├── components/
+│   ├── AgentStatus/
+│   ├── ClaudePanel/
+│   ├── CodexAccountPanel/
+│   ├── MessagePanel/
+│   ├── ReplyInput.tsx
+│   ├── MessageMarkdown.tsx
+│   └── ui/
+└── lib/
+    ├── hello-world.ts
+    └── utils.ts
 ```
 
-## 安全
+## 安全与边界
 
-### 必须通过的安全检查点
+- `auth.json` 通过 symlink 透传，不复制凭证内容
+- Codex 权限边界当前主要依赖 `sandbox_mode`、`approval_policy`、`apply_patch_freeform=false`
+- Claude MCP 注册是项目级 `.mcp.json`，由用户显式点击触发
+- bridge 只负责 MCP/WS 协议转换，不负责业务决策
 
-| 检查点 | 来源 | 验收标准 |
-|-------|------|---------|
-| MCP 用户同意回调 | MCP 规范 Trust & Safety | 工具调用前显式批准（Reviewer/Tester 角色） |
-| 第三方 MCP 提示注入防护 | Claude Code MCP 文档 | 默认不信任外部内容，审批回调中过滤 |
-| 最小权限原则 | OWASP LLM Top 10 | Reviewer/Tester 的工具集最小化 |
-| 沙箱不可绕过 | Codex 沙箱文档 | read-only 模式通过 OS 内核强制 |
-| 凭证不泄露 | Codex 认证文档 | auth.json 通过 symlink（不复制），临时目录权限 0700 |
-| 临时文件清理 | 产品要求 | 进程退出时 rm -rf 所有会话临时目录 |
+## 历史文档说明
 
-### 威胁模型基线（OWASP LLM Top 10）
-
-| 威胁 | AgentBridge 中的表现 | 控制措施 |
-|------|---------------------|---------|
-| Prompt Injection | 恶意代码仓库通过 AGENTS.md 注入指令 | 四层防御，OS 沙箱兜底 |
-| Excessive Agency | Agent 越权执行危险操作 | sandbox read-only + Starlark 白名单 + Feature Flag |
-| Insecure Output | Agent A 的输出被 Agent B 盲信执行 | Reviewer 粗验证，结构化结果传递 |
-| Supply Chain | 恶意 MCP 服务器/依赖 | `--strict-mcp-config` 只加载已知 MCP |
-
-## 踩坑记录
-
-| 问题 | 根因 | 解法 | 规则 |
-|------|------|------|------|
-| 下拉菜单被面板截断 | 父容器 `overflow-hidden` | 去掉父级 `overflow-hidden` | frontend.md |
-| Codex 账号信息拿不到 | `intercept` 读原始 error 对象 | patch 后重新 parse 传给 intercept | daemon.md |
-| GUI 白屏 (Zustand) | selector 内 `.filter()` 新引用 | selector 取原始数组，组件内 for 循环 | frontend.md |
-| GUI 白屏 (process.cwd) | 前端用了 Node.js API | 禁止前端 Node API | frontend.md |
-| xterm.js 黑屏 | PTY 数据在 xterm 前到达 | 缓冲 PTY 数据，open 后回放 | frontend.md |
-| Codex sandbox 参数错 | 发 `{type:"read-only"}` | 直接传字符串 `"read-only"` | — |
-| `@claude` 协议不可靠 | LLM 不遵守 prompt 指令 | 改为 daemon 硬转发，不依赖 LLM | daemon.md |
-| developer_instructions 不可靠 | prompt 级别，模型可能忽略 | 用硬限制 (sandbox/tools/permissions) 控制能力 | role-config.ts |
-| 内嵌终端卡死 | node-pty JSON 序列化开销 | 迁移到 Rust portable-pty + Tauri event 直传 | tauri.md |
-| pty_inject `[` 被吃 | `\x1b[` 构成 ANSI CSI 转义序列 | 去掉 `\x1b` 前缀和 `[` 括号 | daemon.md |
-| Claude 不用 reply tool | MCP bridge 未加载 | Rust PTY 加 `--mcp-config` 参数 | pty.rs |
-| Bridge 断连不重连 | daemon-client.ts 无重连逻辑 | `onclose` 触发 `tryReconnect` 自动重连 | daemon.md |
-| Claude 忽略 reply 指令 | 系统 prompt 软引导不够强 | 注入消息末尾附加 reply tool 使用提醒 | daemon.ts |
-| `.mcp.json` 路径错误 | 项目级 MCP 配置文件名写成 `.claude/mcp.json` | 项目级是 `.mcp.json`（项目根目录） | architecture.md |
-| MCP 配置污染 | 用户已有 MCP server 被加载干扰 | `--strict-mcp-config` + 内联 JSON | pty.rs |
-| CODEX_HOME auth 丢失 | 临时目录中无 auth.json | symlink 而非复制，或用 keyring 模式 | session-manager.ts |
+- `UPDATE.md` 记录当前这轮 Rust 架构整理结果
+- `docs/superpowers/plans/**`、`docs/superpowers/specs/**` 是带日期的迁移记录
+- 历史文档可用于追溯设计决策，但当前实现以本文件和 `.claude/rules/` 为准

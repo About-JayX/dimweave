@@ -2,6 +2,7 @@
 
 mod codex;
 mod daemon;
+mod mcp;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
@@ -110,110 +111,6 @@ async fn codex_logout() -> Result<(), String> {
     codex::oauth::do_logout().await
 }
 
-// ── Misc commands ─────────────────────────────────────────────────────────────
-
-#[tauri::command]
-fn register_mcp() -> Result<bool, String> {
-    let bridge_cmd = if cfg!(debug_assertions) {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let project_root =
-            std::path::Path::new(manifest_dir).parent().unwrap_or(std::path::Path::new("."));
-        let bridge_bin = project_root.join("target").join("debug").join("agent-bridge-bridge");
-        bridge_bin.to_string_lossy().to_string()
-    } else {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        exe.parent()
-            .unwrap_or(std::path::Path::new("."))
-            .join("../Resources/agent-bridge-bridge")
-            .to_string_lossy()
-            .to_string()
-    };
-    write_mcp_config(&bridge_cmd, &[])
-}
-
-fn write_mcp_config(command: &str, args: &[&str]) -> Result<bool, String> {
-    let home = dirs::home_dir().ok_or("cannot resolve home")?;
-    let mcp_path = home.join(".claude").join("mcp.json");
-
-    let mut config: serde_json::Value = if mcp_path.exists() {
-        let raw = std::fs::read_to_string(&mcp_path).map_err(|e| format!("read error: {e}"))?;
-        serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        std::fs::create_dir_all(mcp_path.parent().unwrap()).ok();
-        serde_json::json!({})
-    };
-
-    let servers = config
-        .as_object_mut()
-        .ok_or("invalid mcp.json")?
-        .entry("mcpServers")
-        .or_insert_with(|| serde_json::json!({}));
-
-    let mut entry = serde_json::json!({ "command": command });
-    if !args.is_empty() {
-        entry["args"] = serde_json::json!(args);
-    }
-
-    servers
-        .as_object_mut()
-        .ok_or("invalid mcpServers")?
-        .insert("agentbridge".to_string(), entry);
-
-    let json =
-        serde_json::to_string_pretty(&config).map_err(|e| format!("serialize error: {e}"))?;
-    std::fs::write(&mcp_path, json).map_err(|e| format!("write error: {e}"))?;
-    Ok(true)
-}
-
-#[tauri::command]
-fn check_mcp_registered() -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
-    let raw = match std::fs::read_to_string(home.join(".claude").join("mcp.json")) {
-        Ok(r) => r,
-        Err(_) => return false,
-    };
-    let config: serde_json::Value = match serde_json::from_str(&raw) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    config.pointer("/mcpServers/agentbridge").is_some()
-}
-
-#[tauri::command]
-fn launch_claude_terminal(cwd: Option<String>) -> Result<(), String> {
-    let dir = cwd.unwrap_or_else(|| ".".to_string());
-
-    #[cfg(target_os = "macos")]
-    {
-        let script = format!(
-            r#"tell application "Terminal"
-                activate
-                do script "cd '{}' && claude"
-            end tell"#,
-            dir.replace("'", "'\\''")
-        );
-        std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .spawn()
-            .map_err(|e| format!("failed: {e}"))?;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!("cd '{}' && claude", dir))
-            .spawn()
-            .map_err(|e| format!("failed: {e}"))?;
-    }
-
-    Ok(())
-}
-
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
@@ -222,11 +119,14 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(OAuthHandle::new()))
         .setup(|app| {
+            // Create channel synchronously so DaemonSender is available immediately.
+            // If manage() were called inside an async spawn, any command arriving
+            // before the spawn completes would panic with "state not managed".
+            let (cmd_tx, cmd_rx) = daemon::channel();
+            app.handle().manage(DaemonSender(cmd_tx));
+
             let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let sender = daemon::start(handle.clone()).await;
-                handle.manage(DaemonSender(sender));
-            });
+            tauri::async_runtime::spawn(daemon::run(handle, cmd_rx));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -234,9 +134,9 @@ fn main() {
             refresh_usage,
             list_codex_models,
             pick_directory,
-            register_mcp,
-            check_mcp_registered,
-            launch_claude_terminal,
+            mcp::register_mcp,
+            mcp::check_mcp_registered,
+            mcp::launch_claude_terminal,
             codex_login,
             codex_cancel_login,
             codex_logout,

@@ -23,7 +23,6 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const logRef = useRef<HTMLDivElement>(null);
 
   const clearMessages = useBridgeStore((s) => s.clearMessages);
-  const codexPhase = useBridgeStore((s) => s.codexPhase);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
 
   const chatMessages = messages.filter((m) => m.from !== "system");
@@ -93,17 +92,6 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
               </div>
             );
           })}
-          {codexPhase !== "idle" && (
-            <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground msg-enter">
-              <span className="relative inline-flex size-1.5">
-                <span className="absolute inset-0 rounded-full bg-codex animate-ping opacity-40" />
-                <span className="relative inline-block size-1.5 rounded-full bg-codex shadow-[0_0_6px_#22c55e]" />
-              </span>
-              {codexPhase === "thinking"
-                ? "Codex is thinking\u2026"
-                : "Codex is responding\u2026"}
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
       )}

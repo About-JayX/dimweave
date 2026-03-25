@@ -36,12 +36,10 @@ pub async fn run(
     let (ws_tx, mut ws_rx) = mpsc::channel::<String>(64);
 
     // Outbound writer task
-    let tx2 = ws_tx.clone();
     tokio::spawn(async move {
         while let Some(text) = ws_rx.recv().await {
             if sink.send(Message::Text(text.into())).await.is_err() { break; }
         }
-        drop(tx2);
     });
 
     // === Handshake: initialize ===
@@ -126,5 +124,7 @@ pub async fn run(
             }
         }
     }
+    state.write().await.codex_inject_tx = None;
+    gui::emit_agent_status(&app, "codex", false, None);
     gui::emit_system_log(&app, "info", "[Codex] session ended");
 }

@@ -1,7 +1,6 @@
 use serde::Serialize;
 use std::{
     collections::VecDeque,
-    process::ExitStatus,
     sync::{Arc, Mutex},
 };
 use tokio::{
@@ -163,21 +162,6 @@ where
             }
         }
     }
-}
-
-fn format_failure(status: ExitStatus, state: &LoginState) -> String {
-    let mut detail = format!(
-        "codex login exited with code {}",
-        status.code().unwrap_or(-1)
-    );
-    if !state.recent_output.is_empty() {
-        detail.push_str("\nRecent output:\n");
-        for line in &state.recent_output {
-            detail.push_str(line);
-            detail.push('\n');
-        }
-    }
-    detail
 }
 
 // ── Public API ───────────────────────────────────────────

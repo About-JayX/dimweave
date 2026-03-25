@@ -1,5 +1,7 @@
 # Rust + Channel API Migration Design
 
+> Historical note: this dated spec records the migration target and tradeoffs. Current source of truth is `CLAUDE.md`, `.claude/rules/**`, `src-tauri/src/daemon/**`, and `bridge/**`.
+
 **Date**: 2026-03-25
 **Status**: Draft
 

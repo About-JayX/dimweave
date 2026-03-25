@@ -1,35 +1,52 @@
 ---
 name: debug-daemon
-description: 排查 daemon 运行问题。分析日志、端口占用、进程状态。
+description: 排查当前 Rust 内嵌 daemon、bridge sidecar、Codex app-server 的运行问题。
 disable-model-invocation: true
 ---
 
-排查 AgentBridge daemon 问题：
+排查 AgentBridge 当前运行链路时，按下面顺序检查：
 
-1. **检查日志**
+1. **检查 Tauri / bridge / Codex 进程**
    ```bash
-   tail -100 /tmp/agentbridge.log
+   ps aux | grep -E "(agent-bridge|agent-bridge-bridge|codex.*app-server|claude)" | grep -v grep
    ```
 
-2. **检查进程**
+2. **检查关键端口**
    ```bash
-   ps aux | grep -E "(agentbridge|codex.*app-server)" | grep -v grep
+   lsof -i :4500 -i :4502 2>/dev/null
    ```
 
-3. **检查端口占用**
+3. **检查 control server 健康状态**
    ```bash
-   lsof -i :4500 -i :4501 -i :4502 -i :4503 2>/dev/null
+   curl -s http://127.0.0.1:4502/healthz
    ```
 
-4. **检查 PID 文件**
+4. **检查项目 MCP 注册**
    ```bash
-   cat /tmp/agentbridge-daemon-4502.pid 2>/dev/null
+   cat .mcp.json 2>/dev/null
    ```
 
-5. **健康检查**
+5. **检查 bridge sidecar 是否可构建**
    ```bash
-   curl -s http://127.0.0.1:4502/healthz | jq .
-   curl -s http://127.0.0.1:4503/healthz | jq .
+   cargo build -p agent-bridge-bridge
    ```
 
-根据以上信息诊断问题并给出修复建议。$ARGUMENTS
+6. **检查前端与 Rust 是否能通过基础校验**
+   ```bash
+   bun x tsc --noEmit -p tsconfig.app.json
+   cargo test
+   ```
+
+7. **检查临时 CODEX_HOME 残留**
+   ```bash
+   ls -la /tmp | grep agentbridge-
+   ```
+
+根据以上信息判断故障位于：
+
+- Claude CLI / `.mcp.json`
+- bridge ↔ daemon 控制通道
+- Codex app-server 启动与 session
+- 前端 invoke / listen 链路
+
+不要再按旧 Bun daemon 方式去找 `/tmp/agentbridge.log`、`:4503`、PID 文件或 `daemon/**/*.ts`。$ARGUMENTS

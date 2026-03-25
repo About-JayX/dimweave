@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bun run dev",
-    "beforeBuildCommand": "bun run build"
+    "beforeDevCommand": "cargo build -p agent-bridge-bridge && bun run dev",
+    "beforeBuildCommand": "cargo build -p agent-bridge-bridge --release && bun run build"
   },
   "app": {
     "windows": [
@@ -22,6 +22,11 @@
     "security": {
       "csp": null
     }
+  },
+  "bundle": {
+    "externalBin": [
+      "binaries/agent-bridge-bridge"
+    ]
   },
   "plugins": {
     "shell": {

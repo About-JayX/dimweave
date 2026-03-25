@@ -7,7 +7,11 @@ use axum::{
 };
 use tauri::AppHandle;
 
-pub async fn start(port: u16, state: SharedState, app: AppHandle) {
+pub async fn start(
+    port: u16,
+    state: SharedState,
+    app: AppHandle,
+) -> anyhow::Result<()> {
     let shared = (state, app);
     let router = Router::new()
         .route("/healthz", get(|| async { "ok" }))
@@ -17,9 +21,11 @@ pub async fn start(port: u16, state: SharedState, app: AppHandle) {
     let addr = format!("127.0.0.1:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
-        .expect("cannot bind control server");
+        .map_err(|e| anyhow::anyhow!("cannot bind control server on {addr}: {e}"))?;
     eprintln!("[Daemon] control server on ws://{addr}/ws");
-    axum::serve(listener, router).await.unwrap();
+    axum::serve(listener, router)
+        .await
+        .map_err(|e| anyhow::anyhow!("control server error: {e}"))
 }
 
 async fn ws_handler(

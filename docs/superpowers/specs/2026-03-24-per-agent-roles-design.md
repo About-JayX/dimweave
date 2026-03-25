@@ -1,5 +1,7 @@
 # Per-Agent Role Assignment
 
+> Historical note: this dated spec was written for the Bun-daemon migration period. Current source of truth is `CLAUDE.md`, `.claude/rules/**`, `src-tauri/src/daemon/**`, and `bridge/**`.
+
 ## Summary
 
 将统一 `role` 字段拆分为 `claudeRole` + `codexRole`，支持异构角色分配（如 Claude=Lead, Codex=Coder）。角色定义（`ROLES` 常量）保持统一共享。同时修复 review 中发现的 critical/important 问题。

@@ -1,35 +1,46 @@
 ---
 name: add-adapter
-description: 创建新的 Agent 适配器。当需要添加新 AI agent（如 Gemini、Cursor 等）的桥接支持时使用。
+description: 为当前 Rust 架构添加新的 agent 接入能力（不是旧 Bun daemon 适配器）。
 disable-model-invocation: true
 argument-hint: <agent-name>
 ---
 
-为 `$ARGUMENTS` 创建一个新的 Agent 适配器，按以下步骤执行：
+为 `$ARGUMENTS` 添加新的 agent 接入时，按当前架构执行：
 
-1. **创建适配器文件** `daemon/adapters/$0-adapter.ts`
-   - 继承 EventEmitter，实现 `AgentAdapter` 接口（见 `daemon/adapters/base-adapter.ts`）
-   - 必须实现: `name`, `displayName`, `status`, `start()`, `stop()`, `sendMessage()`
-   - 事件: `message` (BridgeMessage), `statusChange` (AgentStatus), `error` (Error)
+1. **先判断接入形态**
+   - 如果新 agent 通过 MCP / stdio 接入，优先参考 `bridge/`
+   - 如果新 agent 通过本地进程 + WebSocket / IPC 接入，优先参考 `src-tauri/src/daemon/codex/`
 
-2. **参考已有适配器**
-   - 阅读 `daemon/adapters/claude-adapter.ts`（MCP 模式）
-   - 阅读 `daemon/adapters/codex-adapter.ts`（WebSocket 代理模式）
-   - 选择合适的通信模式
+2. **更新 Rust daemon 状态与协议**
+   - 检查 `src-tauri/src/daemon/state.rs`
+   - 检查 `src-tauri/src/daemon/types.rs`
+   - 检查 `src-tauri/src/daemon/routing.rs`
+   - 为新 agent 定义上线 / 下线 / 路由规则
 
-3. **在 daemon 中注册**
-   - 在 `daemon/daemon.ts` 中导入并实例化适配器
-   - 连接消息事件到 `emitToClaude()` 和 `broadcastToGui()`
-   - 更新 `currentStatus()` 加入新 agent 状态
+3. **如果需要新的 bridge sidecar 能力**
+   - 修改 `bridge/src/tools.rs`
+   - 修改 `bridge/src/mcp.rs`
+   - 修改 `bridge/src/daemon_client.rs`
+   - 保证 `bridge/src/types.rs` 与 daemon 协议一致
 
-4. **更新前端**
-   - 在 `src/hooks/useWebSocket.ts` 的 agents 初始状态中添加新 agent
-   - `AgentStatus.tsx` 会自动渲染新 agent 卡片
+4. **如果需要新的本地 session 类型**
+   - 参考 `src-tauri/src/daemon/codex/`
+   - 新增 lifecycle / session / handler 分层
+   - 不要把所有逻辑塞进一个文件
 
-5. **更新类型**
-   - 在 `daemon/types.ts` 的 `MessageSource` 中添加新来源
-   - 在 `src/types.ts` 的 `MessageSource` 中同步更新
+5. **更新前端**
+   - `src/stores/bridge-store/index.ts`
+   - `src/types.ts`
+   - `src/components/AgentStatus/`
+   - 让 UI 能显示新 agent 的状态与消息
 
-6. **日志规范**
-   - 使用 `[${AgentName}Adapter]` 前缀
-   - 写入 `/tmp/agentbridge.log`
+6. **更新文档**
+   - `CLAUDE.md`
+   - `.claude/rules/architecture.md`
+   - 对应 rules 文件
+
+7. **校验**
+   - `bun x tsc --noEmit -p tsconfig.app.json`
+   - `cargo test`
+
+不要再创建 `daemon/**/*.ts`、`gui-server.ts`、`control-server.ts`、`bridge.ts` 这类旧 Bun 架构文件。

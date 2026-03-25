@@ -25,8 +25,8 @@ export function ClaudePanel({ connected }: ClaudePanelProps) {
     if (!cwd) return;
     try {
       setLaunchError(null);
-      // Register MCP config so Claude Code loads the bridge on startup
-      await invoke("register_mcp");
+      // Register agentbridge into the project-local .mcp.json
+      await invoke("register_mcp", { cwd });
       // Open an external terminal running `claude` in the project directory
       await invoke("launch_claude_terminal", { cwd });
     } catch (e) {

@@ -25,7 +25,7 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
-/** Protocol-derived data from daemon WS (model, reasoning, tokens). */
+/** Metadata returned from the Codex account/session integration. */
 export interface CodexAccountInfo {
   initialized: boolean;
   userAgent?: string;
@@ -42,37 +42,4 @@ export interface CodexAccountInfo {
   usage?: TokenUsage;
   cumulativeUsage?: TokenUsage;
   lastUpdated: number;
-}
-
-export interface DaemonStatus {
-  bridgeReady: boolean;
-  tuiConnected: boolean;
-  threadId: string | null;
-  queuedMessageCount: number;
-  proxyUrl: string;
-  appServerUrl: string;
-  pid: number;
-  codexBootstrapped: boolean;
-  codexTuiRunning: boolean;
-  claudeConnected: boolean;
-  codexAccount?: CodexAccountInfo;
-  claudeRole?: string;
-  codexRole?: string;
-}
-
-export interface GuiEvent {
-  type:
-    | "agent_message"
-    | "agent_message_started"
-    | "agent_message_delta"
-    | "codex_phase"
-    | "terminal_output"
-    | "claude_rate_limit"
-    | "pty_inject"
-    | "agent_status"
-    | "role_sync"
-    | "system_log"
-    | "daemon_status";
-  payload: any;
-  timestamp: number;
 }

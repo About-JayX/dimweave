@@ -1,17 +1,18 @@
-use crate::daemon::types::BridgeMessage;
-use std::collections::HashMap;
-use tokio::sync::mpsc;
+use crate::daemon::{session_manager::SessionManager, types::BridgeMessage};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{mpsc, Mutex};
 
 pub type AgentSender = mpsc::Sender<BridgeMessage>;
 
 pub struct DaemonState {
     pub attached_agents: HashMap<String, AgentSender>,
     pub buffered_messages: Vec<BridgeMessage>,
+    pub codex_inject_tx: Option<mpsc::Sender<String>>,
     pub claude_role: String,
     pub codex_role: String,
-    pub codex_bootstrapped: bool,
-    pub active_thread_id: Option<String>,
-    pub codex_home: Option<String>,
+    /// Singleton session manager — shared across all Codex launches to avoid
+    /// stale-session cleanup killing live sessions.
+    pub session_mgr: Arc<Mutex<SessionManager>>,
 }
 
 impl Default for DaemonState {
@@ -19,11 +20,10 @@ impl Default for DaemonState {
         Self {
             attached_agents: HashMap::new(),
             buffered_messages: Vec::new(),
+            codex_inject_tx: None,
             claude_role: "lead".into(),
             codex_role: "coder".into(),
-            codex_bootstrapped: false,
-            active_thread_id: None,
-            codex_home: None,
+            session_mgr: Arc::new(Mutex::new(SessionManager::new())),
         }
     }
 }
@@ -39,10 +39,22 @@ impl DaemonState {
 
     pub fn buffer_message(&mut self, msg: BridgeMessage) {
         self.buffered_messages.push(msg);
-        // Prevent unbounded growth
         if self.buffered_messages.len() > 200 {
             self.buffered_messages.drain(0..100);
         }
+    }
+
+    pub fn take_buffered_for(&mut self, role: &str) -> Vec<BridgeMessage> {
+        let mut ready = Vec::new();
+        self.buffered_messages.retain(|msg| {
+            if msg.to == role {
+                ready.push(msg.clone());
+                false
+            } else {
+                true
+            }
+        });
+        ready
     }
 }
 
