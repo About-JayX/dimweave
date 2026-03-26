@@ -34,12 +34,26 @@ pub async fn run(
                     continue;
                 }
 
-                // Replay messages buffered during backoff
-                for m in pending.drain(..) {
-                    if let Ok(s) = serialize_outbound(&agent_id, &m) {
-                        if sink.send(Message::Text(s.into())).await.is_err() {
-                            break;
+                // Replay messages buffered during backoff — on send failure,
+                // put remaining back into pending for next reconnect attempt
+                {
+                    let mut replay_failed = false;
+                    let mut remaining: Vec<BridgeOutbound> = Vec::new();
+                    for m in pending.drain(..) {
+                        if replay_failed {
+                            remaining.push(m);
+                            continue;
                         }
+                        if let Ok(s) = serialize_outbound(&agent_id, &m) {
+                            if sink.send(Message::Text(s.into())).await.is_err() {
+                                remaining.push(m);
+                                replay_failed = true;
+                            }
+                        }
+                    }
+                    if !remaining.is_empty() {
+                        pending = remaining;
+                        continue; // reconnect — pending preserved
                     }
                 }
 
@@ -57,6 +71,8 @@ pub async fn run(
                         Some(outbound) = reply_rx.recv() => {
                             if let Ok(s) = serialize_outbound(&agent_id, &outbound) {
                                 if sink.send(Message::Text(s.into())).await.is_err() {
+                                    // Send failed — buffer for next reconnect
+                                    pending.push(outbound);
                                     break;
                                 }
                             }

@@ -46,9 +46,10 @@ async fn event_loop(
     mut stream: WsStream,
 ) {
     let mut next_id: u64 = 100;
-    // Turn-level schema-routing: only user-initiated turns get routed
+    // request_id → from_user queue: maps turn/start request id to whether user initiated
+    let mut req_from_user: std::collections::HashMap<u64, bool> = std::collections::HashMap::new();
+    // turn_id → from_user: resolved when turn/start response arrives
     let mut user_turn_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut pending_from_user = false; // consumed by next turn/started
     loop {
         tokio::select! {
             msg_opt = stream.next() => {
@@ -56,16 +57,14 @@ async fn event_loop(
                 let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
                     continue;
                 };
-                // Register turn_id when turn/started arrives
-                if v["method"].as_str() == Some("turn/started") {
-                    if let Some(tid) = v["params"]["turn"]["id"].as_str() {
-                        if pending_from_user {
+                // turn/start response: map request_id → turn_id
+                if let Some(rpc_id) = v["id"].as_u64() {
+                    if let Some(tid) = v["result"]["turn"]["id"].as_str() {
+                        if req_from_user.remove(&rpc_id) == Some(true) {
                             user_turn_ids.insert(tid.to_string());
                         }
-                        pending_from_user = false;
                     }
                 }
-                // Check if this event's turn is user-initiated
                 let turn_id = v["params"]["turnId"].as_str()
                     .or_else(|| v["params"]["turn"]["id"].as_str())
                     .unwrap_or("");
@@ -77,8 +76,8 @@ async fn event_loop(
             }
             inject = inject_rx.recv() => {
                 let Some((text, from_user)) = inject else { break };
-                pending_from_user = from_user;
                 let id = next_id; next_id += 1;
+                req_from_user.insert(id, from_user);
                 let mut turn_params = json!({
                     "threadId": &thread_id,
                     "input": [{"type":"text","text":text}],

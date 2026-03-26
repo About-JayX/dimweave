@@ -1,11 +1,28 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useBridgeStore } from "@/stores/bridge-store";
-import { Send } from "lucide-react";
+import { Send, ChevronDown } from "lucide-react";
 
 const MIN_ROWS = 2;
 const MAX_ROWS = 8;
+const TARGETS = [
+  "auto",
+  "user",
+  "lead",
+  "coder",
+  "reviewer",
+  "tester",
+] as const;
+type Target = (typeof TARGETS)[number];
+
+const TARGET_COLORS: Record<Target, string> = {
+  auto: "text-purple-400 border-purple-400/30",
+  user: "text-sky-400 border-sky-400/30",
+  lead: "text-yellow-400 border-yellow-400/30",
+  coder: "text-emerald-400 border-emerald-400/30",
+  reviewer: "text-orange-400 border-orange-400/30",
+  tester: "text-blue-400 border-blue-400/30",
+};
 
 interface ReplyInputProps {
   connected: boolean;
@@ -15,8 +32,11 @@ export function ReplyInput({ connected }: ReplyInputProps) {
   const draft = useBridgeStore((s) => s.draft);
   const setDraft = useBridgeStore((s) => s.setDraft);
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
+  const [target, setTarget] = useState<Target>("auto");
+  const [showPicker, setShowPicker] = useState(false);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
@@ -27,35 +47,28 @@ export function ReplyInput({ connected }: ReplyInputProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Never send during IME composition
       if (
         composingRef.current ||
         e.nativeEvent.isComposing ||
         e.keyCode === 229
       )
         return;
-
-      // Cmd/Ctrl+Enter to send
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSend();
       }
-      // Plain Enter and Shift+Enter = newline (default textarea behavior)
     },
     [handleSend],
   );
 
-  // Autosize: adjust textarea height based on content and window size
   const autosize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
-    // Measure actual line height from computed style
     const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
-    const paddingTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
-    const paddingBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-    const padding = paddingTop + paddingBottom;
-    const minH = MIN_ROWS * lineHeight + padding;
-    const maxH = MAX_ROWS * lineHeight + padding;
+    const pt = parseFloat(getComputedStyle(el).paddingTop) || 0;
+    const pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    const minH = MIN_ROWS * lineHeight + pt + pb;
+    const maxH = MAX_ROWS * lineHeight + pt + pb;
     el.style.height = "auto";
     el.style.height = `${Math.min(Math.max(el.scrollHeight, minH), maxH)}px`;
   }, []);
@@ -77,19 +90,28 @@ export function ReplyInput({ connected }: ReplyInputProps) {
     };
   }, [autosize]);
 
+  // Close picker on outside click
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+        setShowPicker(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showPicker]);
+
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.userAgent);
-  const modKey = isMac ? "⌘" : "Ctrl";
 
   return (
     <div className="border-t border-border/50 px-4 py-3 relative">
       <div className="absolute top-0 left-4 right-4 h-px bg-linear-to-r from-transparent via-primary/10 to-transparent" />
-      <div className="rounded-lg border border-input bg-card/80 backdrop-blur-sm focus-within:border-claude/50 focus-within:ring-1 focus-within:ring-claude/20 focus-within:shadow-[0_0_20px_#8b5cf615] transition-all duration-300">
-        {/* Textarea */}
+      <div className="rounded-lg border border-input bg-card/80 backdrop-blur-sm focus-within:border-claude/50 focus-within:ring-1 focus-within:ring-claude/20 transition-all duration-300">
         <textarea
           ref={textareaRef}
-          className="block w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] leading-relaxed text-foreground font-[inherit] outline-none placeholder:text-muted-foreground"
+          className="block w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -100,34 +122,46 @@ export function ReplyInput({ connected }: ReplyInputProps) {
             composingRef.current = false;
           }}
           placeholder="Type your message..."
-          aria-label="Message to Codex"
-          name="message"
-          autoComplete="off"
           rows={MIN_ROWS}
         />
-
-        {/* Toolbar */}
         <div className="flex items-center justify-between px-3 py-1.5">
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="text-[10px] font-normal text-codex border-codex/30 shadow-[0_0_6px_#22c55e15]"
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setShowPicker(!showPicker)}
+              className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium transition-colors ${TARGET_COLORS[target]}`}
             >
-              To Codex
-            </Badge>
-            {!connected && (
-              <span className="text-[10px] text-destructive">Disconnected</span>
+              To {target}
+              <ChevronDown className="size-3 opacity-60" />
+            </button>
+            {showPicker && (
+              <div className="absolute bottom-full left-0 mb-1 rounded-md border border-border bg-popover shadow-lg py-1 z-20 min-w-[100px]">
+                {TARGETS.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setTarget(t);
+                      setShowPicker(false);
+                    }}
+                    className={`block w-full text-left px-3 py-1 text-[11px] hover:bg-accent transition-colors ${t === target ? "font-bold" : ""} ${TARGET_COLORS[t].split(" ")[0]}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">
+            {!connected && (
+              <span className="text-[10px] text-destructive">Disconnected</span>
+            )}
             <span className="text-[10px] text-muted-foreground">
-              {modKey}+Enter to send
+              {isMac ? "⌘" : "Ctrl"}+Enter
             </span>
             <Button
               size="sm"
               disabled={!connected || !draft.trim()}
               onClick={handleSend}
-              className="h-7 gap-1.5 px-3 text-[12px] hover:shadow-[0_0_12px_#8b5cf630] active:scale-[0.96] transition-all duration-200"
+              className="h-7 gap-1.5 px-3 text-[12px] hover:shadow-[0_0_12px_#8b5cf630] active:scale-[0.96] transition-all"
             >
               <Send className="size-3" />
               Send
