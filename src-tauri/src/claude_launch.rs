@@ -1,5 +1,6 @@
 use crate::claude_cli::ensure_claude_channel_ready;
 use crate::claude_session::{self, ClaudeSessionManager};
+use crate::daemon::role_config;
 use std::sync::Arc;
 use tauri::AppHandle;
 
@@ -9,6 +10,7 @@ pub async fn launch(
     dir: &str,
     model: Option<String>,
     effort: Option<String>,
+    role: &str,
     cols: Option<u16>,
     rows: Option<u16>,
     session: Arc<ClaudeSessionManager>,
@@ -32,8 +34,13 @@ pub async fn launch(
         }
     }
 
+    // Inject role-specific system prompt
+    let system_prompt = role_config::claude_system_prompt(role);
+    extra_args.push("--append-system-prompt".into());
+    extra_args.push(system_prompt);
+
     eprintln!(
-        "[MCP] launching Claude channel {version} in managed PTY model={model:?} effort={effort:?}"
+        "[MCP] launching Claude channel {version} in managed PTY model={model:?} effort={effort:?} role={role}"
     );
     let emit_debug_logs = cfg!(debug_assertions);
     claude_session::launch(session, dir, &claude_bin, &extra_args, cols, rows, app, emit_debug_logs).await

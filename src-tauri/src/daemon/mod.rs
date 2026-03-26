@@ -35,6 +35,10 @@ pub enum DaemonCmd {
     ReadStatusSnapshot {
         reply: oneshot::Sender<types::DaemonStatusSnapshot>,
     },
+    /// Read current Claude role for system prompt injection at launch.
+    ReadClaudeRole {
+        reply: oneshot::Sender<String>,
+    },
     /// Update which role Claude is playing (affects routing).
     SetClaudeRole(String),
     /// Send a permission verdict back to the bridge for Claude Code.
@@ -121,6 +125,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
                 let _ = reply.send(());
                 break;
+            }
+
+            DaemonCmd::ReadClaudeRole { reply } => {
+                let role = state.read().await.claude_role.clone();
+                let _ = reply.send(role);
             }
 
             DaemonCmd::SetClaudeRole(role) => {

@@ -143,10 +143,17 @@ pub async fn launch_claude_terminal(
     cols: Option<u16>,
     rows: Option<u16>,
     session: State<'_, Arc<ClaudeSessionManager>>,
+    daemon_tx: State<'_, crate::DaemonSender>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
-    crate::claude_launch::launch(&dir, model, effort, cols, rows, session.inner().clone(), app).await
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    daemon_tx.0
+        .send(crate::daemon::DaemonCmd::ReadClaudeRole { reply: reply_tx })
+        .await
+        .map_err(|_| "daemon channel closed".to_string())?;
+    let role = reply_rx.await.map_err(|_| "daemon did not reply".to_string())?;
+    crate::claude_launch::launch(&dir, model, effort, &role, cols, rows, session.inner().clone(), app).await
 }
 
 #[cfg(test)]

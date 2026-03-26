@@ -1,2 +1,2 @@
 pub mod roles;
-pub use roles::{get_role, output_schema};
+pub use roles::{claude_system_prompt, get_role, output_schema};
