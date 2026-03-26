@@ -64,21 +64,8 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         daemon.take_buffered_verdicts_for(&id),
                     )
                 };
-                for message in buffered_messages {
-                    if tx.send(ToAgent::RoutedMessage { message: message.clone() }).await.is_err() {
-                        // Send failed — put back into buffer
-                        state.write().await.buffer_message(message);
-                        eprintln!("[Control] replay failed for {}, re-buffered", id);
-                        break;
-                    }
-                }
-                for verdict in buffered_verdicts {
-                    if tx.send(ToAgent::PermissionVerdict { verdict: verdict.clone() }).await.is_err() {
-                        state.write().await.buffer_permission_verdict(&id, verdict);
-                        eprintln!("[Control] verdict replay failed for {}, re-buffered", id);
-                        break;
-                    }
-                }
+                replay_messages(&tx, &state, buffered_messages).await;
+                replay_verdicts(&tx, &state, &id, buffered_verdicts).await;
                 gui::emit_agent_status(&app, &id, true, None);
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} connected"));
             }
@@ -136,5 +123,39 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             drop(daemon);
             gui::emit_system_log(&app, "info", &format!("[Control] {id} stale connection closed"));
         }
+    }
+}
+
+async fn replay_messages(
+    tx: &mpsc::Sender<ToAgent>,
+    state: &SharedState,
+    mut msgs: Vec<crate::daemon::types::BridgeMessage>,
+) {
+    let mut i = 0;
+    while i < msgs.len() {
+        if tx.send(ToAgent::RoutedMessage { message: msgs[i].clone() }).await.is_err() {
+            let mut s = state.write().await;
+            for m in msgs.drain(i..) { s.buffer_message(m); }
+            eprintln!("[Control] replay failed, re-buffered {} messages", msgs.len() - i);
+            return;
+        }
+        i += 1;
+    }
+}
+
+async fn replay_verdicts(
+    tx: &mpsc::Sender<ToAgent>,
+    state: &SharedState,
+    agent_id: &str,
+    mut verdicts: Vec<crate::daemon::types::PermissionVerdict>,
+) {
+    let mut i = 0;
+    while i < verdicts.len() {
+        if tx.send(ToAgent::PermissionVerdict { verdict: verdicts[i].clone() }).await.is_err() {
+            let mut s = state.write().await;
+            for v in verdicts.drain(i..) { s.buffer_permission_verdict(agent_id, v); }
+            return;
+        }
+        i += 1;
     }
 }

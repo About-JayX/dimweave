@@ -1,7 +1,8 @@
+import { useMemo } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { CyberSelect } from "@/components/ui/cyber-select";
 
-const ROLE_OPTIONS = [
+const ALL_ROLES = [
   { value: "user", label: "User (Admin)" },
   { value: "lead", label: "Lead" },
   { value: "coder", label: "Coder" },
@@ -16,14 +17,23 @@ export function RoleSelect({
   agent: "claude" | "codex";
   disabled?: boolean;
 }) {
-  const role = useBridgeStore((s) =>
-    agent === "claude" ? s.claudeRole : s.codexRole,
-  );
+  const claudeRole = useBridgeStore((s) => s.claudeRole);
+  const codexRole = useBridgeStore((s) => s.codexRole);
   const setRole = useBridgeStore((s) => s.setRole);
+
+  const role = agent === "claude" ? claudeRole : codexRole;
+  const otherRole = agent === "claude" ? codexRole : claudeRole;
+
+  // Filter out the role already taken by the other agent
+  const options = useMemo(
+    () => ALL_ROLES.filter((r) => r.value === role || r.value !== otherRole),
+    [role, otherRole],
+  );
+
   return (
     <CyberSelect
       value={role}
-      options={ROLE_OPTIONS}
+      options={options}
       onChange={(v) => setRole(agent, v)}
       disabled={disabled}
     />

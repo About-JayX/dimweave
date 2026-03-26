@@ -128,19 +128,24 @@ pub async fn start(
         }
     };
 
-    let buffered = {
+    let mut buffered = {
         let mut s = state.write().await;
         s.codex_role = role_id.clone();
         s.codex_inject_tx = Some(inject_tx.clone());
         s.take_buffered_for(&role_id)
     };
-    for msg in buffered {
-        let from_user = msg.from == "user";
-        let text = crate::daemon::routing::format_codex_input(&msg);
-        if inject_tx.send((text, from_user)).await.is_err() {
-            state.write().await.buffer_message(msg);
-            eprintln!("[Codex] inject replay failed, re-buffered");
-            break;
+    {
+        let mut i = 0;
+        while i < buffered.len() {
+            let from_user = buffered[i].from == "user";
+            let text = crate::daemon::routing::format_codex_input(&buffered[i]);
+            if inject_tx.send((text, from_user)).await.is_err() {
+                let mut s = state.write().await;
+                for m in buffered.drain(i..) { s.buffer_message(m); }
+                eprintln!("[Codex] inject replay failed, re-buffered tail");
+                break;
+            }
+            i += 1;
         }
     }
     gui::emit_agent_status(&app, "codex", true, None);
