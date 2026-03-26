@@ -2,9 +2,10 @@ use crate::daemon::codex::handler;
 use crate::daemon::codex::handshake::{WsStream, WsTx};
 use crate::daemon::gui::{self, CodexStreamPayload};
 use crate::daemon::types::BridgeMessage;
-use crate::daemon::SharedState;
+use crate::daemon::{routing, SharedState};
 use futures_util::StreamExt;
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::AppHandle;
 use tokio::sync::mpsc;
 
@@ -13,7 +14,7 @@ pub struct SessionOpts {
     pub cwd: String,
     pub model: Option<String>,
     pub sandbox_mode: Option<String>,
-    pub developer_instructions: Option<String>,
+    pub base_instructions: Option<String>,
 }
 
 pub async fn run(
@@ -57,9 +58,18 @@ async fn event_loop(
             inject = inject_rx.recv() => {
                 let Some(text) = inject else { break };
                 let id = next_id; next_id += 1;
+                let mut turn_params = json!({
+                    "threadId": &thread_id,
+                    "input": [{"type":"text","text":text}],
+                    "outputSchema": crate::daemon::role_config::output_schema()
+                });
+                // Remove outputSchema if null (shouldn't happen but be safe)
+                if turn_params["outputSchema"].is_null() {
+                    turn_params.as_object_mut().map(|m| m.remove("outputSchema"));
+                }
                 if ws_tx.send(json!({
                     "method": "turn/start", "id": id,
-                    "params": {"threadId": &thread_id, "input": [{"type":"text","text":text}]}
+                    "params": turn_params
                 }).to_string()).await.is_err() {
                     eprintln!("[Codex] failed to inject turn/start");
                     break;
@@ -98,43 +108,67 @@ async fn handle_codex_event(
         "item/agentMessage/delta" => {
             if let Some(text) = v["params"]["delta"].as_str() {
                 if !text.is_empty() {
-                    gui::emit_codex_stream(
-                        app,
-                        CodexStreamPayload::Delta { text: text.into() },
-                    );
+                    gui::emit_codex_stream(app, CodexStreamPayload::Delta { text: text.into() });
                 }
             }
         }
         "item/completed" => {
             if v["params"]["item"]["type"].as_str() == Some("agentMessage") {
-                let text = v["params"]["item"]["text"].as_str().unwrap_or("");
-                if !text.is_empty() {
-                    // Emit as codex_stream for live display
-                    gui::emit_codex_stream(
-                        app,
-                        CodexStreamPayload::Message { text: text.into() },
-                    );
-                    // Also emit as agent_message for message history
-                    let msg = BridgeMessage {
-                        id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
-                        from: role_id.to_string(),
-                        to: "user".to_string(),
-                        content: text.to_string(),
-                        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                        reply_to: None,
-                        priority: None,
-                    };
+                let raw = v["params"]["item"]["text"].as_str().unwrap_or("");
+                if raw.is_empty() {
+                    return;
+                }
+                let (display_text, send_to) = parse_structured_output(raw);
+                gui::emit_codex_stream(app, CodexStreamPayload::Message {
+                    text: display_text.clone(),
+                });
+                // Determine routing target from structured output
+                let valid_target = send_to.as_deref().filter(|t| {
+                    matches!(*t, "lead" | "coder" | "reviewer" | "tester")
+                });
+                if let Some(target) = valid_target {
+                    // Route to another agent — route_message emits to GUI internally
+                    let msg = build_msg(role_id, target, &display_text);
+                    eprintln!("[Codex] schema-route {} → {}", role_id, target);
+                    routing::route_message(state, app, msg).await;
+                } else {
+                    // No routing — show as local message to user
+                    let msg = build_msg(role_id, "user", &display_text);
                     gui::emit_agent_message(app, &msg);
                 }
             }
         }
         "turn/completed" => {
             let status = v["params"]["turn"]["status"].as_str().unwrap_or("unknown");
-            gui::emit_codex_stream(
-                app,
-                CodexStreamPayload::TurnDone { status: status.into() },
-            );
+            gui::emit_codex_stream(app, CodexStreamPayload::TurnDone { status: status.into() });
         }
         _ => {}
+    }
+}
+
+/// Parse Codex structured output `{ "message": "...", "send_to": "..." }`.
+/// Falls back to raw text if not valid JSON.
+fn parse_structured_output(raw: &str) -> (String, Option<String>) {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(raw) {
+        let message = v["message"].as_str().unwrap_or(raw).to_string();
+        let send_to = v["send_to"].as_str().map(|s| s.to_string());
+        (message, send_to)
+    } else {
+        (raw.to_string(), None)
+    }
+}
+
+static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn build_msg(from: &str, to: &str, content: &str) -> BridgeMessage {
+    let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
+    BridgeMessage {
+        id: format!("codex_{}_{seq}", chrono::Utc::now().timestamp_millis()),
+        from: from.to_string(),
+        to: to.to_string(),
+        content: content.to_string(),
+        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        reply_to: None,
+        priority: None,
     }
 }

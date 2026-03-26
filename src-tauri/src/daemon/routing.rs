@@ -79,6 +79,13 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
 pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
     gui::emit_agent_message(app, &msg);
     let result = route_message_inner(state, msg.clone()).await;
+    let tag = match &result {
+        RouteResult::Delivered => "delivered",
+        RouteResult::Buffered => "buffered",
+        RouteResult::Dropped => "dropped",
+        RouteResult::ToGui => "gui",
+    };
+    eprintln!("[Route] {} → {} {tag}", msg.from, msg.to);
     match result {
         RouteResult::Delivered => {
             gui::emit_system_log(

@@ -77,11 +77,17 @@ pub(super) async fn handshake(
     // Verified by runtime testing 2026-03-25.
     let mut params = json!({
         "dynamicTools": [
-            { "name": "reply", "description": "Send a message to another agent role.",
-              "inputSchema": {"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string"}},"required":["to","text"]} },
-            { "name": "check_messages", "description": "Check for new messages from other agents.",
+            { "name": "reply",
+              "description": "REQUIRED for inter-agent communication. Call this tool to send a message to another agent (user, lead, coder, reviewer, tester). Text output alone does NOT reach other agents — only this tool delivers messages. Always call this when asked to notify, tell, ask, or send anything to another role.",
+              "inputSchema": {"type":"object","properties":{
+                "to":{"type":"string","description":"Target role: user, lead, coder, reviewer, or tester"},
+                "text":{"type":"string","description":"Message content to send"}
+              },"required":["to","text"]} },
+            { "name": "check_messages",
+              "description": "Check for new incoming messages from other agents.",
               "inputSchema": {"type":"object","properties":{}} },
-            { "name": "get_status", "description": "Get AgentBridge status: available roles and online agents.",
+            { "name": "get_status",
+              "description": "Get AgentBridge status: which roles are online.",
               "inputSchema": {"type":"object","properties":{}} }
         ]
     });
@@ -96,12 +102,12 @@ pub(super) async fn handshake(
     if let Some(sb) = &opts.sandbox_mode {
         params["sandbox"] = json!(sb);
     }
-    if let Some(di) = opts
-        .developer_instructions
+    if let Some(bi) = opts
+        .base_instructions
         .as_deref()
         .filter(|s| !s.is_empty())
     {
-        params["settings"] = json!({"developer_instructions": di});
+        params["baseInstructions"] = json!(bi);
     }
     if ws_tx
         .send(json!({"method":"thread/start","id":thread_id_rpc,"params":params}).to_string())

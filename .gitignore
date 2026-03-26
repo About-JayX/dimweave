@@ -46,3 +46,5 @@ Thumbs.db
 # Lock files (bun)
 *.lockb
 .mcp.json
+
+.cargo-target

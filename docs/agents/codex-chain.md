@@ -307,6 +307,131 @@ Codex app-server → WS :4500 → session.rs handle_codex_event()
 - `MessagePanel/index.tsx` 提取 `CodexStreamIndicator.tsx`（28 行）
 - `helpers.ts` 提取 `sync.ts`（60 行）
 
+### 2026-03-26: baseInstructions 替换 system prompt + outputSchema 结构化输出
+
+#### 背景：Codex 不可靠地调用 reply 工具
+
+**问题:** Codex 收到 "让 lead 审查代码" 指令后，输出文本 "我已通知 lead" 但从未调用 `reply()` 工具。`[Route]` 日志中无 `coder → lead`。`developerInstructions` 加强指令（MUST / NEVER / 示例）后仍无效。
+
+**根因:** GPT 模型对 `developer_instructions`（developer role 消息）的工具调用遵从度不足。文本描述 "发了消息" 但实际未触发 tool call。
+
+#### 方案：baseInstructions + outputSchema 双层强制
+
+**1. `baseInstructions`（替换 system prompt）**
+
+`thread/start` 参数 `baseInstructions` 替换 Codex 内置 system prompt（~14K 字符），直接映射到 OpenAI API `ResponsesApiRequest.instructions` 字段。
+
+源码确认：`codex-rs/app-server-protocol/src/protocol/v2.rs:2583`
+```rust
+pub struct ThreadStartParams {
+    pub base_instructions: Option<String>,  // ← 替换整个 system prompt
+    pub developer_instructions: Option<String>,  // ← 追加 developer message
+}
+```
+
+优先级链（`codex-rs/core/src/codex.rs:561-570`）：
+```
+1. baseInstructions（thread/start 参数）  ← 最高，完全替换
+2. conversation history base_instructions  ← 恢复会话时
+3. model_info.get_model_instructions()     ← 内置默认 prompt
+```
+
+运行时验证：发送 `baseInstructions: "只回复 PINEAPPLE"` → 问 "2+2=?" → 回复 `"PINEAPPLE"` ✅ 确认替换生效。
+
+**2. `outputSchema`（turn/start 参数，GPT Structured Output 硬约束）**
+
+每次 `turn/start` 附带 JSON Schema，强制模型输出包含 `send_to` 路由字段：
+```json
+{
+  "type": "object",
+  "properties": {
+    "message": { "type": "string" },
+    "send_to": { "enum": ["user","lead","coder","reviewer","tester","none"] }
+  },
+  "required": ["message", "send_to"],
+  "additionalProperties": false
+}
+```
+
+`session.rs` 解析 `item/completed(agentMessage)` 文本为 JSON，提取 `send_to`，非 `"none"`/`"user"` 时自动调用 `routing::route_message` 投递。
+
+**3. 替换 prompt 后的影响**
+
+不受影响（独立注入机制）：
+- MCP 工具（`tools` 参数）、Skills（`input[]` user message）、AGENTS.md（`input[]`）
+- developer_sections（sandbox info、memory tool、collaboration mode）
+- dynamicTools（`tools` 参数）
+
+丢失（已手动补回 8 条关键规则）：
+- 工具使用偏好（`rg` 优先、并行化、`apply_patch` 强制）
+- Git 安全边界（不用 `reset --hard`、不 revert 他人改动）
+- 自治行为（执行到底、不停在分析阶段）
+
+**4. 默认 prompt 存档**
+
+从 `codex-rs/core/models.json`（Apache 2.0 许可）提取 13 个模型的完整默认 prompt：
+
+```
+docs/codex/prompts/
+├── gpt-5.4.md          (14100 chars base + 12265 template + 3 personality)
+├── gpt-5.3-codex.md    (12341 chars base + 10507 template)
+├── gpt-5.2-codex.md    (7563 + 7311)
+├── gpt-5.2.md          (21544)
+├── gpt-5.1.md          (24046)
+├── gpt-5.1-codex.md    (6621)
+├── gpt-5.1-codex-max.md(7563)
+├── gpt-5-codex.md      (6621)
+├── gpt-5.md            (20771)
+├── gpt-oss-120b.md     (20771)
+└── gpt-oss-20b.md      (20771)
+```
+
+**文件:** `roles.rs`, `handshake.rs`, `session.rs`, `mod.rs`, `role_config/mod.rs`
+
+**验证:** ✅ `[Route] coder → lead delivered` + `[Route] claude → coder delivered` — 双向通信通过 outputSchema 路由成功。
+
+### 2026-03-26: Codex 指令注入机制全景（源码确认）
+
+#### AGENTS.md 发现与注入
+
+**源码:** `codex-rs/core/src/project_doc.rs`
+
+搜索文件名（优先级）：
+1. `AGENTS.override.md`（本地覆盖）
+2. `AGENTS.md`（默认）
+3. `config.project_doc_fallback_filenames`（额外配置）
+
+搜索目录：从 project root（`.git` 标记或 `config.project_root_markers`）到 CWD 的每一层目录都扫描，找到的文件内容按目录顺序拼接。大小限制 `config.project_doc_max_bytes`。
+
+**注入位置:** `input[]` 中的 `user` role message，`<INSTRUCTIONS>` 标签包裹。独立于 `baseInstructions`。
+
+#### Skills 发现与注入
+
+**源码:** `codex-rs/core-skills/src/loader.rs`
+
+搜索路径（优先级从高到低）：
+
+| 路径 | Scope | 说明 |
+|------|-------|------|
+| `<project>/.codex/skills/` | Repo | 项目级 |
+| `<project root→CWD>/.agents/skills/` | Repo | 项目级（逐层扫描） |
+| `$CODEX_HOME/skills/` | User | 用户级（旧路径，兼容） |
+| `$HOME/.agents/skills/` | User | 用户级（新标准路径） |
+| `$CODEX_HOME/skills/.system/` | System | 内嵌系统 skills |
+| `/etc/codex/skills/` | Admin | 管理员级 |
+
+文件名：`SKILL.md`（必须），可选 `SKILL.json`（interface/dependencies/policy）。
+
+**注入位置:** `input[]` 中的 `user` role message，`<skill>` 标签包裹。独立于 `baseInstructions`。
+
+#### 默认 Prompt 存档
+
+从 `codex-rs/core/models.json`（Apache 2.0）提取 13 个模型完整 prompt → `docs/codex/prompts/`。
+
+#### 关键结论
+
+AGENTS.md、Skills、MCP 工具、developer_sections 全部通过 `input[]` 或 `tools` 参数注入，**覆盖 `baseInstructions` 不影响这些机制**。`baseInstructions` 只替换 OpenAI API `instructions` 字段（system prompt）。
+
 ## 当前已知限制
 
 - 端口 4500 固定，不可配置

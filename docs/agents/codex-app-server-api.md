@@ -308,6 +308,53 @@ Start a fresh thread when you need a new Codex conversation.
 
 serviceName is optional. Set it when you want app-server to tag thread-level metrics with your integration’s service name.
 
+Source note: `baseInstructions` / `developerInstructions`
+
+The public app-server page does not currently spell out these two fields in the `thread/start` example, but the public source confirms that both are part of `ThreadStartParams`.
+
+In `codex-app-server-protocol`, `ThreadStartParams` includes:
+
+```rust
+pub struct ThreadStartParams {
+    pub base_instructions: Option<String>,
+    pub developer_instructions: Option<String>,
+}
+```
+
+Because the struct uses `#[serde(rename_all = "camelCase")]`, the JSON wire names are:
+
+- `baseInstructions`
+- `developerInstructions`
+
+The priority logic in `codex-rs/core/src/codex.rs` shows that `baseInstructions` maps to `base_instructions` and is resolved in this order:
+
+1. `baseInstructions` passed on `thread/start`
+2. `base_instructions` restored from conversation history
+3. The model’s default built-in instructions
+
+That means `baseInstructions` overrides the base instructions layer used by Codex for the current run.
+
+Looking further at `codex-rs/core/src/client.rs`, Codex writes `prompt.base_instructions.text` into the `instructions` field of `ResponsesApiRequest`. In practice:
+
+- `baseInstructions` maps to the OpenAI Responses API `instructions` field
+- `developerInstructions` has different semantics: it appends a `developer` role message instead of replacing `instructions`
+
+A concise mental model is:
+
+| Field | Layer | Typical semantics |
+| --- | --- | --- |
+| `baseInstructions` | Base instructions / `instructions` | Replaces the base instruction layer Codex sends for this run |
+| `developerInstructions` | `developer` role message | Appends developer guidance into the conversation input |
+
+For precision, the safer wording is “replaces the base instructions layer Codex sends to the Responses API,” not “replaces all server-retained system prompt content.”
+
+References:
+
+- <https://docs.rs/codex-app-server-protocol/latest/codex_app_server_protocol/struct.ThreadStartParams.html>
+- <https://docs.rs/codex-app-server-protocol/latest/src/codex_app_server_protocol/protocol/v2.rs.html>
+- <https://github.com/openai/codex/blob/main/codex-rs/core/src/codex.rs>
+- <https://github.com/openai/codex/blob/main/codex-rs/core/src/client.rs>
+
 To continue a stored session, call thread/resume with the thread.id you recorded earlier. The response shape matches thread/start. You can also pass the same configuration overrides supported by thread/start, such as personality:
 
 { "method": "thread/resume", "id": 11, "params": {

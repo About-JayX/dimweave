@@ -40,10 +40,10 @@ pub async fn start(
     app: AppHandle,
     codex_port: u16,
 ) -> anyhow::Result<CodexHandle> {
-    let (sandbox_mode, approval_policy, developer_instructions) =
+    let (sandbox_mode, approval_policy, base_instructions) =
         if let Some(rc) = role_config::get_role(&role_id) {
             (rc.sandbox_mode.to_string(), rc.approval_policy.to_string(),
-             Some(rc.developer_instructions.to_string()))
+             Some(rc.base_instructions.to_string()))
         } else {
             ("workspace-write".into(), "never".into(), None)
         };
@@ -99,7 +99,7 @@ pub async fn start(
         cwd: cwd.clone(),
         model,
         sandbox_mode: Some(sandbox_mode),
-        developer_instructions,
+        base_instructions,
     };
 
     let cancel = CancellationToken::new();

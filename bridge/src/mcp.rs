@@ -55,6 +55,7 @@ pub async fn run(
             }
             Some(inbound) = push_rx.recv() => {
                 if !initialized {
+                    eprintln!("[Bridge/{agent_id}] pre-init: buffering inbound (not yet initialized)");
                     pre_init_buffer.push(inbound);
                     continue;
                 }
