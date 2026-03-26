@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "agentbridge": {
-      "command": "/Users/jason/floder/agent-bridge/target/debug/agent-bridge-bridge"
-    }
-  }
-}

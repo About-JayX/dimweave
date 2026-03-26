@@ -131,11 +131,13 @@ pub async fn launch_claude_terminal(
     cwd: Option<String>,
     model: Option<String>,
     effort: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
     session: State<'_, Arc<ClaudeSessionManager>>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
-    crate::claude_launch::launch(&dir, model, effort, session.inner().clone(), app).await
+    crate::claude_launch::launch(&dir, model, effort, cols, rows, session.inner().clone(), app).await
 }
 
 #[cfg(test)]

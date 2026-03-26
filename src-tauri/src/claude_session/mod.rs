@@ -30,6 +30,8 @@ pub async fn launch(
     dir: &str,
     claude_bin: &std::path::Path,
     extra: &[String],
+    cols: Option<u16>,
+    rows: Option<u16>,
     app: AppHandle,
     emit_debug_logs: bool,
 ) -> Result<(), String> {
@@ -41,7 +43,15 @@ pub async fn launch(
         *guard = None;
     }
 
-    let spawned = spawn_session(dir, claude_bin, extra, app.clone(), emit_debug_logs)?;
+    let spawned = spawn_session(
+        dir,
+        claude_bin,
+        extra,
+        cols.unwrap_or(220),
+        rows.unwrap_or(50),
+        app.clone(),
+        emit_debug_logs,
+    )?;
     crate::daemon::gui::emit_claude_terminal_reset(&app);
     crate::daemon::gui::emit_claude_terminal_status(&app, true, None, None);
     eprintln!("[Claude] PTY session started pid={}", spawned.session.pid);

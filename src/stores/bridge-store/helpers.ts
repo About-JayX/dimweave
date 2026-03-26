@@ -98,7 +98,6 @@ export function initListeners(
         claudeTerminalRunning: e.payload.running,
         claudeTerminalExitCode: e.payload.exitCode,
         claudeTerminalDetail: e.payload.detail,
-        claudeNeedsAttention: e.payload.running ? true : false,
       }));
     }),
     listen<AgentStatusPayload>("agent_status", (e) => {

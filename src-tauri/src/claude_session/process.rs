@@ -18,14 +18,16 @@ pub fn spawn_session(
     dir: &str,
     claude_bin: &Path,
     extra: &[String],
+    cols: u16,
+    rows: u16,
     app: AppHandle,
     emit_debug_logs: bool,
 ) -> Result<SpawnedSession, String> {
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
-            rows: 24,
-            cols: 80,
+            rows: rows.max(24),
+            cols: cols.max(80),
             pixel_width: 0,
             pixel_height: 0,
         })
@@ -61,6 +63,8 @@ pub fn spawn_session(
 fn build_claude_command(dir: &str, claude_bin: &Path, extra: &[String]) -> CommandBuilder {
     let mut cmd = CommandBuilder::new(claude_bin.to_string_lossy().to_string());
     cmd.cwd(dir);
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
     cmd.arg("--dangerously-load-development-channels");
     cmd.arg("server:agentbridge");
     cmd.arg("--dangerously-skip-permissions");

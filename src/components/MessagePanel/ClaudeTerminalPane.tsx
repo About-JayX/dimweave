@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { ClaudeTerminalChunk } from "@/stores/bridge-store/types";
@@ -40,17 +39,6 @@ export function ClaudeTerminalPane({
     if (host) {
       terminal.open(host);
     }
-    let webglAddon: WebglAddon | null = null;
-    try {
-      webglAddon = new WebglAddon();
-      terminal.loadAddon(webglAddon);
-      webglAddon.onContextLoss(() => {
-        webglAddon?.dispose();
-        webglAddon = null;
-      });
-    } catch (error) {
-      console.warn("Claude terminal WebGL renderer unavailable", error);
-    }
     fitTerminal(terminal, fitAddon);
 
     const disposable = terminal.onData((data) => {
@@ -71,7 +59,6 @@ export function ClaudeTerminalPane({
     return () => {
       observer.disconnect();
       disposable.dispose();
-      webglAddon?.dispose();
       terminal.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -125,7 +112,7 @@ export function ClaudeTerminalPane({
       )}
       <div
         ref={hostRef}
-        className="min-h-0 flex-1 overflow-hidden px-2 py-2 [&_.xterm]:h-full [&_.xterm-viewport]:overflow-y-auto"
+        className="min-h-0 flex-1 overflow-hidden px-2 py-2 [&_.xterm]:h-full"
       />
     </div>
   );

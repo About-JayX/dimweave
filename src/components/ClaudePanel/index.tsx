@@ -45,10 +45,17 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
     try {
       setActionError(null);
       await invoke("register_mcp", { cwd });
+      // Estimate terminal dimensions from current window layout.
+      // Sidebar ~280px, terminal padding ~16px, char width ~7.8px for 13px Geist Mono,
+      // line height ~15px. UI chrome (tabs + header + input) ~140px.
+      const cols = Math.max(80, Math.floor((window.innerWidth - 296) / 7.8));
+      const rows = Math.max(24, Math.floor((window.innerHeight - 140) / 15));
       await invoke("launch_claude_terminal", {
         cwd,
         model: model || null,
         effort: effort || null,
+        cols,
+        rows,
       });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));

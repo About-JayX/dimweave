@@ -9,6 +9,8 @@ pub async fn launch(
     dir: &str,
     model: Option<String>,
     effort: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
     session: Arc<ClaudeSessionManager>,
     app: AppHandle,
 ) -> Result<(), String> {
@@ -34,5 +36,5 @@ pub async fn launch(
         "[MCP] launching Claude channel {version} in managed PTY model={model:?} effort={effort:?}"
     );
     let emit_debug_logs = cfg!(debug_assertions);
-    claude_session::launch(session, dir, &claude_bin, &extra_args, app, emit_debug_logs).await
+    claude_session::launch(session, dir, &claude_bin, &extra_args, cols, rows, app, emit_debug_logs).await
 }
