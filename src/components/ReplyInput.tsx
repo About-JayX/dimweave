@@ -33,9 +33,9 @@ export function ReplyInput({ connected }: ReplyInputProps) {
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
     if (!trimmed || !connected) return;
-    sendToCodex(trimmed);
+    sendToCodex(trimmed, target);
     setDraft("");
-  }, [draft, connected, sendToCodex, setDraft]);
+  }, [draft, connected, sendToCodex, setDraft, target]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

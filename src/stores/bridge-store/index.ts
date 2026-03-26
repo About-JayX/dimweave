@@ -46,17 +46,26 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
 
     setDraft: (text) => set({ draft: text }),
 
-    sendToCodex: (content) => {
-      const { codexRole } = get();
-      invoke("daemon_send_message", {
-        msg: {
-          id: `user_${Date.now()}`,
-          from: "user",
-          to: codexRole,
-          content,
-          timestamp: Date.now(),
-        },
-      }).catch(logError(set));
+    sendToCodex: (content, target) => {
+      const { claudeRole, codexRole } = get();
+      const sendOne = (to: string) =>
+        invoke("daemon_send_message", {
+          msg: {
+            id: `user_${Date.now()}_${to}`,
+            from: "user",
+            to,
+            content,
+            timestamp: Date.now(),
+          },
+        }).catch(logError(set));
+
+      if (target && target !== "auto") {
+        sendOne(target);
+      } else {
+        // Auto: broadcast to all connected agents
+        sendOne(claudeRole);
+        sendOne(codexRole);
+      }
     },
 
     clearMessages: () => set({ messages: [] }),

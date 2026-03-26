@@ -43,7 +43,7 @@ export interface BridgeState {
   draft: string;
 
   setDraft: (text: string) => void;
-  sendToCodex: (content: string) => void;
+  sendToCodex: (content: string, target?: string) => void;
   clearMessages: () => void;
   launchCodexTui: () => Promise<void>;
   stopCodexTui: () => void;
