@@ -222,6 +222,74 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 - **影响**: 低频场景（同一 session 内多次需要用户关注）会漏发 attention 事件
 - **建议**: 在 `confirmed` 从 false → true 时重置 `attention_fired`，允许后续真实 prompt 再次触发
 
+### 2026-03-26: Bridge 未被 Claude 启动 ("1 MCP server failed")
+
+#### 问题描述
+
+Claude PTY 启动后出现 `"Listening for channel messages from: server:agentbridge"` 紧接 `"1 MCP server failed · /mcp"`，bridge 进程从未被 spawn。
+
+#### 根因
+
+`--dangerously-load-development-channels server:agentbridge` 只告知 Claude 要加载名为 `server:agentbridge` 的 channel，但 Claude Code 不知道如何 spawn 对应的 MCP server。没有 `--mcp-config`，Claude 不读取项目 `.mcp.json`，因此无法找到 `agent-bridge-bridge` 的命令路径。
+
+#### 失败尝试
+
+- `--setting-sources user,project,local` — 合法的 flag，但不影响项目 `.mcp.json` 的读取逻辑，无效
+
+#### 修复
+
+在 `build_claude_command`（`src-tauri/src/claude_session/process.rs`）中追加：
+
+```rust
+let mcp_config_path = std::path::Path::new(dir).join(".mcp.json");
+cmd.arg("--mcp-config");
+cmd.arg(mcp_config_path.to_string_lossy().to_string());
+```
+
+- **文件**: `src-tauri/src/claude_session/process.rs:74-76`
+- **验证**: ✅ Bridge PID 被成功 spawn；`lsof` 确认 `localhost:PORT->localhost:4502 ESTABLISHED`
+
+#### 诊断陷阱
+
+- `pgrep -la agent-bridge-bridge` 会匹配 `cargo build -p agent-bridge-bridge`（构建脚本），误报 bridge 存在
+- 正确方法: `pgrep -fl "target/debug/agent-bridge-bridge"` 匹配完整二进制路径
+- 二进制替换为 shell wrapper 无效：`register_mcp` 每次都重写 `.mcp.json` 为 Tauri 注册的绝对路径，wrapper 不会被调用；且 wrapper 重定向 stdout 到日志会破坏 MCP stdio 协议
+
+### 2026-03-26: Bridge → Claude Channel 通知端到端验证
+
+#### 路径描述
+
+```
+测试 WS 客户端 → daemon :4502 → routing.rs → bridge tx → bridge mcp_io.rs → Claude MCP stdin
+```
+
+#### 正确 Wire Format（重要）
+
+`FromAgent` 枚举用 `#[serde(tag = "type", rename_all = "snake_case")]`：
+
+```json
+{ "type": "agent_connect", "agentId": "codex" }
+{ "type": "agent_reply", "message": { "id": "...", "from": "coder", "to": "lead", "content": "...", "timestamp": 1234567890 } }
+```
+
+注意：`agentId` 是 camelCase（显式 `#[serde(rename = "agentId")]`），不是 snake_case 的 `agent_id`。`agent_connect` 解析失败时连接不会断开（handler `continue`），但 `agent_reply` 不需要前置 `agent_connect` 也能路由。
+
+#### 验证结果
+
+1. 测试脚本连接为 `codex`，向 `lead`（Claude role）发送测试消息
+2. daemon `routing.rs` 匹配 `msg.from == codex_role` → 通过 sender gate
+3. bridge 的 `channel_state.prepare_channel_message` 生成 `notifications/claude/channel` 通知
+4. Claude 接收到通知，用 `reply` tool 回复：`"Hello coder! Bridge channel test received successfully. Everything is working."`
+5. 回复经 bridge → daemon → buffered（codex 未连），连接时 flush 回测试客户端
+
+- **验证**: ✅ Claude 成功收到并回复 channel 消息，end-to-end 路径完整
+
+#### 注意
+
+- `ALLOWED_SENDERS` = `["user", "system", "lead", "coder", "reviewer", "tester"]`，bridge 会拒绝 `"claude"` 以外不在列表内的 sender（`"intruder"` 等）
+- 只有 `from` 在 `ALLOWED_SENDERS` 且 `to == claude_role` 时 channel 通知才会发出
+- `codex_role` 默认为 `"coder"`，`claude_role` 默认为 `"lead"`
+
 ## 当前已知限制
 
 - Channel preview 是实验性功能，需要 `--dangerously-load-development-channels`

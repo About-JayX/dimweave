@@ -68,6 +68,12 @@ fn build_claude_command(dir: &str, claude_bin: &Path, extra: &[String]) -> Comma
     cmd.arg("--dangerously-load-development-channels");
     cmd.arg("server:agentbridge");
     cmd.arg("--dangerously-skip-permissions");
+    // Explicitly load project .mcp.json so Claude spawns the agentbridge MCP server.
+    // Without this, Claude may not read the project-level config and the channel bridge
+    // never gets spawned, resulting in "1 MCP server failed".
+    let mcp_config_path = std::path::Path::new(dir).join(".mcp.json");
+    cmd.arg("--mcp-config");
+    cmd.arg(mcp_config_path.to_string_lossy().to_string());
     for arg in extra {
         cmd.arg(arg);
     }
