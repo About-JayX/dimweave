@@ -44,6 +44,8 @@ pub async fn start(
     approval_policy: &str,
 ) -> anyhow::Result<Child> {
     let codex_bin = resolve_codex_bin();
+    let path = crate::claude_cli::enriched_path();
+    eprintln!("[Codex] using binary: {}", codex_bin.display());
 
     let child = Command::new(&codex_bin)
         .arg("app-server")
@@ -56,6 +58,7 @@ pub async fn start(
         .arg("--config")
         .arg("features.apply_patch_freeform=false")
         .env("CODEX_HOME", codex_home)
+        .env("PATH", &path)
         .current_dir(cwd)
         .kill_on_drop(true)
         .spawn()

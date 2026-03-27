@@ -65,6 +65,7 @@ fn build_claude_command(dir: &str, claude_bin: &Path, extra: &[String]) -> Comma
     cmd.cwd(dir);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    cmd.env("PATH", crate::claude_cli::enriched_path());
     cmd.arg("--dangerously-load-development-channels");
     cmd.arg("server:agentnexus");
     cmd.arg("--dangerously-skip-permissions");

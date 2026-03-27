@@ -1,4 +1,31 @@
-use std::{fmt, process::Command};
+use std::{fmt, path::PathBuf, process::Command};
+
+/// Build a PATH that includes dirs where node/codex/claude are likely installed.
+/// macOS .app bundles inherit a minimal PATH from launchd.
+pub fn enriched_path() -> String {
+    let sys_path = std::env::var("PATH").unwrap_or_default();
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut dirs: Vec<String> = Vec::new();
+    let nvm_dir = PathBuf::from(&home).join(".nvm/versions/node");
+    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+        let mut vers: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok().map(|e| e.path().join("bin")))
+            .filter(|p| p.exists())
+            .collect();
+        vers.sort();
+        vers.reverse();
+        for v in vers { dirs.push(v.to_string_lossy().into()); }
+    }
+    for d in &[".bun/bin", ".local/bin", ".cargo/bin"] {
+        let p = PathBuf::from(&home).join(d);
+        if p.exists() { dirs.push(p.to_string_lossy().into()); }
+    }
+    for d in &["/usr/local/bin", "/opt/homebrew/bin"] {
+        if PathBuf::from(d).exists() { dirs.push((*d).into()); }
+    }
+    if !sys_path.is_empty() { dirs.push(sys_path); }
+    dirs.join(":")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ClaudeVersion {
@@ -36,20 +63,24 @@ pub fn parse_claude_version(output: &str) -> Option<ClaudeVersion> {
     })
 }
 
-/// Resolve `claude` binary — bundled sidecar first, then PATH.
-pub fn resolve_claude_bin() -> Result<std::path::PathBuf, String> {
+/// Resolve `claude` binary — bundled sidecar > enriched PATH > which.
+pub fn resolve_claude_bin() -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let sidecar = dir.join("claude");
             if sidecar.exists() { return Ok(sidecar); }
         }
     }
-    which::which("claude").map_err(|_| "Claude Code CLI not found".to_string())
+    let path = enriched_path();
+    which::which_in("claude", Some(&path), ".")
+        .or_else(|_| which::which("claude"))
+        .map_err(|_| "Claude Code CLI not found".to_string())
 }
 
 pub fn ensure_claude_channel_ready() -> Result<ClaudeVersion, String> {
     let claude = resolve_claude_bin()?;
     let output = Command::new(&claude)
+        .env("PATH", enriched_path())
         .arg("-v")
         .output()
         .map_err(|e| format!("failed to run `claude -v`: {e}"))?;
