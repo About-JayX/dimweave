@@ -5,37 +5,30 @@ use tauri::State;
 
 fn resolve_release_bridge_cmd() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let resources_dir = exe
-        .parent()
-        .unwrap_or(std::path::Path::new("."))
-        .join("../Resources");
+    let exe_dir = exe.parent().unwrap_or(std::path::Path::new("."));
 
-    let direct = resources_dir.join("agent-nexus-bridge");
-    if direct.exists() {
-        return Ok(direct.to_string_lossy().to_string());
+    // Tauri 2 puts externalBin in Contents/MacOS/ (same dir as main binary)
+    let candidate = exe_dir.join("agent-nexus-bridge");
+    if candidate.exists() {
+        return Ok(candidate.to_string_lossy().to_string());
     }
-
-    let entries = std::fs::read_dir(&resources_dir).map_err(|e| {
-        format!(
-            "failed to read resources dir {}: {e}",
-            resources_dir.display()
-        )
-    })?;
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if name.starts_with("agent-nexus-bridge") {
-            return Ok(path.to_string_lossy().to_string());
+    // Fallback: Contents/Resources/
+    let resources = exe_dir.join("../Resources/agent-nexus-bridge");
+    if resources.exists() {
+        return Ok(resources.to_string_lossy().to_string());
+    }
+    // Scan both dirs for prefixed name (e.g. with target triple suffix)
+    for dir in &[exe_dir.to_path_buf(), exe_dir.join("../Resources")] {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name.to_string_lossy().starts_with("agent-nexus-bridge") {
+                    return Ok(entry.path().to_string_lossy().to_string());
+                }
+            }
         }
     }
-
-    Err(format!(
-        "agent-nexus-bridge not found in {}",
-        resources_dir.display()
-    ))
+    Err(format!("agent-nexus-bridge not found near {}", exe_dir.display()))
 }
 
 #[tauri::command]
