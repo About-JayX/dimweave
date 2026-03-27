@@ -48,6 +48,7 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
     let msg = BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
+        display_source: Some("codex".into()),
         to: to.to_string(),
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,

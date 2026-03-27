@@ -91,6 +91,7 @@ pub fn handle_tool_call(
     Ok(Some(BridgeMessage {
         id: format!("claude_{}_{seq}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
+        display_source: None,
         to: to.to_string(),
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,

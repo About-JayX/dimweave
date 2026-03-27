@@ -425,6 +425,20 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - [已修复] `reviewer` 现在同时承担 code review 与 test verification：既负责质量审查，也负责运行测试、验证行为、汇总测试结果。
 - [已修复] Codex 在线占用 `lead` 时，Claude 启动前会先做角色冲突检查；同 role 冲突会在启动前直接拒绝，不再等 PTY 拉起后才在 bridge 连接层失败。
 
+### 2026-03-27: register_mcp 改为写入真实 Claude role
+
+- [已修复] `register_mcp()` 之前每次都把 `.mcp.json` 写成 `AGENTBRIDGE_ROLE=lead`。当 Claude 在 UI 中被切成 `coder` 或 `reviewer` 后，bridge 初始化给 Claude 的 `instructions` 与 reply tool 上下文仍然会按 `lead` 注入，导致 MCP 调用语义漂移。
+- [已修复] 现在 `register_mcp()` 会先从 daemon 读取当前 `claudeRole`，再把真实角色写进 `.mcp.json`。这样 Claude 重新连接后，bridge `initialize_result(role)` 与 reply tool 所在上下文就会和 UI 选中的角色一致。
+- [结果] Claude 作为 `coder` / `reviewer` 运行时，不再因为 bridge env 被硬编码成 `lead` 而走错 reply 语义。
+
+### 2026-03-27: Claude 消息颜色固定按模型身份显示
+
+- [已修复] Claude 发回消息时，daemon 现在会同时保留两层身份：
+  - `from=lead|coder|reviewer` 作为内部路由角色
+  - `displaySource=claude` 作为前端展示身份
+- [已修复] Messages 面板的 badge 和颜色改为优先使用 `displaySource`，因此 Claude 即使当前扮演 `coder` / `reviewer`，气泡仍保持 Claude 紫色。
+- [已修复] 当展示身份与路由角色不同，UI 会在 Claude badge 旁边显示一个次级 role label，保留“这条消息是 Claude 以哪个角色发出的”语义，但不再让颜色跟角色漂移。
+
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过；`bun test tests/message-panel-view-model.test.ts` 通过；attention 留存与强制 focus 回归路径已覆盖。
 
 ### 2026-03-27: 现场故障修复（终端空白等待态）
@@ -441,7 +455,7 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - 依赖 Claude Code >= 2.1.80 / permission relay >= 2.1.81
 - 当前只有 `reply` 一个 tool
 - `--agent --agents` 角色注入方案已研究（可行），尚未实现
-- `register_mcp` 中 role 硬编码为 "lead"，切角色需重新注册
+- 切角色后仍需要重新 register + 重启 Claude，bridge 才会读取新的 `.mcp.json` env
 - meta key 不能包含连字符（会被 Claude Code 静默丢弃）
 - `chat_targets` eviction 是随机的（HashMap 无序），长会话可能影响活跃对话
 - bridge 重连时不重发 pending permission requests

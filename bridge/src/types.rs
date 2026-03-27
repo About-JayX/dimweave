@@ -32,6 +32,8 @@ impl MessageStatus {
 pub struct BridgeMessage {
     pub id: String,
     pub from: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_source: Option<String>,
     pub to: String,
     pub content: String,
     pub timestamp: u64,

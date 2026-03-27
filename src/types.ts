@@ -3,6 +3,7 @@ export type MessageStatus = "in_progress" | "done" | "error";
 export interface BridgeMessage {
   id: string;
   from: string;
+  displaySource?: string;
   to: string;
   content: string;
   timestamp: number;

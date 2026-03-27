@@ -1,6 +1,7 @@
 /// MCP registration helpers and related Tauri commands.
 use crate::claude_session::ClaudeSessionManager;
 use crate::daemon::types::DaemonStatusSnapshot;
+use crate::DaemonSender;
 use std::sync::Arc;
 use tauri::State;
 
@@ -33,7 +34,10 @@ fn resolve_release_bridge_cmd() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn register_mcp(cwd: Option<String>) -> Result<bool, String> {
+pub async fn register_mcp(
+    cwd: Option<String>,
+    daemon_tx: State<'_, DaemonSender>,
+) -> Result<bool, String> {
     let bridge_cmd = if cfg!(debug_assertions) {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let project_root = std::path::Path::new(manifest_dir)
@@ -48,11 +52,20 @@ pub fn register_mcp(cwd: Option<String>) -> Result<bool, String> {
         resolve_release_bridge_cmd()?
     };
     let project_dir = cwd.unwrap_or_else(|| ".".to_string());
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    daemon_tx
+        .0
+        .send(crate::daemon::DaemonCmd::ReadClaudeRole { reply: reply_tx })
+        .await
+        .map_err(|_| "daemon channel closed".to_string())?;
+    let role = reply_rx
+        .await
+        .map_err(|_| "daemon did not reply".to_string())?;
     eprintln!(
-        "[MCP] register agentnexus in {project_dir} using absolute command {}",
-        bridge_cmd
+        "[MCP] register agentnexus in {project_dir} using absolute command {} role={role}",
+        bridge_cmd,
     );
-    write_mcp_config(&project_dir, &bridge_cmd, &[], "lead")
+    write_mcp_config(&project_dir, &bridge_cmd, &[], &role)
 }
 
 fn write_mcp_config(
@@ -202,5 +215,21 @@ mod tests {
         let (next, changed) = upsert_mcp_server(config, "/tmp/new", &[], "lead").unwrap();
         assert!(changed);
         assert_eq!(next["mcpServers"]["agentnexus"]["command"], "/tmp/new");
+    }
+
+    #[test]
+    fn upsert_mcp_server_marks_changed_when_role_differs() {
+        let config = serde_json::json!({
+            "mcpServers": {
+                "agentnexus": {
+                    "command": "/tmp/bridge",
+                    "env": { "AGENTBRIDGE_ROLE": "lead" }
+                }
+            }
+        });
+
+        let (next, changed) = upsert_mcp_server(config, "/tmp/bridge", &[], "reviewer").unwrap();
+        assert!(changed);
+        assert_eq!(next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"], "reviewer");
     }
 }

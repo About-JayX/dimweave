@@ -48,6 +48,7 @@ async fn auto_fanout_delivers_to_both_agents() {
         let msg = BridgeMessage {
             id: format!("test_{role}"),
             from: "user".into(),
+            display_source: Some("user".into()),
             to: role.clone(),
             content: "hello".into(),
             timestamp: 1,
@@ -68,6 +69,7 @@ async fn explicit_user_target_routes_to_gui() {
     let msg = BridgeMessage {
         id: "u1".into(),
         from: "user".into(),
+        display_source: Some("user".into()),
         to: "user".into(),
         content: "hello".into(),
         timestamp: 1,
@@ -86,6 +88,7 @@ async fn invalid_target_is_dropped_not_buffered() {
     let msg = BridgeMessage {
         id: "bad-1".into(),
         from: "user".into(),
+        display_source: Some("user".into()),
         to: "admin".into(),
         content: "hello".into(),
         timestamp: 1,
@@ -104,6 +107,7 @@ async fn valid_role_offline_is_buffered() {
     let msg = BridgeMessage {
         id: "buf-1".into(),
         from: "user".into(),
+        display_source: Some("user".into()),
         to: "reviewer".into(),
         content: "review this".into(),
         timestamp: 1,
@@ -121,6 +125,7 @@ fn visible_messages_require_non_whitespace_content() {
     let visible = BridgeMessage {
         id: "msg-visible".into(),
         from: "coder".into(),
+        display_source: Some("codex".into()),
         to: "user".into(),
         content: "hello".into(),
         timestamp: 1,
@@ -131,6 +136,7 @@ fn visible_messages_require_non_whitespace_content() {
     let empty = BridgeMessage {
         id: "msg-empty".into(),
         from: "coder".into(),
+        display_source: Some("codex".into()),
         to: "user".into(),
         content: "   \n\t".into(),
         timestamp: 1,
@@ -147,6 +153,7 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
     let msg = BridgeMessage {
         id: "msg-claude".into(),
         from: "user".into(),
+        display_source: Some("user".into()),
         to: "lead".into(),
         content: "please help".into(),
         timestamp: 1,
@@ -167,6 +174,7 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
     assert!(!should_emit_claude_thinking(
         &BridgeMessage {
             from: "lead".into(),
+            display_source: Some("claude".into()),
             ..msg.clone()
         },
         &RouteResult::Delivered,

@@ -208,6 +208,7 @@ fn build_msg_with_status(
     BridgeMessage {
         id: format!("codex_{}_{seq}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
+        display_source: Some("codex".into()),
         to: to.to_string(),
         content: content.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,

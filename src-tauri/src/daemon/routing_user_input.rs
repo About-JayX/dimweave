@@ -57,6 +57,7 @@ fn build_user_message(now: u64, to: &str, content: &str) -> BridgeMessage {
     BridgeMessage {
         id: format!("user_{now}{suffix}"),
         from: "user".into(),
+        display_source: Some("user".into()),
         to: to.to_string(),
         content: content.to_string(),
         timestamp: now,

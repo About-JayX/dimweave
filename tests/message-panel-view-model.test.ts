@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   filterRenderableChatMessages,
+  getMessageIdentityPresentation,
   getClaudeTerminalPlaceholder,
   getClaudeAttentionResolution,
   getTransientIndicators,
@@ -35,6 +36,39 @@ describe("filterRenderableChatMessages", () => {
     expect(filterRenderableChatMessages(messages as any)).toEqual([
       messages[2],
     ]);
+  });
+});
+
+describe("getMessageIdentityPresentation", () => {
+  test("uses display source for badge color while keeping role visible", () => {
+    expect(
+      getMessageIdentityPresentation({
+        id: "1",
+        from: "coder",
+        displaySource: "claude",
+        to: "user",
+        content: "done",
+        timestamp: 1,
+      } as any),
+    ).toEqual({
+      badgeSource: "claude",
+      roleLabel: "coder",
+    });
+  });
+
+  test("falls back to from when there is no separate display source", () => {
+    expect(
+      getMessageIdentityPresentation({
+        id: "2",
+        from: "user",
+        to: "lead",
+        content: "hello",
+        timestamp: 1,
+      } as any),
+    ).toEqual({
+      badgeSource: "user",
+      roleLabel: null,
+    });
   });
 });
 

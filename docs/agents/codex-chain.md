@@ -479,6 +479,12 @@ AGENTS.md、Skills、MCP 工具、developer_sections 全部通过 `input[]` 或 
 - [已修复] Codex 启动前现在会主动清理占用 4500 端口的孤儿 app-server。`codex::start()` 不再只是等 5 秒看端口会不会自己释放，而是先执行 `ensure_port_available()`，在端口被占用时调用 `kill_port_holder()` 再重试。
 - [已修复] 新增测试：`ensure_port_available_runs_cleanup_before_failing` 与 `ensure_port_available_times_out_when_cleanup_cannot_free_port`，锁住“先清理、后失败”的启动策略。
 
+### 2026-03-27: Codex 消息颜色固定按模型身份显示
+
+- [已修复] Codex 最终消息与 dynamic reply 现在都会写入 `displaySource=codex`，而 `from` 继续保留当前路由角色（例如 `lead`、`coder`、`reviewer`）。
+- [已修复] 前端消息气泡改为优先使用 `displaySource` 决定 badge 和颜色，因此 Codex 即使临时扮演 `lead`，气泡也仍然保持 Codex 绿色。
+- [已修复] 若 `displaySource` 与 `from` 不一致，UI 会把路由角色作为次级标签显示，避免丢掉“谁在以什么身份说话”的信息。
+
 ## 当前已知限制
 
 - 端口 4500 固定，不可配置

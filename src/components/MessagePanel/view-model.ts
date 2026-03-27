@@ -7,6 +7,21 @@ import type {
 export type StreamIndicatorId = "claude" | "codex";
 export type MessagePanelTab = "messages" | "claude" | "logs" | "approvals";
 
+export function getMessageIdentityPresentation(
+  message: BridgeMessage,
+): {
+  badgeSource: string;
+  roleLabel: string | null;
+} {
+  const badgeSource = message.displaySource ?? message.from;
+  const roleLabel =
+    message.from !== badgeSource &&
+    !["user", "system"].includes(message.from)
+      ? message.from
+      : null;
+  return { badgeSource, roleLabel };
+}
+
 export function filterRenderableChatMessages(
   messages: BridgeMessage[],
 ): BridgeMessage[] {

@@ -440,6 +440,19 @@ cargo clippy --workspace --all-targets -- -D warnings
 - [已修复] `reviewer` 现在同时覆盖测试职责：review + test verification。测试结果、验证结论和 review 结论统一由 reviewer 输出。
 - [已修复] 角色冲突从“缓存 role 冲突”改成“在线 agent 冲突”：当 Claude 离线时，Codex 现在可以选择 `lead`；但若在线 Claude 已占用 `lead`，Codex 启动前会被直接拒绝。反过来，若在线 Codex 已占用某 role，Claude 连接/启动前也会被阻断，避免 live duplicate role。
 
+### 24. [已修复] 2026-03-27 Claude MCP 注册改为使用真实 claudeRole
+
+- [已修复] `register_mcp()` 之前始终把 `.mcp.json` 写成 `AGENTBRIDGE_ROLE=lead`。这会让 bridge 在 Claude 被切到 `coder` / `reviewer` 后，依旧把 `initialize_result(role)` 和 reply tool 上下文按 `lead` 注入。
+- [已修复] 现在 `register_mcp()` 会先从 daemon 读取真实 `claudeRole`，再写入 `.mcp.json`，避免 Claude MCP 调用继续基于错误角色语义运行。
+- [结果] Claude 作为 `coder` / `reviewer` 运行时，MCP reply 的角色上下文不再固定成 `lead`。
+
+### 25. [已修复] 2026-03-27 消息气泡颜色改为按真实模型身份显示
+
+- [已修复] 之前消息 UI 直接把 `BridgeMessage.from` 同时当成“路由角色”和“展示身份”，导致 Claude 被切成 `coder` / `reviewer` 后，消息气泡会跟着角色变绿或变黄，看起来像换了模型。
+- [已修复] 统一消息结构新增可选 `displaySource` / `display_source`。daemon 现在会保留 `from=lead|coder|reviewer` 作为真实路由角色，同时写入 `displaySource=claude|codex|user|system` 作为 UI 展示身份。
+- [已修复] Messages 面板现在只用 `displaySource ?? from` 决定 badge 和颜色；若展示身份与路由角色不同，则额外显示一个次级 role label，例如 `Claude + coder`、`Codex + lead`。
+- [结果] 颜色稳定绑定模型身份，角色只作为辅助语义显示，不再把“Claude 的 coder 回复”渲染成 Codex 风格气泡。
+
 ## 验证记录（本轮 #17）
 
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过（78 tests）

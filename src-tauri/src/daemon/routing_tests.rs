@@ -26,6 +26,7 @@ async fn route_to_claude_from_unknown_sender_drops() {
     let msg = BridgeMessage {
         id: "msg-1".into(),
         from: "intruder".into(),
+        display_source: None,
         to: "lead".into(),
         content: "hello".into(),
         timestamp: 1,

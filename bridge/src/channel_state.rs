@@ -75,6 +75,7 @@ mod tests {
         BridgeMessage {
             id: "msg-1".into(),
             from: from.into(),
+            display_source: None,
             to: "lead".into(),
             content: "hello".into(),
             timestamp: 1,

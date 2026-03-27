@@ -36,6 +36,8 @@ impl MessageStatus {
 pub struct BridgeMessage {
     pub id: String,
     pub from: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_source: Option<String>,
     pub to: String,
     pub content: String,
     pub timestamp: u64,
@@ -53,6 +55,7 @@ impl BridgeMessage {
         Self {
             id: format!("sys_{}", chrono::Utc::now().timestamp_millis()),
             from: "system".into(),
+            display_source: Some("system".into()),
             to: to.into(),
             content: content.into(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,

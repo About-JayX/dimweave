@@ -1,9 +1,11 @@
 import { MessageMarkdown } from "@/components/MessageMarkdown";
 import { SourceBadge } from "./SourceBadge";
 import type { BridgeMessage } from "@/types";
+import { getMessageIdentityPresentation } from "./view-model";
 
 export function MessageBubble({ msg }: { msg: BridgeMessage }) {
   const isUser = msg.from === "user";
+  const { badgeSource, roleLabel } = getMessageIdentityPresentation(msg);
   return (
     <div
       className={`flex py-2.5 msg-enter ${isUser ? "justify-end" : "justify-start"}`}
@@ -18,7 +20,12 @@ export function MessageBubble({ msg }: { msg: BridgeMessage }) {
         <div
           className={`flex items-center gap-2 mb-1 ${isUser ? "justify-end" : ""}`}
         >
-          <SourceBadge source={msg.from} />
+          <SourceBadge source={badgeSource} />
+          {roleLabel ? (
+            <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground/80">
+              {roleLabel}
+            </span>
+          ) : null}
           <span className="font-mono text-[11px] text-muted-foreground">
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
