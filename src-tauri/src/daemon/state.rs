@@ -64,15 +64,31 @@ impl DaemonState {
         Self::default()
     }
 
+    pub fn is_agent_online(&self, agent: &str) -> bool {
+        match agent {
+            "claude" => self.attached_agents.contains_key("claude"),
+            "codex" => self.codex_inject_tx.is_some(),
+            other => self.attached_agents.contains_key(other),
+        }
+    }
+
+    pub fn online_role_conflict(&self, agent: &str, role: &str) -> Option<&'static str> {
+        match agent {
+            "claude" if self.is_agent_online("codex") && self.codex_role == role => Some("codex"),
+            "codex" if self.is_agent_online("claude") && self.claude_role == role => Some("claude"),
+            _ => None,
+        }
+    }
+
     pub fn status_snapshot(&self) -> DaemonStatusSnapshot {
         let mut agents = vec![
             AgentRuntimeStatus {
                 agent: "claude".into(),
-                online: self.attached_agents.contains_key("claude"),
+                online: self.is_agent_online("claude"),
             },
             AgentRuntimeStatus {
                 agent: "codex".into(),
-                online: self.codex_inject_tx.is_some(),
+                online: self.is_agent_online("codex"),
             },
         ];
 

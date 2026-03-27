@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 
 #[test]
 fn valid_roles_accepted() {
-    for role in &["lead", "coder", "reviewer", "tester"] {
+    for role in &["lead", "coder", "reviewer"] {
         assert!(crate::daemon::is_valid_agent_role(role), "{role} should be valid");
     }
 }

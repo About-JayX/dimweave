@@ -7,7 +7,6 @@ const ALL_ROLES = [
   { value: "lead", label: "Lead" },
   { value: "coder", label: "Coder" },
   { value: "reviewer", label: "Reviewer" },
-  { value: "tester", label: "Tester" },
 ];
 
 export function RoleSelect({
@@ -19,15 +18,21 @@ export function RoleSelect({
 }) {
   const claudeRole = useBridgeStore((s) => s.claudeRole);
   const codexRole = useBridgeStore((s) => s.codexRole);
+  const agents = useBridgeStore((s) => s.agents);
   const setRole = useBridgeStore((s) => s.setRole);
 
   const role = agent === "claude" ? claudeRole : codexRole;
+  const otherAgent = agent === "claude" ? "codex" : "claude";
   const otherRole = agent === "claude" ? codexRole : claudeRole;
+  const otherOnline = agents[otherAgent]?.status === "connected";
 
-  // Filter out the role already taken by the other agent
+  // Only block the other agent's role while that agent is actually online.
   const options = useMemo(
-    () => ALL_ROLES.filter((r) => r.value === role || r.value !== otherRole),
-    [role, otherRole],
+    () =>
+      ALL_ROLES.filter(
+        (r) => !otherOnline || r.value === role || r.value !== otherRole,
+      ),
+    [otherOnline, otherRole, role],
   );
 
   return (

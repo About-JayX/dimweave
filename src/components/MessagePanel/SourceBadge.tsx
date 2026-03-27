@@ -35,10 +35,6 @@ const sourceStyle: Record<string, { label: string; className: string }> = {
     label: "Reviewer",
     className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
   },
-  tester: {
-    label: "Tester",
-    className: "border-orange-500/40 bg-orange-500/10 text-orange-400",
-  },
 };
 
 export function SourceBadge({ source }: { source: string }) {

@@ -120,7 +120,7 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 | `notifications/claude/channel/permission_request` | `mcp.rs` parse + bridge outbound | ✅ 已实现 |
 | `notifications/claude/channel/permission` | `channel_state.rs` permission_notification | ✅ 已实现 |
 | meta 属性 (`from`, 可选 `status`) | `channel_state.rs` prepare_channel_message | ✅ 已实现 |
-| Sender gating | `channel_state.rs` ALLOWED_SENDERS | ✅ 已实现 |
+| Sender gating | `channel_state.rs` ALLOWED_SENDERS（当前为 `user/system/lead/coder/reviewer`） | ✅ 已实现 |
 | Pre-init message buffering | `mcp.rs` pre_init_buffer | ✅ 已实现 |
 
 ## 修复记录
@@ -301,7 +301,7 @@ cmd.arg(mcp_config_path.to_string_lossy().to_string());
 
 #### 注意
 
-- `ALLOWED_SENDERS` = `["user", "system", "lead", "coder", "reviewer", "tester"]`，bridge 会拒绝 `"claude"` 以外不在列表内的 sender（`"intruder"` 等）
+- `ALLOWED_SENDERS` = `["user", "system", "lead", "coder", "reviewer"]`，bridge 会拒绝 `"claude"` 以外不在列表内的 sender（`"intruder"` 等）
 - 只有 `from` 在 `ALLOWED_SENDERS` 且 `to == claude_role` 时 channel 通知才会发出
 - `codex_role` 默认为 `"coder"`，`claude_role` 默认为 `"lead"`
 
@@ -409,6 +409,21 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - [已修复] Claude thinking 的结束条件已切到显式状态：`done` / `error` 会结束 thinking，`in_progress` 不会；空消息仍不渲染，但允许 `status=done|error` 只负责结束 thinking。
 
 **验证:** ✅ `cargo test --manifest-path bridge/Cargo.toml` 通过（19 tests）；`cargo test --manifest-path src-tauri/Cargo.toml` 通过（85 tests）。
+
+### 2026-03-27: 非 lead 默认只回 lead
+
+- [已修复] Claude prompt 与 bridge `CHANNEL_INSTRUCTIONS` 现在都增加了分层路由默认值：
+  - `lead` 可以按上下文直接回复用户或分派给其他 worker
+  - 非 `lead` 角色默认只回 `lead`
+  - 只有当用户明确点名该身份或明确要求该身份直接回答时，非 `lead` 才允许直接回复 `user`
+  - 非 `lead` 只有在当前指令明确点名目标 worker 时，才允许直接发给其他非 `lead` 角色；否则仍回 `lead`
+- [目的] 收紧多 agent 的外显发言面，默认由 `lead` 作为对用户的汇总出口，减少 worker 角色在 auto/broadcast 场景下直接面向用户发言的噪声。
+
+### 2026-03-27: 移除 tester，reviewer 覆盖测试职责
+
+- [已修复] Claude 当前角色模型已收敛为 `lead / coder / reviewer` 三角色；`tester` 已从当前 allowlist、prompt 角色图谱和可选 target 中移除。
+- [已修复] `reviewer` 现在同时承担 code review 与 test verification：既负责质量审查，也负责运行测试、验证行为、汇总测试结果。
+- [已修复] Codex 在线占用 `lead` 时，Claude 启动前会先做角色冲突检查；同 role 冲突会在启动前直接拒绝，不再等 PTY 拉起后才在 bridge 连接层失败。
 
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过；`bun test tests/message-panel-view-model.test.ts` 通过；attention 留存与强制 focus 回归路径已覆盖。
 

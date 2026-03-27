@@ -5,7 +5,7 @@ import { Send, ChevronDown } from "lucide-react";
 
 const MIN_ROWS = 2;
 const MAX_ROWS = 8;
-const TARGETS = ["auto", "lead", "coder", "reviewer", "tester"] as const;
+const TARGETS = ["auto", "lead", "coder", "reviewer"] as const;
 type Target = (typeof TARGETS)[number];
 
 const TARGET_COLORS: Record<Target, string> = {
@@ -13,7 +13,6 @@ const TARGET_COLORS: Record<Target, string> = {
   lead: "text-yellow-400 border-yellow-400/30",
   coder: "text-emerald-400 border-emerald-400/30",
   reviewer: "text-orange-400 border-orange-400/30",
-  tester: "text-blue-400 border-blue-400/30",
 };
 
 interface ReplyInputProps {

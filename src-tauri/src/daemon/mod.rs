@@ -42,19 +42,19 @@ pub fn channel() -> (mpsc::Sender<DaemonCmd>, mpsc::Receiver<DaemonCmd>) {
     mpsc::channel(64)
 }
 
-const AGENT_ROLES: &[&str] = &["lead", "coder", "reviewer", "tester"];
+const AGENT_ROLES: &[&str] = &["lead", "coder", "reviewer"];
 
 pub fn is_valid_agent_role(role: &str) -> bool { AGENT_ROLES.contains(&role) }
 
 async fn set_role(
     state: &SharedState,
+    agent: &str,
     field: fn(&mut DaemonState) -> &mut String,
-    other: fn(&DaemonState) -> &str,
     new: String,
 ) -> bool {
     if !is_valid_agent_role(&new) { return false; }
     let mut s = state.write().await;
-    if other(&s) == new { return false; }
+    if s.online_role_conflict(agent, &new).is_some() { return false; }
     let old = std::mem::replace(field(&mut s), new.clone());
     if old != new { s.migrate_buffered_role(&old, &new); }
     true
@@ -62,9 +62,9 @@ async fn set_role(
 
 async fn apply_role(
     state: &SharedState, app: &AppHandle, agent: &str, role: String,
-    field: fn(&mut DaemonState) -> &mut String, other: fn(&DaemonState) -> &str,
+    field: fn(&mut DaemonState) -> &mut String,
 ) -> Result<(), String> {
-    if set_role(state, field, other, role.clone()).await {
+    if set_role(state, agent, field, role.clone()).await {
         Ok(())
     } else {
         gui::emit_system_log(app, "warn", &format!("[Daemon] {agent} role rejected: {role}"));
@@ -111,6 +111,20 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 reply,
             } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
+                if let Some(conflict_agent) = {
+                    let daemon = state.read().await;
+                    daemon.online_role_conflict("codex", &role_id)
+                } {
+                    let err = format!("role '{role_id}' already in use by online {conflict_agent}");
+                    gui::emit_agent_status(&app, "codex", false, None);
+                    gui::emit_system_log(
+                        &app,
+                        "error",
+                        &format!("[Daemon] Codex start failed: {err}"),
+                    );
+                    let _ = reply.send(Err(err));
+                    continue;
+                }
                 let launch_result =
                     match codex::start(role_id, cwd, model, state.clone(), app.clone(), 4500).await
                     {
@@ -139,10 +153,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(state.read().await.claude_role.clone());
             }
             DaemonCmd::SetClaudeRole { role: r, reply } => {
-                let _ = reply.send(apply_role(&state, &app, "claude", r, |s| &mut s.claude_role, |s| &s.codex_role).await);
+                let _ = reply.send(apply_role(&state, &app, "claude", r, |s| &mut s.claude_role).await);
             }
             DaemonCmd::SetCodexRole { role: r, reply } => {
-                let _ = reply.send(apply_role(&state, &app, "codex", r, |s| &mut s.codex_role, |s| &s.claude_role).await);
+                let _ = reply.send(apply_role(&state, &app, "codex", r, |s| &mut s.codex_role).await);
             }
             DaemonCmd::ReadStatusSnapshot { reply } => {
                 let snapshot = state.read().await.status_snapshot();

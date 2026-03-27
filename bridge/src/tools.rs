@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
 
-const VALID_REPLY_TARGETS: &[&str] = &["user", "lead", "coder", "reviewer", "tester"];
+const VALID_REPLY_TARGETS: &[&str] = &["user", "lead", "coder", "reviewer"];
 const VALID_REPLY_STATUSES: &[&str] = &["in_progress", "done", "error"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +32,7 @@ pub fn reply_tool_schema() -> serde_json::Value {
                 "to": {
                     "type": "string",
                     "enum": VALID_REPLY_TARGETS,
-                    "description": "Target role: user, lead, coder, reviewer, or tester"
+                    "description": "Target role: user, lead, coder, or reviewer"
                 },
                 "text": {
                     "type": "string",
@@ -194,6 +194,8 @@ mod tests {
             .iter().map(|v| v.as_str().unwrap()).collect();
         assert!(targets.contains(&"user"));
         assert!(targets.contains(&"lead"));
+        assert!(targets.contains(&"reviewer"));
+        assert!(!targets.contains(&"tester"));
         assert!(!targets.contains(&"admin"));
     }
 }

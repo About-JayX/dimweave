@@ -427,6 +427,19 @@ cargo clippy --workspace --all-targets -- -D warnings
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过（87 tests）
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：通过
 
+### 22. [已修复] 2026-03-27 非 lead 默认只回 lead 的 prompt 收紧
+
+- [已修复] Claude prompt、bridge `CHANNEL_INSTRUCTIONS`、Codex `baseInstructions` 已统一增加层级路由默认值。
+- [已修复] `lead` 仍保留总协调权，可以按上下文直接回复用户或继续分派任务。
+- [已修复] 非 `lead` 角色默认只向 `lead` 汇报；只有用户明确点名该身份、或当前指令明确点名目标 worker 时，才允许绕过 `lead` 直接发给 `user` / 指定 worker。
+- [目的] 把对用户的默认出口继续收敛到 `lead`，减少 auto/broadcast 场景下 worker 角色直接面向用户发言的概率。
+
+### 23. [已修复] 2026-03-27 角色模型收敛为 lead / coder / reviewer
+
+- [已修复] `tester` 已从当前角色模型中移除，前端 target 选择、agent role 选择、daemon `AGENT_ROLES`、bridge sender/target allowlist、Claude/Codex prompt、Codex `send_to` schema 已同步收口到 `lead / coder / reviewer`。
+- [已修复] `reviewer` 现在同时覆盖测试职责：review + test verification。测试结果、验证结论和 review 结论统一由 reviewer 输出。
+- [已修复] 角色冲突从“缓存 role 冲突”改成“在线 agent 冲突”：当 Claude 离线时，Codex 现在可以选择 `lead`；但若在线 Claude 已占用 `lead`，Codex 启动前会被直接拒绝。反过来，若在线 Codex 已占用某 role，Claude 连接/启动前也会被阻断，避免 live duplicate role。
+
 ## 验证记录（本轮 #17）
 
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过（78 tests）

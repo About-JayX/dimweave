@@ -263,7 +263,7 @@ Codex app-server → WS :4500 → session.rs handle_codex_event()
 - `roles.rs` 改用 `role_instructions!` 宏，compile-time `concat!` 拼接共享前言 + 角色专属段
 - 共享前言：角色图谱、工具说明、主动汇报进展、自行判断路由目标
 - 每个角色附加典型路由路径（如 lead: `receive task → assign coder → send reviewer → report user`）
-- read-only 角色（reviewer/tester）明确写 "read-only sandbox"，不写 "full permissions"
+- read-only 角色（reviewer）明确写 "read-only sandbox"，不写 "full permissions"
 - write 角色（user/lead/coder）写 "full permissions, execute directly"
 
 **文件:** `src-tauri/src/daemon/role_config/roles.rs`
@@ -295,7 +295,7 @@ Codex app-server → WS :4500 → session.rs handle_codex_event()
 
 #### [已修复] I-4: read-only 角色指令声称 "full permissions"
 
-**问题:** `role_instructions!` 共享前言写 "You have full permissions"，但 reviewer/tester 的 `sandbox_mode` 是 `"read-only"`（OS 内核级限制）。LLM 被误导后尝试写文件会被内核拒绝。
+**问题:** `role_instructions!` 共享前言写 "You have full permissions"，但 reviewer 的 `sandbox_mode` 是 `"read-only"`（OS 内核级限制）。LLM 被误导后尝试写文件会被内核拒绝。
 
 **修复:** 移除共享前言中的权限声明，改为按角色写入：write 角色写 "full permissions"，read-only 角色写 "read-only sandbox, cannot modify files"。
 
@@ -346,7 +346,7 @@ pub struct ThreadStartParams {
   "type": "object",
   "properties": {
     "message": { "type": "string" },
-    "send_to": { "enum": ["user","lead","coder","reviewer","tester","none"] },
+    "send_to": { "enum": ["user","lead","coder","reviewer","none"] },
     "status": { "enum": ["in_progress","done","error"] }
   },
   "required": ["message", "send_to", "status"],
@@ -355,6 +355,21 @@ pub struct ThreadStartParams {
 ```
 
 `session.rs` 解析 `item/completed(agentMessage)` 文本为 JSON，提取 `send_to` 和 `status`。非 `"none"`/`"user"` 时自动调用 `routing::route_message` 投递；缺失 `status` 兼容按 `done` 处理，非法值会转成用户可见的错误提示并打 `error` 日志。
+
+### 2026-03-27: 非 lead 默认只回 lead
+
+- [已修复] `roles.rs` 的 Codex `baseInstructions` 新增层级路由规则：
+  - `lead` 可以按上下文直接回复 `user` 或分派给其他 worker
+  - 非 `lead` 默认 `send_to = "lead"`
+  - 只有用户明确点名该角色或明确要求该角色直接回答时，非 `lead` 才允许 `send_to = "user"`
+  - 只有当前指令明确点名目标 worker 时，非 `lead` 才允许直接发给其他非 `lead` 角色；否则仍回 `lead`
+- [目的] 让 Codex worker 默认向 `lead` 汇报，而不是在 auto/broadcast 场景里直接对用户发声，减少多 agent 回答面扩散。
+
+### 2026-03-27: 移除 tester，reviewer 覆盖测试职责
+
+- [已修复] Codex 当前角色模型已收敛为 `lead / coder / reviewer` 三角色；`tester` 已从 `send_to` schema、角色配置和前端 target 中移除。
+- [已修复] `reviewer` 现在同时承担 review 与 test verification，负责质量审查、运行测试、验证行为，并向 `lead` 或 `coder` 汇报结果。
+- [已修复] 当 Claude 离线时，Codex 不会再因为 Claude 缓存角色仍是 `lead` 就被挡住；角色冲突只对在线 agent 生效。但如果在线 Claude 已占用 `lead`，Codex 启动前会直接被拒绝，避免 live duplicate role。
 
 **3. 替换 prompt 后的影响**
 

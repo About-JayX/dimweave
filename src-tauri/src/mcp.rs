@@ -1,5 +1,6 @@
 /// MCP registration helpers and related Tauri commands.
 use crate::claude_session::ClaudeSessionManager;
+use crate::daemon::types::DaemonStatusSnapshot;
 use std::sync::Arc;
 use tauri::State;
 
@@ -147,6 +148,22 @@ pub async fn launch_claude_terminal(
         .await
         .map_err(|_| "daemon channel closed".to_string())?;
     let role = reply_rx.await.map_err(|_| "daemon did not reply".to_string())?;
+    let (snapshot_tx, snapshot_rx) = tokio::sync::oneshot::channel();
+    daemon_tx.0
+        .send(crate::daemon::DaemonCmd::ReadStatusSnapshot { reply: snapshot_tx })
+        .await
+        .map_err(|_| "daemon channel closed".to_string())?;
+    let snapshot: DaemonStatusSnapshot =
+        snapshot_rx.await.map_err(|_| "daemon did not reply".to_string())?;
+    let codex_online = snapshot
+        .agents
+        .iter()
+        .any(|agent| agent.agent == "codex" && agent.online);
+    if codex_online && snapshot.codex_role == role {
+        return Err(format!(
+            "role '{role}' already in use by online codex"
+        ));
+    }
     crate::claude_launch::launch(&dir, model, effort, &role, cols, rows, session.inner().clone(), app).await
 }
 

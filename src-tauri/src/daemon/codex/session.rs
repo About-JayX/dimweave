@@ -170,7 +170,7 @@ async fn handle_codex_event(
                 });
                 let valid_target = if schema_route_enabled {
                     parsed.send_to.as_deref().filter(|t| {
-                        matches!(*t, "lead" | "coder" | "reviewer" | "tester")
+                        matches!(*t, "lead" | "coder" | "reviewer")
                     })
                 } else {
                     None

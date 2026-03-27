@@ -91,6 +91,21 @@ fn status_snapshot_reports_current_online_agents() {
 }
 
 #[test]
+fn online_role_conflict_only_blocks_live_other_agent() {
+    let mut s = DaemonState::new();
+    s.claude_role = "lead".into();
+    s.codex_role = "lead".into();
+    assert_eq!(s.online_role_conflict("codex", "lead"), None);
+
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
+    assert_eq!(s.online_role_conflict("codex", "lead"), Some("claude"));
+}
+
+#[test]
 fn migrate_buffered_role_retargets_messages() {
     let mut s = DaemonState::new();
     s.buffer_message(BridgeMessage::system("hello", "lead"));

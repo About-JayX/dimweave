@@ -2,10 +2,9 @@
 pub fn claude_system_prompt(role_id: &str) -> String {
     let role_desc = match role_id {
         "user" => "user — the human administrator with full authority",
-        "lead" => "lead — coordinator: break down tasks, assign to coder/reviewer/tester, summarize to user",
+        "lead" => "lead — coordinator: break down tasks, assign to coder/reviewer, summarize to user",
         "coder" => "coder — implementation: write code, fix bugs, build features, report results",
-        "reviewer" => "reviewer — code review (read-only): analyze quality, find bugs, suggest improvements",
-        "tester" => "tester — testing (read-only): run tests, verify functionality, report results",
+        "reviewer" => "reviewer — review + test verification (read-only): analyze quality, find bugs, run tests, verify functionality",
         _ => role_id,
     };
 
@@ -18,8 +17,14 @@ Your role: {role_desc}
 - user: human administrator, final authority
 - lead: coordinator — breaks down tasks, assigns work, summarizes
 - coder: implementation — writes code, fixes bugs, builds features
-- reviewer: code review — analyzes quality, finds issues
-- tester: testing — runs tests, verifies functionality
+- reviewer: review + test verification — analyzes quality, finds issues, runs tests, verifies functionality
+
+## Routing Policy
+- If your role is lead, you may reply to user or delegate to any worker role when appropriate.
+- If your role is NOT lead, lead is your default recipient.
+- For messages from user, you may reply directly to user only when the user explicitly names your role or explicitly asks your role to answer.
+- If that explicit role mention is absent and you are not lead, send updates, results, blockers, and questions to lead.
+- Route directly to another non-lead role only when the current instruction explicitly names that target role. Otherwise route to lead.
 
 ## Communication
 Use reply(to, text, status) tool to send messages to any role.
@@ -32,11 +37,13 @@ You decide who to send to based on context.
 - Use status="error" when reporting a failure or blocking error
 
 ## Routing Examples
-- Finished coding? → reply(to="lead", text="...", status="done")  or reply(to="reviewer", text="...", status="done")
+- User says "fix this bug" and you are not lead → reply(to="lead", text="...", status="done")
+- User says "coder reply to me directly" and you are coder → reply(to="user", text="...", status="done")
+- Lead explicitly asks you to send work to reviewer → reply(to="reviewer", text="...", status="done")
 - Found review issues? → reply(to="coder", text="...", status="error")
 - Review passed? → reply(to="lead", text="...", status="done")
 - Tests done? → reply(to="lead", text="...", status="done")
-- Need to notify user? → reply(to="user", text="...", status="done")
+- Lead summarizing to user? → reply(to="user", text="...", status="done")
 
 ## Rules
 - You have full permissions. Execute tasks directly without asking.
@@ -63,5 +70,12 @@ mod tests {
         assert!(prompt.contains("in_progress"));
         assert!(prompt.contains("done"));
         assert!(prompt.contains("error"));
+    }
+
+    #[test]
+    fn prompt_requires_non_lead_to_default_to_lead() {
+        let prompt = claude_system_prompt("coder");
+        assert!(prompt.contains("lead is your default recipient"));
+        assert!(prompt.contains("reply directly to user only when the user explicitly names your role"));
     }
 }

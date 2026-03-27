@@ -46,6 +46,23 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 agent_id = Some(id.clone());
                 let (buffered_messages, buffered_verdicts) = {
                     let mut daemon = state.write().await;
+                    let role = match id.as_str() {
+                        "claude" => Some(daemon.claude_role.clone()),
+                        "codex" => Some(daemon.codex_role.clone()),
+                        _ => None,
+                    };
+                    if let Some(conflict_role) = role.as_deref() {
+                        if let Some(conflict_agent) = daemon.online_role_conflict(&id, conflict_role) {
+                            gui::emit_system_log(
+                                &app,
+                                "warn",
+                                &format!(
+                                    "[Control] rejected {id} connection: role '{conflict_role}' already in use by online {conflict_agent}"
+                                ),
+                            );
+                            break;
+                        }
+                    }
                     let gen = daemon.next_agent_gen;
                     daemon.next_agent_gen += 1;
                     my_gen = gen;
@@ -53,11 +70,6 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         id.clone(),
                         crate::daemon::state::AgentSender::new(tx.clone(), gen),
                     );
-                    let role = match id.as_str() {
-                        "claude" => Some(daemon.claude_role.clone()),
-                        "codex" => Some(daemon.codex_role.clone()),
-                        _ => None,
-                    };
                     (
                         role.map(|role_id| daemon.take_buffered_for(&role_id))
                             .unwrap_or_default(),

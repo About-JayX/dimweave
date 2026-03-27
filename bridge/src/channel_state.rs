@@ -1,7 +1,7 @@
 use crate::types::{BridgeMessage, PermissionRequest, PermissionVerdict};
 use std::collections::HashMap;
 
-const ALLOWED_SENDERS: &[&str] = &["user", "system", "lead", "coder", "reviewer", "tester"];
+const ALLOWED_SENDERS: &[&str] = &["user", "system", "lead", "coder", "reviewer"];
 
 /// Minimal channel state: sender validation + pending permission tracking.
 /// Routing is handled by the daemon, not the bridge.
