@@ -25,7 +25,7 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 eprintln!("[Control] failed to serialize outbound message");
                 continue;
             };
-            if sink.send(Message::Text(payload.into())).await.is_err() {
+            if sink.send(Message::Text(payload)).await.is_err() {
                 break;
             }
         }
@@ -113,7 +113,7 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
         let is_ours = daemon
             .attached_agents
             .get(id.as_str())
-            .map_or(false, |s| s.gen == my_gen);
+            .is_some_and(|s| s.gen == my_gen);
         if is_ours {
             daemon.attached_agents.remove(id);
             drop(daemon);

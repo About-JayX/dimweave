@@ -20,6 +20,20 @@ pub async fn daemon_send_message(
         .map_err(|e| e.to_string())
 }
 
+/// User typed a message — daemon handles GUI echo + fan-out internally.
+#[tauri::command]
+pub async fn daemon_send_user_input(
+    content: String,
+    target: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::SendUserInput { content, target })
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn daemon_launch_codex(
     role_id: String,

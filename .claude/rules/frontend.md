@@ -28,6 +28,7 @@ paths:
   - `codex_stream`
 - 用户操作通过 Tauri command：
   - `daemon_send_message`
+  - `daemon_send_user_input`
   - `daemon_launch_codex`
   - `daemon_stop_codex`
   - `daemon_set_claude_role`
@@ -60,3 +61,4 @@ paths:
 
 - 每次修改后执行 `bun x tsc --noEmit -p tsconfig.app.json`
 - 如果改了前端依赖或删了旧组件，必须同步清理 `package.json`
+- 每次做完前端相关审查（代码 review、链路复核、superpowers 审查）后，必须同步更新 `docs/agentbridge-audit-summary.md`；如果结论属于专项链路，也要同步更新对应 `docs/agents/*.md`

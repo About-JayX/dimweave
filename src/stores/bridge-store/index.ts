@@ -47,28 +47,10 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     setDraft: (text) => set({ draft: text }),
 
     sendToCodex: (content, target) => {
-      const { claudeRole, codexRole } = get();
-      const sendOne = (to: string) =>
-        invoke("daemon_send_message", {
-          msg: {
-            id: `user_${Date.now()}_${to}`,
-            from: "user",
-            to,
-            content,
-            timestamp: Date.now(),
-          },
-        }).catch(logError(set));
-
-      if (target && target !== "auto") {
-        sendOne(target);
-      } else {
-        // Auto: broadcast to ONLINE agents only (dedupe if same role)
-        const { agents } = get();
-        const targets = new Set<string>();
-        if (agents.claude?.status === "connected") targets.add(claudeRole);
-        if (agents.codex?.status === "connected") targets.add(codexRole);
-        for (const t of targets) sendOne(t);
-      }
+      invoke("daemon_send_user_input", {
+        content,
+        target: target ?? "auto",
+      }).catch(logError(set));
     },
 
     clearMessages: () => set({ messages: [] }),

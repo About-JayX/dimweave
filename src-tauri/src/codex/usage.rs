@@ -144,10 +144,10 @@ pub fn load_cached() -> Result<UsageSnapshot, String> {
             .unwrap_or(false),
         primary: rl
             .and_then(|v| v.get("primary"))
-            .and_then(|v| map_cached_window(v)),
+            .and_then(map_cached_window),
         secondary: rl
             .and_then(|v| v.get("secondary"))
-            .and_then(|v| map_cached_window(v)),
+            .and_then(map_cached_window),
     })
 }
 

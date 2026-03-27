@@ -89,3 +89,55 @@ fn status_snapshot_reports_current_online_agents() {
         .iter()
         .any(|agent| agent.agent == "codex" && agent.online));
 }
+
+#[test]
+fn migrate_buffered_role_retargets_messages() {
+    let mut s = DaemonState::new();
+    s.buffer_message(BridgeMessage::system("hello", "lead"));
+    s.buffer_message(BridgeMessage::system("world", "coder"));
+    s.migrate_buffered_role("lead", "reviewer");
+    assert!(s.buffered_messages.iter().all(|m| m.to != "lead"));
+    assert!(s.buffered_messages.iter().any(|m| m.to == "reviewer"));
+    assert!(s.buffered_messages.iter().any(|m| m.to == "coder"));
+}
+
+#[test]
+fn take_buffered_for_drains_only_matching_role() {
+    let mut s = DaemonState::new();
+    s.buffer_message(BridgeMessage::system("a", "lead"));
+    s.buffer_message(BridgeMessage::system("b", "coder"));
+    s.buffer_message(BridgeMessage::system("c", "lead"));
+    let taken = s.take_buffered_for("lead");
+    assert_eq!(taken.len(), 2);
+    assert_eq!(s.buffered_messages.len(), 1);
+    assert_eq!(s.buffered_messages[0].to, "coder");
+}
+
+#[test]
+fn buffered_verdicts_round_trip() {
+    let mut s = DaemonState::new();
+    s.buffer_permission_verdict("claude", PermissionVerdict {
+        request_id: "req-1".into(),
+        behavior: PermissionBehavior::Allow,
+    });
+    s.buffer_permission_verdict("claude", PermissionVerdict {
+        request_id: "req-2".into(),
+        behavior: PermissionBehavior::Deny,
+    });
+    let verdicts = s.take_buffered_verdicts_for("claude");
+    assert_eq!(verdicts.len(), 2);
+    assert!(s.take_buffered_verdicts_for("claude").is_empty());
+}
+
+#[test]
+fn buffered_verdicts_cap_at_50() {
+    let mut s = DaemonState::new();
+    for i in 0..60 {
+        s.buffer_permission_verdict("claude", PermissionVerdict {
+            request_id: format!("req-{i}"),
+            behavior: PermissionBehavior::Allow,
+        });
+    }
+    let verdicts = s.take_buffered_verdicts_for("claude");
+    assert!(verdicts.len() <= 50);
+}

@@ -25,6 +25,7 @@ impl Default for ClaudeSessionManager {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn launch(
     manager: Arc<ClaudeSessionManager>,
     dir: &str,

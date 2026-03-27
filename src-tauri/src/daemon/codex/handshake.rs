@@ -33,7 +33,7 @@ pub(super) async fn handshake(
 
     tokio::spawn(async move {
         while let Some(text) = ws_rx.recv().await {
-            if sink.send(Message::Text(text.into())).await.is_err() {
+            if sink.send(Message::Text(text)).await.is_err() {
                 break;
             }
         }
@@ -85,7 +85,7 @@ pub(super) async fn handshake(
               "inputSchema": {"type":"object","properties":{}} }
         ]
     });
-    if let Some(cwd) = (!opts.cwd.is_empty()).then(|| opts.cwd.as_str()) {
+    if let Some(cwd) = (!opts.cwd.is_empty()).then_some(opts.cwd.as_str()) {
         params["cwd"] = json!(cwd);
     }
     if let Some(m) = &opts.model {
@@ -117,7 +117,7 @@ pub(super) async fn handshake(
             let Some(Ok(msg)) = stream.next().await else {
                 return String::new();
             };
-            let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
+            let Ok(v) = serde_json::from_str::<Value>(msg.to_text().unwrap_or("")) else {
                 continue;
             };
             if v["id"].as_u64() == Some(thread_id_rpc) {
@@ -156,7 +156,7 @@ async fn wait_for_id(stream: &mut WsStream, expected_id: u64, secs: u64) -> bool
             let Some(Ok(msg)) = stream.next().await else {
                 return false;
             };
-            let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
+            let Ok(v) = serde_json::from_str::<Value>(msg.to_text().unwrap_or("")) else {
                 continue;
             };
             if v["id"].as_u64() == Some(expected_id) {

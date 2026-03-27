@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { CyberSelect } from "@/components/ui/cyber-select";
 
+// "user" is reserved for the human administrator and not assignable to agents.
 const ALL_ROLES = [
-  { value: "user", label: "User (Admin)" },
   { value: "lead", label: "Lead" },
   { value: "coder", label: "Coder" },
   { value: "reviewer", label: "Reviewer" },

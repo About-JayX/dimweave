@@ -20,6 +20,8 @@ pub type SharedState = Arc<RwLock<DaemonState>>;
 pub enum DaemonCmd {
     /// Route a message (e.g. user input) to its target agent.
     SendMessage(types::BridgeMessage),
+    /// User typed a message — daemon emits ONE GUI echo and fans out internally.
+    SendUserInput { content: String, target: String },
     /// Launch a Codex session for the given role.
     LaunchCodex {
         role_id: String,
@@ -103,6 +105,9 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             DaemonCmd::SendMessage(msg) => routing::route_message(&state, &app, msg).await,
+            DaemonCmd::SendUserInput { content, target } => {
+                routing::route_user_input(&state, &app, content, target).await;
+            }
             DaemonCmd::LaunchCodex {
                 role_id,
                 cwd,
@@ -147,12 +152,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             DaemonCmd::SetCodexRole(role) => {
                 set_role(&state, |s| &mut s.codex_role, |s| &s.claude_role, role).await;
             }
-
             DaemonCmd::ReadStatusSnapshot { reply } => {
                 let snapshot = state.read().await.status_snapshot();
                 let _ = reply.send(snapshot);
             }
-
             DaemonCmd::RespondPermission {
                 request_id,
                 behavior,

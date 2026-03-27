@@ -1,5 +1,6 @@
 use crate::daemon::{
     gui,
+    state::DaemonState,
     types::{BridgeMessage, ToAgent},
     SharedState,
 };
@@ -76,11 +77,22 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
         }
     }
 }
-
 pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
+    route_message_with_display(state, app, msg, true).await;
+}
+
+pub async fn route_message_silent(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
+    route_message_with_display(state, app, msg, false).await;
+}
+
+async fn route_message_with_display(
+    state: &SharedState,
+    app: &AppHandle,
+    msg: BridgeMessage,
+    display_in_gui: bool,
+) {
     let result = route_message_inner(state, msg.clone()).await;
-    // Only show in GUI after confirming the route result (no ghost messages)
-    if !matches!(result, RouteResult::Dropped) {
+    if display_in_gui && !matches!(result, RouteResult::Dropped) {
         gui::emit_agent_message(app, &msg);
     }
     let tag = match &result {
@@ -116,6 +128,66 @@ pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMess
     }
 }
 
+pub async fn route_user_input(
+    state: &SharedState,
+    app: &AppHandle,
+    content: String,
+    target: String,
+) {
+    let targets = {
+        let s = state.read().await;
+        resolve_user_targets(&s, &target)
+    };
+    let display_to = if targets.len() == 1 {
+        targets[0].clone()
+    } else {
+        target
+    };
+    let now = chrono::Utc::now().timestamp_millis() as u64;
+    let echo = BridgeMessage {
+        id: format!("user_{now}"),
+        from: "user".into(),
+        to: display_to,
+        content: content.clone(),
+        timestamp: now,
+        reply_to: None,
+        priority: None,
+    };
+    gui::emit_agent_message(app, &echo);
+    if targets.is_empty() {
+        gui::emit_system_log(app, "warn", "[Route] no online targets for user input");
+    }
+    for role in targets {
+        let msg = BridgeMessage {
+            id: format!("user_{now}_{role}"),
+            from: "user".into(),
+            to: role,
+            content: content.clone(),
+            timestamp: now,
+            reply_to: None,
+            priority: None,
+        };
+        route_message_silent(state, app, msg).await;
+    }
+}
+
+/// "auto" → online agent roles (deduplicated, excludes "user"); otherwise the literal role.
+pub fn resolve_user_targets(state: &DaemonState, target: &str) -> Vec<String> {
+    if target != "auto" {
+        return vec![target.to_string()];
+    }
+    let mut targets = Vec::with_capacity(2);
+    let claude_online = state.attached_agents.contains_key("claude");
+    let codex_online = state.codex_inject_tx.is_some();
+    if claude_online && state.claude_role != "user" {
+        targets.push(state.claude_role.clone());
+    }
+    if codex_online && state.codex_role != "user" && !targets.contains(&state.codex_role) {
+        targets.push(state.codex_role.clone());
+    }
+    targets
+}
+
 pub fn format_codex_input(msg: &BridgeMessage) -> String {
     if msg.from == "user" {
         msg.content.clone()
@@ -124,43 +196,5 @@ pub fn format_codex_input(msg: &BridgeMessage) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::daemon::{state::DaemonState, types::BridgeMessage};
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
-
-    #[tokio::test]
-    async fn route_to_offline_agent_buffers() {
-        let state = Arc::new(RwLock::new(DaemonState::new()));
-        let msg = BridgeMessage::system("hello", "lead");
-        let result = route_message_inner(&state, msg).await;
-        assert!(matches!(result, RouteResult::Buffered));
-        assert_eq!(state.read().await.buffered_messages.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn route_to_user_returns_to_gui() {
-        let state = Arc::new(RwLock::new(DaemonState::new()));
-        let msg = BridgeMessage::system("hello", "user");
-        let result = route_message_inner(&state, msg).await;
-        assert!(matches!(result, RouteResult::ToGui));
-    }
-
-    #[tokio::test]
-    async fn route_to_claude_from_unknown_sender_drops() {
-        let state = Arc::new(RwLock::new(DaemonState::new()));
-        let msg = BridgeMessage {
-            id: "msg-1".into(),
-            from: "intruder".into(),
-            to: "lead".into(),
-            content: "hello".into(),
-            timestamp: 1,
-            reply_to: None,
-            priority: None,
-        };
-        let result = route_message_inner(&state, msg).await;
-        assert!(matches!(result, RouteResult::Dropped));
-    }
-}
+#[cfg(test)] #[path = "routing_tests.rs"]
+mod tests;

@@ -77,6 +77,7 @@
 - [已修复] `migrate_buffered_role` 接入后，旧 role 上的缓冲消息会重定向到新 role。
 - [已修复] 但仅有迁移还不够，因为两个 agent 仍可短暂共用同一 role，导致迁移和路由都出现歧义。
 - [已修复] `b659fea` 最终在 UI 层过滤掉“另一个 agent 已占用的 role”，把角色唯一性前置约束起来。
+- [已知限制] 最新复核发现，前端 `setRole` 仍是乐观写入，daemon 对冲突 role 的拒绝结果没有回传到前端；因此“daemon 是 role 的事实来源”在 UI 边界上还没有完全闭环。
 
 结论：
 
@@ -160,10 +161,10 @@
 
 同时，最新复核后仍需保留以下残余问题：
 
-### 1. [已修复] role 唯一性现在在 daemon 层强制
+### 1. [已修复] role 唯一性现在在 daemon 层有冲突校验
 
 - `set_role` 增加冲突校验：写入前检查另一个 agent 的当前 role，重复则拒绝（返回 false）。
-- 前端 `RoleSelect` 过滤 + daemon `set_role` 拒绝 = 两层约束。
+- [已知限制] 前端 `RoleSelect` 只做 UI 过滤，`daemon_set_claude_role` / `daemon_set_codex_role` 当前没有把 reject 结果回传给前端；store 仍先本地写入，UI 与 daemon 状态仍可能漂移。
 
 ### 2. [已修复] permission auto-deny 写失败时退出 MCP loop
 
@@ -183,28 +184,29 @@
 
 - 当前代码主链已明显稳定，但自动化验证层仍落后于这几轮修复速度。
 
-### 4. 新增问题：user 输入会显示两条 message 气泡
+### 4. [已修复] user 输入在 auto 模式下显示两条 message 气泡
 
-- [未修复] 这不是事件重复监听，也不是 daemon 重复广播，而是消息模型层次混淆。
-- [未修复] 当前前端在 `auto` 模式下会把一次用户输入拆成多条 transport 级 `BridgeMessage`，分别发给多个 target。
-- [未修复] daemon 又会把每条 transport 消息都 `emit_agent_message` 到 GUI。
-- [未修复] 消息面板只按 `from === "user"` 渲染 user 样式，不展示 `to`，于是多条发往不同 target 的用户消息会显示成两条一模一样的 user 气泡。
+- [已修复] 根因：前端在 `auto` 模式下会把一次用户输入拆成多条 transport 级 `BridgeMessage`，daemon 又会把每条都 `emit_agent_message` 到 GUI，导致消息面板出现多条一模一样的 user 气泡。
+- [已修复] 修复方案：新增 `daemon_send_user_input` Tauri command，前端只发一次。daemon 内部 `route_user_input` 先发一次 GUI echo，再通过 `route_message_silent` 把 transport 副本 fan-out 到各 target，不重复 emit。
+- [已修复] 新增 `resolve_user_targets` 纯函数，”auto” 解析为在线 agent roles（去重），fan-out 决策从前端下沉到 daemon。
+- [已修复] 7 项 `resolve_user_targets` 回归测试覆盖：显式 target、auto 空/单/双 agent、去重。
 
-结论：
+### 5. [已修复] 2026-03-27 复核发现的剩余链路问题
 
-- 根因不是“重复发消息”，而是“展示层直接消费 transport 副本”。
-- 这条问题应通过“单次 user echo + daemon 内部 fan-out”修复，而不是做文本去重。
-- 已补充专项计划：`docs/superpowers/plans/2026-03-27-user-single-bubble.md`
+- [已修复] `RoleSelect` 已移除 `user` 选项，agent 不再能选择 `user` role。
+- [已修复] `resolve_user_targets` 在 auto 模式下过滤掉 `user` role，避免路由黑洞。
+- [已修复] `route_user_input` 在零目标时 emit 系统日志警告，用户可观测。
+- [已修复] 补充回归测试：`auto_excludes_user_role`、`migrate_buffered_role_retargets_messages`、`take_buffered_for_drains_only_matching_role`、`buffered_verdicts_round_trip`、`buffered_verdicts_cap_at_50`。
 
 ## 当前仍需保留的已知限制
 
 - [已知限制] `threadId` 尚未从 daemon 暴露到前端，Codex 头部无法显示真实 thread。
-- [已知限制] 近期多轮修复的专门回归测试仍然不足，尤其是：
+- [已知限制] 部分回归测试仍依赖手动验证，尤其是：
   - daemon replay tail 保留
   - Codex inject replay tail 保留
   - MCP pre-init buffer 安全
   - permission auto-deny + write failure exit
-- [已知限制] `cargo clippy --workspace --all-targets -- -D warnings` 仍未通过，当前主要是样式/lint 级问题，不是新的主链路 bug。
+- [已知限制] `RoleSelect` 与 daemon role 拒绝结果之间仍缺少显式回传，role 唯一性在 UI 边界上没有完全闭环。
 
 ## 验证记录
 
@@ -221,6 +223,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 - `cargo test`：通过
 - `npm run build`：通过
 - `cargo clippy --workspace --all-targets -- -D warnings`：未通过，但失败项仍以 lint/样式问题为主
+
+在 2026-03-27 当前工作区复核时：
+
+- `cargo test`：通过（49 tests）
+- `bun run build`：通过（修复 `react-virtuoso` 依赖安装后）
+- `cargo clippy --workspace --all-targets -- -D warnings`：通过（修复 12 项 lint 问题后）
 
 ## 相关文档
 

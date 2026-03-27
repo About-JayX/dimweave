@@ -135,6 +135,7 @@ pub fn check_mcp_registered(cwd: Option<String>) -> bool {
 /// Launch Claude Code channel preview.
 /// Runs Claude in a managed hidden PTY so the local development prompt can be
 /// auto-confirmed for `server:agentbridge`.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn launch_claude_terminal(
     cwd: Option<String>,

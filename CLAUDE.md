@@ -98,7 +98,7 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 
 ### 消息路由
 
-- **用户 → Codex**: 前端 `daemon_send_message` → `routing.rs` → `codex_inject_tx`
+- **用户 → agent**: 前端 `daemon_send_user_input` → `routing::route_user_input`（单次 GUI echo + 内部 fan-out）
 - **Claude → Codex**: bridge `reply` tool → WS :4502 → `routing.rs` → `codex_inject_tx`
 - **Codex → Claude**: Codex 动态 `reply` → `routing.rs` → bridge WS channel → Claude Channel notification
 - **任一 agent → user**: `to = "user"` 时只发到 GUI

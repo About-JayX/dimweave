@@ -46,9 +46,11 @@ paths:
 - `codex_cancel_login`
 - `codex_logout`
 - `daemon_send_message`
+- `daemon_send_user_input`
 - `daemon_launch_codex`
 - `daemon_stop_codex`
 - `daemon_set_claude_role`
+- `daemon_set_codex_role`
 - `daemon_respond_permission`
 - `daemon_get_status_snapshot`
 
@@ -95,3 +97,4 @@ paths:
 - Rust 改动后至少执行 `cargo test`
 - 结构性改动后建议执行 `cargo check`
 - 删除旧架构残留时，要同步删掉陈旧测试、陈旧依赖和陈旧注释
+- 每次做完 Tauri / daemon / Rust 链路审查后，必须同步更新 `docs/agentbridge-audit-summary.md`；如果涉及 Claude / Codex / bridge 专项协议，还要同步更新对应 `docs/agents/*.md`

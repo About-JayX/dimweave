@@ -30,7 +30,7 @@ pub async fn run(
                     eprintln!("[Bridge/{agent_id}] failed to serialize connect msg: {e}");
                     "{}".to_string()
                 });
-                if sink.send(Message::Text(connect_msg.into())).await.is_err() {
+                if sink.send(Message::Text(connect_msg)).await.is_err() {
                     continue;
                 }
 
@@ -45,7 +45,7 @@ pub async fn run(
                             continue;
                         }
                         if let Ok(s) = serialize_outbound(&agent_id, &m) {
-                            if sink.send(Message::Text(s.into())).await.is_err() {
+                            if sink.send(Message::Text(s)).await.is_err() {
                                 remaining.push(m);
                                 replay_failed = true;
                             }
@@ -70,7 +70,7 @@ pub async fn run(
                         }
                         Some(outbound) = reply_rx.recv() => {
                             if let Ok(s) = serialize_outbound(&agent_id, &outbound) {
-                                if sink.send(Message::Text(s.into())).await.is_err() {
+                                if sink.send(Message::Text(s)).await.is_err() {
                                     // Send failed — buffer for next reconnect
                                     pending.push(outbound);
                                     break;

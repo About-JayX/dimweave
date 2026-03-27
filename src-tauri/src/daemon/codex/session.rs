@@ -54,7 +54,7 @@ async fn event_loop(
         tokio::select! {
             msg_opt = stream.next() => {
                 let Some(Ok(msg)) = msg_opt else { break };
-                let Ok(v) = serde_json::from_str::<Value>(&msg.to_text().unwrap_or("")) else {
+                let Ok(v) = serde_json::from_str::<Value>(msg.to_text().unwrap_or("")) else {
                     continue;
                 };
                 // turn/start response: map request_id → turn_id

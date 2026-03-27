@@ -6,6 +6,7 @@ use tauri::AppHandle;
 
 /// Core logic for launching Claude Code in channel preview mode via a managed
 /// PTY.  Extracted from `mcp.rs` to keep that module under the 200-line limit.
+#[allow(clippy::too_many_arguments)]
 pub async fn launch(
     dir: &str,
     model: Option<String>,
