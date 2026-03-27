@@ -1,7 +1,33 @@
 use serde_json::Value;
+use std::fmt;
+
+use crate::daemon::types::MessageStatus;
 
 /// Max bytes in raw delta buffer; bounds Rust-side memory for long responses.
 const RAW_DELTA_CAP: usize = 512_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ParsedOutput {
+    pub(super) message: String,
+    pub(super) send_to: Option<String>,
+    pub(super) status: MessageStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum StructuredOutputError {
+    InvalidStatus(String),
+}
+
+impl fmt::Display for StructuredOutputError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidStatus(value) => write!(
+                f,
+                "Invalid status: \"{value}\". Expected \"in_progress\", \"done\", or \"error\"."
+            ),
+        }
+    }
+}
 
 #[derive(Default)]
 pub(super) struct StreamPreviewState {
@@ -42,12 +68,32 @@ impl StreamPreviewState {
     }
 }
 
-pub(super) fn parse_structured_output(raw: &str) -> (String, Option<String>) {
+pub(super) fn parse_structured_output(raw: &str) -> Result<ParsedOutput, StructuredOutputError> {
     if let Ok(v) = serde_json::from_str::<Value>(raw) {
-        (v["message"].as_str().unwrap_or(raw).to_string(),
-         v["send_to"].as_str().map(str::to_string))
+        let status = match v.get("status") {
+            Some(value) => {
+                let raw = value.as_str().unwrap_or_default();
+                MessageStatus::parse(raw).ok_or_else(|| {
+                    StructuredOutputError::InvalidStatus(if raw.is_empty() {
+                        value.to_string()
+                    } else {
+                        raw.to_string()
+                    })
+                })?
+            }
+            None => MessageStatus::Done,
+        };
+        Ok(ParsedOutput {
+            message: v["message"].as_str().unwrap_or(raw).to_string(),
+            send_to: v["send_to"].as_str().map(str::to_string),
+            status,
+        })
     } else {
-        (raw.to_string(), None)
+        Ok(ParsedOutput {
+            message: raw.to_string(),
+            send_to: None,
+            status: MessageStatus::Done,
+        })
     }
 }
 
@@ -163,9 +209,33 @@ mod tests {
     }
     #[test]
     fn final_empty_message_not_emitted() {
-        let (text, to) = parse_structured_output(r#"{"message":"   ","send_to":"lead"}"#);
-        assert_eq!(to.as_deref(), Some("lead"));
-        assert!(!should_emit_final_message(&text));
+        let parsed = parse_structured_output(r#"{"message":"   ","send_to":"lead"}"#).unwrap();
+        assert_eq!(parsed.send_to.as_deref(), Some("lead"));
+        assert!(!should_emit_final_message(&parsed.message));
+    }
+    #[test]
+    fn status_defaults_to_done_when_missing() {
+        let parsed = parse_structured_output(r#"{"message":"done","send_to":"lead"}"#).unwrap();
+        assert_eq!(parsed.status.as_str(), "done");
+    }
+    #[test]
+    fn parses_explicit_in_progress_status() {
+        let parsed = parse_structured_output(
+            r#"{"message":"working","send_to":"lead","status":"in_progress"}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.status.as_str(), "in_progress");
+    }
+    #[test]
+    fn invalid_status_returns_error() {
+        let err = parse_structured_output(
+            r#"{"message":"working","send_to":"lead","status":"waiting"}"#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid status: \"waiting\""),
+            "unexpected error: {err}"
+        );
     }
     #[test]
     fn raw_delta_cap_enforced() {

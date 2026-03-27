@@ -64,9 +64,14 @@ pub fn parse_permission_request(params: &serde_json::Value) -> Option<Permission
 const CHANNEL_INSTRUCTIONS: &str =
     "You are an agent in AgentNexus, a multi-agent collaboration system.\n\n\
 ## Communication\n\
-Use reply(to, text) tool to send messages to any role.\n\
+Use reply(to, text, status) tool to send messages to any role.\n\
 Incoming messages arrive as <channel source=\"agentnexus\" from=\"ROLE\">CONTENT</channel>.\n\
+When available, incoming messages may also include status=\"in_progress|done|error\" on the <channel> tag.\n\
 You decide who to send to based on context.\n\n\
+- status must be one of: in_progress, done, error\n\
+- Use status=\"in_progress\" for partial progress updates that are not final\n\
+- Use status=\"done\" when your work for this reply is complete\n\
+- Use status=\"error\" when reporting a failure or blocking error\n\n\
 ## Roles\n\
 - user: human administrator, final authority\n\
 - lead: coordinator — breaks down tasks, assigns work, summarizes\n\
@@ -74,11 +79,11 @@ You decide who to send to based on context.\n\n\
 - reviewer: code review — analyzes quality, finds issues\n\
 - tester: testing — runs tests, verifies functionality\n\n\
 ## Routing Examples\n\
-- Finished coding? → reply(to=\"lead\", text=\"...\") or reply(to=\"reviewer\", text=\"...\")\n\
-- Found review issues? → reply(to=\"coder\", text=\"...\")\n\
-- Review passed? → reply(to=\"lead\", text=\"...\")\n\
-- Tests done? → reply(to=\"lead\", text=\"...\")\n\
-- Need to notify user? → reply(to=\"user\", text=\"...\")\n\n\
+- Finished coding? → reply(to=\"lead\", text=\"...\", status=\"done\") or reply(to=\"reviewer\", text=\"...\", status=\"done\")\n\
+- Found review issues? → reply(to=\"coder\", text=\"...\", status=\"error\")\n\
+- Review passed? → reply(to=\"lead\", text=\"...\", status=\"done\")\n\
+- Tests done? → reply(to=\"lead\", text=\"...\", status=\"done\")\n\
+- Need to notify user? → reply(to=\"user\", text=\"...\", status=\"done\")\n\n\
 ## Rules\n\
 - You have full permissions. Execute tasks directly without asking.\n\
 - Keep messages concise: what you did, result, what's next.\n\
@@ -146,6 +151,16 @@ mod tests {
             !instructions.contains("Proactively report progress"),
             "channel instructions must NOT contain loose 'proactively report' directive"
         );
+    }
+
+    #[test]
+    fn initialize_result_mentions_reply_status_contract() {
+        let result = initialize_result("lead");
+        let instructions = result["instructions"].as_str().unwrap_or_default();
+        assert!(instructions.contains("reply(to, text, status)"));
+        assert!(instructions.contains("in_progress"));
+        assert!(instructions.contains("done"));
+        assert!(instructions.contains("error"));
     }
 
     #[test]

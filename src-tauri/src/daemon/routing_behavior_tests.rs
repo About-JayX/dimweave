@@ -53,6 +53,7 @@ async fn auto_fanout_delivers_to_both_agents() {
             timestamp: 1,
             reply_to: None,
             priority: None,
+            status: None,
         };
         let result = route_message_inner(&state, msg).await;
         assert!(matches!(result, RouteResult::Delivered));
@@ -72,6 +73,7 @@ async fn explicit_user_target_routes_to_gui() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::ToGui));
@@ -89,6 +91,7 @@ async fn invalid_target_is_dropped_not_buffered() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));
@@ -106,6 +109,7 @@ async fn valid_role_offline_is_buffered() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
@@ -122,6 +126,7 @@ fn visible_messages_require_non_whitespace_content() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     let empty = BridgeMessage {
         id: "msg-empty".into(),
@@ -131,6 +136,7 @@ fn visible_messages_require_non_whitespace_content() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     assert!(is_renderable_message(&visible));
     assert!(!is_renderable_message(&empty));
@@ -146,6 +152,7 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     assert!(should_emit_claude_thinking(
         &msg,

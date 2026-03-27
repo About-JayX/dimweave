@@ -29,11 +29,14 @@ Your ONLY way to send messages to other agents is through your text output forma
 
 ## Output Format (MANDATORY)
 Your final text output MUST be valid JSON matching this schema:
-{\"message\": \"<your response>\", \"send_to\": \"<target role or none>\"}
+{\"message\": \"<your response>\", \"send_to\": \"<target role or none>\", \"status\": \"<in_progress|done|error>\"}
 
 - send_to = the role you want to deliver this message to
 - send_to = \"none\" if the message is only for the current user
 - send_to = \"user\" to explicitly reply to the human user
+- status = \"in_progress\" for a non-final progress update
+- status = \"done\" when this reply completes your current work
+- status = \"error\" when reporting a failure or blocking error
 - The system parses your output and routes it automatically
 - This is the ONLY communication channel. There is no other way to reach other agents.
 
@@ -44,20 +47,20 @@ Your final text output MUST be valid JSON matching this schema:
 ## When to Respond — CRITICAL
 Messages from the user may be sent to you directly OR broadcast to all agents (auto mode).
 - If the user addresses your role by name or describes a task in your domain → respond.
-- If the message does not mention your role and is not in your domain → set send_to = \"none\" and output {\"message\": \"\", \"send_to\": \"none\"}. Stay completely silent.
-- If the user explicitly says \"only X role respond\" or \"X回答我\" and X is NOT your role → you MUST output {\"message\": \"\", \"send_to\": \"none\"}. This is absolute — no exceptions.
+- If the message does not mention your role and is not in your domain → set send_to = \"none\" and output {\"message\": \"\", \"send_to\": \"none\", \"status\": \"done\"}. Stay completely silent.
+- If the user explicitly says \"only X role respond\" or \"X回答我\" and X is NOT your role → you MUST output {\"message\": \"\", \"send_to\": \"none\", \"status\": \"done\"}. This is absolute — no exceptions.
 - Exception: if the user's statement contains a significant factual error in your area of expertise, you SHOULD correct it even if not directly addressed.
 - When in doubt about whether to respond, DO NOT respond. Silence is always safer than an unwanted reply.
 
 ## Examples
 User: \"Tell lead to review this code\"
-Output: {\"message\": \"Please review the recent code changes for quality and correctness.\", \"send_to\": \"lead\"}
+Output: {\"message\": \"Please review the recent code changes for quality and correctness.\", \"send_to\": \"lead\", \"status\": \"done\"}
 
 User: \"Fix the login bug\"
-Output: {\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \"send_to\": \"none\"}
+Output: {\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \"send_to\": \"none\", \"status\": \"done\"}
 
 User: \"Send test results to lead\"
-Output: {\"message\": \"All 15 tests passed. No regressions found.\", \"send_to\": \"lead\"}
+Output: {\"message\": \"All 15 tests passed. No regressions found.\", \"send_to\": \"lead\", \"status\": \"done\"}
 
 ## Tool Usage (from Codex defaults)
 - Prefer `rg` for searching text/files (faster than grep). Use `rg --files` for file listing.
@@ -150,9 +153,32 @@ pub fn output_schema() -> serde_json::Value {
                 "type": "string",
                 "enum": ["user", "lead", "coder", "reviewer", "tester", "none"],
                 "description": "Target role to deliver this message to, or 'none' for local only"
+            },
+            "status": {
+                "type": "string",
+                "enum": ["in_progress", "done", "error"],
+                "description": "Reply lifecycle status"
             }
         },
-        "required": ["message", "send_to"],
+        "required": ["message", "send_to", "status"],
         "additionalProperties": false
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::output_schema;
+
+    #[test]
+    fn output_schema_requires_status_enum() {
+        let schema = output_schema();
+        assert_eq!(
+            schema["required"],
+            serde_json::json!(["message", "send_to", "status"])
+        );
+        assert_eq!(
+            schema["properties"]["status"]["enum"],
+            serde_json::json!(["in_progress", "done", "error"])
+        );
+    }
 }

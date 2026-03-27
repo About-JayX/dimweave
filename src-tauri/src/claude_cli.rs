@@ -43,6 +43,15 @@ impl ClaudeVersion {
                 patch: 80,
             }
     }
+
+    pub fn is_known_bad_managed_pty(&self) -> bool {
+        *self
+            == ClaudeVersion {
+                major: 2,
+                minor: 1,
+                patch: 85,
+            }
+    }
 }
 
 impl fmt::Display for ClaudeVersion {
@@ -97,9 +106,18 @@ pub fn ensure_claude_channel_ready() -> Result<ClaudeVersion, String> {
     );
     let version = parse_claude_version(&raw)
         .ok_or_else(|| format!("failed to parse Claude Code version from `{}`", raw.trim()))?;
+    validate_claude_channel_ready(version)
+}
+
+fn validate_claude_channel_ready(version: ClaudeVersion) -> Result<ClaudeVersion, String> {
     if !version.supports_channels_preview() {
         return Err(format!(
             "Claude Code {version} is too old for channel preview; require >= 2.1.80"
+        ));
+    }
+    if version.is_known_bad_managed_pty() {
+        return Err(format!(
+            "Claude Code {version} is blocked in AgentNexus managed PTY: this release can crash with `_4.useRef is not a function` after Claude starts rendering tool activity. Downgrade to 2.1.84 (for example: `claude install 2.1.84 --force` or `npm i -g @anthropic-ai/claude-code@2.1.84`) or upgrade once Anthropic ships a fixed release."
         ));
     }
     Ok(version)
@@ -119,5 +137,21 @@ mod tests {
     fn reject_old_claude_version() {
         let version = parse_claude_version("2.1.79").expect("version should parse");
         assert!(!version.supports_channels_preview());
+    }
+
+    #[test]
+    fn reject_known_bad_managed_pty_version() {
+        let version = parse_claude_version("2.1.85 (Claude Code)").expect("version should parse");
+        let err = validate_claude_channel_ready(version).expect_err("2.1.85 should be blocked");
+        assert!(err.contains("blocked in AgentNexus managed PTY"));
+        assert!(err.contains("_4.useRef is not a function"));
+        assert!(err.contains("2.1.84"));
+    }
+
+    #[test]
+    fn accept_supported_non_bad_version() {
+        let version = parse_claude_version("2.1.84 (Claude Code)").expect("version should parse");
+        let accepted = validate_claude_channel_ready(version).expect("2.1.84 should be allowed");
+        assert_eq!(accepted, version);
     }
 }

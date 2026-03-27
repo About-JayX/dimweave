@@ -31,6 +31,7 @@ async fn route_to_claude_from_unknown_sender_drops() {
         timestamp: 1,
         reply_to: None,
         priority: None,
+        status: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));

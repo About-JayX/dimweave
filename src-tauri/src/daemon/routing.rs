@@ -150,7 +150,15 @@ pub fn format_codex_input(msg: &BridgeMessage) -> String {
     if msg.from == "user" {
         msg.content.clone()
     } else {
-        format!("Message from {}:\n{}", msg.from, msg.content)
+        match msg.status {
+            Some(status) => format!(
+                "Message from {} (status: {}):\n{}",
+                msg.from,
+                status.as_str(),
+                msg.content
+            ),
+            None => format!("Message from {}:\n{}", msg.from, msg.content),
+        }
     }
 }
 

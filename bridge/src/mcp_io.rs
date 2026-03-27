@@ -13,9 +13,9 @@ pub(crate) async fn tool_call_response(
     match msg
         .params
         .as_ref()
-        .and_then(|params| handle_tool_call(params, agent_id))
+        .map(|params| handle_tool_call(params, agent_id))
     {
-        Some(bridge_msg) => {
+        Some(Ok(Some(bridge_msg))) => {
             eprintln!(
                 "[Bridge/{agent_id}] reply tool → {}",
                 bridge_msg.to
@@ -33,7 +33,12 @@ pub(crate) async fn tool_call_response(
                 }),
             }
         }
-        None => serde_json::json!({
+        Some(Err(err)) => serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id_to_value(&msg.id),
+            "error": { "code": -32002, "message": err.to_string() }
+        }),
+        _ => serde_json::json!({
             "jsonrpc": "2.0",
             "id": id_to_value(&msg.id),
             "error": { "code": -32000, "message": "unsupported tool call" }
@@ -96,4 +101,36 @@ pub(crate) async fn write_line(
         return false;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mcp_protocol::{RpcId, RpcMessage};
+
+    #[tokio::test]
+    async fn invalid_status_tool_call_returns_explicit_error() {
+        let (reply_tx, _reply_rx) = tokio::sync::mpsc::channel(1);
+        let msg = RpcMessage {
+            id: Some(RpcId::Number(1)),
+            method: Some("tools/call".into()),
+            params: Some(serde_json::json!({
+                "name": "reply",
+                "arguments": {
+                    "to": "lead",
+                    "text": "hello",
+                    "status": "waiting"
+                }
+            })),
+        };
+
+        let response = tool_call_response("claude", &reply_tx, &msg).await;
+        assert_eq!(response["error"]["code"], -32002);
+        assert!(
+            response["error"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("Invalid status: \"waiting\"")
+        );
+    }
 }

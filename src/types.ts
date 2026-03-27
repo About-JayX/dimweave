@@ -1,3 +1,5 @@
+export type MessageStatus = "in_progress" | "done" | "error";
+
 export interface BridgeMessage {
   id: string;
   from: string;
@@ -7,6 +9,7 @@ export interface BridgeMessage {
   type?: "task" | "review" | "result" | "question" | "system";
   replyTo?: string;
   priority?: "normal" | "urgent";
+  status?: MessageStatus;
 }
 
 export type PermissionBehavior = "allow" | "deny";

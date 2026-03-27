@@ -62,7 +62,7 @@ tool 通过 `ListToolsRequestSchema` handler 注册:
 |------|------|------|------|
 | `name` | `string` | 是 | Tool 名称，如 `"reply"` |
 | `description` | `string` | 是 | Tool 描述，Claude 用来决定何时调用 |
-| `inputSchema` | JSON Schema | 是 | 输入参数 schema。当前 bridge 用 `chat_id` + `text` |
+| `inputSchema` | JSON Schema | 是 | 输入参数 schema。当前 bridge 用 `to` + `text` + `status` |
 
 tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 ```json
@@ -119,7 +119,7 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 | `notifications/claude/channel` | `channel_state.rs` prepare_channel_message | ✅ 已实现 |
 | `notifications/claude/channel/permission_request` | `mcp.rs` parse + bridge outbound | ✅ 已实现 |
 | `notifications/claude/channel/permission` | `channel_state.rs` permission_notification | ✅ 已实现 |
-| meta 属性 (`from`, `chat_id`) | `channel_state.rs` prepare_channel_message | ✅ 已实现 |
+| meta 属性 (`from`, 可选 `status`) | `channel_state.rs` prepare_channel_message | ✅ 已实现 |
 | Sender gating | `channel_state.rs` ALLOWED_SENDERS | ✅ 已实现 |
 | Pre-init message buffering | `mcp.rs` pre_init_buffer | ✅ 已实现 |
 
@@ -218,6 +218,21 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 #### [已修复] Claude terminal attention 改为 prompt 边沿触发
 
 - **现象**: 之前 `attention_fired` 在首次 attention 后永久为 true，同一 PTY session 内后续 prompt 不再触发 tab badge，也不会再次递增 `claudeFocusNonce`
+
+### 2026-03-27: Claude Code 2.1.85 PTY 崩溃保护
+
+- [已修复] Claude Code `2.1.85` 在 AgentNexus 的 managed PTY 下会崩在上游 TUI bundle，报错形态为 `_4.useRef is not a function`，随后终端无响应但 GUI 仍可能残留“已连接”错觉
+- **根因**: 这不是 AgentNexus 的 `status` 协议或 PTY 写入链直接打坏，而是 Claude Code `2.1.85` 自身交互 TUI 的回归；错误栈位于 `claude-standalone` 内部 tool activity 渲染代码
+- **修复**: `ensure_claude_channel_ready()` 现在把 `2.1.85` 视为已知坏版本并在启动前直接拒绝，给出明确降级提示，不再让坏版本进入 managed PTY 后静默炸掉
+- **当前策略**:
+  - `>= 2.1.80` 仍是 channel preview 最低版本要求
+  - `2.1.85` 被额外列为 AgentNexus managed PTY 黑名单版本
+  - 推荐回退到 `2.1.84`：`claude install 2.1.84 --force`
+  - 或 `npm i -g @anthropic-ai/claude-code@2.1.84`
+- **验证**:
+  - 本地 `claude --version` = `2.1.85`
+  - npm registry 仍可获取 `2.1.84`
+  - Rust 单测新增：`reject_known_bad_managed_pty_version`、`accept_supported_non_bad_version`
 - **根因**: `prompt.rs` 使用会话级一次性门闩去抑制 attention storm，结果把“同一 prompt 不要连发”误实现成了“整个 session 只发一次”
 - **修复**: `prompt.rs` 现在改成 prompt 可见性的边沿触发。当前 prompt 仍然可见时不重复 emit；prompt 消失后再次出现时，会重新 emit `claude_terminal_attention`
 - **结果**: 后续真实交互 prompt 会再次自动切到 `Claude Terminal` 并 force focus，方向键等键盘输入不再要求用户先手动点击终端
@@ -370,6 +385,14 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过（78 tests）；`cargo clippy --workspace --all-targets -- -D warnings` 通过；`bun run build` 通过；dev 模式下重建后未再复现 `there is no reactor running` panic。
 
+### 2026-03-27: Claude thinking 不再被静默超时提前结束
+
+- [已修复] daemon 侧 15 秒 Claude idle timeout 已移除。之前即使 Claude reply 还没结束，只要一段时间没有新的 preview/终端输出，daemon 也会主动发 `claude_stream.done`，导致 Messages 面板里的 Claude thinking 卡片提前消失。
+- [已修复] 当前 Claude thinking 只由真实生命周期事件结束：
+  - Claude 发回非空 reply 时 `control/handler.rs` 发 `Done`
+  - Claude 断开、终端退出、用户强制断开时发 `Reset`
+- [结果] 对“Claude 还在处理但暂时没有终端输出”的场景，Messages 面板会继续保留 Claude thinking，占位不会再被提前清掉。
+
 ### 2026-03-27: Superpowers 复核收口
 
 - [已修复] `claude_terminal_attention` 在用户已经停留在 Claude tab 时，不再把 `claudeNeedsAttention` 脏状态残留在 store。当前前端通过 `getClaudeAttentionResolution()` 同时决定“是否切 tab”和“是否清空 store attention”，避免后续切去别的 tab 时被强行弹回 Claude。
@@ -377,6 +400,15 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - [已修复] `ClaudeTerminalPane` 的强制 focus effect 已缩减为只由 `focusNonce` 驱动；`connected` / `running` 状态变化不再隐式触发 `terminal.focus()`。
 - [说明] Claude preview 文本清洗链路仍保留在 daemon 侧，但当前前端已不再消费该 preview；UI 行为以单一 thinking 占位为准。
 - [已修复] Claude thinking 的启动判定现在与真实路由结果绑定在同一份 daemon state 快照里，不再依赖 `route_message_with_display()` 额外读取一次 `claude_role`。角色切换瞬间不会再出现“消息已按旧角色投递、thinking 却按新角色判断”的竞态。
+
+### 2026-03-27: Claude reply 协议新增 `status`
+
+- [已修复] Claude `reply` tool 现在使用 `reply(to, text, status)`，`status` 固定为三态：`in_progress`、`done`、`error`。
+- [已修复] bridge 侧新增严格校验：缺失 `status` 仍兼容并默认按 `done`，但只要传了非法值，就会返回明确的 MCP tool error：`Invalid status: "<value>". Expected "in_progress", "done", or "error".`
+- [已修复] Claude → daemon 的统一 `BridgeMessage` 已新增可选 `status` 字段；bridge 转发到 Claude channel 时，也会把 `status` 作为可选 meta 属性透传到 `<channel ... status="...">`。
+- [已修复] Claude thinking 的结束条件已切到显式状态：`done` / `error` 会结束 thinking，`in_progress` 不会；空消息仍不渲染，但允许 `status=done|error` 只负责结束 thinking。
+
+**验证:** ✅ `cargo test --manifest-path bridge/Cargo.toml` 通过（19 tests）；`cargo test --manifest-path src-tauri/Cargo.toml` 通过（85 tests）。
 
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过；`bun test tests/message-panel-view-model.test.ts` 通过；attention 留存与强制 focus 回归路径已覆盖。
 

@@ -340,20 +340,21 @@ pub struct ThreadStartParams {
 
 **2. `outputSchema`（turn/start 参数，GPT Structured Output 硬约束）**
 
-每次 `turn/start` 附带 JSON Schema，强制模型输出包含 `send_to` 路由字段：
+每次 `turn/start` 附带 JSON Schema，强制模型输出包含 `send_to` 路由字段和 `status` 生命周期字段：
 ```json
 {
   "type": "object",
   "properties": {
     "message": { "type": "string" },
-    "send_to": { "enum": ["user","lead","coder","reviewer","tester","none"] }
+    "send_to": { "enum": ["user","lead","coder","reviewer","tester","none"] },
+    "status": { "enum": ["in_progress","done","error"] }
   },
-  "required": ["message", "send_to"],
+  "required": ["message", "send_to", "status"],
   "additionalProperties": false
 }
 ```
 
-`session.rs` 解析 `item/completed(agentMessage)` 文本为 JSON，提取 `send_to`，非 `"none"`/`"user"` 时自动调用 `routing::route_message` 投递。
+`session.rs` 解析 `item/completed(agentMessage)` 文本为 JSON，提取 `send_to` 和 `status`。非 `"none"`/`"user"` 时自动调用 `routing::route_message` 投递；缺失 `status` 兼容按 `done` 处理，非法值会转成用户可见的错误提示并打 `error` 日志。
 
 **3. 替换 prompt 后的影响**
 
@@ -437,6 +438,7 @@ AGENTS.md、Skills、MCP 工具、developer_sections 全部通过 `input[]` 或 
 - [已修复] `item/agentMessage/delta` 之前会把结构化输出原始 JSON token 直接透传到前端，Messages 底部 streaming 区会显示 `{"message":"...","send_to":"..."}` 这类模板文本。当前 daemon 改为维护当前 turn 的原始缓冲，只提取 `message` 字段作为 preview，再通过 `codex_stream.delta` 发给前端。
 - [已修复] 前端 `codex_stream.delta` 的消费语义已从“原始 token 追加”改成“当前完整 preview 替换”，因此 `CodexStreamIndicator` 只显示当前可展示文本，不再自己拼 JSON 片段。
 - [已修复] 若 Codex 最终完成消息的 `message.trim().is_empty()`，daemon 不再 emit 最终 message，也不再做内部路由；只等待 `turn/completed` 清理 thinking，避免空消息或空路由副作用。
+- [已修复] Codex 最终结构化输出新增 `status` 字段，固定为 `in_progress` / `done` / `error`。统一 `BridgeMessage` 已保留该字段，agent 间转发不会再把状态丢掉；发往 Codex 的内部消息文本也会附带 `(status: ...)` 上下文。
 
 **验证:** ✅ Codex streaming 区只显示 `message` 内容；最终空消息不会落入历史消息或内部 route。
 
@@ -449,9 +451,13 @@ AGENTS.md、Skills、MCP 工具、developer_sections 全部通过 `input[]` 或 
 
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过；Codex 结构化输出 preview/空消息测试通过；`cargo clippy --workspace --all-targets -- -D warnings` 通过。
 
-### 2026-03-27: 项目级深度复核补充
+### 2026-03-27: Codex `status` 协议与非法值处理
 
-- [未修复] `StreamPreviewState.raw_delta` 仍无长度上限。虽然前端 `codexStream.currentDelta` 已在 listener 层裁剪到最近 100,000 个字符，但 daemon 侧 `structured_output.rs::ingest_delta()` 仍会把整段原始 delta 持续累加到同一个 `String`，直到 `turn/completed` 才 `reset()`。长回复场景下，Rust 侧内存增长仍然存在。
+- [已修复] `structured_output.rs` 现已把最终 JSON 解析为强类型结果：`message`、`send_to`、`status`。缺失 `status` 会兼容默认成 `done`。
+- [已修复] `status` 非法值不再静默降级。daemon 会写一条 `error` 级 system log，并生成一条面向用户的错误消息：`Invalid status: "<value>". Expected "in_progress", "done", or "error".`
+- [已修复] `StreamPreviewState.raw_delta` 现已受 `RAW_DELTA_CAP = 512_000` 约束，daemon 侧不会再无限累积原始 preview 缓冲。
+
+**验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml` 通过（85 tests）；`invalid_status_returns_error`、`status_defaults_to_done_when_missing`、`parses_explicit_in_progress_status` 回归测试已加入。
 
 ### 2026-03-27: 现场故障修复（Port 4500 残留）
 

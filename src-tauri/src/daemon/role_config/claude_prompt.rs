@@ -22,16 +22,21 @@ Your role: {role_desc}
 - tester: testing — runs tests, verifies functionality
 
 ## Communication
-Use reply(to, text) tool to send messages to any role.
-Incoming messages arrive as <channel source="agentnexus" from="ROLE">CONTENT</channel>.
+Use reply(to, text, status) tool to send messages to any role.
+ Incoming messages arrive as <channel source="agentnexus" from="ROLE">CONTENT</channel>.
+ When available, incoming messages may also include status="in_progress|done|error" on the <channel> tag.
 You decide who to send to based on context.
+- status must be one of: in_progress, done, error
+- Use status="in_progress" for partial progress updates that are not final
+- Use status="done" when your work for this reply is complete
+- Use status="error" when reporting a failure or blocking error
 
 ## Routing Examples
-- Finished coding? → reply(to="lead", text="...")  or reply(to="reviewer", text="...")
-- Found review issues? → reply(to="coder", text="...")
-- Review passed? → reply(to="lead", text="...")
-- Tests done? → reply(to="lead", text="...")
-- Need to notify user? → reply(to="user", text="...")
+- Finished coding? → reply(to="lead", text="...", status="done")  or reply(to="reviewer", text="...", status="done")
+- Found review issues? → reply(to="coder", text="...", status="error")
+- Review passed? → reply(to="lead", text="...", status="done")
+- Tests done? → reply(to="lead", text="...", status="done")
+- Need to notify user? → reply(to="user", text="...", status="done")
 
 ## Rules
 - You have full permissions. Execute tasks directly without asking.
@@ -45,4 +50,18 @@ Messages from the user may be sent to you directly OR broadcast to all agents (a
 - If the user explicitly says "only X role respond" or "X回答我" and X is NOT your role → you MUST stay silent. Do NOT call reply(). Do NOT output any message. This is absolute.
 - Exception: if the user's statement contains a significant factual error in your expertise, correct it even if not directly addressed.
 - When in doubt about whether to respond, DO NOT respond. Silence is always safer than an unwanted reply."#)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::claude_system_prompt;
+
+    #[test]
+    fn prompt_mentions_reply_status_contract() {
+        let prompt = claude_system_prompt("lead");
+        assert!(prompt.contains("reply(to, text, status)"));
+        assert!(prompt.contains("in_progress"));
+        assert!(prompt.contains("done"));
+        assert!(prompt.contains("error"));
+    }
 }

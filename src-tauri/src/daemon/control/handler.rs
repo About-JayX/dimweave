@@ -1,6 +1,6 @@
 use crate::daemon::{
     gui::{self, ClaudeStreamPayload}, routing,
-    types::{FromAgent, ToAgent},
+    types::{FromAgent, MessageStatus, ToAgent},
     SharedState,
 };
 use axum::extract::ws::{Message, WebSocket};
@@ -82,9 +82,14 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         }
                     };
                     message.from = role;
-                    if id == "claude" && !message.content.trim().is_empty() {
+                    let status = message.status.unwrap_or(MessageStatus::Done);
+                    message.status = Some(status);
+                    if id == "claude" && status.is_terminal() {
                         gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                     }
+                }
+                if message.content.trim().is_empty() {
+                    continue;
                 }
                 routing::route_message(&state, &app, message).await;
             }

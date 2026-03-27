@@ -253,7 +253,7 @@
 
 ### 13. [已知问题] 2026-03-27 项目级深度复核
 
-- [已知问题] Codex 结构化输出 preview 虽然已经在前端 store 做了 100,000 字符上限，但 daemon 侧 `StreamPreviewState.raw_delta` 仍是无上限累积：`ingest_delta()` 每个 delta 都 `push_str()` 到同一个 `String`，直到 turn 完成才 `reset()`。长回复场景下，前端不会继续膨胀，但 Rust 进程内存仍会跟着整段原始输出增长。
+- [已修复] Codex 结构化输出 preview 现在已在 daemon 侧加入 `RAW_DELTA_CAP = 512_000` 上限，不再无限累积原始 `raw_delta`。本节保留仅用于说明当时复核结论已在后续轮次收口。
 - [已知问题] `RoleSelect` / store 的 optimistic role 更新仍未真正闭环。前端 `setRole()` 先直接写 `claudeRole` / `codexRole`，而 Tauri `daemon_set_*_role` command 只返回“命令是否成功入队”；daemon 内部若因为重复 role 拒绝变更，只会写一条 system log，不会把拒绝结果回传给前端，因此 UI role 仍可能和实际 daemon 路由状态分叉。
 
 ### 14. [已修复] 2026-03-27 现场故障修复（Codex 4500 端口 / Claude 终端空白）
@@ -344,7 +344,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### 15. [已修复] 2026-03-27 reviewer 二轮深度链路审计修复
 
-- [已修复] **P0: Claude 静默时 thinking 永远不消失** — `src-tauri/src/daemon/gui.rs` 新增 daemon 侧 idle timeout。机制：`emit_claude_stream` 在 `ThinkingStarted` 和 `Preview` 时 bump 一个 `AtomicU64` generation 并 spawn 15 秒延迟任务；`Done` 和 `Reset` 只 bump generation（使待定 timeout 失效）。若 15 秒内无 Preview 也无 Reply，延迟任务检查 generation 未变则 emit `Done`。这与被移除的前端 30s timeout 本质不同：(a) 由 daemon 权威发出而非前端猜测；(b) 每次 Preview 重置倒计时，不会中断活跃的 thinking；(c) 不修改前端 store，不阻断后续事件链。
+- [已修复] **P0: 前端 30s thinking timeout 已撤销** — `ClaudeStreamIndicator.tsx` 中的前端超时自动清理逻辑已经移除，Claude thinking 不再由前端猜测结束。后续又试过 daemon 侧 15 秒 idle timeout，但现场验证会在“Claude 仍在处理但暂时没有终端输出”时提前清空 thinking，因此该 daemon timeout 也已在本轮 #19 撤销，当前只保留真实 `Done/Reset` 事件作为结束信号。
 - [已修复] **P1: RoleSelect 与 daemon 真值分叉** — `DaemonCmd::SetClaudeRole` 和 `SetCodexRole` 改为携带 `oneshot::Sender<Result<(), String>>` reply channel。`commands.rs` 的 `daemon_set_*_role` 现在 await daemon 真实校验结果并回传前端。前端 `setRole()` 改为 optimistic + rollback：先写 store 保持 UI 响应，invoke 失败（冲突/非法 role）时立即回滚到 prev 值并通过 `logError` 展示错误。
 - [已修复] **P1: Codex raw_delta 无上限内存增长** — `src-tauri/src/daemon/codex/structured_output.rs` 的 `ingest_delta()` 新增 `RAW_DELTA_CAP = 512_000` 字节上限。超出时从 buffer 前端按 char boundary 裁剪，保留最近 512KB。与前端 100K 字符 preview 截断形成双层保护。
 - [已修复] **P2: 前端 ANSI regex CSI final byte 覆盖不完整** — `MessageMarkdown.tsx` 和 `ClaudeStreamIndicator.tsx` 的 CSI 正则从 `[A-Za-z]` 修正为 `[@-~]`（覆盖完整 0x40-0x7E final byte range）。两处去重提取为共享 `src/lib/strip-escapes.ts`，与 Rust `text_utils.rs` 语义对齐。新增 `tests/strip-escapes.test.ts` 8 项测试，覆盖 bracketed paste (`ESC[200~`) 等此前遗漏的序列。
@@ -380,6 +380,52 @@ cargo clippy --workspace --all-targets -- -D warnings
 - `bun test tests/claude-stream-reduction.test.ts`：通过（1 test）
 - `bun test tests/`：通过（20 tests across 4 files）
 - `bun run build`：通过
+
+### 19. [已修复] 2026-03-27 Claude thinking 不再被静默超时提前结束
+
+- [已修复] **daemon 15 秒 idle timeout 已移除** — 用户现场复现了新的真实问题：Claude 终端一段时间没有输出，但 reply 实际还没结束，Messages 面板里的 Claude thinking 已经消失。根因是 `src-tauri/src/daemon/gui.rs` 里的 idle timeout 会在静默 15 秒后主动 emit `claude_stream.done`。当前这条 timeout 已移除。
+- [已修复] **Claude thinking 只由真实生命周期事件收尾** — 现在只有以下事件会结束 Claude thinking：
+  - `control/handler.rs` 在 Claude 发回非空 reply 时发 `Done`
+  - `process.rs` / `control/handler.rs` / `daemon/mod.rs` 在 Claude 终端退出、连接断开或强制断开时发 `Reset`
+- [结果] “Claude 还在处理但暂时没有终端输出”的场景下，Messages UI 不会再提前消失。
+
+## 验证记录（本轮 #19）
+
+- `cargo test --manifest-path src-tauri/Cargo.toml idle_claude_thinking -- --nocapture`：通过（2 tests）
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过（80 tests）
+- `cargo test --manifest-path bridge/Cargo.toml`：通过（14 tests）
+- `bun test tests/`：通过（21 tests across 4 files）
+- `cargo clippy --workspace --all-targets -- -D warnings`：通过
+- `bun run build`：通过
+
+### 20. [已修复] 2026-03-27 Claude / Codex 返回协议新增 `status`
+
+- [已修复] 统一消息结构 `BridgeMessage` 已新增可选 `status` 字段，三态固定为 `in_progress` / `done` / `error`；bridge、daemon、前端类型均已同步。
+- [已修复] Claude `reply` tool 已升级为 `reply(to, text, status)`。bridge 对 `status` 做严格校验：缺失值兼容默认成 `done`，非法值直接返回 MCP tool error：`Invalid status: "<value>". Expected "in_progress", "done", or "error".`
+- [已修复] Claude channel 转发现在会把 `status` 作为可选 `<channel ... status="...">` meta 透传；Claude system prompt 与 bridge `CHANNEL_INSTRUCTIONS` 也已同步说明该字段。
+- [已修复] Codex 最终结构化输出 schema 已扩展为 `{"message","send_to","status"}`。daemon 会解析并保留 `status`；缺失值兼容按 `done` 处理，非法值会写 `error` 级 system log，并生成一条面向用户的错误提示消息。
+- [已修复] Claude thinking 的完成条件已切到显式状态驱动：`done` / `error` 会结束 thinking，`in_progress` 不会；空消息仍不渲染，但允许终态空消息只负责结束 thinking。
+- [已修复] Codex 侧继续保留流式 `delta.text` 预览；`status` 只在最终结构化完成结果中解析，不要求每个 streaming delta 都带该字段。
+
+## 验证记录（本轮 #20）
+
+- `cargo test --manifest-path bridge/Cargo.toml`：通过（19 tests）
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过（85 tests）
+
+### 21. [已修复] 2026-03-27 Claude Code `2.1.85` 已知坏版本前置阻断
+
+- [已修复] **Claude PTY 静默崩溃的根因已定位到上游版本回归** — 现场日志出现 `ERROR _4.useRef is not a function`，错误栈位于 `claude-standalone` 内部 tool activity 渲染函数，而不是 AgentNexus 的 `status` 协议或 PTY 输入链。
+- [已修复] **启动前版本校验新增黑名单保护** — `src-tauri/src/claude_cli.rs` 现在除了校验 `>= 2.1.80` 以外，还会额外拒绝 `2.1.85`。这能避免 Claude 以“看似已连接”的状态进入 managed PTY 后再静默炸掉。
+- [已修复] **错误提示改成可执行 workaround** — 阻断消息会明确提示当前已知坏版本、对应崩溃形态 `_4.useRef is not a function`，并给出回退命令：
+  - `claude install 2.1.84 --force`
+  - `npm i -g @anthropic-ai/claude-code@2.1.84`
+- [记录] npm registry 复核结果：`2.1.85` 是当前 latest，但 `2.1.84` 仍可获取，因此“前置阻断 + 指向 2.1.84”是当前最稳妥的处理。
+
+## 验证记录（本轮 #21）
+
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_cli`：通过（4 tests）
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过（87 tests）
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：通过
 
 ## 验证记录（本轮 #17）
 

@@ -31,7 +31,7 @@ impl ChannelState {
             "method": "notifications/claude/channel",
             "params": {
                 "content": msg.content,
-                "meta": { "from": msg.from }
+                "meta": build_meta(msg)
             }
         }))
     }
@@ -57,6 +57,15 @@ impl ChannelState {
     }
 }
 
+fn build_meta(msg: &BridgeMessage) -> serde_json::Value {
+    let mut meta = serde_json::Map::new();
+    meta.insert("from".into(), serde_json::json!(msg.from));
+    if let Some(status) = msg.status {
+        meta.insert("status".into(), serde_json::json!(status.as_str()));
+    }
+    serde_json::Value::Object(meta)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,6 +80,7 @@ mod tests {
             timestamp: 1,
             reply_to: None,
             priority: None,
+            status: None,
         }
     }
 
@@ -80,6 +90,15 @@ mod tests {
         let notif = state.prepare_channel_message(&msg("coder"));
         assert!(notif.is_some());
         assert_eq!(notif.unwrap()["params"]["meta"]["from"], "coder");
+    }
+
+    #[test]
+    fn status_is_forwarded_in_channel_meta() {
+        let state = ChannelState::new();
+        let mut message = msg("coder");
+        message.status = Some(crate::types::MessageStatus::InProgress);
+        let notif = state.prepare_channel_message(&message).unwrap();
+        assert_eq!(notif["params"]["meta"]["status"], "in_progress");
     }
 
     #[test]

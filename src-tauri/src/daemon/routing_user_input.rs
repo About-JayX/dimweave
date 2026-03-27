@@ -62,5 +62,6 @@ fn build_user_message(now: u64, to: &str, content: &str) -> BridgeMessage {
         timestamp: now,
         reply_to: None,
         priority: None,
+        status: None,
     }
 }

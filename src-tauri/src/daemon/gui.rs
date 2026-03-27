@@ -1,18 +1,7 @@
 use crate::daemon::types::{BridgeMessage, PermissionRequest};
 use serde::Serialize;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tauri::async_runtime;
 use super::window_focus::focus_main_window;
-
-/// Generation counter for Claude thinking idle timeout.
-/// Each ThinkingStarted/Preview bumps this and spawns a delayed Done check.
-/// Each Done/Reset bumps this to invalidate pending timeouts.
-static CLAUDE_THINKING_GEN: AtomicU64 = AtomicU64::new(0);
-
-/// Idle timeout: emit Done if no Preview/Reply arrives within this window.
-const CLAUDE_THINKING_IDLE_SECS: u64 = 15;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -141,30 +130,13 @@ pub enum ClaudeStreamPayload {
     Reset,
 }
 
-pub fn emit_claude_stream(app: &AppHandle, payload: ClaudeStreamPayload) {
-    match &payload {
-        ClaudeStreamPayload::ThinkingStarted | ClaudeStreamPayload::Preview { .. } => {
-            spawn_thinking_idle_timeout(app);
-        }
-        ClaudeStreamPayload::Done | ClaudeStreamPayload::Reset => {
-            // Bump generation so any pending idle timeout becomes stale.
-            CLAUDE_THINKING_GEN.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-    let _ = app.emit("claude_stream", payload);
+#[cfg(test)]
+fn should_auto_finish_idle_claude_thinking(_payload: &ClaudeStreamPayload) -> bool {
+    false
 }
 
-/// Bump the generation and spawn a delayed task that emits Done if the
-/// generation hasn't changed (meaning no new Preview/Reply/Reset arrived).
-fn spawn_thinking_idle_timeout(app: &AppHandle) {
-    let gen = CLAUDE_THINKING_GEN.fetch_add(1, Ordering::SeqCst) + 1;
-    let app = app.clone();
-    async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(CLAUDE_THINKING_IDLE_SECS)).await;
-        if CLAUDE_THINKING_GEN.load(Ordering::SeqCst) == gen {
-            let _ = app.emit("claude_stream", ClaudeStreamPayload::Done);
-        }
-    });
+pub fn emit_claude_stream(app: &AppHandle, payload: ClaudeStreamPayload) {
+    let _ = app.emit("claude_stream", payload);
 }
 
 pub fn emit_agent_status(app: &AppHandle, agent: &str, online: bool, exit_code: Option<i32>) {
@@ -195,4 +167,25 @@ pub fn emit_permission_prompt(
             created_at,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_auto_finish_idle_claude_thinking, ClaudeStreamPayload};
+
+    #[test]
+    fn thinking_started_does_not_auto_finish_idle_claude_thinking() {
+        assert!(!should_auto_finish_idle_claude_thinking(
+            &ClaudeStreamPayload::ThinkingStarted
+        ));
+    }
+
+    #[test]
+    fn preview_does_not_auto_finish_idle_claude_thinking() {
+        assert!(!should_auto_finish_idle_claude_thinking(
+            &ClaudeStreamPayload::Preview {
+                text: "preview".into(),
+            }
+        ));
+    }
 }

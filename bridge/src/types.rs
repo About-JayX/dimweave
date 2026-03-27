@@ -1,5 +1,32 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageStatus {
+    InProgress,
+    Done,
+    Error,
+}
+
+impl MessageStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InProgress => "in_progress",
+            Self::Done => "done",
+            Self::Error => "error",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "in_progress" => Some(Self::InProgress),
+            "done" => Some(Self::Done),
+            "error" => Some(Self::Error),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
@@ -12,6 +39,8 @@ pub struct BridgeMessage {
     pub reply_to: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<MessageStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

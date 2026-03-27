@@ -4,7 +4,7 @@ use crate::daemon::codex::structured_output::{
     StreamPreviewState, parse_structured_output, should_emit_final_message,
 };
 use crate::daemon::gui::{self, CodexStreamPayload};
-use crate::daemon::types::BridgeMessage;
+use crate::daemon::types::{BridgeMessage, MessageStatus};
 use crate::daemon::{routing, SharedState};
 use futures_util::StreamExt;
 use serde_json::{json, Value};
@@ -151,26 +151,38 @@ async fn handle_codex_event(
                     return;
                 }
                 stream_preview.sync_final_raw(raw);
-                let (display_text, send_to) = parse_structured_output(raw);
-                if !should_emit_final_message(&display_text) {
+                let parsed = match parse_structured_output(raw) {
+                    Ok(parsed) => parsed,
+                    Err(err) => {
+                        let hint = err.to_string();
+                        gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
+                        let error_msg =
+                            build_msg_with_status(role_id, "user", &hint, MessageStatus::Error);
+                        gui::emit_agent_message(app, &error_msg);
+                        return;
+                    }
+                };
+                if !should_emit_final_message(&parsed.message) {
                     return;
                 }
                 gui::emit_codex_stream(app, CodexStreamPayload::Message {
-                    text: display_text.clone(),
+                    text: parsed.message.clone(),
                 });
                 let valid_target = if schema_route_enabled {
-                    send_to.as_deref().filter(|t| {
+                    parsed.send_to.as_deref().filter(|t| {
                         matches!(*t, "lead" | "coder" | "reviewer" | "tester")
                     })
                 } else {
                     None
                 };
                 if let Some(target) = valid_target {
-                    let msg = build_msg(role_id, target, &display_text);
+                    let msg =
+                        build_msg_with_status(role_id, target, &parsed.message, parsed.status);
                     eprintln!("[Codex] schema-route {} → {}", role_id, target);
                     routing::route_message(state, app, msg).await;
                 } else {
-                    let msg = build_msg(role_id, "user", &display_text);
+                    let msg =
+                        build_msg_with_status(role_id, "user", &parsed.message, parsed.status);
                     gui::emit_agent_message(app, &msg);
                 }
             }
@@ -186,7 +198,12 @@ async fn handle_codex_event(
 
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
 
-fn build_msg(from: &str, to: &str, content: &str) -> BridgeMessage {
+fn build_msg_with_status(
+    from: &str,
+    to: &str,
+    content: &str,
+    status: MessageStatus,
+) -> BridgeMessage {
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     BridgeMessage {
         id: format!("codex_{}_{seq}", chrono::Utc::now().timestamp_millis()),
@@ -196,5 +213,6 @@ fn build_msg(from: &str, to: &str, content: &str) -> BridgeMessage {
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
+        status: Some(status),
     }
 }

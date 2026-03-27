@@ -1,4 +1,7 @@
-use crate::daemon::{types::BridgeMessage, SharedState};
+use crate::daemon::{
+    types::{BridgeMessage, MessageStatus},
+    SharedState,
+};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio::sync::mpsc;
@@ -50,6 +53,7 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
+        status: Some(MessageStatus::Done),
     };
 
     crate::daemon::routing::route_message(state, app, msg).await;
