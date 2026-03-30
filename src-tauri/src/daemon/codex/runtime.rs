@@ -41,6 +41,7 @@ where
 
 pub(super) fn spawn_health_monitor(
     child: Arc<Mutex<Option<tokio::process::Child>>>,
+    session_epoch: u64,
     state: SharedState,
     app: AppHandle,
     cancel: CancellationToken,
@@ -56,9 +57,14 @@ pub(super) fn spawn_health_monitor(
                 match proc.try_wait() {
                     Ok(Some(status)) => {
                         cancel.cancel();
-                        state.write().await.codex_inject_tx = None;
-                        gui::emit_agent_status(&app, "codex", false, None);
-                        gui::emit_system_log(&app, "warn", &format!("[Codex] exited: {status}"));
+                        let cleared_current = {
+                            let mut daemon = state.write().await;
+                            daemon.clear_codex_session_if_current(session_epoch)
+                        };
+                        if cleared_current {
+                            gui::emit_agent_status(&app, "codex", false, None);
+                            gui::emit_system_log(&app, "warn", &format!("[Codex] exited: {status}"));
+                        }
                         return;
                     }
                     Ok(None) => {}

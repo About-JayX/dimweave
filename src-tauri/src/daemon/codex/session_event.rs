@@ -1,5 +1,5 @@
 use crate::daemon::codex::handler;
-use crate::daemon::codex::handshake::WsTx;
+use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::codex::structured_output::{
     parse_structured_output, should_emit_final_message, StreamPreviewState,
 };

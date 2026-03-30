@@ -1,9 +1,8 @@
-use crate::daemon::codex::handshake::{WsStream, WsTx};
 use crate::daemon::codex::structured_output::StreamPreviewState;
+use crate::daemon::codex::ws_client::{CodexWsClient, WsRx, WsTx};
 use crate::daemon::gui;
 use crate::daemon::SharedState;
-use futures_util::StreamExt;
-use serde_json::{json, Value};
+use serde_json::json;
 use self::session_event::handle_codex_event;
 use tauri::AppHandle;
 use tokio::sync::mpsc;
@@ -15,21 +14,40 @@ pub struct SessionOpts {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub sandbox_mode: Option<String>,
+    pub network_access: bool,
     pub base_instructions: Option<String>,
+}
+
+struct EventLoopCtx<'a> {
+    thread_id: String,
+    session_epoch: u64,
+    role_id: &'a str,
+    state: &'a SharedState,
+    app: &'a AppHandle,
 }
 
 pub async fn run(
     port: u16,
+    session_epoch: u64,
     opts: SessionOpts,
     state: SharedState,
     app: AppHandle,
     mut inject_rx: mpsc::Receiver<(String, bool)>,
     ready_tx: tokio::sync::oneshot::Sender<String>,
 ) {
-    match super::handshake::handshake(port, &opts, &app).await {
-        Some((tid, ws_tx, stream)) => {
+    match CodexWsClient::connect(port, &opts, &app).await {
+        Some((client, ws_rx)) => {
+            let tid = client.thread_id().to_string();
+            let ws_tx = client.sender().clone();
             let _ = ready_tx.send(tid.clone());
-            event_loop(tid, &opts.role_id, &state, &app, &mut inject_rx, ws_tx, stream).await;
+            let ctx = EventLoopCtx {
+                thread_id: tid,
+                session_epoch,
+                role_id: &opts.role_id,
+                state: &state,
+                app: &app,
+            };
+            event_loop(ctx, &mut inject_rx, ws_tx, ws_rx).await;
         }
         None => {
             let _ = ready_tx.send(String::new());
@@ -38,25 +56,26 @@ pub async fn run(
 }
 
 async fn event_loop(
-    thread_id: String,
-    role_id: &str,
-    state: &SharedState,
-    app: &AppHandle,
+    ctx: EventLoopCtx<'_>,
     inject_rx: &mut mpsc::Receiver<(String, bool)>,
     ws_tx: WsTx,
-    mut stream: WsStream,
+    mut ws_rx: WsRx,
 ) {
+    let EventLoopCtx {
+        thread_id,
+        session_epoch,
+        role_id,
+        state,
+        app,
+    } = ctx;
     let mut next_id: u64 = 100;
     let mut stream_preview = StreamPreviewState::default();
     let mut req_from_user: std::collections::HashMap<u64, bool> = std::collections::HashMap::new();
     let mut user_turn_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     loop {
         tokio::select! {
-            msg_opt = stream.next() => {
-                let Some(Ok(msg)) = msg_opt else { break };
-                let Ok(v) = serde_json::from_str::<Value>(msg.to_text().unwrap_or("")) else {
-                    continue;
-                };
+            msg_opt = ws_rx.recv() => {
+                let Some(v) = msg_opt else { break };
                 if let Some(rpc_id) = v["id"].as_u64() {
                     if let Some(tid) = v["result"]["turn"]["id"].as_str() {
                         if req_from_user.remove(&rpc_id) == Some(true) {
@@ -103,7 +122,12 @@ async fn event_loop(
             }
         }
     }
-    state.write().await.codex_inject_tx = None;
-    gui::emit_agent_status(app, "codex", false, None);
-    gui::emit_system_log(app, "info", "[Codex] session ended");
+    let cleared_current = {
+        let mut daemon = state.write().await;
+        daemon.clear_codex_session_if_current(session_epoch)
+    };
+    if cleared_current {
+        gui::emit_agent_status(app, "codex", false, None);
+        gui::emit_system_log(app, "info", "[Codex] session ended");
+    }
 }

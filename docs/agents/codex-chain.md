@@ -506,13 +506,61 @@ AGENTS.md、Skills、MCP 工具、developer_sections 全部通过 `input[]` 或 
   - `daemon/codex/session.rs`: 111 行
   - `daemon/codex/handshake.rs`: 183 行
 
+### 2026-03-30: 切角色重连后旧 session 不再冲掉新连接
+
+- [已修复] 旧 Codex session 和旧 health monitor 退出时曾经无条件执行 `codex_inject_tx = None`。在“断开 -> 切角色 -> 重连”场景下，这会把已经接管的新连接清空，后续消息被错误当成离线 buffer，表现为发消息后无响应。
+- [已修复] daemon state 现在为 Codex 会话维护 session epoch。只有当前 epoch 的 session 才能：
+  - 挂载 `codex_inject_tx`
+  - 在退出时清理 `codex_inject_tx`
+  - 触发当前连接的断开副作用
+- [已修复] 新增回归测试 `stale_codex_session_cleanup_cannot_clear_new_session`，锁住这条竞态。
+- [已修复] 为了不让状态文件重新膨胀，权限缓存相关逻辑已拆到 `src-tauri/src/daemon/state_permission.rs`。当前相关文件行数：
+  - `daemon/mod.rs`: 196 行
+  - `daemon/state.rs`: 187 行
+  - `daemon/codex/mod.rs`: 200 行
+  - `daemon/codex/session.rs`: 133 行
+
+### 2026-03-27: WS pump loop 稳定化与 session lifecycle 清理
+
+#### [已修复] WS pump loop debug 日志残留
+
+**问题:** `ws_client.rs` 中残留生产环境不应出现的 debug 日志：每条 WS 消息都会追加写入 `/tmp/ws_pump.log`。`log` 闭包及 `ws_log!` / `ws_logf!` 宏未清理。
+
+**修复:** 移除所有 `/tmp/ws_pump.log` 相关代码，pump loop 不再写磁盘。
+
+**文件:** `src-tauri/src/daemon/codex/ws_client.rs`
+
+#### [已确认] unsplit WS pump loop 稳定性
+
+**背景:** 之前使用 WS split 方案（拆成独立的 read/write half）存在 borrow-split 生命周期问题，导致首消息丢失和重连后消息不投递。
+
+**当前设计:** 单个 `tokio::spawn` task 使用 `tokio::select!` 同时处理：
+- outbound: `out_rx.recv()` -> `ws.send(Message::Text(...))`
+- inbound: `ws.next()` -> 解析 JSON -> `in_tx.send(v)`
+
+Ping/Pong 由 tungstenite 底层自动处理。任一方向出错或通道关闭时 pump loop 退出。
+
+**验证:** `cargo test daemon::codex` 17 tests 通过；手动验证消息投递链路正常。
+
+#### [已确认] session epoch 防竞态机制
+
+**问题:** 旧 session 退出时无条件清空 `codex_inject_tx`，在快速重连场景下会覆盖新 session 的活跃通道。
+
+**当前实现:** `DaemonState.codex_session_epoch` 作为单调递增计数器，三个守卫方法确保只有当前 epoch 的 session 能操作 inject 通道：
+- `begin_codex_launch()` -> epoch += 1
+- `attach_codex_session_if_current(epoch, tx)` -> epoch 匹配才挂载
+- `clear_codex_session_if_current(epoch)` -> epoch 匹配才清空
+
+**回归测试:** `stale_codex_session_cleanup_cannot_clear_new_session`
+
+**验证:** `cargo test --manifest-path src-tauri/Cargo.toml` 97 tests 通过。
+
 ## 当前已知限制
 
 - 端口 4500 固定，不可配置
 - `kill_port_holder` 用 SIGKILL 可能误杀同端口的其他进程
 - 不处理 `item/commandExecution/requestApproval` 审批
 - 不处理 `-32001` 过载错误重试
-- 健康监控和 session task 独立退出时会双重 emit `agent_status(false)`
 - app 异常退出时 codex app-server 残留进程不会被自动清理
 - `item/completed(agentMessage)` 构造的 BridgeMessage 硬编码 `to: "user"`，不反映实际路由目标
 - `dynamicTools` 未按角色过滤（所有角色收到相同 3 个工具），可做 L1 硬约束但尚未实现

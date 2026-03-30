@@ -156,3 +156,17 @@ fn buffered_verdicts_cap_at_50() {
     let verdicts = s.take_buffered_verdicts_for("claude");
     assert!(verdicts.len() <= 50);
 }
+
+#[test]
+fn stale_codex_session_cleanup_cannot_clear_new_session() {
+    let mut s = DaemonState::new();
+    let stale_epoch = s.begin_codex_launch();
+    let current_epoch = s.begin_codex_launch();
+    let (current_tx, _current_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+
+    assert!(s.attach_codex_session_if_current(current_epoch, current_tx));
+    assert!(!s.clear_codex_session_if_current(stale_epoch));
+    assert!(s.codex_inject_tx.is_some());
+    assert!(s.clear_codex_session_if_current(current_epoch));
+    assert!(s.codex_inject_tx.is_none());
+}

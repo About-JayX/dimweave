@@ -34,8 +34,7 @@ pub enum DaemonCmd {
     SetClaudeRole { role: String, reply: oneshot::Sender<Result<(), String>> },
     SetCodexRole { role: String, reply: oneshot::Sender<Result<(), String>> },
     RespondPermission { request_id: String, behavior: types::PermissionBehavior },
-    /// Force-disconnect an agent by removing it from attached_agents.
-    /// Dropping the sender causes the WS outbound task to end and the connection to close.
+    /// Force-disconnect an agent by dropping its live sender.
     ForceDisconnectAgent { agent_id: String },
 }
 
@@ -82,9 +81,7 @@ async fn stop_codex_session(
     if let Some(h) = codex_handle.take() {
         h.stop().await;
     }
-    let mut daemon = state.write().await;
-    daemon.codex_inject_tx = None;
-    drop(daemon);
+    state.write().await.invalidate_codex_session();
     gui::emit_agent_status(app, "codex", false, None);
 }
 
@@ -128,15 +125,19 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(err));
                     continue;
                 }
+                let launch_epoch = state.write().await.begin_codex_launch();
                 let launch_result =
                     match codex::start(
-                        role_id,
-                        cwd,
-                        model,
-                        reasoning_effort,
+                        codex::StartOpts {
+                            role_id,
+                            cwd,
+                            model,
+                            effort: reasoning_effort,
+                            launch_epoch,
+                            codex_port: 4500,
+                        },
                         state.clone(),
                         app.clone(),
-                        4500,
                     )
                     .await
                     {

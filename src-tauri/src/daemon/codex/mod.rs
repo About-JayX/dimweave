@@ -1,9 +1,10 @@
-mod handshake;
+pub(crate) mod handshake;
 pub mod handler;
 pub mod lifecycle;
 mod runtime;
 pub mod session;
 mod structured_output;
+pub(crate) mod ws_client;
 
 use crate::daemon::{gui, role_config, SharedState};
 use runtime::{ensure_port_available, spawn_health_monitor};
@@ -21,6 +22,15 @@ pub struct CodexHandle {
     port: u16,
 }
 
+pub struct StartOpts {
+    pub role_id: String,
+    pub cwd: String,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub launch_epoch: u64,
+    pub codex_port: u16,
+}
+
 impl CodexHandle {
     pub async fn stop(&self) {
         self.cancel.cancel();
@@ -36,21 +46,30 @@ impl CodexHandle {
 
 /// Start a Codex app-server for the given role and wire it up to the daemon state.
 pub async fn start(
-    role_id: String,
-    cwd: String,
-    model: Option<String>,
-    effort: Option<String>,
+    opts: StartOpts,
     state: SharedState,
     app: AppHandle,
-    codex_port: u16,
 ) -> anyhow::Result<CodexHandle> {
-    let (sandbox_mode, approval_policy, base_instructions) =
-        if let Some(rc) = role_config::get_role(&role_id) {
-            (rc.sandbox_mode.to_string(), rc.approval_policy.to_string(),
-             Some(rc.base_instructions.to_string()))
-        } else {
-            ("workspace-write".into(), "never".into(), None)
-        };
+    let StartOpts {
+        role_id,
+        cwd,
+        model,
+        effort,
+        launch_epoch,
+        codex_port,
+    } = opts;
+    let (sandbox_mode, approval_policy, network_access, base_instructions) = if let Some(rc) =
+        role_config::get_role(&role_id)
+    {
+        (
+            rc.sandbox_mode.to_string(),
+            rc.approval_policy.to_string(),
+            rc.network_access,
+            Some(rc.base_instructions.to_string()),
+        )
+    } else {
+        ("workspace-write".into(), "never".into(), false, None)
+    };
 
     let session_mgr = state.read().await.session_mgr.clone();
     let session_id = session_mgr.lock().await.next_session_id();
@@ -99,6 +118,7 @@ pub async fn start(
         model,
         effort,
         sandbox_mode: Some(sandbox_mode),
+        network_access,
         base_instructions,
     };
 
@@ -111,7 +131,7 @@ pub async fn start(
     tokio::spawn(async move {
         tokio::select! {
             _ = cancel_session.cancelled() => {}
-            _ = session::run(codex_port, opts, state2, app2, inject_rx, ready_tx) => {}
+            _ = session::run(codex_port, launch_epoch, opts, state2, app2, inject_rx, ready_tx) => {}
         }
     });
 
@@ -128,12 +148,25 @@ pub async fn start(
         }
     };
 
-    let mut buffered = {
+    let (attached, mut buffered) = {
         let mut s = state.write().await;
         s.codex_role = role_id.clone();
-        s.codex_inject_tx = Some(inject_tx.clone());
-        s.take_buffered_for(&role_id)
+        let attached = s.attach_codex_session_if_current(launch_epoch, inject_tx.clone());
+        let buffered = if attached {
+            s.take_buffered_for(&role_id)
+        } else {
+            Vec::new()
+        };
+        (attached, buffered)
     };
+    if !attached {
+        cancel.cancel();
+        if let Some(mut child) = child_arc.lock().await.take() {
+            lifecycle::stop(&mut child, codex_port).await;
+        }
+        session_mgr.lock().await.cleanup_session(&session_id);
+        anyhow::bail!("Codex session was superseded before it became active");
+    }
     {
         let mut i = 0;
         while i < buffered.len() {
@@ -151,7 +184,7 @@ pub async fn start(
     gui::emit_agent_status(&app, "codex", true, None);
     gui::emit_system_log(&app, "info", &format!("[Codex] ready role={role_id} thread={thread_id}"));
 
-    spawn_health_monitor(child_arc.clone(), state.clone(), app.clone(), cancel.clone());
+    spawn_health_monitor(child_arc.clone(), launch_epoch, state.clone(), app.clone(), cancel.clone());
 
     Ok(CodexHandle {
         process: child_arc,

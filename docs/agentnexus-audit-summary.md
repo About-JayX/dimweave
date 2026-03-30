@@ -471,6 +471,46 @@ cargo clippy --workspace --all-targets -- -D warnings
   - `src/stores/bridge-store/types.ts` 中的类型声明
 - [结果] review 指出的“超出 200 行限制”和“Codex 启动死代码残留”两条问题都已收口。
 
+### 28. [已修复] 2026-03-30 Codex 切角色重连后消息无响应
+
+- [已修复] 现场复现路径为：App 启动 -> Connect Codex -> 断开/切换 Codex 角色 -> 重新 Connect -> 用户发消息后 Codex 无响应。
+- [根因] 旧 Codex session 和旧 health monitor 在退出时会无条件执行 `codex_inject_tx = None` 并发出 `agent_status(false)`。当新 session 已经完成握手并接管路由后，旧 session 的迟到清理仍会把新连接的注入通道清空，导致后续消息被当成“Codex 离线”处理并进入 buffer。
+- [已修复] daemon state 新增 Codex session epoch。每次启动/失效都会推进 epoch，只有“当前 epoch 的 session”才允许：
+  - 挂载 `codex_inject_tx`
+  - 在退出时清空 `codex_inject_tx`
+  - 发出当前连接的断开副作用
+- [已修复] `src-tauri/src/daemon/state.rs` 的权限逻辑已拆到 `state_permission.rs`，本轮新增的 session epoch helper 没有再把 `state.rs` 推回 200 行以上。
+- [已修复] 相关文件当前行数：
+  - `src-tauri/src/daemon/mod.rs`: 196 行
+  - `src-tauri/src/daemon/state.rs`: 187 行
+  - `src-tauri/src/daemon/codex/mod.rs`: 200 行
+  - `src-tauri/src/daemon/codex/session.rs`: 133 行
+- [验证] 新增回归测试 `stale_codex_session_cleanup_cannot_clear_new_session`，锁住“旧 session 不能清掉新 session”这条行为。
+
+## 验证记录（本轮 #28）
+
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过（97 tests）
+- `cargo test --manifest-path bridge/Cargo.toml`：通过（19 tests）
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings`：通过
+
+### 29. [已修复] 2026-03-27 Codex WS pump loop 稳定化与 session lifecycle 清理
+
+- [已修复] **WS pump loop debug 日志清除** — `src-tauri/src/daemon/codex/ws_client.rs` 中残留的 `/tmp/ws_pump.log` 文件写入、`log` 闭包及所有调试输出已完全移除。pump loop 在生产环境不应写入磁盘日志。
+- [已确认] **unsplit WS pump loop 稳定性** — pump loop 使用 `tokio::select!` 在单个 task 中同时处理 outbound（`out_rx.recv()`）和 inbound（`ws.next()`），避免了之前 borrow-split 方案导致的首消息丢失和重连后消息不投递问题。Ping/Pong 由 tungstenite 底层自动处理，无需手动回复。
+- [已确认] **session epoch 机制正确性** — `DaemonState` 的 `codex_session_epoch` 计数器通过以下三个原子操作保护：
+  - `begin_codex_launch()`: 推进 epoch，返回新值
+  - `attach_codex_session_if_current(epoch, tx)`: 只有 epoch 匹配时才挂载 `codex_inject_tx`
+  - `clear_codex_session_if_current(epoch)`: 只有 epoch 匹配时才清空 `codex_inject_tx`
+  这确保旧 session 退出（无论是正常结束还是 health monitor 检测到进程退出）不会覆盖已经接管的新 session。
+- [已确认] **重连后 `codex_inject_tx` 指向当前活跃 session** — `codex::start()` 在 `session::run()` 完成 WS 握手后调用 `attach_codex_session_if_current(launch_epoch, tx)`，如果 epoch 已被新的 launch 推进则挂载失败并清理自身。
+- [回归测试] `stale_codex_session_cleanup_cannot_clear_new_session` 锁住了 epoch 竞态保护行为。
+
+## 验证记录（本轮 #29）
+
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过（97 tests）
+- `cargo test --manifest-path bridge/Cargo.toml`：通过（19 tests）
+- `cargo check --workspace`：通过
+
 ## 验证记录（本轮 #17）
 
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过（78 tests）
