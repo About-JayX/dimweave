@@ -555,6 +555,36 @@ Ping/Pong 由 tungstenite 底层自动处理。任一方向出错或通道关闭
 
 **验证:** `cargo test --manifest-path src-tauri/Cargo.toml` 97 tests 通过。
 
+### 2026-03-27: `get_status` 升级为结构化 JSON 接口
+
+**变更:** `handler.rs` 中 `handle_get_status()` 的返回格式从 ad-hoc 字符串改为结构化 JSON。
+
+旧格式（已删除）：
+```
+Claude role: lead, Codex role: coder, Online agents: [codex]
+```
+
+新格式：
+```json
+{"online_agents": [{"agentId": "codex", "role": "coder", "modelSource": "codex"}]}
+```
+
+**根因:** 旧格式是人类可读的自由文本，Codex 模型需要对其进行非结构化解析，容易出错或被不同模型版本解析方式不同。统一改为 JSON 后，agent 可以通过 `online_agents[*].agentId` 可靠地遍历在线 agent，无需字符串解析。
+
+**实现:**
+- `handle_get_status()` 调用 `state.online_agents_snapshot()` 获取 `Vec<OnlineAgentInfo>`
+- 用 `serde_json::json!({"online_agents": snapshot})` 序列化后返回
+- `handshake.rs` 工具描述同步更新，明确说明返回 JSON 结构
+
+**测试（新增 3 个）：**
+- `get_status_returns_valid_json` — 断言返回值是合法 JSON，顶层有 `online_agents` 数组
+- `get_status_includes_wired_codex_session` — 挂载 Codex inject tx 后断言 `agentId`/`role`/`modelSource` 字段存在
+- `get_status_empty_when_no_agents_online` — 无 agent 时断言空数组
+
+**文件:** `src-tauri/src/daemon/codex/handler.rs`, `src-tauri/src/daemon/codex/handshake.rs`
+
+**验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::handler` — 3 tests passed.
+
 ## 当前已知限制
 
 - 端口 4500 固定，不可配置

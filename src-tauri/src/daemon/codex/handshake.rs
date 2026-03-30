@@ -9,7 +9,7 @@ pub(super) fn build_thread_start_params(opts: &SessionOpts) -> Value {
               "description": "Check for new incoming messages from other agents.",
               "inputSchema": {"type":"object","properties":{}} },
             { "name": "get_status",
-              "description": "Get AgentNexus status: which roles are online.",
+              "description": "Get AgentNexus status as structured JSON: {\"online_agents\": [{\"agentId\", \"role\", \"modelSource\"}]}.",
               "inputSchema": {"type":"object","properties":{}} }
         ]
     });

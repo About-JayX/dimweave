@@ -75,26 +75,9 @@ async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
 
 async fn handle_get_status(state: &SharedState) -> String {
     let s = state.read().await;
-    let mut online: Vec<String> = Vec::new();
-    if s.attached_agents.contains_key("claude") {
-        online.push("claude".to_string());
-    }
-    if s.codex_inject_tx.is_some() {
-        online.push("codex".to_string());
-    }
-    for agent in s
-        .attached_agents
-        .keys()
-        .filter(|agent| agent.as_str() != "claude" && agent.as_str() != "codex")
-    {
-        online.push(agent.clone());
-    }
-    format!(
-        "Claude role: {}, Codex role: {}, Online agents: [{}]",
-        s.claude_role,
-        s.codex_role,
-        online.join(", ")
-    )
+    let snapshot = s.online_agents_snapshot();
+    serde_json::to_string(&json!({ "online_agents": snapshot }))
+        .unwrap_or_else(|_| r#"{"online_agents":[]}"#.to_string())
 }
 
 #[cfg(test)]
@@ -105,12 +88,35 @@ mod tests {
     use tokio::sync::{mpsc, RwLock};
 
     #[tokio::test]
-    async fn get_status_reports_wired_codex_session() {
+    async fn get_status_returns_valid_json() {
+        let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
+        let status = handle_get_status(&state).await;
+        let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
+        assert!(v["online_agents"].is_array(), "top-level online_agents must be array");
+    }
+
+    #[tokio::test]
+    async fn get_status_includes_wired_codex_session() {
         let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
         let (tx, _rx) = mpsc::channel::<(String, bool)>(1);
         state.write().await.codex_inject_tx = Some(tx);
 
         let status = handle_get_status(&state).await;
-        assert!(status.contains("Online agents: [codex]"));
+        let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
+        let agents = v["online_agents"].as_array().expect("must be array");
+        assert_eq!(agents.len(), 1);
+        let agent = &agents[0];
+        assert_eq!(agent["agentId"], "codex");
+        assert!(agent["role"].is_string(), "role must be string");
+        assert!(agent["modelSource"].is_string(), "modelSource must be string");
+    }
+
+    #[tokio::test]
+    async fn get_status_empty_when_no_agents_online() {
+        let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
+        let status = handle_get_status(&state).await;
+        let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
+        let agents = v["online_agents"].as_array().expect("must be array");
+        assert!(agents.is_empty(), "no agents should be online by default");
     }
 }
