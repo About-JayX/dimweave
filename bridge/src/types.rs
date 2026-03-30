@@ -79,6 +79,9 @@ pub enum DaemonMsg {
     PermissionVerdict {
         verdict: PermissionVerdict,
     },
+    OnlineAgentsResponse {
+        online_agents: serde_json::Value,
+    },
     Status {
         #[serde(rename = "status")]
         _status: serde_json::Value,
@@ -89,12 +92,14 @@ pub enum DaemonMsg {
 pub enum DaemonInbound {
     RoutedMessage(BridgeMessage),
     PermissionVerdict(PermissionVerdict),
+    OnlineAgentsResponse(serde_json::Value),
 }
 
 #[derive(Debug)]
 pub enum BridgeOutbound {
     AgentReply(BridgeMessage),
     PermissionRequest(PermissionRequest),
+    GetOnlineAgents(tokio::sync::oneshot::Sender<serde_json::Value>),
 }
 
 /// Messages bridge sends TO daemon over WS :4502
@@ -114,5 +119,6 @@ pub enum BridgeMsg<'a> {
     PermissionRequest {
         request: &'a PermissionRequest,
     },
+    GetOnlineAgents,
     AgentDisconnect,
 }

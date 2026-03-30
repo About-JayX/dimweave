@@ -10,40 +10,60 @@ pub(crate) async fn tool_call_response(
     reply_tx: &tokio::sync::mpsc::Sender<BridgeOutbound>,
     msg: &crate::mcp_protocol::RpcMessage,
 ) -> serde_json::Value {
-    match msg
-        .params
-        .as_ref()
-        .map(|params| handle_tool_call(params, agent_id))
-    {
-        Some(Ok(Some(bridge_msg))) => {
-            eprintln!(
-                "[Bridge/{agent_id}] reply tool → {}",
-                bridge_msg.to
-            );
+    let params = match msg.params.as_ref() {
+        Some(p) => p,
+        None => return tool_error(&msg.id, -32000, "unsupported tool call"),
+    };
+    if crate::tools::is_get_online_agents(params) {
+        return handle_get_online_agents(agent_id, reply_tx, &msg.id).await;
+    }
+    match handle_tool_call(params, agent_id) {
+        Ok(Some(bridge_msg)) => {
+            eprintln!("[Bridge/{agent_id}] reply tool → {}", bridge_msg.to);
             match reply_tx.send(BridgeOutbound::AgentReply(bridge_msg)).await {
-                Ok(()) => serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": id_to_value(&msg.id),
-                    "result": { "content": [{ "type": "text", "text": "sent" }] }
-                }),
-                Err(_) => serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": id_to_value(&msg.id),
-                    "error": { "code": -32001, "message": "bridge outbound channel is closed" }
-                }),
+                Ok(()) => tool_ok(&msg.id, "sent"),
+                Err(_) => tool_error(&msg.id, -32001, "bridge outbound channel is closed"),
             }
         }
-        Some(Err(err)) => serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id_to_value(&msg.id),
-            "error": { "code": -32002, "message": err.to_string() }
-        }),
-        _ => serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id_to_value(&msg.id),
-            "error": { "code": -32000, "message": "unsupported tool call" }
-        }),
+        Err(err) => tool_error(&msg.id, -32002, &err.to_string()),
+        Ok(None) => tool_error(&msg.id, -32000, "unsupported tool call"),
     }
+}
+
+async fn handle_get_online_agents(
+    agent_id: &str,
+    reply_tx: &tokio::sync::mpsc::Sender<BridgeOutbound>,
+    rpc_id: &Option<crate::mcp_protocol::RpcId>,
+) -> serde_json::Value {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if reply_tx.send(BridgeOutbound::GetOnlineAgents(tx)).await.is_err() {
+        return tool_error(rpc_id, -32001, "bridge outbound channel is closed");
+    }
+    match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
+        Ok(Ok(agents)) => {
+            let payload = serde_json::json!({ "online_agents": agents });
+            let text = serde_json::to_string(&payload).unwrap_or_default();
+            eprintln!("[Bridge/{agent_id}] get_online_agents → {text}");
+            tool_ok(rpc_id, &text)
+        }
+        _ => tool_error(rpc_id, -32003, "timeout waiting for online agents"),
+    }
+}
+
+fn tool_ok(id: &Option<crate::mcp_protocol::RpcId>, text: &str) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id_to_value(id),
+        "result": { "content": [{ "type": "text", "text": text }] }
+    })
+}
+
+fn tool_error(id: &Option<crate::mcp_protocol::RpcId>, code: i32, message: &str) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id_to_value(id),
+        "error": { "code": code, "message": message }
+    })
 }
 
 /// Handle a daemon inbound message. Returns false if stdout write failed.
@@ -74,6 +94,7 @@ pub(crate) async fn handle_daemon_inbound_checked(
             }
             notif
         }
+        DaemonInbound::OnlineAgentsResponse(_) => None,
     };
 
     if let Some(notif) = payload {
@@ -116,21 +137,48 @@ mod tests {
             method: Some("tools/call".into()),
             params: Some(serde_json::json!({
                 "name": "reply",
-                "arguments": {
-                    "to": "lead",
-                    "text": "hello",
-                    "status": "waiting"
-                }
+                "arguments": { "to": "lead", "text": "hello", "status": "waiting" }
             })),
         };
-
         let response = tool_call_response("claude", &reply_tx, &msg).await;
         assert_eq!(response["error"]["code"], -32002);
-        assert!(
-            response["error"]["message"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("Invalid status: \"waiting\"")
-        );
+        assert!(response["error"]["message"].as_str().unwrap_or_default()
+            .contains("Invalid status: \"waiting\""));
+    }
+
+    #[tokio::test]
+    async fn get_online_agents_returns_json_on_success() {
+        let (reply_tx, mut reply_rx) = tokio::sync::mpsc::channel(4);
+        let msg = RpcMessage {
+            id: Some(RpcId::Number(5)),
+            method: Some("tools/call".into()),
+            params: Some(serde_json::json!({ "name": "get_online_agents", "arguments": {} })),
+        };
+        // Spawn a task to respond to the oneshot
+        tokio::spawn(async move {
+            if let Some(BridgeOutbound::GetOnlineAgents(tx)) = reply_rx.recv().await {
+                let _ = tx.send(serde_json::json!([
+                    {"agentId": "claude", "role": "lead", "modelSource": "claude"}
+                ]));
+            }
+        });
+        let response = tool_call_response("claude", &reply_tx, &msg).await;
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert!(parsed["online_agents"].is_array());
+        assert_eq!(parsed["online_agents"][0]["agentId"], "claude");
+    }
+
+    #[tokio::test]
+    async fn get_online_agents_errors_when_channel_closed() {
+        let (reply_tx, reply_rx) = tokio::sync::mpsc::channel(1);
+        drop(reply_rx);
+        let msg = RpcMessage {
+            id: Some(RpcId::Number(6)),
+            method: Some("tools/call".into()),
+            params: Some(serde_json::json!({ "name": "get_online_agents", "arguments": {} })),
+        };
+        let response = tool_call_response("claude", &reply_tx, &msg).await;
+        assert_eq!(response["error"]["code"], -32001);
     }
 }

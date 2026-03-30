@@ -125,6 +125,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     ),
                 );
             }
+            FromAgent::GetOnlineAgents => {
+                let snapshot = state.read().await.online_agents_snapshot();
+                let payload = serde_json::to_value(&snapshot).unwrap_or_default();
+                let _ = tx.send(ToAgent::OnlineAgentsResponse { online_agents: payload }).await;
+            }
             FromAgent::AgentDisconnect => break,
         }
     }

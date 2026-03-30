@@ -97,7 +97,7 @@ async fn handle_rpc_message(
             let resp = serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id_to_value(&msg.id),
-                "result": { "tools": [crate::tools::reply_tool_schema()] }
+                "result": { "tools": crate::tools::tool_list() }
             });
             if !write_line(writer, &resp).await { return false; }
         }

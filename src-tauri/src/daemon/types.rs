@@ -120,6 +120,7 @@ pub struct OnlineAgentInfo {
 pub enum ToAgent {
     RoutedMessage { message: BridgeMessage },
     PermissionVerdict { verdict: PermissionVerdict },
+    OnlineAgentsResponse { online_agents: serde_json::Value },
 }
 
 /// bridge → daemon (over WS :4502)
@@ -138,59 +139,10 @@ pub enum FromAgent {
     PermissionRequest {
         request: PermissionRequest,
     },
+    GetOnlineAgents,
     AgentDisconnect,
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serialize_permission_verdict_to_agent() {
-        let outbound = ToAgent::PermissionVerdict {
-            verdict: PermissionVerdict {
-                request_id: "req-1".into(),
-                behavior: PermissionBehavior::Allow,
-            },
-        };
-        let json = serde_json::to_value(outbound).unwrap();
-        assert_eq!(json["type"], "permission_verdict");
-        assert_eq!(json["verdict"]["request_id"], "req-1");
-        assert_eq!(json["verdict"]["behavior"], "allow");
-    }
-
-    #[test]
-    fn deserialize_permission_request_from_agent() {
-        let raw = r#"{"type":"permission_request","request":{"request_id":"req-2","tool_name":"Bash","description":"run pwd","input_preview":"pwd"}}"#;
-        let inbound: FromAgent = serde_json::from_str(raw).unwrap();
-        match inbound {
-            FromAgent::PermissionRequest { request } => {
-                assert_eq!(request.request_id, "req-2");
-                assert_eq!(request.tool_name, "Bash");
-            }
-            other => panic!("unexpected inbound payload: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn online_agent_info_camel_case_fields() {
-        let info = OnlineAgentInfo {
-            agent_id: "bridge-1".into(),
-            role: "coder".into(),
-            model_source: "claude".into(),
-        };
-        let json = serde_json::to_value(&info).unwrap();
-        assert_eq!(json["agentId"], "bridge-1");
-        assert_eq!(json["role"], "coder");
-        assert_eq!(json["modelSource"], "claude");
-    }
-
-    #[test]
-    fn online_agent_info_roundtrip() {
-        let raw = r#"{"agentId":"bridge-1","role":"coder","modelSource":"claude"}"#;
-        let info: OnlineAgentInfo = serde_json::from_str(raw).unwrap();
-        assert_eq!(info.agent_id, "bridge-1");
-        assert_eq!(info.role, "coder");
-        assert_eq!(info.model_source, "claude");
-    }
-}
+#[path = "types_tests.rs"]
+mod tests;

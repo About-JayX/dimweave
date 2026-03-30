@@ -49,6 +49,22 @@ pub fn reply_tool_schema() -> serde_json::Value {
     })
 }
 
+pub fn get_online_agents_schema() -> serde_json::Value {
+    serde_json::json!({
+        "name": "get_online_agents",
+        "description": "Query which agents are currently online in AgentNexus and their roles.",
+        "inputSchema": { "type": "object", "properties": {} }
+    })
+}
+
+pub fn tool_list() -> Vec<serde_json::Value> {
+    vec![reply_tool_schema(), get_online_agents_schema()]
+}
+
+pub fn is_get_online_agents(params: &serde_json::Value) -> bool {
+    params.get("name").and_then(|v| v.as_str()) == Some("get_online_agents")
+}
+
 pub fn handle_tool_call(
     params: &serde_json::Value,
     from: &str,
@@ -102,101 +118,5 @@ pub fn handle_tool_call(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reply_schema_uses_to_field() {
-        let schema = reply_tool_schema();
-        assert!(schema["inputSchema"]["properties"]["to"].is_object());
-        assert_eq!(
-            schema["inputSchema"]["required"],
-            serde_json::json!(["to", "text", "status"])
-        );
-        // chat_id no longer exists
-        assert!(schema["inputSchema"]["properties"]["chat_id"].is_null());
-    }
-
-    #[test]
-    fn handle_reply_tool() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "lead", "text": "hello", "status": "done" }
-        });
-        let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
-        assert_eq!(msg.to, "lead");
-        assert_eq!(msg.content, "hello");
-        assert_eq!(msg.from, "coder");
-        assert_eq!(msg.status.unwrap().as_str(), "done");
-    }
-
-    #[test]
-    fn handle_reply_defaults_missing_status_to_done() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "lead", "text": "hello" }
-        });
-        let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
-        assert_eq!(msg.status.unwrap().as_str(), "done");
-    }
-
-    #[test]
-    fn invalid_status_returns_explicit_error() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "lead", "text": "hello", "status": "waiting" }
-        });
-        let err = handle_tool_call(&params, "coder").unwrap_err();
-        assert!(
-            err.to_string().contains("Invalid status: \"waiting\""),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn unknown_tool_returns_none() {
-        let params = serde_json::json!({ "name": "unknown", "arguments": {} });
-        assert!(handle_tool_call(&params, "claude").unwrap().is_none());
-    }
-
-    #[test]
-    fn invalid_target_rejected() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "admin", "text": "hello", "status": "done" }
-        });
-        assert!(handle_tool_call(&params, "coder").unwrap().is_none());
-    }
-
-    #[test]
-    fn empty_reply_text_rejected() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "lead", "text": "", "status": "done" }
-        });
-        assert!(handle_tool_call(&params, "coder").unwrap().is_none());
-    }
-
-    #[test]
-    fn whitespace_only_reply_text_rejected() {
-        let params = serde_json::json!({
-            "name": "reply",
-            "arguments": { "to": "lead", "text": " \n\t ", "status": "done" }
-        });
-        assert!(handle_tool_call(&params, "coder").unwrap().is_none());
-    }
-
-    #[test]
-    fn reply_schema_has_enum_constraint() {
-        let schema = reply_tool_schema();
-        let to_enum = &schema["inputSchema"]["properties"]["to"]["enum"];
-        assert!(to_enum.is_array());
-        let targets: Vec<&str> = to_enum.as_array().unwrap()
-            .iter().map(|v| v.as_str().unwrap()).collect();
-        assert!(targets.contains(&"user"));
-        assert!(targets.contains(&"lead"));
-        assert!(targets.contains(&"reviewer"));
-        assert!(!targets.contains(&"tester"));
-        assert!(!targets.contains(&"admin"));
-    }
-}
+#[path = "tools_tests.rs"]
+mod tests;
