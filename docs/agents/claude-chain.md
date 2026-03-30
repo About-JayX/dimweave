@@ -449,6 +449,22 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
   - connected/no-output: `Claude is connected. Waiting for terminal output…`
 - [已修复] 这样即使 Claude 还没开始打印任何 ANSI 输出，用户也能知道它是“正在等输出”，不是前端已经失去响应。
 
+### 2026-03-27: Claude system instructions 更新 — online agents 查询文档
+
+**问题:** `CHANNEL_INSTRUCTIONS` 中没有说明 lead 应如何发现在线的 worker agents。Claude 作为 lead 时不知道有 `get_online_agents()` 工具，也不知道其返回结构，导致委派任务时无法明确选择目标。
+
+**修复:** 在 `CHANNEL_INSTRUCTIONS` 的 `## Routing Policy` 前新增 `## Discovering Online Agents` 章节，说明：
+
+- 委派前应先调用 `get_online_agents()` 查询在线 agents
+- 返回的每个条目包含 `agent_id`、`role`、`model_source` 三个字段
+- transport 层**不会**自动选择目标；lead 必须自己根据列表决定委派对象
+
+**文件:** `bridge/src/mcp_protocol.rs`
+
+**测试:** 新增 `instructions_document_online_agents_query` 测试，断言 instructions 中包含 `get_online_agents`、`agent_id`、`role`、`model_source`，以及"transport 层不自动选择"说明。
+
+**验证:** ✅ `cargo test --manifest-path bridge/Cargo.toml mcp_protocol` — 7 tests passed.
+
 ## 当前已知限制
 
 - Channel preview 是实验性功能，需要 `--dangerously-load-development-channels`

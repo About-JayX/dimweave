@@ -77,6 +77,15 @@ You decide who to send to based on context.\n\n\
 - lead: coordinator — breaks down tasks, assigns work, summarizes\n\
 - coder: implementation — writes code, fixes bugs, builds features\n\
 - reviewer: review + test verification — analyzes quality, finds issues, runs tests, verifies functionality\n\n\
+## Discovering Online Agents\n\
+Before delegating work, query who is currently online using the get_online_agents() tool (or \
+check_messages() if get_online_agents is unavailable).\n\
+get_online_agents() returns a structured list. Each item includes:\n\
+- agent_id: unique identifier for this agent instance\n\
+- role: the agent's role (lead, coder, reviewer, etc.)\n\
+- model_source: the AI model or backend powering this agent\n\
+The transport layer does NOT automatically select a target for you. As lead, YOU must decide \
+which agent to delegate to based on the online_agents list and the task at hand.\n\n\
 ## Routing Policy\n\
 - If your role is lead, you may reply to user or delegate to any worker role when appropriate.\n\
 - If your role is NOT lead, lead is your default recipient.\n\
@@ -178,5 +187,31 @@ mod tests {
         assert!(s.contains("notifications/claude/channel"));
         assert!(s.contains("hello"));
         assert!(s.contains("coder"));
+    }
+
+    #[test]
+    fn instructions_document_online_agents_query() {
+        let result = initialize_result("lead");
+        let instructions = result["instructions"].as_str().unwrap_or_default();
+        assert!(
+            instructions.contains("get_online_agents"),
+            "instructions must mention get_online_agents tool"
+        );
+        assert!(
+            instructions.contains("agent_id"),
+            "instructions must describe agent_id field in online_agents response"
+        );
+        assert!(
+            instructions.contains("role"),
+            "instructions must describe role field in online_agents response"
+        );
+        assert!(
+            instructions.contains("model_source"),
+            "instructions must describe model_source field in online_agents response"
+        );
+        assert!(
+            instructions.contains("transport layer does NOT automatically select"),
+            "instructions must state that lead must choose the target agent"
+        );
     }
 }

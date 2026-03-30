@@ -26,7 +26,7 @@ macro_rules! role_prompt {
 ## Communication
 Your ONLY way to send messages to other agents is through your text output format.
 - check_messages(): check for incoming messages from other agents
-- get_status(): see which agents are online
+- get_status(): returns a structured online_agents list; each item includes agent_id, role, and model_source — use this to decide which agent to send work to
 
 ## Output Format (MANDATORY)
 Your final text output MUST be valid JSON matching this schema:

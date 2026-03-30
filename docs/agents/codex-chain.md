@@ -585,6 +585,22 @@ Claude role: lead, Codex role: coder, Online agents: [codex]
 
 **验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::handler` — 3 tests passed.
 
+### 2026-03-27: Codex baseInstructions 更新 — get_status 返回结构说明
+
+**问题:** `role_prompt!` 宏中 `## Communication` 章节仅写 `get_status(): see which agents are online`，Codex agent 不知道返回结构（字段名），无法正确解析以选择委派目标。
+
+**修复:** 将该行改为：
+
+```
+- get_status(): returns a structured online_agents list; each item includes agent_id, role, and model_source — use this to decide which agent to send work to
+```
+
+**文件:** `src-tauri/src/daemon/role_config/roles.rs`
+
+**测试:** 新增 `prompt_documents_get_status_structured_response` 测试（`roles_tests.rs`），断言 prompt 中包含 `get_status`、`agent_id`、`role`、`model_source`。
+
+**验证:** ✅ `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config` — 5 tests passed.
+
 ## 当前已知限制
 
 - 端口 4500 固定，不可配置
