@@ -105,6 +105,15 @@ pub struct PermissionVerdict {
     pub behavior: PermissionBehavior,
 }
 
+/// Structured snapshot of one online agent, used in query responses.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAgentInfo {
+    pub agent_id: String,
+    pub role: String,
+    pub model_source: String,
+}
+
 /// daemon → bridge (over WS :4502)
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -161,5 +170,27 @@ mod tests {
             }
             other => panic!("unexpected inbound payload: {other:?}"),
         }
+    }
+
+    #[test]
+    fn online_agent_info_camel_case_fields() {
+        let info = OnlineAgentInfo {
+            agent_id: "bridge-1".into(),
+            role: "coder".into(),
+            model_source: "claude".into(),
+        };
+        let json = serde_json::to_value(&info).unwrap();
+        assert_eq!(json["agentId"], "bridge-1");
+        assert_eq!(json["role"], "coder");
+        assert_eq!(json["modelSource"], "claude");
+    }
+
+    #[test]
+    fn online_agent_info_roundtrip() {
+        let raw = r#"{"agentId":"bridge-1","role":"coder","modelSource":"claude"}"#;
+        let info: OnlineAgentInfo = serde_json::from_str(raw).unwrap();
+        assert_eq!(info.agent_id, "bridge-1");
+        assert_eq!(info.role, "coder");
+        assert_eq!(info.model_source, "claude");
     }
 }
