@@ -261,6 +261,62 @@ cmd.arg("--mcp-config");
 cmd.arg(mcp_config_path.to_string_lossy().to_string());
 ```
 
+### 2026-03-31: Claude CLI 深度逆向（prompt / channel / stream / teammate）
+
+- [记录] 本机 Claude CLI 样本：
+  - 二进制：`/Users/jason/.nvm/versions/node/v24.14.0/bin/claude`
+  - 包目录：`/Users/jason/.nvm/versions/node/v24.14.0/lib/node_modules/@anthropic-ai/claude-code`
+  - 版本：`2.1.88`
+- [记录] 安装包内存在 `cli.js.map`，可直接从 source map 反推出原始 TS/TSX 源文件
+- [确认] Claude CLI 不仅支持 `--append-system-prompt`，还支持 **更强的** `--system-prompt`
+- [确认] `../src/utils/systemPrompt.ts` 的 `buildEffectiveSystemPrompt()` 中：
+  - `customSystemPrompt`（即 `--system-prompt`）优先级高于 default prompt
+  - `appendSystemPrompt`（即 `--append-system-prompt`）只在末尾追加
+  - 因此 `--system-prompt` 是“替换主 prompt”，`--append-system-prompt` 是“尾部附言”
+- [确认] Claude CLI 内建但在常规文档里不显眼的参数至少包括：
+  - `--channels`
+  - `--dangerously-load-development-channels`
+  - `--agent-id`
+  - `--agent-name`
+  - `--team-name`
+  - `--parent-session-id`
+  - `--teammate-mode`
+  - `--agent-type`
+  - `--sdk-url`
+- [确认] `main.tsx` 注释明确写了：
+  - `--channels` 可在 interactive 和 print/SDK 模式共用
+  - `--sdk-url` 会自动切到 `stream-json`
+  - 说明 **stream 和 channel 本来就是可共存设计**
+- [确认] 最小运行探测已验证这些参数会被当前 `2.1.88` 正常解析，不是 dead code：
+  - `claude --system-prompt-file /definitely/missing -p hi`
+  - `claude --append-system-prompt-file /definitely/missing -p hi`
+  - `claude --sdk-url ws://127.0.0.1:1 --system-prompt-file /definitely/missing -p hi`
+  - `claude --channels server:test --system-prompt-file /definitely/missing -p hi`
+  - `claude --parent-session-id abc --agent-id a --agent-name b --team-name c --teammate-mode auto --agent-type worker --system-prompt-file /definitely/missing -p hi`
+- [结论] AgentNexus 当前 Claude 链路只使用了较弱的 `--append-system-prompt`。若要把 Claude 侧强约束提升到接近 Codex `base_instructions` 的级别，应优先改为：
+  - 主角色 contract → `--system-prompt`
+  - 临时附加规则 / 调试尾注 → `--append-system-prompt`
+- [详情] 逆向链路与证据已单独记录到：`docs/agents/claude-cli-reverse-engineering.md`
+
+### 2026-03-31: Claude prompt 升级为双层注入
+
+- [已修复] Claude launcher 不再只注入 `--append-system-prompt`
+- [已修复] 当前启动参数改为双层：
+  - `--system-prompt`：承载主角色 contract（路由、reply 协议、必须回传）
+  - `--append-system-prompt`：承载轻量 addendum（handoff/结果格式补充）
+- [已修复] Claude prompt 文字约束进一步收紧：
+  - 必须在需要可见结果的 turn 结束前调用 `reply()`
+  - 非 lead 完成任务时默认必须回 lead
+  - 没有既有 chat thread 不是静默丢结果的理由
+  - worker 未通过 `reply()` 交付结果，不算完成
+- [文件]:
+  - `src-tauri/src/claude_launch.rs`
+  - `src-tauri/src/daemon/role_config/claude_prompt.rs`
+  - `src-tauri/src/daemon/role_config/mod.rs`
+- [验证]:
+  - `cargo test claude_launch --manifest-path src-tauri/Cargo.toml`
+  - `cargo test prompt_mentions_reply_status_contract --manifest-path src-tauri/Cargo.toml`
+
 - **文件**: `src-tauri/src/claude_session/process.rs:74-76`
 - **验证**: ✅ Bridge PID 被成功 spawn；`lsof` 确认 `localhost:PORT->localhost:4502 ESTABLISHED`
 

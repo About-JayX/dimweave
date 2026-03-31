@@ -33,6 +33,8 @@ async fn route_to_claude_from_unknown_sender_drops() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -107,4 +109,28 @@ fn auto_excludes_user_role() {
         .insert("claude".into(), crate::daemon::state::AgentSender::new(tx, 0));
     let targets = resolve_user_targets(&s, "auto");
     assert!(targets.is_empty());
+}
+
+#[test]
+fn auto_prefers_active_task_role_over_fanout() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.set_active_task(Some(task.task_id.clone()));
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing,
+    );
+    let (claude_tx, _) = tokio::sync::mpsc::channel(1);
+    let (codex_tx, _) = tokio::sync::mpsc::channel(1);
+    s.attached_agents
+        .insert("claude".into(), crate::daemon::state::AgentSender::new(claude_tx, 0));
+    s.codex_inject_tx = Some(codex_tx);
+
+    assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead"]);
+
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Implementing,
+    );
+    assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder"]);
 }

@@ -1,0 +1,99 @@
+// Domain types mirroring Rust task_graph::types (camelCase fields, snake_case enum values)
+
+export type TaskStatus =
+  | "draft"
+  | "planning"
+  | "implementing"
+  | "reviewing"
+  | "done"
+  | "error";
+
+export type SessionStatus = "active" | "paused" | "completed" | "error";
+export type Provider = "claude" | "codex";
+export type SessionRole = "lead" | "coder";
+export type ArtifactKind =
+  | "research"
+  | "plan"
+  | "review"
+  | "diff"
+  | "verification"
+  | "summary";
+export type ReviewStatus =
+  | "pending_lead_review"
+  | "in_review"
+  | "pending_lead_approval";
+
+export interface TaskInfo {
+  taskId: string;
+  workspaceRoot: string;
+  title: string;
+  status: TaskStatus;
+  reviewStatus?: ReviewStatus | null;
+  leadSessionId?: string | null;
+  currentCoderSessionId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SessionInfo {
+  sessionId: string;
+  taskId: string;
+  parentSessionId?: string | null;
+  provider: Provider;
+  role: SessionRole;
+  externalSessionId?: string | null;
+  status: SessionStatus;
+  cwd: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ArtifactInfo {
+  artifactId: string;
+  taskId: string;
+  sessionId: string;
+  kind: ArtifactKind;
+  title: string;
+  contentRef: string;
+  createdAt: number;
+}
+
+// Event payloads from gui_task.rs
+
+export interface ActiveTaskChangedPayload {
+  taskId: string | null;
+}
+
+export interface ReviewGateChangedPayload {
+  taskId: string;
+  reviewStatus: ReviewStatus | null;
+}
+
+export interface SessionTreeChangedPayload {
+  taskId: string;
+  sessions: SessionInfo[];
+}
+
+export interface ArtifactsChangedPayload {
+  taskId: string;
+  artifacts: ArtifactInfo[];
+}
+
+// Store data (separate from actions for testability)
+
+export interface TaskStoreData {
+  activeTaskId: string | null;
+  tasks: Record<string, TaskInfo>;
+  sessions: Record<string, SessionInfo[]>;
+  artifacts: Record<string, ArtifactInfo[]>;
+}
+
+export interface TaskStoreState extends TaskStoreData {
+  createTask: (workspace: string, title: string) => Promise<TaskInfo>;
+  selectTask: (taskId: string) => Promise<void>;
+  approveReview: () => Promise<void>;
+  fetchSnapshot: () => Promise<void>;
+  resumeSession: (sessionId: string) => Promise<void>;
+  cleanup: () => void;
+}

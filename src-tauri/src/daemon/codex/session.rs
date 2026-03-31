@@ -8,6 +8,10 @@ use tauri::AppHandle;
 use tokio::sync::mpsc;
 #[path = "session_event.rs"]
 mod session_event;
+
+const MAX_RECONNECT_ATTEMPTS: u32 = 5;
+const RECONNECT_BASE_DELAY_MS: u64 = 500;
+
 pub struct SessionOpts {
     pub role_id: String,
     pub cwd: String,
@@ -16,14 +20,6 @@ pub struct SessionOpts {
     pub sandbox_mode: Option<String>,
     pub network_access: bool,
     pub base_instructions: Option<String>,
-}
-
-struct EventLoopCtx<'a> {
-    thread_id: String,
-    session_epoch: u64,
-    role_id: &'a str,
-    state: &'a SharedState,
-    app: &'a AppHandle,
 }
 
 pub async fn run(
@@ -37,17 +33,13 @@ pub async fn run(
 ) {
     match CodexWsClient::connect(port, &opts, &app).await {
         Some((client, ws_rx)) => {
-            let tid = client.thread_id().to_string();
+            let thread_id = client.thread_id().to_string();
             let ws_tx = client.sender().clone();
-            let _ = ready_tx.send(tid.clone());
-            let ctx = EventLoopCtx {
-                thread_id: tid,
-                session_epoch,
-                role_id: &opts.role_id,
-                state: &state,
-                app: &app,
-            };
-            event_loop(ctx, &mut inject_rx, ws_tx, ws_rx).await;
+            let _ = ready_tx.send(thread_id.clone());
+            run_with_reconnect(
+                port, session_epoch, &opts.role_id, &state, &app,
+                &mut inject_rx, thread_id, ws_tx, ws_rx,
+            ).await;
         }
         None => {
             let _ = ready_tx.send(String::new());
@@ -55,57 +47,142 @@ pub async fn run(
     }
 }
 
-async fn event_loop(
-    ctx: EventLoopCtx<'_>,
+async fn run_with_reconnect(
+    port: u16,
+    session_epoch: u64,
+    role_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
     inject_rx: &mut mpsc::Receiver<(String, bool)>,
-    ws_tx: WsTx,
+    thread_id: String,
+    mut ws_tx: WsTx,
     mut ws_rx: WsRx,
 ) {
-    let EventLoopCtx {
-        thread_id,
-        session_epoch,
-        role_id,
-        state,
-        app,
-    } = ctx;
+    let mut reconnect_count: u32 = 0;
+    loop {
+        let reason = event_loop(
+            &thread_id, session_epoch, role_id, state, app,
+            inject_rx, &ws_tx, &mut ws_rx,
+        ).await;
+
+        if reason != LoopExit::WsClosed {
+            break;
+        }
+        // WS closed — check if process is still alive before reconnecting
+        if !is_port_alive(port).await {
+            eprintln!("[Codex] app-server unreachable, not reconnecting");
+            break;
+        }
+        reconnect_count += 1;
+        if reconnect_count > MAX_RECONNECT_ATTEMPTS {
+            eprintln!("[Codex] max reconnect attempts ({MAX_RECONNECT_ATTEMPTS}) reached");
+            break;
+        }
+        let delay = RECONNECT_BASE_DELAY_MS * 2u64.pow(reconnect_count - 1);
+        eprintln!("[Codex] WS lost, reconnecting ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS}) in {delay}ms");
+        gui::emit_system_log(app, "warn", &format!(
+            "[Codex] reconnecting ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS})…"
+        ));
+        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+
+        match CodexWsClient::reconnect(port, &thread_id, app).await {
+            Some((client, new_rx)) => {
+                ws_tx = client.sender().clone();
+                ws_rx = new_rx;
+                reconnect_count = 0; // reset on success
+                gui::emit_system_log(app, "info", "[Codex] reconnected");
+                eprintln!("[Codex] reconnected to thread={thread_id}");
+            }
+            None => {
+                eprintln!("[Codex] reconnect handshake failed");
+                break;
+            }
+        }
+    }
+    let cleared = state.write().await.clear_codex_session_if_current(session_epoch);
+    if cleared {
+        gui::emit_agent_status(app, "codex", false, None);
+        gui::emit_system_log(app, "info", "[Codex] session ended");
+    }
+}
+
+#[derive(PartialEq)]
+enum LoopExit { WsClosed, InjectClosed, SendFailed }
+
+#[derive(Default)]
+struct RoutedTurnTracker {
+    pending_injected_requests: std::collections::HashSet<u64>,
+    routed_turn_ids: std::collections::HashSet<String>,
+}
+
+impl RoutedTurnTracker {
+    fn track_injected_request(&mut self, rpc_id: u64, _from_user: bool) {
+        self.pending_injected_requests.insert(rpc_id);
+    }
+
+    fn bind_turn_from_response(&mut self, response: &serde_json::Value) {
+        let Some(rpc_id) = response["id"].as_u64() else {
+            return;
+        };
+        let Some(turn_id) = response["result"]["turn"]["id"].as_str() else {
+            return;
+        };
+        if self.pending_injected_requests.remove(&rpc_id) {
+            self.routed_turn_ids.insert(turn_id.to_string());
+        }
+    }
+
+    fn is_routed_turn(&self, turn_id: &str) -> bool {
+        self.routed_turn_ids.contains(turn_id)
+    }
+
+    fn complete_turn(&mut self, turn_id: &str) {
+        self.routed_turn_ids.remove(turn_id);
+    }
+}
+
+async fn event_loop(
+    thread_id: &str,
+    session_epoch: u64,
+    role_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+    inject_rx: &mut mpsc::Receiver<(String, bool)>,
+    ws_tx: &WsTx,
+    ws_rx: &mut WsRx,
+) -> LoopExit {
     let mut next_id: u64 = 100;
     let mut stream_preview = StreamPreviewState::default();
-    let mut req_from_user: std::collections::HashMap<u64, bool> = std::collections::HashMap::new();
-    let mut user_turn_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut routed_turns = RoutedTurnTracker::default();
+    let _ = (session_epoch, thread_id); // used by callers for context
     loop {
         tokio::select! {
             msg_opt = ws_rx.recv() => {
-                let Some(v) = msg_opt else { break };
-                if let Some(rpc_id) = v["id"].as_u64() {
-                    if let Some(tid) = v["result"]["turn"]["id"].as_str() {
-                        if req_from_user.remove(&rpc_id) == Some(true) {
-                            user_turn_ids.insert(tid.to_string());
-                        }
-                    }
-                }
+                let Some(v) = msg_opt else {
+                    eprintln!("[Codex] event_loop: ws_rx closed");
+                    return LoopExit::WsClosed;
+                };
+                routed_turns.bind_turn_from_response(&v);
                 let turn_id = v["params"]["turnId"].as_str()
                     .or_else(|| v["params"]["turn"]["id"].as_str())
                     .unwrap_or("");
-                let route_ok = user_turn_ids.contains(turn_id);
+                let route_ok = routed_turns.is_routed_turn(turn_id);
                 handle_codex_event(
-                    &v,
-                    role_id,
-                    route_ok,
-                    state,
-                    app,
-                    &ws_tx,
-                    &mut stream_preview,
+                    &v, role_id, route_ok, state, app, ws_tx, &mut stream_preview,
                 ).await;
                 if v["method"].as_str() == Some("turn/completed") {
-                    user_turn_ids.remove(turn_id);
+                    routed_turns.complete_turn(turn_id);
                 }
             }
             inject = inject_rx.recv() => {
-                let Some((text, from_user)) = inject else { break };
+                let Some((text, from_user)) = inject else {
+                    eprintln!("[Codex] event_loop: inject_rx closed");
+                    return LoopExit::InjectClosed;
+                };
                 let id = next_id; next_id += 1;
-                req_from_user.insert(id, from_user);
+                routed_turns.track_injected_request(id, from_user);
                 let mut turn_params = json!({
-                    "threadId": &thread_id,
+                    "threadId": thread_id,
                     "input": [{"type":"text","text":text}],
                     "outputSchema": crate::daemon::role_config::output_schema()
                 });
@@ -117,17 +194,48 @@ async fn event_loop(
                     "params": turn_params
                 }).to_string()).await.is_err() {
                     eprintln!("[Codex] failed to inject turn/start");
-                    break;
+                    return LoopExit::SendFailed;
                 }
             }
         }
     }
-    let cleared_current = {
-        let mut daemon = state.write().await;
-        daemon.clear_codex_session_if_current(session_epoch)
-    };
-    if cleared_current {
-        gui::emit_agent_status(app, "codex", false, None);
-        gui::emit_system_log(app, "info", "[Codex] session ended");
+}
+
+async fn is_port_alive(port: u16) -> bool {
+    tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+        .await
+        .is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn injected_turns_are_routable_even_when_not_from_user() {
+        let mut tracker = RoutedTurnTracker::default();
+
+        tracker.track_injected_request(101, false);
+        tracker.bind_turn_from_response(&json!({
+            "id": 101,
+            "result": { "turn": { "id": "turn_agent_reply" } }
+        }));
+
+        assert!(tracker.is_routed_turn("turn_agent_reply"));
+    }
+
+    #[test]
+    fn completed_turns_are_removed_from_routable_set() {
+        let mut tracker = RoutedTurnTracker::default();
+
+        tracker.track_injected_request(202, true);
+        tracker.bind_turn_from_response(&json!({
+            "id": 202,
+            "result": { "turn": { "id": "turn_user" } }
+        }));
+        tracker.complete_turn("turn_user");
+
+        assert!(!tracker.is_routed_turn("turn_user"));
     }
 }

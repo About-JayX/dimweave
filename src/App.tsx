@@ -2,6 +2,7 @@ import { useBridgeStore } from "./stores/bridge-store";
 import { AgentStatusPanel } from "./components/AgentStatus";
 import { MessagePanel } from "./components/MessagePanel";
 import { ReplyInput } from "./components/ReplyInput";
+import { TaskPanel } from "./components/TaskPanel";
 
 export default function App() {
   const messages = useBridgeStore((s) => s.messages);
@@ -33,6 +34,7 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 animate-in fade-in duration-500">
+        <TaskPanel />
         <MessagePanel messages={messages} />
         <ReplyInput connected={anyAgentConnected} />
       </div>

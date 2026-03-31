@@ -55,6 +55,8 @@ async fn auto_fanout_delivers_to_both_agents() {
             reply_to: None,
             priority: None,
             status: None,
+            task_id: None,
+            session_id: None,
             sender_agent_id: None,
         };
         let result = route_message_inner(&state, msg).await;
@@ -77,6 +79,8 @@ async fn explicit_user_target_routes_to_gui() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -97,6 +101,8 @@ async fn invalid_target_is_dropped_not_buffered() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -117,6 +123,8 @@ async fn valid_role_offline_is_buffered() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -136,6 +144,8 @@ fn visible_messages_require_non_whitespace_content() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     let empty = BridgeMessage {
@@ -148,6 +158,8 @@ fn visible_messages_require_non_whitespace_content() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     assert!(is_renderable_message(&visible));
@@ -166,6 +178,8 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
         reply_to: None,
         priority: None,
         status: None,
+        task_id: None,
+        session_id: None,
         sender_agent_id: None,
     };
     assert!(should_emit_claude_thinking(
@@ -188,4 +202,3 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
         "lead",
     ));
 }
-

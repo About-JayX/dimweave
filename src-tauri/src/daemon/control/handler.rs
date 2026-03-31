@@ -93,11 +93,12 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                             _ => id.to_string(),
                         }
                     };
-                    message.from = role;
+                    message.from = role.clone();
                     message.display_source = Some(id.to_string());
                     message.sender_agent_id = Some(id.to_string());
                     let status = message.status.unwrap_or(MessageStatus::Done);
                     message.status = Some(status);
+                    state.read().await.stamp_message_context(&role, &mut message);
                     if id == "claude" && status.is_terminal() {
                         gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                     }

@@ -170,3 +170,169 @@ fn stale_codex_session_cleanup_cannot_clear_new_session() {
     assert!(s.clear_codex_session_if_current(current_epoch));
     assert!(s.codex_inject_tx.is_none());
 }
+
+#[test]
+fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.set_active_task(Some(task.task_id.clone()));
+    s.task_graph
+        .update_task_status(&task.task_id, crate::daemon::task_graph::types::TaskStatus::Implementing);
+
+    let coder_done = BridgeMessage {
+        id: "coder_done".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "finished current todo".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("codex".into()),
+    };
+    assert!(s.prepare_task_routing(&coder_done).is_allowed);
+    let released = s.observe_task_message(&coder_done);
+    assert!(released.is_empty());
+    assert!(s.active_review_gate().is_some());
+
+    let blocked = BridgeMessage {
+        id: "lead_next".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "coder".into(),
+        content: "start next todo".into(),
+        timestamp: 2,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+    };
+    let decision = s.prepare_task_routing(&blocked);
+    assert!(!decision.is_allowed);
+    assert_eq!(decision.buffer_reason.as_deref(), Some("review_gate"));
+
+    let lead_to_reviewer = BridgeMessage {
+        id: "lead_review".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "reviewer".into(),
+        content: "please review".into(),
+        timestamp: 3,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+    };
+    assert!(s.prepare_task_routing(&lead_to_reviewer).is_allowed);
+    let released = s.observe_task_message(&lead_to_reviewer);
+    assert!(released.is_empty());
+
+    let reviewer_done = BridgeMessage {
+        id: "review_done".into(),
+        from: "reviewer".into(),
+        display_source: Some("claude".into()),
+        to: "lead".into(),
+        content: "approved".into(),
+        timestamp: 4,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+    };
+    assert!(s.prepare_task_routing(&reviewer_done).is_allowed);
+    let released = s.observe_task_message(&reviewer_done);
+    // reviewer→lead done does NOT release; sets PendingLeadApproval
+    assert!(released.is_empty());
+    let gate = s.active_review_gate().expect("gate still active");
+    assert_eq!(
+        gate.review_status,
+        crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval
+    );
+
+    // lead explicitly approves → releases blocked messages
+    let released = s.lead_approve_review();
+    assert_eq!(released.len(), 1);
+    assert_eq!(released[0].id, "lead_next");
+    assert!(s.active_review_gate().is_none());
+    assert_eq!(
+        s.task_graph.get_task(&task.task_id).unwrap().status,
+        crate::daemon::task_graph::types::TaskStatus::Implementing
+    );
+}
+
+#[test]
+fn daemon_state_task_graph_persist_round_trip() {
+    let path = std::env::temp_dir().join(format!(
+        "agentnexus_state_test_{}.json",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+
+    let mut s = DaemonState::with_task_graph_path(path.clone())
+        .expect("create with path should succeed");
+    let task = s.task_graph.create_task("/ws", "Stateful Task");
+    let tid = task.task_id.clone();
+    s.save_task_graph().expect("save should succeed");
+
+    let s2 = DaemonState::with_task_graph_path(path.clone())
+        .expect("reload should succeed");
+    let t = s2.task_graph.get_task(&tid).expect("task should survive");
+    assert_eq!(t.title, "Stateful Task");
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn observe_task_message_auto_saves_without_explicit_call() {
+    let path = std::env::temp_dir().join(format!(
+        "agentnexus_autosave_test_{}.json",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+
+    let mut s = DaemonState::with_task_graph_path(path.clone())
+        .expect("create with path");
+    let task = s.task_graph.create_task("/ws", "AutoSave Task");
+    let tid = task.task_id.clone();
+    s.task_graph
+        .update_task_status(&tid, crate::daemon::task_graph::types::TaskStatus::Implementing);
+    s.set_active_task(Some(tid.clone()));
+    // Manually save the initial state so the file exists
+    s.save_task_graph().unwrap();
+
+    // Simulate coder -> lead done message (triggers auto-save internally)
+    let coder_done = BridgeMessage {
+        id: "cd".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "done".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("codex".into()),
+    };
+    let _ = s.observe_task_message(&coder_done);
+
+    // Load from disk WITHOUT calling save_task_graph() — the auto-save
+    // inside observe_task_message should have persisted the change.
+    let s2 = DaemonState::with_task_graph_path(path.clone())
+        .expect("reload");
+    let t = s2.task_graph.get_task(&tid).expect("task exists on disk");
+    assert_eq!(t.status, crate::daemon::task_graph::types::TaskStatus::Reviewing);
+    assert!(t.review_status.is_some());
+
+    let _ = std::fs::remove_file(&path);
+}

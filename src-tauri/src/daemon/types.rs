@@ -47,6 +47,10 @@ pub struct BridgeMessage {
     pub priority: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<MessageStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     /// The agent instance that originated this message (e.g. "claude", "codex").
     /// Set by the daemon on inbound AgentReply; distinct from `from` (which is the role).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,6 +70,8 @@ impl BridgeMessage {
             reply_to: None,
             priority: None,
             status: None,
+            task_id: None,
+            session_id: None,
             sender_agent_id: None,
         }
     }
@@ -108,6 +114,32 @@ pub enum PermissionBehavior {
 pub struct PermissionVerdict {
     pub request_id: String,
     pub behavior: PermissionBehavior,
+}
+
+/// Frontend DTO: active task with its sessions and artifacts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSnapshot {
+    pub task: crate::daemon::task_graph::types::Task,
+    pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
+    pub artifacts: Vec<crate::daemon::task_graph::types::Artifact>,
+}
+
+/// Frontend DTO: session tree for a task (flat list, tree via parent_session_id).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTreeSnapshot {
+    pub task_id: String,
+    pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
+}
+
+/// Frontend DTO: task history entry with summary counts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryEntry {
+    pub task: crate::daemon::task_graph::types::Task,
+    pub session_count: usize,
+    pub artifact_count: usize,
 }
 
 /// Structured snapshot of one online agent, used in query responses.

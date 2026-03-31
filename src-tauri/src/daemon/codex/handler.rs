@@ -45,7 +45,7 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         return format!("Ignored empty message to {to}");
     }
 
-    let msg = BridgeMessage {
+    let mut msg = BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
         display_source: Some("codex".into()),
@@ -55,15 +55,22 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         reply_to: None,
         priority: None,
         status: Some(MessageStatus::Done),
+        task_id: None,
+        session_id: None,
         sender_agent_id: Some("codex".into()),
     };
+    state.read().await.stamp_message_context(from, &mut msg);
 
     crate::daemon::routing::route_message(state, app, msg).await;
     format!("Message sent to {to}")
 }
 
 async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
-    let msgs = state.write().await.take_buffered_for(role_id);
+    let task_id = state.read().await.active_task_id.clone();
+    let msgs = state
+        .write()
+        .await
+        .take_buffered_for_task(role_id, task_id.as_deref());
     if msgs.is_empty() {
         return "No new messages.".to_string();
     }

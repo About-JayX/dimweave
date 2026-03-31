@@ -45,12 +45,7 @@ impl ClaudeVersion {
     }
 
     pub fn is_known_bad_managed_pty(&self) -> bool {
-        *self
-            == ClaudeVersion {
-                major: 2,
-                minor: 1,
-                patch: 85,
-            }
+        false
     }
 }
 
@@ -140,12 +135,10 @@ mod tests {
     }
 
     #[test]
-    fn reject_known_bad_managed_pty_version() {
+    fn accept_previously_blocked_version() {
         let version = parse_claude_version("2.1.85 (Claude Code)").expect("version should parse");
-        let err = validate_claude_channel_ready(version).expect_err("2.1.85 should be blocked");
-        assert!(err.contains("blocked in AgentNexus managed PTY"));
-        assert!(err.contains("_4.useRef is not a function"));
-        assert!(err.contains("2.1.84"));
+        let accepted = validate_claude_channel_ready(version).expect("2.1.85 should now be allowed");
+        assert_eq!(accepted, version);
     }
 
     #[test]

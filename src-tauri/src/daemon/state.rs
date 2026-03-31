@@ -1,11 +1,13 @@
 use crate::daemon::{
+    orchestrator::review_gate::ReviewGate,
     session_manager::SessionManager,
+    task_graph::TaskGraphStore,
     types::{
         AgentRuntimeStatus, BridgeMessage, DaemonStatusSnapshot, OnlineAgentInfo,
         PermissionBehavior, PermissionRequest, PermissionVerdict, ToAgent,
     },
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
 pub const PERMISSION_TTL_MS: u64 = 10 * 60 * 1000;
@@ -42,6 +44,10 @@ pub struct DaemonState {
     pub session_mgr: Arc<Mutex<SessionManager>>,
     /// Monotonic counter for agent connection generations.
     pub next_agent_gen: u64,
+    /// Normalized task/session/artifact graph.
+    pub task_graph: TaskGraphStore,
+    pub active_task_id: Option<String>,
+    pub(crate) review_gate: ReviewGate,
 }
 
 impl Default for DaemonState {
@@ -57,6 +63,9 @@ impl Default for DaemonState {
             codex_role: "coder".into(),
             session_mgr: Arc::new(Mutex::new(SessionManager::new())),
             next_agent_gen: 0,
+            task_graph: TaskGraphStore::new(),
+            active_task_id: None,
+            review_gate: ReviewGate::new(),
         }
     }
 }
@@ -64,6 +73,21 @@ impl Default for DaemonState {
 impl DaemonState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create with task graph loaded from the given path.
+    pub fn with_task_graph_path(path: PathBuf) -> anyhow::Result<Self> {
+        Ok(Self { task_graph: TaskGraphStore::load(&path)?, ..Self::default() })
+    }
+
+    /// Persist task graph to disk (no-op if no path configured).
+    pub fn save_task_graph(&self) -> anyhow::Result<()> { self.task_graph.save() }
+
+    /// Best-effort auto-save after mutations.
+    pub(crate) fn auto_save_task_graph(&self) {
+        if let Err(e) = self.task_graph.save() {
+            eprintln!("[Daemon] task graph auto-save failed: {e}");
+        }
     }
 
     pub fn begin_codex_launch(&mut self) -> u64 {
@@ -135,9 +159,22 @@ impl DaemonState {
     }
 
     pub fn take_buffered_for(&mut self, role: &str) -> Vec<BridgeMessage> {
+        self.take_buffered_for_task(role, None)
+    }
+
+    pub fn take_buffered_for_task(
+        &mut self,
+        role: &str,
+        task_id: Option<&str>,
+    ) -> Vec<BridgeMessage> {
         let mut ready = Vec::new();
         self.buffered_messages.retain(|msg| {
-            if msg.to == role {
+            let same_task = match (task_id, msg.task_id.as_deref()) {
+                (Some(expected), Some(actual)) => expected == actual,
+                (Some(_), None) => false,
+                _ => true,
+            };
+            if msg.to == role && same_task {
                 ready.push(msg.clone());
                 false
             } else {
@@ -153,9 +190,8 @@ impl DaemonState {
 mod state_permission;
 #[path = "state_snapshot.rs"]
 mod state_snapshot;
-#[cfg(test)]
-#[path = "state_tests.rs"]
-mod state_tests;
-#[cfg(test)]
-#[path = "state_snapshot_tests.rs"]
-mod state_snapshot_tests;
+#[path = "state_task_flow.rs"]
+mod state_task_flow;
+#[cfg(test)] #[path = "state_tests.rs"] mod state_tests;
+#[cfg(test)] #[path = "state_snapshot_tests.rs"] mod state_snapshot_tests;
+#[cfg(test)] #[path = "state_task_snapshot_tests.rs"] mod state_task_snapshot_tests;

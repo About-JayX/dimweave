@@ -105,11 +105,13 @@ async fn handle_completed_agent_message(
         None
     };
     if let Some(target) = valid_target {
-        let msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
+        let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
+        state.read().await.stamp_message_context(role_id, &mut msg);
         eprintln!("[Codex] schema-route {} → {}", role_id, target);
         routing::route_message(state, app, msg).await;
     } else {
-        let msg = build_msg_with_status(role_id, "user", &parsed.message, parsed.status);
+        let mut msg = build_msg_with_status(role_id, "user", &parsed.message, parsed.status);
+        state.read().await.stamp_message_context(role_id, &mut msg);
         gui::emit_agent_message(app, &msg);
     }
 }
@@ -133,6 +135,8 @@ fn build_msg_with_status(
         reply_to: None,
         priority: None,
         status: Some(status),
+        task_id: None,
+        session_id: None,
         sender_agent_id: Some("codex".into()),
     }
 }

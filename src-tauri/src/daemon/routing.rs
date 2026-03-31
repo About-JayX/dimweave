@@ -21,6 +21,17 @@ struct RouteOutcome {
 }
 
 async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) -> RouteOutcome {
+    let decision = {
+        let mut s = state.write().await;
+        s.prepare_task_routing(&msg)
+    };
+    if !decision.is_allowed {
+        return RouteOutcome {
+            result: RouteResult::Buffered,
+            emit_claude_thinking: false,
+        };
+    }
+
     if msg.to == "user" {
         return RouteOutcome {
             result: RouteResult::ToGui,
@@ -161,6 +172,21 @@ async fn route_message_with_display(
         outcome.emit_claude_thinking,
         display_in_gui,
     );
+    if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
+        let released = {
+            let mut s = state.write().await;
+            s.observe_task_message(&msg)
+        };
+        for released_msg in released {
+            Box::pin(route_message_with_display(
+                state,
+                app,
+                released_msg,
+                false,
+            ))
+            .await;
+        }
+    }
 }
 
 pub fn format_codex_input(msg: &BridgeMessage) -> String {

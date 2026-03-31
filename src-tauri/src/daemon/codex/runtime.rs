@@ -56,6 +56,7 @@ pub(super) fn spawn_health_monitor(
             if let Some(ref mut proc) = *guard {
                 match proc.try_wait() {
                     Ok(Some(status)) => {
+                        eprintln!("[Codex] health_monitor: process exited with status={status}");
                         cancel.cancel();
                         let cleared_current = {
                             let mut daemon = state.write().await;

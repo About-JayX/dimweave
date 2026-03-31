@@ -5,6 +5,7 @@ mod claude_launch;
 mod claude_session;
 mod codex;
 mod commands;
+mod commands_task;
 mod daemon;
 mod mcp;
 
@@ -125,6 +126,14 @@ fn main() {
             commands::daemon_set_codex_role,
             commands::daemon_respond_permission,
             commands::daemon_get_status_snapshot,
+            commands_task::daemon_create_task,
+            commands_task::daemon_list_tasks,
+            commands_task::daemon_select_task,
+            commands_task::daemon_get_task_snapshot,
+            commands_task::daemon_approve_review,
+            commands_task::daemon_list_session_tree,
+            commands_task::daemon_list_history,
+            commands_task::daemon_resume_session,
             commands::stop_claude,
             commands::claude_terminal_input,
             commands::claude_terminal_resize,

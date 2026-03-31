@@ -57,6 +57,91 @@ fn deserialize_get_online_agents_from_agent() {
 }
 
 #[test]
+fn task_snapshot_serializes_camel_case() {
+    use crate::daemon::task_graph::types::*;
+    let snap = TaskSnapshot {
+        task: Task {
+            task_id: "task_1".into(), workspace_root: "/ws".into(),
+            title: "Test".into(), status: TaskStatus::Implementing,
+            review_status: Some(ReviewStatus::InReview),
+            lead_session_id: Some("s1".into()), current_coder_session_id: Some("s2".into()),
+            created_at: 1000, updated_at: 2000,
+        },
+        sessions: vec![SessionHandle {
+            session_id: "s1".into(), task_id: "task_1".into(),
+            parent_session_id: None, provider: Provider::Claude,
+            role: SessionRole::Lead, external_session_id: None,
+            status: SessionStatus::Active, cwd: "/ws".into(),
+            title: "Lead".into(), created_at: 1000, updated_at: 2000,
+        }],
+        artifacts: vec![],
+    };
+    let json = serde_json::to_value(&snap).unwrap();
+    assert_eq!(json["task"]["taskId"], "task_1");
+    assert_eq!(json["task"]["status"], "implementing");
+    assert_eq!(json["task"]["reviewStatus"], "in_review");
+    assert_eq!(json["sessions"][0]["sessionId"], "s1");
+    assert_eq!(json["sessions"][0]["provider"], "claude");
+    assert!(json["artifacts"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn task_snapshot_roundtrip() {
+    use crate::daemon::task_graph::types::*;
+    let snap = TaskSnapshot {
+        task: Task {
+            task_id: "t1".into(), workspace_root: "/ws".into(),
+            title: "T".into(), status: TaskStatus::Draft,
+            review_status: None, lead_session_id: None,
+            current_coder_session_id: None, created_at: 100, updated_at: 200,
+        },
+        sessions: vec![], artifacts: vec![],
+    };
+    let json_str = serde_json::to_string(&snap).unwrap();
+    let decoded: TaskSnapshot = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(decoded.task.task_id, "t1");
+    assert_eq!(decoded.task.status, TaskStatus::Draft);
+}
+
+#[test]
+fn session_tree_snapshot_serializes_camel_case() {
+    use crate::daemon::task_graph::types::*;
+    let snap = SessionTreeSnapshot {
+        task_id: "t1".into(),
+        sessions: vec![SessionHandle {
+            session_id: "s1".into(), task_id: "t1".into(),
+            parent_session_id: None, provider: Provider::Claude,
+            role: SessionRole::Lead, external_session_id: None,
+            status: SessionStatus::Active, cwd: "/ws".into(),
+            title: "Lead".into(), created_at: 100, updated_at: 200,
+        }],
+    };
+    let json = serde_json::to_value(&snap).unwrap();
+    assert_eq!(json["taskId"], "t1");
+    assert_eq!(json["sessions"][0]["sessionId"], "s1");
+    assert_eq!(json["sessions"][0]["role"], "lead");
+}
+
+#[test]
+fn history_entry_serializes_camel_case() {
+    use crate::daemon::task_graph::types::*;
+    let entry = HistoryEntry {
+        task: Task {
+            task_id: "t1".into(), workspace_root: "/ws".into(),
+            title: "T".into(), status: TaskStatus::Done,
+            review_status: None, lead_session_id: None,
+            current_coder_session_id: None, created_at: 100, updated_at: 200,
+        },
+        session_count: 3,
+        artifact_count: 1,
+    };
+    let json = serde_json::to_value(&entry).unwrap();
+    assert_eq!(json["task"]["taskId"], "t1");
+    assert_eq!(json["sessionCount"], 3);
+    assert_eq!(json["artifactCount"], 1);
+}
+
+#[test]
 fn serialize_online_agents_response_to_agent() {
     let agents = serde_json::json!([
         {"agentId": "claude", "role": "lead", "modelSource": "claude"}

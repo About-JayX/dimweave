@@ -1,0 +1,117 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    Draft,
+    Planning,
+    Implementing,
+    Reviewing,
+    Done,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStatus {
+    Active,
+    Paused,
+    Completed,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Provider {
+    Claude,
+    Codex,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRole {
+    Lead,
+    Coder,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactKind {
+    Research,
+    Plan,
+    Review,
+    Diff,
+    Verification,
+    Summary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewStatus {
+    PendingLeadReview,
+    InReview,
+    /// Reviewer is done; waiting for lead to explicitly approve.
+    PendingLeadApproval,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub task_id: String,
+    pub workspace_root: String,
+    pub title: String,
+    pub status: TaskStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_status: Option<ReviewStatus>,
+    pub lead_session_id: Option<String>,
+    pub current_coder_session_id: Option<String>,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHandle {
+    pub session_id: String,
+    pub task_id: String,
+    pub parent_session_id: Option<String>,
+    pub provider: Provider,
+    pub role: SessionRole,
+    pub external_session_id: Option<String>,
+    pub status: SessionStatus,
+    pub cwd: String,
+    pub title: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Artifact {
+    pub artifact_id: String,
+    pub task_id: String,
+    pub session_id: String,
+    pub kind: ArtifactKind,
+    pub title: String,
+    pub content_ref: String,
+    pub created_at: u64,
+}
+
+/// Parameters for creating a new session.
+pub struct CreateSessionParams<'a> {
+    pub task_id: &'a str,
+    pub parent_session_id: Option<&'a str>,
+    pub provider: Provider,
+    pub role: SessionRole,
+    pub cwd: &'a str,
+    pub title: &'a str,
+}
+
+/// Parameters for creating a new artifact.
+pub struct CreateArtifactParams<'a> {
+    pub task_id: &'a str,
+    pub session_id: &'a str,
+    pub kind: ArtifactKind,
+    pub title: &'a str,
+    pub content_ref: &'a str,
+}

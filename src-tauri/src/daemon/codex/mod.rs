@@ -5,6 +5,7 @@ mod runtime;
 pub mod session;
 mod structured_output;
 pub(crate) mod ws_client;
+mod ws_helpers;
 
 use crate::daemon::{gui, role_config, SharedState};
 use runtime::{ensure_port_available, spawn_health_monitor};
@@ -34,13 +35,8 @@ pub struct StartOpts {
 impl CodexHandle {
     pub async fn stop(&self) {
         self.cancel.cancel();
-        if let Some(mut child) = self.process.lock().await.take() {
-            lifecycle::stop(&mut child, self.port).await;
-        }
-        self.session_mgr
-            .lock()
-            .await
-            .cleanup_session(&self.session_id);
+        if let Some(mut c) = self.process.lock().await.take() { lifecycle::stop(&mut c, self.port).await; }
+        self.session_mgr.lock().await.cleanup_session(&self.session_id);
     }
 }
 
@@ -153,6 +149,7 @@ pub async fn start(
         s.codex_role = role_id.clone();
         let attached = s.attach_codex_session_if_current(launch_epoch, inject_tx.clone());
         let buffered = if attached {
+            crate::daemon::provider::codex::register_on_launch(&mut s, &role_id, &cwd, &thread_id);
             s.take_buffered_for(&role_id)
         } else {
             Vec::new()
