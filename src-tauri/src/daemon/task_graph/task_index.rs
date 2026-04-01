@@ -3,10 +3,7 @@ use super::types::*;
 
 impl TaskGraphStore {
     /// All tasks for a given workspace root.
-    pub fn tasks_for_workspace(
-        &self,
-        workspace_root: &str,
-    ) -> Vec<&Task> {
+    pub fn tasks_for_workspace(&self, workspace_root: &str) -> Vec<&Task> {
         self.tasks
             .values()
             .filter(|t| t.workspace_root == workspace_root)
@@ -14,10 +11,7 @@ impl TaskGraphStore {
     }
 
     /// The most recent non-terminal task for a workspace.
-    pub fn active_task(
-        &self,
-        workspace_root: &str,
-    ) -> Option<&Task> {
+    pub fn active_task(&self, workspace_root: &str) -> Option<&Task> {
         self.tasks
             .values()
             .filter(|t| {

@@ -74,7 +74,10 @@ fn status_snapshot_reports_current_online_agents() {
     let mut s = DaemonState::new();
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
     let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
-    s.attached_agents.insert("claude".into(), crate::daemon::state::AgentSender::new(claude_tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
     s.codex_inject_tx = Some(codex_tx);
 
     let snapshot = s.status_snapshot();
@@ -131,14 +134,20 @@ fn take_buffered_for_drains_only_matching_role() {
 #[test]
 fn buffered_verdicts_round_trip() {
     let mut s = DaemonState::new();
-    s.buffer_permission_verdict("claude", PermissionVerdict {
-        request_id: "req-1".into(),
-        behavior: PermissionBehavior::Allow,
-    });
-    s.buffer_permission_verdict("claude", PermissionVerdict {
-        request_id: "req-2".into(),
-        behavior: PermissionBehavior::Deny,
-    });
+    s.buffer_permission_verdict(
+        "claude",
+        PermissionVerdict {
+            request_id: "req-1".into(),
+            behavior: PermissionBehavior::Allow,
+        },
+    );
+    s.buffer_permission_verdict(
+        "claude",
+        PermissionVerdict {
+            request_id: "req-2".into(),
+            behavior: PermissionBehavior::Deny,
+        },
+    );
     let verdicts = s.take_buffered_verdicts_for("claude");
     assert_eq!(verdicts.len(), 2);
     assert!(s.take_buffered_verdicts_for("claude").is_empty());
@@ -148,10 +157,13 @@ fn buffered_verdicts_round_trip() {
 fn buffered_verdicts_cap_at_50() {
     let mut s = DaemonState::new();
     for i in 0..60 {
-        s.buffer_permission_verdict("claude", PermissionVerdict {
-            request_id: format!("req-{i}"),
-            behavior: PermissionBehavior::Allow,
-        });
+        s.buffer_permission_verdict(
+            "claude",
+            PermissionVerdict {
+                request_id: format!("req-{i}"),
+                behavior: PermissionBehavior::Allow,
+            },
+        );
     }
     let verdicts = s.take_buffered_verdicts_for("claude");
     assert!(verdicts.len() <= 50);
@@ -176,8 +188,10 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     s.set_active_task(Some(task.task_id.clone()));
-    s.task_graph
-        .update_task_status(&task.task_id, crate::daemon::task_graph::types::TaskStatus::Implementing);
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Implementing,
+    );
 
     let coder_done = BridgeMessage {
         id: "coder_done".into(),
@@ -270,21 +284,91 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
 }
 
 #[test]
-fn daemon_state_task_graph_persist_round_trip() {
-    let path = std::env::temp_dir().join(format!(
-        "agentnexus_state_test_{}.json",
-        std::process::id()
+fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.set_active_task(Some(task.task_id.clone()));
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Implementing,
+    );
+
+    let coder_done = BridgeMessage {
+        id: "coder_done".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "finished current todo".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("codex".into()),
+    };
+
+    let effects = s.observe_task_message_effects(&coder_done);
+
+    assert!(effects.released.is_empty());
+    assert_eq!(effects.ui_events.len(), 2);
+    assert!(matches!(
+        &effects.ui_events[0],
+        crate::daemon::gui_task::TaskUiEvent::TaskUpdated(task)
+            if task.status == crate::daemon::task_graph::types::TaskStatus::Reviewing
+                && task.review_status == Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadReview)
     ));
+    assert!(matches!(
+        &effects.ui_events[1],
+        crate::daemon::gui_task::TaskUiEvent::ReviewGateChanged { task_id, review_status }
+            if task_id == &task.task_id
+                && *review_status == Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadReview)
+    ));
+}
+
+#[test]
+fn lead_approve_review_effects_reports_task_ui_events() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.set_active_task(Some(task.task_id.clone()));
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing,
+    );
+    s.task_graph.update_task_review_status(
+        &task.task_id,
+        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
+    );
+
+    let effects = s.lead_approve_review_effects();
+
+    assert_eq!(effects.ui_events.len(), 2);
+    assert!(matches!(
+        &effects.ui_events[0],
+        crate::daemon::gui_task::TaskUiEvent::TaskUpdated(task)
+            if task.status == crate::daemon::task_graph::types::TaskStatus::Implementing
+                && task.review_status.is_none()
+    ));
+    assert!(matches!(
+        &effects.ui_events[1],
+        crate::daemon::gui_task::TaskUiEvent::ReviewGateChanged { task_id, review_status }
+            if task_id == &task.task_id && review_status.is_none()
+    ));
+}
+
+#[test]
+fn daemon_state_task_graph_persist_round_trip() {
+    let path =
+        std::env::temp_dir().join(format!("agentnexus_state_test_{}.json", std::process::id()));
     let _ = std::fs::remove_file(&path);
 
-    let mut s = DaemonState::with_task_graph_path(path.clone())
-        .expect("create with path should succeed");
+    let mut s =
+        DaemonState::with_task_graph_path(path.clone()).expect("create with path should succeed");
     let task = s.task_graph.create_task("/ws", "Stateful Task");
     let tid = task.task_id.clone();
     s.save_task_graph().expect("save should succeed");
 
-    let s2 = DaemonState::with_task_graph_path(path.clone())
-        .expect("reload should succeed");
+    let s2 = DaemonState::with_task_graph_path(path.clone()).expect("reload should succeed");
     let t = s2.task_graph.get_task(&tid).expect("task should survive");
     assert_eq!(t.title, "Stateful Task");
 
@@ -299,12 +383,13 @@ fn observe_task_message_auto_saves_without_explicit_call() {
     ));
     let _ = std::fs::remove_file(&path);
 
-    let mut s = DaemonState::with_task_graph_path(path.clone())
-        .expect("create with path");
+    let mut s = DaemonState::with_task_graph_path(path.clone()).expect("create with path");
     let task = s.task_graph.create_task("/ws", "AutoSave Task");
     let tid = task.task_id.clone();
-    s.task_graph
-        .update_task_status(&tid, crate::daemon::task_graph::types::TaskStatus::Implementing);
+    s.task_graph.update_task_status(
+        &tid,
+        crate::daemon::task_graph::types::TaskStatus::Implementing,
+    );
     s.set_active_task(Some(tid.clone()));
     // Manually save the initial state so the file exists
     s.save_task_graph().unwrap();
@@ -328,10 +413,12 @@ fn observe_task_message_auto_saves_without_explicit_call() {
 
     // Load from disk WITHOUT calling save_task_graph() — the auto-save
     // inside observe_task_message should have persisted the change.
-    let s2 = DaemonState::with_task_graph_path(path.clone())
-        .expect("reload");
+    let s2 = DaemonState::with_task_graph_path(path.clone()).expect("reload");
     let t = s2.task_graph.get_task(&tid).expect("task exists on disk");
-    assert_eq!(t.status, crate::daemon::task_graph::types::TaskStatus::Reviewing);
+    assert_eq!(
+        t.status,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing
+    );
     assert!(t.review_status.is_some());
 
     let _ = std::fs::remove_file(&path);

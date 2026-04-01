@@ -67,10 +67,16 @@ fn register_codex_session_as_child_of_lead() {
     };
     let sess = codex::register_session(&mut store, reg);
 
-    assert_eq!(sess.parent_session_id.as_deref(), Some(lead.session_id.as_str()));
+    assert_eq!(
+        sess.parent_session_id.as_deref(),
+        Some(lead.session_id.as_str())
+    );
     let children = store.children_of_session(&lead.session_id);
     assert_eq!(children.len(), 1);
-    assert_eq!(children[0].external_session_id.as_deref(), Some("thread_xyz"));
+    assert_eq!(
+        children[0].external_session_id.as_deref(),
+        Some("thread_xyz")
+    );
 }
 
 #[test]
@@ -108,14 +114,18 @@ fn register_on_launch_creates_session_with_thread_id() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "T1");
     let tid = task.task_id.clone();
-    s.task_graph.update_task_status(&tid, TaskStatus::Implementing);
+    s.task_graph
+        .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
     codex::register_on_launch(&mut s, "coder", "/ws", "thread_abc");
 
     // Session registered with correct external_session_id
     let task = s.task_graph.get_task(&tid).unwrap();
-    let coder_sid = task.current_coder_session_id.as_ref().expect("coder session set");
+    let coder_sid = task
+        .current_coder_session_id
+        .as_ref()
+        .expect("coder session set");
     let sess = s.task_graph.get_session(coder_sid).unwrap();
     assert_eq!(sess.provider, Provider::Codex);
     assert_eq!(sess.role, SessionRole::Coder);
@@ -137,12 +147,16 @@ fn register_on_launch_links_to_lead_session() {
     let task = s.task_graph.create_task("/ws", "T1");
     let tid = task.task_id.clone();
     let lead = s.task_graph.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     s.task_graph.set_lead_session(&tid, &lead.session_id);
-    s.task_graph.update_task_status(&tid, TaskStatus::Implementing);
+    s.task_graph
+        .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
     codex::register_on_launch(&mut s, "coder", "/ws", "thread_child");
@@ -150,7 +164,10 @@ fn register_on_launch_links_to_lead_session() {
     let task = s.task_graph.get_task(&tid).unwrap();
     let coder_sid = task.current_coder_session_id.as_ref().unwrap();
     let sess = s.task_graph.get_session(coder_sid).unwrap();
-    assert_eq!(sess.parent_session_id.as_deref(), Some(lead.session_id.as_str()));
+    assert_eq!(
+        sess.parent_session_id.as_deref(),
+        Some(lead.session_id.as_str())
+    );
     assert_eq!(s.task_graph.children_of_session(&lead.session_id).len(), 1);
 }
 
@@ -158,6 +175,7 @@ fn register_on_launch_links_to_lead_session() {
 
 #[test]
 fn codex_adapter_has_expected_interface() {
-    let _ = codex::register_session as fn(&mut TaskGraphStore, SessionRegistration) -> SessionHandle;
+    let _ =
+        codex::register_session as fn(&mut TaskGraphStore, SessionRegistration) -> SessionHandle;
     let _ = codex::bind_thread_id as fn(&mut TaskGraphStore, &str, &str) -> bool;
 }

@@ -1,6 +1,5 @@
 use super::{
-    drain_log_lines, extract_terminal_preview, needs_user_attention,
-    next_attention_event,
+    drain_log_lines, extract_terminal_preview, needs_user_attention, next_attention_event,
     should_auto_confirm_development_prompt, should_emit_attention,
 };
 
@@ -47,10 +46,7 @@ fn matches_prompt_when_terminal_output_collapses_spaces() {
 #[test]
 fn drains_complete_sanitized_log_lines() {
     let mut pending = String::new();
-    let lines = drain_log_lines(
-        &mut pending,
-        "\u{1b}[32mhello\u{1b}[0m\nworld\r\npartial",
-    );
+    let lines = drain_log_lines(&mut pending, "\u{1b}[32mhello\u{1b}[0m\nworld\r\npartial");
     assert_eq!(lines, vec!["hello".to_string(), "world".to_string()]);
     assert_eq!(pending, "partial");
 }
@@ -109,7 +105,10 @@ fn stops_attention_for_dev_prompt_after_auto_confirm() {
 
 #[test]
 fn terminal_preview_drops_empty_frames() {
-    assert_eq!(extract_terminal_preview("\u{1b}[32m\r\n\r\n\u{1b}[0m"), None);
+    assert_eq!(
+        extract_terminal_preview("\u{1b}[32m\r\n\r\n\u{1b}[0m"),
+        None
+    );
 }
 
 #[test]

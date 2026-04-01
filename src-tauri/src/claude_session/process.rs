@@ -4,8 +4,8 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
     time::Duration,
 };
-use tauri::AppHandle;
 use tauri::async_runtime;
+use tauri::AppHandle;
 
 use super::{clear_if_pid_matches, ActiveClaudeSession, ClaudeSessionManager};
 
@@ -55,7 +55,11 @@ pub fn spawn_session(
 
     super::prompt::spawn_auto_confirm_thread(reader, writer.clone(), app, emit_debug_logs);
     Ok(SpawnedSession {
-        session: ActiveClaudeSession { pid, writer, master },
+        session: ActiveClaudeSession {
+            pid,
+            writer,
+            master,
+        },
         child,
     })
 }
@@ -123,7 +127,9 @@ pub fn spawn_exit_watcher(
         });
 }
 
-fn describe_exit(status: std::io::Result<portable_pty::ExitStatus>) -> (&'static str, Option<i32>, String) {
+fn describe_exit(
+    status: std::io::Result<portable_pty::ExitStatus>,
+) -> (&'static str, Option<i32>, String) {
     match status {
         Ok(status) if status.signal().is_some() => {
             let signal = status.signal().unwrap_or("unknown");
@@ -136,7 +142,11 @@ fn describe_exit(status: std::io::Result<portable_pty::ExitStatus>) -> (&'static
         Ok(status) => {
             let code = status.exit_code() as i32;
             let level = if code == 0 { "info" } else { "warn" };
-            (level, Some(code), format!("Claude terminal exited with code {code}"))
+            (
+                level,
+                Some(code),
+                format!("Claude terminal exited with code {code}"),
+            )
         }
         Err(err) => (
             "error",

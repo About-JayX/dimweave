@@ -36,11 +36,7 @@ pub(super) fn build_thread_start_params(opts: &SessionOpts) -> Value {
             params["sandbox"] = json!(sb);
         }
     }
-    if let Some(bi) = opts
-        .base_instructions
-        .as_deref()
-        .filter(|s| !s.is_empty())
-    {
+    if let Some(bi) = opts.base_instructions.as_deref().filter(|s| !s.is_empty()) {
         params["baseInstructions"] = json!(bi);
     }
     params

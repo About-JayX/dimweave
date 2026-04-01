@@ -61,7 +61,9 @@ mod tests {
     impl AttentionWindowOps for MockWindow {
         fn show_attention_window(&self) -> Result<(), String> {
             self.calls.lock().unwrap().push("show");
-            self.show_ok.then_some(()).ok_or_else(|| "show failed".into())
+            self.show_ok
+                .then_some(())
+                .ok_or_else(|| "show failed".into())
         }
 
         fn unminimize_attention_window(&self) -> Result<(), String> {
@@ -73,7 +75,9 @@ mod tests {
 
         fn focus_attention_window(&self) -> Result<(), String> {
             self.calls.lock().unwrap().push("focus");
-            self.focus_ok.then_some(()).ok_or_else(|| "focus failed".into())
+            self.focus_ok
+                .then_some(())
+                .ok_or_else(|| "focus failed".into())
         }
     }
 

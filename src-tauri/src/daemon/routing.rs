@@ -1,11 +1,11 @@
+#[cfg(test)]
+pub use crate::daemon::routing_user_input::resolve_user_targets;
+pub use crate::daemon::routing_user_input::route_user_input;
 use crate::daemon::{
     routing_display,
     types::{BridgeMessage, ToAgent},
     SharedState,
 };
-pub use crate::daemon::routing_user_input::route_user_input;
-#[cfg(test)]
-pub use crate::daemon::routing_user_input::resolve_user_targets;
 use tauri::AppHandle;
 
 pub enum RouteResult {
@@ -50,9 +50,8 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
     // cached role would shadow an online Codex holding the same role.
     let (target, emit_claude_thinking) = {
         let s = state.read().await;
-        let emit_claude_thinking = routing_display::should_emit_claude_thinking_pre(
-            &msg, &s.claude_role,
-        );
+        let emit_claude_thinking =
+            routing_display::should_emit_claude_thinking_pre(&msg, &s.claude_role);
         let claude_matches = s.claude_role == msg.to;
         let codex_matches = s.codex_role == msg.to;
 
@@ -93,7 +92,10 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 (Target::Claude(tx), emit_claude_thinking)
             } else if let Some(tx) = codex_tx {
                 let from_user = msg.from == "user";
-                (Target::Codex(tx, format_codex_input(&msg), from_user), false)
+                (
+                    Target::Codex(tx, format_codex_input(&msg), from_user),
+                    false,
+                )
             } else {
                 (Target::NeedBuffer, false)
             }
@@ -173,18 +175,15 @@ async fn route_message_with_display(
         display_in_gui,
     );
     if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
-        let released = {
+        let effects = {
             let mut s = state.write().await;
-            s.observe_task_message(&msg)
+            s.observe_task_message_effects(&msg)
         };
-        for released_msg in released {
-            Box::pin(route_message_with_display(
-                state,
-                app,
-                released_msg,
-                false,
-            ))
-            .await;
+        for event in effects.ui_events {
+            event.emit(app);
+        }
+        for released_msg in effects.released {
+            Box::pin(route_message_with_display(state, app, released_msg, false)).await;
         }
     }
 }
@@ -209,6 +208,12 @@ pub fn format_codex_input(msg: &BridgeMessage) -> String {
     }
 }
 
-#[cfg(test)] #[path = "routing_tests.rs"] mod tests;
-#[cfg(test)] #[path = "routing_behavior_tests.rs"] mod behavior_tests;
-#[cfg(test)] #[path = "routing_shared_role_tests.rs"] mod shared_role_tests;
+#[cfg(test)]
+#[path = "routing_behavior_tests.rs"]
+mod behavior_tests;
+#[cfg(test)]
+#[path = "routing_shared_role_tests.rs"]
+mod shared_role_tests;
+#[cfg(test)]
+#[path = "routing_tests.rs"]
+mod tests;

@@ -10,16 +10,14 @@ pub struct ReviewGate {
 
 impl ReviewGate {
     pub fn new() -> Self {
-        Self { blocked: HashMap::new() }
+        Self {
+            blocked: HashMap::new(),
+        }
     }
 
     /// Should this message be blocked by the review gate?
     /// Blocks lead→coder whenever any review status is active.
-    pub fn should_block(
-        &self,
-        review_status: Option<ReviewStatus>,
-        msg: &BridgeMessage,
-    ) -> bool {
+    pub fn should_block(&self, review_status: Option<ReviewStatus>, msg: &BridgeMessage) -> bool {
         msg.from == "lead" && msg.to == "coder" && review_status.is_some()
     }
 
@@ -44,5 +42,7 @@ impl ReviewGate {
 }
 
 impl Default for ReviewGate {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

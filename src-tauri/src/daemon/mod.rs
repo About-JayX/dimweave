@@ -32,22 +32,35 @@ async fn set_role(
     field: fn(&mut DaemonState) -> &mut String,
     new: String,
 ) -> bool {
-    if !is_valid_agent_role(&new) { return false; }
+    if !is_valid_agent_role(&new) {
+        return false;
+    }
     let mut s = state.write().await;
-    if s.online_role_conflict(agent, &new).is_some() { return false; }
+    if s.online_role_conflict(agent, &new).is_some() {
+        return false;
+    }
     let old = std::mem::replace(field(&mut s), new.clone());
-    if old != new { s.migrate_buffered_role(&old, &new); }
+    if old != new {
+        s.migrate_buffered_role(&old, &new);
+    }
     true
 }
 
 async fn apply_role(
-    state: &SharedState, app: &AppHandle, agent: &str, role: String,
+    state: &SharedState,
+    app: &AppHandle,
+    agent: &str,
+    role: String,
     field: fn(&mut DaemonState) -> &mut String,
 ) -> Result<(), String> {
     if set_role(state, agent, field, role.clone()).await {
         Ok(())
     } else {
-        gui::emit_system_log(app, "warn", &format!("[Daemon] {agent} role rejected: {role}"));
+        gui::emit_system_log(
+            app,
+            "warn",
+            &format!("[Daemon] {agent} role rejected: {role}"),
+        );
         Err(format!("role '{role}' conflict or invalid"))
     }
 }
@@ -64,14 +77,27 @@ async fn stop_codex_session(
     gui::emit_agent_status(app, "codex", false, None);
 }
 
-/// Emit active_task_changed + session_tree_changed + artifacts_changed for a task.
+/// Emit a full task context sync for the selected task.
 async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id: &str) {
     let s = state.read().await;
-    gui_task::emit_active_task_changed(app, Some(task_id));
-    let sess: Vec<_> = s.task_graph.sessions_for_task(task_id).into_iter().cloned().collect();
-    gui_task::emit_session_tree_changed(app, task_id, &sess);
-    let arts: Vec<_> = s.task_graph.artifacts_for_task(task_id).into_iter().cloned().collect();
-    gui_task::emit_artifacts_changed(app, task_id, &arts);
+    let sess: Vec<_> = s
+        .task_graph
+        .sessions_for_task(task_id)
+        .into_iter()
+        .cloned()
+        .collect();
+    let arts: Vec<_> = s
+        .task_graph
+        .artifacts_for_task(task_id)
+        .into_iter()
+        .cloned()
+        .collect();
+    let events =
+        gui_task::build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts);
+    drop(s);
+    for event in events {
+        event.emit(app);
+    }
 }
 
 pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
@@ -115,82 +141,127 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     continue;
                 }
                 let launch_epoch = state.write().await.begin_codex_launch();
-                let launch_result =
-                    match codex::start(
-                        codex::StartOpts {
-                            role_id,
-                            cwd,
-                            model,
-                            effort: reasoning_effort,
-                            launch_epoch,
-                            codex_port: 4500,
-                        },
-                        state.clone(),
-                        app.clone(),
-                    )
-                    .await
-                    {
-                        Ok(h) => {
-                            codex_handle = Some(h);
-                            Ok(())
-                        }
-                        Err(e) => {
-                            gui::emit_agent_status(&app, "codex", false, None);
-                            gui::emit_system_log(
-                                &app,
-                                "error",
-                                &format!("[Daemon] Codex start failed: {e}"),
-                            );
-                            Err(e.to_string())
-                        }
-                    };
+                let launch_result = match codex::start(
+                    codex::StartOpts {
+                        role_id,
+                        cwd,
+                        model,
+                        effort: reasoning_effort,
+                        launch_epoch,
+                        codex_port: 4500,
+                    },
+                    state.clone(),
+                    app.clone(),
+                )
+                .await
+                {
+                    Ok(h) => {
+                        codex_handle = Some(h);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        gui::emit_agent_status(&app, "codex", false, None);
+                        gui::emit_system_log(
+                            &app,
+                            "error",
+                            &format!("[Daemon] Codex start failed: {e}"),
+                        );
+                        Err(e.to_string())
+                    }
+                };
                 let _ = reply.send(launch_result);
             }
             DaemonCmd::StopCodex => stop_codex_session(&mut codex_handle, &state, &app).await,
             DaemonCmd::Shutdown { reply } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
-                let _ = reply.send(()); break;
+                let _ = reply.send(());
+                break;
             }
-            DaemonCmd::ReadClaudeRole { reply } => { let _ = reply.send(state.read().await.claude_role.clone()); }
-            DaemonCmd::SetClaudeRole { role: r, reply } => { let _ = reply.send(apply_role(&state, &app, "claude", r, |s| &mut s.claude_role).await); }
-            DaemonCmd::SetCodexRole { role: r, reply } => { let _ = reply.send(apply_role(&state, &app, "codex", r, |s| &mut s.codex_role).await); }
-            DaemonCmd::ReadStatusSnapshot { reply } => { let _ = reply.send(state.read().await.status_snapshot()); }
-            DaemonCmd::RespondPermission { request_id, behavior } => { permission::handle_permission_verdict(&state, &app, request_id, behavior).await; }
+            DaemonCmd::ReadClaudeRole { reply } => {
+                let _ = reply.send(state.read().await.claude_role.clone());
+            }
+            DaemonCmd::SetClaudeRole { role: r, reply } => {
+                let _ =
+                    reply.send(apply_role(&state, &app, "claude", r, |s| &mut s.claude_role).await);
+            }
+            DaemonCmd::SetCodexRole { role: r, reply } => {
+                let _ =
+                    reply.send(apply_role(&state, &app, "codex", r, |s| &mut s.codex_role).await);
+            }
+            DaemonCmd::ReadStatusSnapshot { reply } => {
+                let _ = reply.send(state.read().await.status_snapshot());
+            }
+            DaemonCmd::RespondPermission {
+                request_id,
+                behavior,
+            } => {
+                permission::handle_permission_verdict(&state, &app, request_id, behavior).await;
+            }
             DaemonCmd::ForceDisconnectAgent { agent_id } => {
-                let removed = state.write().await.attached_agents.remove(&agent_id).is_some();
+                let removed = state
+                    .write()
+                    .await
+                    .attached_agents
+                    .remove(&agent_id)
+                    .is_some();
                 if removed {
-                    if agent_id == "claude" { gui::emit_claude_stream(&app, gui::ClaudeStreamPayload::Reset); }
+                    if agent_id == "claude" {
+                        gui::emit_claude_stream(&app, gui::ClaudeStreamPayload::Reset);
+                    }
                     gui::emit_agent_status(&app, &agent_id, false, None);
-                    gui::emit_system_log(&app, "info", &format!("[Daemon] force-disconnected {agent_id}"));
+                    gui::emit_system_log(
+                        &app,
+                        "info",
+                        &format!("[Daemon] force-disconnected {agent_id}"),
+                    );
                 }
             }
-            DaemonCmd::CreateTask { workspace, title, reply } => {
-                let task = state.write().await.create_and_select_task(&workspace, &title);
-                gui_task::emit_task_updated(&app, &task);
+            DaemonCmd::CreateTask {
+                workspace,
+                title,
+                reply,
+            } => {
+                let task = state
+                    .write()
+                    .await
+                    .create_and_select_task(&workspace, &title);
                 emit_task_context_events(&state, &app, &task.task_id).await;
                 let _ = reply.send(task);
             }
-            DaemonCmd::ListTasks { workspace, reply } => { let _ = reply.send(state.read().await.task_list(workspace.as_deref())); }
+            DaemonCmd::ListTasks { workspace, reply } => {
+                let _ = reply.send(state.read().await.task_list(workspace.as_deref()));
+            }
             DaemonCmd::SelectTask { task_id, reply } => {
                 let result = state.write().await.select_task(&task_id);
-                if result.is_ok() { emit_task_context_events(&state, &app, &task_id).await; }
+                if result.is_ok() {
+                    emit_task_context_events(&state, &app, &task_id).await;
+                }
                 let _ = reply.send(result.map(|_| ()));
             }
-            DaemonCmd::GetTaskSnapshot { reply } => { let _ = reply.send(state.read().await.task_snapshot()); }
+            DaemonCmd::GetTaskSnapshot { reply } => {
+                let _ = reply.send(state.read().await.task_snapshot());
+            }
             DaemonCmd::ApproveReview { reply } => {
-                let released = state.write().await.lead_approve_review();
-                for msg in released { routing::route_message(&state, &app, msg).await; }
-                let s = state.read().await;
-                if let Some(tid) = s.active_task_id.as_deref() {
-                    if let Some(t) = s.task_graph.get_task(tid) { gui_task::emit_review_gate_changed(&app, t); }
+                let effects = state.write().await.lead_approve_review_effects();
+                for event in effects.ui_events {
+                    event.emit(&app);
+                }
+                for msg in effects.released {
+                    routing::route_message(&state, &app, msg).await;
                 }
                 let _ = reply.send(Ok(()));
             }
-            DaemonCmd::ListSessionTree { task_id, reply } => { let _ = reply.send(state.read().await.session_tree(&task_id)); }
-            DaemonCmd::ListHistory { workspace, reply } => { let _ = reply.send(state.read().await.task_history(workspace.as_deref())); }
+            DaemonCmd::ListSessionTree { task_id, reply } => {
+                let _ = reply.send(state.read().await.session_tree(&task_id));
+            }
+            DaemonCmd::ListHistory { workspace, reply } => {
+                let _ = reply.send(state.read().await.task_history(workspace.as_deref()));
+            }
             DaemonCmd::ResumeSession { session_id, reply } => {
                 let result = state.write().await.resume_session(&session_id);
-                if let Ok(ref task_id) = result { emit_task_context_events(&state, &app, task_id).await; }
+                if let Ok(ref task_id) = result {
+                    emit_task_context_events(&state, &app, task_id).await;
+                }
                 let _ = reply.send(result.map(|_| ()));
             }
         }

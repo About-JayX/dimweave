@@ -72,6 +72,5 @@ pub(crate) fn should_emit_claude_thinking(
     result: &RouteResult,
     claude_role: &str,
 ) -> bool {
-    matches!(result, RouteResult::Delivered)
-        && should_emit_claude_thinking_pre(msg, claude_role)
+    matches!(result, RouteResult::Delivered) && should_emit_claude_thinking_pre(msg, claude_role)
 }

@@ -1,8 +1,8 @@
 use crate::daemon::codex::handler;
-use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::codex::structured_output::{
     parse_structured_output, should_emit_final_message, StreamPreviewState,
 };
+use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::gui::{self, CodexStreamPayload};
 use crate::daemon::types::{BridgeMessage, MessageStatus};
 use crate::daemon::{routing, SharedState};
@@ -32,41 +32,65 @@ pub(super) async fn handle_codex_event(
         "item/reasoning/summaryTextDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
                 stream_preview.append_reasoning(delta);
-                gui::emit_codex_stream(app, CodexStreamPayload::Reasoning {
-                    text: stream_preview.reasoning_text().to_string(),
-                });
+                gui::emit_codex_stream(
+                    app,
+                    CodexStreamPayload::Reasoning {
+                        text: stream_preview.reasoning_text().to_string(),
+                    },
+                );
             }
         }
         "item/reasoning/summaryPartAdded" => {
             stream_preview.append_reasoning_boundary();
             if !stream_preview.reasoning_text().is_empty() {
-                gui::emit_codex_stream(app, CodexStreamPayload::Reasoning {
-                    text: stream_preview.reasoning_text().to_string(),
-                });
+                gui::emit_codex_stream(
+                    app,
+                    CodexStreamPayload::Reasoning {
+                        text: stream_preview.reasoning_text().to_string(),
+                    },
+                );
             }
         }
         "item/commandExecution/outputDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
-                gui::emit_codex_stream(app, CodexStreamPayload::CommandOutput {
-                    text: delta.to_string(),
-                });
+                gui::emit_codex_stream(
+                    app,
+                    CodexStreamPayload::CommandOutput {
+                        text: delta.to_string(),
+                    },
+                );
             }
         }
         "item/agentMessage/delta" => {
-            if let Some(text) = v["params"]["delta"].as_str().filter(|text| !text.is_empty()) {
+            if let Some(text) = v["params"]["delta"]
+                .as_str()
+                .filter(|text| !text.is_empty())
+            {
                 if let Some(preview) = stream_preview.ingest_delta(text) {
                     gui::emit_codex_stream(app, CodexStreamPayload::Delta { text: preview });
                 }
             }
         }
         "item/completed" => {
-            handle_completed_agent_message(v, role_id, schema_route_enabled, state, app, stream_preview)
-                .await;
+            handle_completed_agent_message(
+                v,
+                role_id,
+                schema_route_enabled,
+                state,
+                app,
+                stream_preview,
+            )
+            .await;
         }
         "turn/completed" => {
             stream_preview.reset();
             let status = v["params"]["turn"]["status"].as_str().unwrap_or("unknown");
-            gui::emit_codex_stream(app, CodexStreamPayload::TurnDone { status: status.into() });
+            gui::emit_codex_stream(
+                app,
+                CodexStreamPayload::TurnDone {
+                    status: status.into(),
+                },
+            );
         }
         _ => {}
     }
@@ -117,9 +141,12 @@ async fn handle_completed_agent_message(
     if !should_emit_final_message(&parsed.message) {
         return;
     }
-    gui::emit_codex_stream(app, CodexStreamPayload::Message {
-        text: parsed.message.clone(),
-    });
+    gui::emit_codex_stream(
+        app,
+        CodexStreamPayload::Message {
+            text: parsed.message.clone(),
+        },
+    );
     let valid_target = if schema_route_enabled {
         parsed
             .send_to
@@ -148,7 +175,9 @@ fn emit_activity_from_item(v: &Value, app: &AppHandle) {
 }
 
 fn truncate_label(s: &str, max: usize) -> String {
-    if s.chars().count() <= max { s.to_string() } else {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
         s.chars().take(max - 1).collect::<String>() + "…"
     }
 }
@@ -160,9 +189,15 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
             Some(format!("Running: {}", truncate_label(cmd, 80)))
         }
         Some("fileChange") => {
-            let change = item["changes"].as_array().and_then(|changes| changes.first());
-            let path = change.and_then(|entry| entry["path"].as_str()).unwrap_or("…");
-            let kind = change.and_then(|entry| entry["kind"].as_str()).unwrap_or("edit");
+            let change = item["changes"]
+                .as_array()
+                .and_then(|changes| changes.first());
+            let path = change
+                .and_then(|entry| entry["path"].as_str())
+                .unwrap_or("…");
+            let kind = change
+                .and_then(|entry| entry["kind"].as_str())
+                .unwrap_or("edit");
             Some(format!("File {kind}: {}", truncate_label(path, 80)))
         }
         Some("mcpToolCall") => {
@@ -170,31 +205,29 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
             Some(format!("MCP tool: {tool}"))
         }
         Some("reasoning") => Some("Reasoning…".into()),
-        Some("webSearch") => {
-            match item["action"]["type"].as_str() {
-                Some("openPage") => {
-                    let url = item["action"]["url"].as_str().unwrap_or("…");
-                    Some(format!("Opening: {}", truncate_label(url, 60)))
-                }
-                Some("findInPage") => {
-                    let pattern = item["action"]["pattern"].as_str().unwrap_or("…");
-                    Some(format!("Finding: {}", truncate_label(pattern, 60)))
-                }
-                _ => {
-                    let query = item["query"]
-                        .as_str()
-                        .or_else(|| item["action"]["query"].as_str())
-                        .or_else(|| {
-                            item["action"]["queries"]
-                                .as_array()
-                                .and_then(|queries| queries.first())
-                                .and_then(|query| query.as_str())
-                        })
-                        .unwrap_or("…");
-                    Some(format!("Searching: {}", truncate_label(query, 60)))
-                }
+        Some("webSearch") => match item["action"]["type"].as_str() {
+            Some("openPage") => {
+                let url = item["action"]["url"].as_str().unwrap_or("…");
+                Some(format!("Opening: {}", truncate_label(url, 60)))
             }
-        }
+            Some("findInPage") => {
+                let pattern = item["action"]["pattern"].as_str().unwrap_or("…");
+                Some(format!("Finding: {}", truncate_label(pattern, 60)))
+            }
+            _ => {
+                let query = item["query"]
+                    .as_str()
+                    .or_else(|| item["action"]["query"].as_str())
+                    .or_else(|| {
+                        item["action"]["queries"]
+                            .as_array()
+                            .and_then(|queries| queries.first())
+                            .and_then(|query| query.as_str())
+                    })
+                    .unwrap_or("…");
+                Some(format!("Searching: {}", truncate_label(query, 60)))
+            }
+        },
         _ => None,
     }
 }
@@ -246,7 +279,10 @@ mod tests {
     fn activity_label_formats_reasoning_state() {
         let item = json!({ "type": "reasoning" });
 
-        assert_eq!(activity_label_from_item(&item).as_deref(), Some("Reasoning…"));
+        assert_eq!(
+            activity_label_from_item(&item).as_deref(),
+            Some("Reasoning…")
+        );
     }
 
     #[test]

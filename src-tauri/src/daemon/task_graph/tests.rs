@@ -88,7 +88,10 @@ fn create_coder_child_session_with_parent() {
         cwd: "/ws",
         title: "Coder",
     });
-    assert_eq!(coder.parent_session_id.as_deref(), Some(lead.session_id.as_str()));
+    assert_eq!(
+        coder.parent_session_id.as_deref(),
+        Some(lead.session_id.as_str())
+    );
     assert_eq!(coder.role, SessionRole::Coder);
 }
 
@@ -159,14 +162,20 @@ fn sessions_for_task_returns_all_linked() {
     let task = store.create_task("/ws", "T1");
     let tid = task.task_id.clone();
     store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "Coder",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
     });
     assert_eq!(store.sessions_for_task(&tid).len(), 2);
 }
@@ -177,20 +186,29 @@ fn children_of_session_returns_only_children() {
     let task = store.create_task("/ws", "T1");
     let tid = task.task_id.clone();
     let lead = store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     let lid = lead.session_id.clone();
     store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: Some(&lid),
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "C1",
+        task_id: &tid,
+        parent_session_id: Some(&lid),
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "C1",
     });
     store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: Some(&lid),
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "C2",
+        task_id: &tid,
+        parent_session_id: Some(&lid),
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "C2",
     });
     assert_eq!(store.children_of_session(&lid).len(), 2);
 }
@@ -201,9 +219,12 @@ fn lead_session_for_task_returns_correct() {
     let task = store.create_task("/ws", "T1");
     let tid = task.task_id.clone();
     let lead = store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     store.set_lead_session(&tid, &lead.session_id);
     let found = store.lead_session_for_task(&tid).unwrap();
@@ -240,18 +261,27 @@ fn artifacts_for_task_and_session() {
     let task = store.create_task("/ws", "T1");
     let tid = task.task_id.clone();
     let s1 = store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "S1",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "S1",
     });
     let s1id = s1.session_id.clone();
     store.add_artifact(CreateArtifactParams {
-        task_id: &tid, session_id: &s1id,
-        kind: ArtifactKind::Research, title: "A1", content_ref: "a1",
+        task_id: &tid,
+        session_id: &s1id,
+        kind: ArtifactKind::Research,
+        title: "A1",
+        content_ref: "a1",
     });
     store.add_artifact(CreateArtifactParams {
-        task_id: &tid, session_id: &s1id,
-        kind: ArtifactKind::Plan, title: "A2", content_ref: "a2",
+        task_id: &tid,
+        session_id: &s1id,
+        kind: ArtifactKind::Plan,
+        title: "A2",
+        content_ref: "a2",
     });
     assert_eq!(store.artifacts_for_task(&tid).len(), 2);
     assert_eq!(store.artifacts_for_session(&s1id).len(), 2);
@@ -274,9 +304,12 @@ fn session_serialization_round_trip() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task("/ws", "T1");
     let sess = store.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "S1",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "S1",
     });
     let json = serde_json::to_string(&sess).unwrap();
     let de: SessionHandle = serde_json::from_str(&json).unwrap();
@@ -289,12 +322,17 @@ fn session_serialization_round_trip() {
 use std::path::PathBuf;
 
 fn tmp_persist_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("agentnexus_test_{name}_{}.json", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "agentnexus_test_{name}_{}.json",
+        std::process::id()
+    ))
 }
 
 struct CleanupFile(PathBuf);
 impl Drop for CleanupFile {
-    fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); }
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 #[test]
@@ -306,14 +344,20 @@ fn persist_save_and_load_round_trip() {
     let task = store.create_task("/ws", "Persist Me");
     let tid = task.task_id.clone();
     let sess = store.create_session(CreateSessionParams {
-        task_id: &tid, parent_session_id: None,
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "Coder S",
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder S",
     });
     let sid = sess.session_id.clone();
     let art = store.add_artifact(CreateArtifactParams {
-        task_id: &tid, session_id: &sid,
-        kind: ArtifactKind::Plan, title: "Plan v1", content_ref: "plan.md",
+        task_id: &tid,
+        session_id: &sid,
+        kind: ArtifactKind::Plan,
+        title: "Plan v1",
+        content_ref: "plan.md",
     });
     let aid = art.artifact_id.clone();
     store.save().expect("save should succeed");
@@ -361,15 +405,21 @@ fn persist_parent_child_relationship_survives() {
     let mut store = TaskGraphStore::with_persist_path(path.clone());
     let task = store.create_task("/ws", "T1");
     let lead = store.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     let lid = lead.session_id.clone();
     store.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: Some(&lid),
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "Coder",
+        task_id: &task.task_id,
+        parent_session_id: Some(&lid),
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
     });
     store.save().unwrap();
 
@@ -381,6 +431,6 @@ fn persist_parent_child_relationship_survives() {
 #[test]
 fn persist_no_path_save_is_noop() {
     let store = TaskGraphStore::new(); // no persist_path
-    // save on in-memory-only store should succeed (no-op)
+                                       // save on in-memory-only store should succeed (no-op)
     store.save().expect("noop save should succeed");
 }

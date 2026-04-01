@@ -8,10 +8,7 @@ use crate::daemon::task_graph::types::*;
 /// Register a new Codex session into the normalized task graph.
 /// If `reg.external_id` is set, it is bound immediately (typical for
 /// sessions where the thread_id is known at creation time).
-pub fn register_session(
-    store: &mut TaskGraphStore,
-    reg: SessionRegistration,
-) -> SessionHandle {
+pub fn register_session(store: &mut TaskGraphStore, reg: SessionRegistration) -> SessionHandle {
     let sess = store.create_session(CreateSessionParams {
         task_id: &reg.task_id,
         parent_session_id: reg.parent_session_id.as_deref(),
@@ -30,11 +27,7 @@ pub fn register_session(
 /// Bind a Codex thread_id to an existing session.
 /// Use when the thread_id becomes available after session creation
 /// (e.g. after Codex handshake completes).
-pub fn bind_thread_id(
-    store: &mut TaskGraphStore,
-    session_id: &str,
-    thread_id: &str,
-) -> bool {
+pub fn bind_thread_id(store: &mut TaskGraphStore, session_id: &str, thread_id: &str) -> bool {
     store.set_external_session_id(session_id, thread_id)
 }
 
@@ -47,7 +40,9 @@ pub fn register_on_launch(
     cwd: &str,
     thread_id: &str,
 ) {
-    let Some(task_id) = state.active_task_id.clone() else { return };
+    let Some(task_id) = state.active_task_id.clone() else {
+        return;
+    };
     let parent_id = state
         .task_graph
         .get_task(&task_id)
@@ -66,7 +61,9 @@ pub fn register_on_launch(
     };
     let sess = register_session(&mut state.task_graph, reg);
     if session_role == SessionRole::Coder {
-        state.task_graph.set_coder_session(&task_id, &sess.session_id);
+        state
+            .task_graph
+            .set_coder_session(&task_id, &sess.session_id);
     }
     state.auto_save_task_graph();
 }

@@ -1,9 +1,9 @@
-pub mod types;
-pub mod store;
+mod artifact_index;
 mod persist;
 mod session_index;
+pub mod store;
 mod task_index;
-mod artifact_index;
+pub mod types;
 
 pub use store::TaskGraphStore;
 

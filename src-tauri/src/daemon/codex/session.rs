@@ -1,9 +1,9 @@
+use self::session_event::handle_codex_event;
 use crate::daemon::codex::structured_output::StreamPreviewState;
 use crate::daemon::codex::ws_client::{CodexWsClient, WsRx, WsTx};
 use crate::daemon::gui;
 use crate::daemon::SharedState;
 use serde_json::json;
-use self::session_event::handle_codex_event;
 use tauri::AppHandle;
 use tokio::sync::mpsc;
 #[path = "session_event.rs"]
@@ -37,9 +37,17 @@ pub async fn run(
             let ws_tx = client.sender().clone();
             let _ = ready_tx.send(thread_id.clone());
             run_with_reconnect(
-                port, session_epoch, &opts.role_id, &state, &app,
-                &mut inject_rx, thread_id, ws_tx, ws_rx,
-            ).await;
+                port,
+                session_epoch,
+                &opts.role_id,
+                &state,
+                &app,
+                &mut inject_rx,
+                thread_id,
+                ws_tx,
+                ws_rx,
+            )
+            .await;
         }
         None => {
             let _ = ready_tx.send(String::new());
@@ -61,9 +69,16 @@ async fn run_with_reconnect(
     let mut reconnect_count: u32 = 0;
     loop {
         let reason = event_loop(
-            &thread_id, session_epoch, role_id, state, app,
-            inject_rx, &ws_tx, &mut ws_rx,
-        ).await;
+            &thread_id,
+            session_epoch,
+            role_id,
+            state,
+            app,
+            inject_rx,
+            &ws_tx,
+            &mut ws_rx,
+        )
+        .await;
 
         if reason != LoopExit::WsClosed {
             break;
@@ -80,9 +95,11 @@ async fn run_with_reconnect(
         }
         let delay = RECONNECT_BASE_DELAY_MS * 2u64.pow(reconnect_count - 1);
         eprintln!("[Codex] WS lost, reconnecting ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS}) in {delay}ms");
-        gui::emit_system_log(app, "warn", &format!(
-            "[Codex] reconnecting ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS})…"
-        ));
+        gui::emit_system_log(
+            app,
+            "warn",
+            &format!("[Codex] reconnecting ({reconnect_count}/{MAX_RECONNECT_ATTEMPTS})…"),
+        );
         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
 
         match CodexWsClient::reconnect(port, &thread_id, app).await {
@@ -99,7 +116,10 @@ async fn run_with_reconnect(
             }
         }
     }
-    let cleared = state.write().await.clear_codex_session_if_current(session_epoch);
+    let cleared = state
+        .write()
+        .await
+        .clear_codex_session_if_current(session_epoch);
     if cleared {
         gui::emit_agent_status(app, "codex", false, None);
         gui::emit_system_log(app, "info", "[Codex] session ended");
@@ -107,7 +127,11 @@ async fn run_with_reconnect(
 }
 
 #[derive(PartialEq)]
-enum LoopExit { WsClosed, InjectClosed, SendFailed }
+enum LoopExit {
+    WsClosed,
+    InjectClosed,
+    SendFailed,
+}
 
 #[derive(Default)]
 struct RoutedTurnTracker {

@@ -16,10 +16,7 @@ pub fn process_message(
     // coder → lead (done): enter review phase
     if msg.from == "coder" && msg.to == "lead" && status.is_terminal() {
         store.update_task_status(task_id, TaskStatus::Reviewing);
-        store.update_task_review_status(
-            task_id,
-            Some(ReviewStatus::PendingLeadReview),
-        );
+        store.update_task_review_status(task_id, Some(ReviewStatus::PendingLeadReview));
         return Vec::new();
     }
 
@@ -33,19 +30,13 @@ pub fn process_message(
     // reviewer → coder: reviewer sends fixes back
     if msg.from == "reviewer" && msg.to == "coder" {
         store.update_task_status(task_id, TaskStatus::Implementing);
-        store.update_task_review_status(
-            task_id,
-            Some(ReviewStatus::PendingLeadReview),
-        );
+        store.update_task_review_status(task_id, Some(ReviewStatus::PendingLeadReview));
         return Vec::new();
     }
 
     // reviewer → lead (done): reviewer finished, await lead approval
     if msg.from == "reviewer" && msg.to == "lead" && status == MessageStatus::Done {
-        store.update_task_review_status(
-            task_id,
-            Some(ReviewStatus::PendingLeadApproval),
-        );
+        store.update_task_review_status(task_id, Some(ReviewStatus::PendingLeadApproval));
         // Do NOT release blocked messages — lead must explicitly approve.
         return Vec::new();
     }
@@ -81,9 +72,7 @@ pub fn lead_approve(
 
 /// Suggest the best routing target based on task state.
 pub fn preferred_auto_target(task: &Task) -> Option<String> {
-    if task.review_status.is_some()
-        || matches!(task.status, TaskStatus::Reviewing)
-    {
+    if task.review_status.is_some() || matches!(task.status, TaskStatus::Reviewing) {
         Some("lead".into())
     } else if matches!(task.status, TaskStatus::Implementing) {
         Some("coder".into())

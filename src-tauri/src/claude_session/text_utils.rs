@@ -139,7 +139,7 @@ fn is_box_drawing_only(line: &str) -> bool {
         ch.is_whitespace()
             || ('\u{2500}'..='\u{257F}').contains(&ch) // Box Drawing block
             || ('\u{2580}'..='\u{259F}').contains(&ch) // Block Elements
-            || matches!(ch, '╭' | '╮' | '╰' | '╯')   // rounded corners (U+256D–U+2570)
+            || matches!(ch, '╭' | '╮' | '╰' | '╯') // rounded corners (U+256D–U+2570)
     })
 }
 
@@ -153,15 +153,25 @@ mod tests {
         assert_eq!(strip_ansi("\x1b[1;34mcolored\x1b[0m text"), "colored text");
     }
     #[test]
-    fn strip_ansi_osc_bel() { assert_eq!(strip_ansi("\x1b]0;title\x07text"), "text"); }
+    fn strip_ansi_osc_bel() {
+        assert_eq!(strip_ansi("\x1b]0;title\x07text"), "text");
+    }
     #[test]
-    fn strip_ansi_osc_st() { assert_eq!(strip_ansi("\x1b]0;title\x1b\\text"), "text"); }
+    fn strip_ansi_osc_st() {
+        assert_eq!(strip_ansi("\x1b]0;title\x1b\\text"), "text");
+    }
     #[test]
-    fn strip_ansi_standalone_bel() { assert_eq!(strip_ansi("a\x07b"), "ab"); }
+    fn strip_ansi_standalone_bel() {
+        assert_eq!(strip_ansi("a\x07b"), "ab");
+    }
     #[test]
-    fn strip_ansi_keeps_whitespace() { assert_eq!(strip_ansi("a\nb\tc"), "a\nb\tc"); }
+    fn strip_ansi_keeps_whitespace() {
+        assert_eq!(strip_ansi("a\nb\tc"), "a\nb\tc");
+    }
     #[test]
-    fn strip_ansi_control_chars() { assert_eq!(strip_ansi("a\x01\x02b"), "ab"); }
+    fn strip_ansi_control_chars() {
+        assert_eq!(strip_ansi("a\x01\x02b"), "ab");
+    }
     #[test]
     fn strip_ansi_mixed() {
         assert_eq!(strip_ansi("\x1b]0;t\x07\x1b[32mg\x1b[0m n"), "g n");
@@ -173,11 +183,17 @@ mod tests {
     }
     #[test]
     fn normalize_strips_and_joins() {
-        assert_eq!(normalize_prompt_text("\x1b[1m  hello   world  \x1b[0m"), "hello world");
+        assert_eq!(
+            normalize_prompt_text("\x1b[1m  hello   world  \x1b[0m"),
+            "hello world"
+        );
     }
     #[test]
     fn preview_skips_chrome() {
         let input = "Esc to interrupt\n╭──────╮\nreal content\n╰──────╯\n";
-        assert_eq!(extract_terminal_preview(input).as_deref(), Some("real content"));
+        assert_eq!(
+            extract_terminal_preview(input).as_deref(),
+            Some("real content")
+        );
     }
 }

@@ -148,7 +148,10 @@ fn lead_approve_noop_when_not_pending_approval() {
     let released = task_flow::lead_approve(&mut store, &mut gate, &tid);
     assert!(released.is_empty());
     // Status unchanged
-    assert_eq!(store.get_task(&tid).unwrap().status, TaskStatus::Implementing);
+    assert_eq!(
+        store.get_task(&tid).unwrap().status,
+        TaskStatus::Implementing
+    );
 }
 
 // ── preferred_auto_target ──────────────────────────────────
@@ -158,10 +161,7 @@ fn auto_target_returns_lead_during_review() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task("/ws", "T1");
     store.update_task_status(&task.task_id, TaskStatus::Reviewing);
-    store.update_task_review_status(
-        &task.task_id,
-        Some(ReviewStatus::PendingLeadApproval),
-    );
+    store.update_task_review_status(&task.task_id, Some(ReviewStatus::PendingLeadApproval));
     let target = task_flow::preferred_auto_target(store.get_task(&task.task_id).unwrap());
     assert_eq!(target.as_deref(), Some("lead"));
 }

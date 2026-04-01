@@ -64,7 +64,11 @@ pub(super) fn spawn_health_monitor(
                         };
                         if cleared_current {
                             gui::emit_agent_status(&app, "codex", false, None);
-                            gui::emit_system_log(&app, "warn", &format!("[Codex] exited: {status}"));
+                            gui::emit_system_log(
+                                &app,
+                                "warn",
+                                &format!("[Codex] exited: {status}"),
+                            );
                         }
                         return;
                     }

@@ -59,8 +59,10 @@ fn auto_with_no_agents_returns_empty() {
 fn auto_with_claude_only() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    s.attached_agents
-        .insert("claude".into(), crate::daemon::state::AgentSender::new(tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(tx, 0),
+    );
     let targets = resolve_user_targets(&s, "auto");
     assert_eq!(targets, vec!["lead"]);
 }
@@ -79,8 +81,10 @@ fn auto_with_both_agents_returns_two_roles() {
     let mut s = DaemonState::new();
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents
-        .insert("claude".into(), crate::daemon::state::AgentSender::new(claude_tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
     s.codex_inject_tx = Some(codex_tx);
     let targets = resolve_user_targets(&s, "auto");
     assert_eq!(targets, vec!["lead", "coder"]);
@@ -93,8 +97,10 @@ fn auto_dedupes_when_same_role() {
     s.codex_role = "coder".into();
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents
-        .insert("claude".into(), crate::daemon::state::AgentSender::new(claude_tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
     s.codex_inject_tx = Some(codex_tx);
     let targets = resolve_user_targets(&s, "auto");
     assert_eq!(targets, vec!["coder"]);
@@ -105,8 +111,10 @@ fn auto_excludes_user_role() {
     let mut s = DaemonState::new();
     s.claude_role = "user".into();
     let (tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents
-        .insert("claude".into(), crate::daemon::state::AgentSender::new(tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(tx, 0),
+    );
     let targets = resolve_user_targets(&s, "auto");
     assert!(targets.is_empty());
 }
@@ -122,8 +130,10 @@ fn auto_prefers_active_task_role_over_fanout() {
     );
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents
-        .insert("claude".into(), crate::daemon::state::AgentSender::new(claude_tx, 0));
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
     s.codex_inject_tx = Some(codex_tx);
 
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead"]);

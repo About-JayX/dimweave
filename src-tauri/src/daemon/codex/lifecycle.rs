@@ -8,11 +8,15 @@ fn resolve_codex_bin() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let sidecar = dir.join("codex");
-            if sidecar.exists() { return sidecar; }
+            if sidecar.exists() {
+                return sidecar;
+            }
         }
     }
     // 2. System PATH
-    if let Ok(p) = which::which("codex") { return p; }
+    if let Ok(p) = which::which("codex") {
+        return p;
+    }
     // 3. Common install paths (macOS .app has minimal PATH)
     let home = std::env::var("HOME").unwrap_or_default();
     let nvm_dir = PathBuf::from(&home).join(".nvm/versions/node");
@@ -22,15 +26,21 @@ fn resolve_codex_bin() -> PathBuf {
             .filter(|p| p.exists())
             .collect();
         versions.sort();
-        if let Some(p) = versions.pop() { return p; }
+        if let Some(p) = versions.pop() {
+            return p;
+        }
     }
     for dir in &[".bun/bin", ".local/bin"] {
         let p = PathBuf::from(&home).join(dir).join("codex");
-        if p.exists() { return p; }
+        if p.exists() {
+            return p;
+        }
     }
     for p in &["/usr/local/bin/codex", "/opt/homebrew/bin/codex"] {
         let p = PathBuf::from(p);
-        if p.exists() { return p; }
+        if p.exists() {
+            return p;
+        }
     }
     "codex".into()
 }
@@ -99,9 +109,13 @@ pub(super) async fn kill_port_holder(port: u16) {
     let pids = String::from_utf8_lossy(&output.stdout);
     for pid_str in pids.split_whitespace() {
         if let Ok(pid) = pid_str.parse::<i32>() {
-            if pid == self_pid || pid <= 1 { continue; }
+            if pid == self_pid || pid <= 1 {
+                continue;
+            }
             eprintln!("[Codex] killing orphan process {pid} on port {port}");
-            unsafe { libc::kill(pid, libc::SIGKILL); }
+            unsafe {
+                libc::kill(pid, libc::SIGKILL);
+            }
         }
     }
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;

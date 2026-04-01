@@ -1,5 +1,6 @@
 use crate::daemon::{
-    gui::{self, ClaudeStreamPayload}, routing,
+    gui::{self, ClaudeStreamPayload},
+    routing,
     types::{FromAgent, MessageStatus, ToAgent},
     SharedState,
 };
@@ -52,7 +53,9 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         _ => None,
                     };
                     if let Some(conflict_role) = role.as_deref() {
-                        if let Some(conflict_agent) = daemon.online_role_conflict(&id, conflict_role) {
+                        if let Some(conflict_agent) =
+                            daemon.online_role_conflict(&id, conflict_role)
+                        {
                             gui::emit_system_log(
                                 &app,
                                 "warn",
@@ -98,7 +101,10 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     message.sender_agent_id = Some(id.to_string());
                     let status = message.status.unwrap_or(MessageStatus::Done);
                     message.status = Some(status);
-                    state.read().await.stamp_message_context(&role, &mut message);
+                    state
+                        .read()
+                        .await
+                        .stamp_message_context(&role, &mut message);
                     if id == "claude" && status.is_terminal() {
                         gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                     }
@@ -130,7 +136,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             FromAgent::GetOnlineAgents => {
                 let snapshot = state.read().await.online_agents_snapshot();
                 let payload = serde_json::to_value(&snapshot).unwrap_or_default();
-                let _ = tx.send(ToAgent::OnlineAgentsResponse { online_agents: payload }).await;
+                let _ = tx
+                    .send(ToAgent::OnlineAgentsResponse {
+                        online_agents: payload,
+                    })
+                    .await;
             }
             FromAgent::AgentDisconnect => break,
         }
@@ -152,7 +162,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             gui::emit_system_log(&app, "info", &format!("[Control] {id} disconnected"));
         } else {
             drop(daemon);
-            gui::emit_system_log(&app, "info", &format!("[Control] {id} stale connection closed"));
+            gui::emit_system_log(
+                &app,
+                "info",
+                &format!("[Control] {id} stale connection closed"),
+            );
         }
     }
 }
@@ -164,10 +178,21 @@ async fn replay_messages(
 ) {
     let mut i = 0;
     while i < msgs.len() {
-        if tx.send(ToAgent::RoutedMessage { message: msgs[i].clone() }).await.is_err() {
+        if tx
+            .send(ToAgent::RoutedMessage {
+                message: msgs[i].clone(),
+            })
+            .await
+            .is_err()
+        {
             let mut s = state.write().await;
-            for m in msgs.drain(i..) { s.buffer_message(m); }
-            eprintln!("[Control] replay failed, re-buffered {} messages", msgs.len() - i);
+            for m in msgs.drain(i..) {
+                s.buffer_message(m);
+            }
+            eprintln!(
+                "[Control] replay failed, re-buffered {} messages",
+                msgs.len() - i
+            );
             return;
         }
         i += 1;
@@ -182,9 +207,17 @@ async fn replay_verdicts(
 ) {
     let mut i = 0;
     while i < verdicts.len() {
-        if tx.send(ToAgent::PermissionVerdict { verdict: verdicts[i].clone() }).await.is_err() {
+        if tx
+            .send(ToAgent::PermissionVerdict {
+                verdict: verdicts[i].clone(),
+            })
+            .await
+            .is_err()
+        {
             let mut s = state.write().await;
-            for v in verdicts.drain(i..) { s.buffer_permission_verdict(agent_id, v); }
+            for v in verdicts.drain(i..) {
+                s.buffer_permission_verdict(agent_id, v);
+            }
             return;
         }
         i += 1;

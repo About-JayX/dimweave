@@ -82,7 +82,10 @@ pub async fn daemon_set_claude_role(
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
         .0
-        .send(DaemonCmd::SetClaudeRole { role, reply: reply_tx })
+        .send(DaemonCmd::SetClaudeRole {
+            role,
+            reply: reply_tx,
+        })
         .await
         .map_err(|e| e.to_string())?;
     reply_rx
@@ -101,7 +104,10 @@ pub async fn daemon_set_codex_role(
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
         .0
-        .send(DaemonCmd::SetCodexRole { role, reply: reply_tx })
+        .send(DaemonCmd::SetCodexRole {
+            role,
+            reply: reply_tx,
+        })
         .await
         .map_err(|e| e.to_string())?;
     reply_rx
@@ -149,7 +155,9 @@ pub async fn stop_claude(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     // Try to stop managed PTY session (may not exist if Claude connected externally)
-    let had_pty = crate::claude_session::stop(session.inner().as_ref()).await.is_ok();
+    let had_pty = crate::claude_session::stop(session.inner().as_ref())
+        .await
+        .is_ok();
     if had_pty {
         crate::daemon::gui::emit_claude_terminal_status(
             &app,

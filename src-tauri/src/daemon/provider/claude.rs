@@ -6,10 +6,7 @@ use crate::daemon::task_graph::store::TaskGraphStore;
 use crate::daemon::task_graph::types::*;
 
 /// Register a new Claude session into the normalized task graph.
-pub fn register_session(
-    store: &mut TaskGraphStore,
-    reg: SessionRegistration,
-) -> SessionHandle {
+pub fn register_session(store: &mut TaskGraphStore, reg: SessionRegistration) -> SessionHandle {
     let sess = store.create_session(CreateSessionParams {
         task_id: &reg.task_id,
         parent_session_id: reg.parent_session_id.as_deref(),
@@ -42,13 +39,18 @@ pub fn register_on_connect(
     cwd: &str,
     claude_session_id: Option<&str>,
 ) {
-    let Some(task_id) = state.active_task_id.clone() else { return };
+    let Some(task_id) = state.active_task_id.clone() else {
+        return;
+    };
     let session_role = match role_id {
         "coder" => SessionRole::Coder,
         _ => SessionRole::Lead,
     };
     let parent_id = if session_role == SessionRole::Coder {
-        state.task_graph.get_task(&task_id).and_then(|t| t.lead_session_id.clone())
+        state
+            .task_graph
+            .get_task(&task_id)
+            .and_then(|t| t.lead_session_id.clone())
     } else {
         None
     };
@@ -62,8 +64,16 @@ pub fn register_on_connect(
     };
     let sess = register_session(&mut state.task_graph, reg);
     match session_role {
-        SessionRole::Lead => { state.task_graph.set_lead_session(&task_id, &sess.session_id); }
-        SessionRole::Coder => { state.task_graph.set_coder_session(&task_id, &sess.session_id); }
+        SessionRole::Lead => {
+            state
+                .task_graph
+                .set_lead_session(&task_id, &sess.session_id);
+        }
+        SessionRole::Coder => {
+            state
+                .task_graph
+                .set_coder_session(&task_id, &sess.session_id);
+        }
     }
     state.auto_save_task_graph();
 }

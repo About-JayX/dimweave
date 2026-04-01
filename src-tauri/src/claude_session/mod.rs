@@ -196,6 +196,9 @@ mod tests {
     async fn clear_if_pid_matches_keeps_different_session() {
         let manager = ClaudeSessionManager(Mutex::new(Some(dummy_session(7))));
         assert!(!clear_if_pid_matches(&manager, 42).await);
-        assert_eq!(manager.0.lock().await.as_ref().map(|session| session.pid), Some(7));
+        assert_eq!(
+            manager.0.lock().await.as_ref().map(|session| session.pid),
+            Some(7)
+        );
     }
 }

@@ -32,9 +32,12 @@ fn task_snapshot_includes_sessions() {
     let mut s = DaemonState::new();
     let task = s.create_and_select_task("/ws", "With Sessions");
     s.task_graph.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     let snap = s.task_snapshot().unwrap();
     assert_eq!(snap.sessions.len(), 1);
@@ -90,9 +93,12 @@ fn session_tree_returns_sessions_for_task() {
     let mut s = DaemonState::new();
     let task = s.create_and_select_task("/ws", "T1");
     s.task_graph.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     let tree = s.session_tree(&task.task_id).unwrap();
     assert_eq!(tree.task_id, task.task_id);
@@ -107,9 +113,12 @@ fn task_history_returns_entries_with_counts() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "T1");
     s.task_graph.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Claude, role: SessionRole::Lead,
-        cwd: "/ws", title: "Lead",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
     });
     let history = s.task_history(Some("/ws"));
     assert_eq!(history.len(), 1);
@@ -131,19 +140,29 @@ fn resume_session_sets_active_task_and_pointer() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "T1");
     let sess = s.task_graph.create_session(CreateSessionParams {
-        task_id: &task.task_id, parent_session_id: None,
-        provider: Provider::Codex, role: SessionRole::Coder,
-        cwd: "/ws", title: "Coder",
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
     });
-    s.task_graph.update_session_status(&sess.session_id, SessionStatus::Paused);
+    s.task_graph
+        .update_session_status(&sess.session_id, SessionStatus::Paused);
     s.active_task_id = None;
 
     let returned_task_id = s.resume_session(&sess.session_id).unwrap();
 
-    assert_eq!(returned_task_id, task.task_id, "resume_session must return task_id, not session_id");
+    assert_eq!(
+        returned_task_id, task.task_id,
+        "resume_session must return task_id, not session_id"
+    );
     assert_eq!(s.active_task_id.as_deref(), Some(task.task_id.as_str()));
     let updated = s.task_graph.get_task(&task.task_id).unwrap();
-    assert_eq!(updated.current_coder_session_id.as_deref(), Some(sess.session_id.as_str()));
+    assert_eq!(
+        updated.current_coder_session_id.as_deref(),
+        Some(sess.session_id.as_str())
+    );
     let updated_sess = s.task_graph.get_session(&sess.session_id).unwrap();
     assert_eq!(updated_sess.status, SessionStatus::Active);
 }

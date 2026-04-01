@@ -3,15 +3,16 @@ use serde_json::Value;
 use tokio::time::{timeout, Duration};
 use tokio_tungstenite::tungstenite::Message;
 
-pub(super) type FullWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+pub(super) type FullWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 pub(super) async fn wait_for_rpc_id(ws: &mut FullWs, expected_id: u64, secs: u64) -> bool {
     timeout(Duration::from_secs(secs), async {
         while let Some(Ok(msg)) = ws.next().await {
             let Ok(text) = msg.to_text() else { continue };
-            let Ok(v) = serde_json::from_str::<Value>(text) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(text) else {
+                continue;
+            };
             if v["id"].as_u64() == Some(expected_id) {
                 return true;
             }
@@ -26,14 +27,18 @@ pub(super) async fn wait_for_thread_id(ws: &mut FullWs, secs: u64) -> Option<Str
     timeout(Duration::from_secs(secs), async {
         while let Some(Ok(msg)) = ws.next().await {
             let Ok(text) = msg.to_text() else { continue };
-            let Ok(v) = serde_json::from_str::<Value>(text) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(text) else {
+                continue;
+            };
             if v["id"].as_u64() == Some(2) {
                 if v.get("error").is_some() {
                     let err = serde_json::to_string(&v["error"]).unwrap_or_default();
                     eprintln!("[Codex] thread/start error: {err}");
                 }
                 return v["result"]["thread"]["id"]
-                    .as_str().unwrap_or("").to_string();
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
             }
             if v["method"].as_str() == Some("thread/started") {
                 if let Some(tid) = v["params"]["thread"]["id"].as_str() {

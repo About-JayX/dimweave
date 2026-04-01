@@ -20,11 +20,7 @@ pub(crate) struct CodexWsClient {
 
 impl CodexWsClient {
     /// Connect, initialize, start a new thread, and spawn pump loop.
-    pub async fn connect(
-        port: u16,
-        opts: &SessionOpts,
-        app: &AppHandle,
-    ) -> Option<(Self, WsRx)> {
+    pub async fn connect(port: u16, opts: &SessionOpts, app: &AppHandle) -> Option<(Self, WsRx)> {
         let mut ws = open_ws(port, app).await?;
         do_initialize(&mut ws, app).await?;
         let thread_id = do_thread_start(&mut ws, opts, app).await?;
@@ -33,15 +29,17 @@ impl CodexWsClient {
         let (out_tx, out_rx) = mpsc::channel::<String>(64);
         let (in_tx, in_rx) = mpsc::channel::<Value>(128);
         ws_helpers::spawn_pump(ws, out_rx, in_tx);
-        Some((Self { thread_id, ws_tx: out_tx }, in_rx))
+        Some((
+            Self {
+                thread_id,
+                ws_tx: out_tx,
+            },
+            in_rx,
+        ))
     }
 
     /// Reconnect to an existing thread after WS drop.
-    pub async fn reconnect(
-        port: u16,
-        thread_id: &str,
-        app: &AppHandle,
-    ) -> Option<(Self, WsRx)> {
+    pub async fn reconnect(port: u16, thread_id: &str, app: &AppHandle) -> Option<(Self, WsRx)> {
         let mut ws = open_ws(port, app).await?;
         do_initialize(&mut ws, app).await?;
         do_thread_resume(&mut ws, thread_id, app).await?;
@@ -49,11 +47,21 @@ impl CodexWsClient {
         let (out_tx, out_rx) = mpsc::channel::<String>(64);
         let (in_tx, in_rx) = mpsc::channel::<Value>(128);
         ws_helpers::spawn_pump(ws, out_rx, in_tx);
-        Some((Self { thread_id: thread_id.to_string(), ws_tx: out_tx }, in_rx))
+        Some((
+            Self {
+                thread_id: thread_id.to_string(),
+                ws_tx: out_tx,
+            },
+            in_rx,
+        ))
     }
 
-    pub fn thread_id(&self) -> &str { &self.thread_id }
-    pub fn sender(&self) -> &WsTx { &self.ws_tx }
+    pub fn thread_id(&self) -> &str {
+        &self.thread_id
+    }
+    pub fn sender(&self) -> &WsTx {
+        &self.ws_tx
+    }
 }
 
 async fn open_ws(port: u16, app: &AppHandle) -> Option<FullWs> {
@@ -88,11 +96,7 @@ async fn do_initialize(ws: &mut FullWs, app: &AppHandle) -> Option<()> {
     Some(())
 }
 
-async fn do_thread_start(
-    ws: &mut FullWs,
-    opts: &SessionOpts,
-    app: &AppHandle,
-) -> Option<String> {
+async fn do_thread_start(ws: &mut FullWs, opts: &SessionOpts, app: &AppHandle) -> Option<String> {
     let params = super::handshake::build_thread_start_params(opts);
     let msg = json!({"method":"thread/start","id":2,"params":params});
     if ws.send(Message::Text(msg.to_string())).await.is_err() {
@@ -108,11 +112,7 @@ async fn do_thread_start(
     }
 }
 
-async fn do_thread_resume(
-    ws: &mut FullWs,
-    thread_id: &str,
-    app: &AppHandle,
-) -> Option<()> {
+async fn do_thread_resume(ws: &mut FullWs, thread_id: &str, app: &AppHandle) -> Option<()> {
     let msg = json!({
         "method": "thread/resume", "id": 3,
         "params": { "threadId": thread_id }

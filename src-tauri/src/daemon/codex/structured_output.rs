@@ -53,7 +53,9 @@ impl StreamPreviewState {
         if self.reasoning.len() > REASONING_CAP {
             let drop = self.reasoning.len() - REASONING_CAP;
             let mut b = drop;
-            while b < self.reasoning.len() && !self.reasoning.is_char_boundary(b) { b += 1; }
+            while b < self.reasoning.len() && !self.reasoning.is_char_boundary(b) {
+                b += 1;
+            }
             self.reasoning.drain(..b);
         }
     }
@@ -69,18 +71,24 @@ impl StreamPreviewState {
         }
     }
 
-    pub(super) fn reasoning_text(&self) -> &str { &self.reasoning }
+    pub(super) fn reasoning_text(&self) -> &str {
+        &self.reasoning
+    }
 
     pub(super) fn ingest_delta(&mut self, text: &str) -> Option<String> {
         self.raw_delta.push_str(text);
         if self.raw_delta.len() > RAW_DELTA_CAP {
             let drop = self.raw_delta.len() - RAW_DELTA_CAP;
             let mut b = drop;
-            while b < self.raw_delta.len() && !self.raw_delta.is_char_boundary(b) { b += 1; }
+            while b < self.raw_delta.len() && !self.raw_delta.is_char_boundary(b) {
+                b += 1;
+            }
             self.raw_delta.drain(..b);
             self.truncated = true;
         }
-        if self.truncated { return None; }
+        if self.truncated {
+            return None;
+        }
         let preview = extract_structured_message_preview(&self.raw_delta)?;
         if preview == self.last_preview {
             return None;
@@ -124,7 +132,9 @@ pub(super) fn parse_structured_output(raw: &str) -> Result<ParsedOutput, Structu
     }
 }
 
-pub(super) fn should_emit_final_message(text: &str) -> bool { !text.trim().is_empty() }
+pub(super) fn should_emit_final_message(text: &str) -> bool {
+    !text.trim().is_empty()
+}
 
 fn extract_structured_message_preview(raw: &str) -> Option<String> {
     if let Ok(v) = serde_json::from_str::<Value>(raw) {

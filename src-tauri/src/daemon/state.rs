@@ -77,11 +77,16 @@ impl DaemonState {
 
     /// Create with task graph loaded from the given path.
     pub fn with_task_graph_path(path: PathBuf) -> anyhow::Result<Self> {
-        Ok(Self { task_graph: TaskGraphStore::load(&path)?, ..Self::default() })
+        Ok(Self {
+            task_graph: TaskGraphStore::load(&path)?,
+            ..Self::default()
+        })
     }
 
     /// Persist task graph to disk (no-op if no path configured).
-    pub fn save_task_graph(&self) -> anyhow::Result<()> { self.task_graph.save() }
+    pub fn save_task_graph(&self) -> anyhow::Result<()> {
+        self.task_graph.save()
+    }
 
     /// Best-effort auto-save after mutations.
     pub(crate) fn auto_save_task_graph(&self) {
@@ -183,15 +188,20 @@ impl DaemonState {
         });
         ready
     }
-
 }
 
 #[path = "state_permission.rs"]
 mod state_permission;
 #[path = "state_snapshot.rs"]
 mod state_snapshot;
+#[cfg(test)]
+#[path = "state_snapshot_tests.rs"]
+mod state_snapshot_tests;
 #[path = "state_task_flow.rs"]
 mod state_task_flow;
-#[cfg(test)] #[path = "state_tests.rs"] mod state_tests;
-#[cfg(test)] #[path = "state_snapshot_tests.rs"] mod state_snapshot_tests;
-#[cfg(test)] #[path = "state_task_snapshot_tests.rs"] mod state_task_snapshot_tests;
+#[cfg(test)]
+#[path = "state_task_snapshot_tests.rs"]
+mod state_task_snapshot_tests;
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod state_tests;

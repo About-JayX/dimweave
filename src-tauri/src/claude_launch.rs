@@ -26,7 +26,17 @@ pub async fn launch(
         "[MCP] launching Claude channel {version} in managed PTY model={model:?} effort={effort:?} role={role}"
     );
     let emit_debug_logs = cfg!(debug_assertions);
-    claude_session::launch(session, dir, &claude_bin, &extra_args, cols, rows, app, emit_debug_logs).await
+    claude_session::launch(
+        session,
+        dir,
+        &claude_bin,
+        &extra_args,
+        cols,
+        rows,
+        app,
+        emit_debug_logs,
+    )
+    .await
 }
 
 fn build_launch_args(model: Option<&str>, effort: Option<&str>, role: &str) -> Vec<String> {
@@ -58,14 +68,22 @@ mod tests {
     #[test]
     fn launch_args_use_system_and_append_prompt_layers() {
         let args = build_launch_args(Some("sonnet"), Some("high"), "coder");
-        assert!(args.windows(2).any(|w| w[0] == "--system-prompt" && !w[1].is_empty()));
-        assert!(args.windows(2).any(|w| w[0] == "--append-system-prompt" && !w[1].is_empty()));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--system-prompt" && !w[1].is_empty()));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--append-system-prompt" && !w[1].is_empty()));
     }
 
     #[test]
     fn launch_args_preserve_optional_model_and_effort() {
         let args = build_launch_args(Some("sonnet"), Some("high"), "lead");
-        assert!(args.windows(2).any(|w| w[0] == "--model" && w[1] == "sonnet"));
-        assert!(args.windows(2).any(|w| w[0] == "--effort" && w[1] == "high"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--model" && w[1] == "sonnet"));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--effort" && w[1] == "high"));
     }
 }

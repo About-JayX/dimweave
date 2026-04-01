@@ -1,5 +1,5 @@
-pub(crate) mod handshake;
 pub mod handler;
+pub(crate) mod handshake;
 pub mod lifecycle;
 mod runtime;
 pub mod session;
@@ -35,8 +35,13 @@ pub struct StartOpts {
 impl CodexHandle {
     pub async fn stop(&self) {
         self.cancel.cancel();
-        if let Some(mut c) = self.process.lock().await.take() { lifecycle::stop(&mut c, self.port).await; }
-        self.session_mgr.lock().await.cleanup_session(&self.session_id);
+        if let Some(mut c) = self.process.lock().await.take() {
+            lifecycle::stop(&mut c, self.port).await;
+        }
+        self.session_mgr
+            .lock()
+            .await
+            .cleanup_session(&self.session_id);
     }
 }
 
@@ -54,23 +59,25 @@ pub async fn start(
         launch_epoch,
         codex_port,
     } = opts;
-    let (sandbox_mode, approval_policy, network_access, base_instructions) = if let Some(rc) =
-        role_config::get_role(&role_id)
-    {
-        (
-            rc.sandbox_mode.to_string(),
-            rc.approval_policy.to_string(),
-            rc.network_access,
-            Some(rc.base_instructions.to_string()),
-        )
-    } else {
-        ("workspace-write".into(), "never".into(), false, None)
-    };
+    let (sandbox_mode, approval_policy, network_access, base_instructions) =
+        if let Some(rc) = role_config::get_role(&role_id) {
+            (
+                rc.sandbox_mode.to_string(),
+                rc.approval_policy.to_string(),
+                rc.network_access,
+                Some(rc.base_instructions.to_string()),
+            )
+        } else {
+            ("workspace-write".into(), "never".into(), false, None)
+        };
 
     let session_mgr = state.read().await.session_mgr.clone();
     let session_id = session_mgr.lock().await.next_session_id();
-    let codex_home = session_mgr.lock().await
-        .create_session(&session_id, &sandbox_mode, &approval_policy)?;
+    let codex_home =
+        session_mgr
+            .lock()
+            .await
+            .create_session(&session_id, &sandbox_mode, &approval_policy)?;
 
     // If a previous Codex session crashed, a port-holder orphan may survive.
     // Proactively clean it before giving up on launch.
@@ -79,10 +86,20 @@ pub async fn start(
     })
     .await?;
 
-    let child = lifecycle::start(codex_port, &codex_home, &cwd, &sandbox_mode, &approval_policy)
-        .await?;
+    let child = lifecycle::start(
+        codex_port,
+        &codex_home,
+        &cwd,
+        &sandbox_mode,
+        &approval_policy,
+    )
+    .await?;
     let child_arc = Arc::new(Mutex::new(Some(child)));
-    gui::emit_system_log(&app, "info", &format!("[Codex] spawned port={codex_port} role={role_id}"));
+    gui::emit_system_log(
+        &app,
+        "info",
+        &format!("[Codex] spawned port={codex_port} role={role_id}"),
+    );
 
     // Poll until Codex app-server is accepting connections (up to 10 s)
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -171,7 +188,9 @@ pub async fn start(
             let text = crate::daemon::routing::format_codex_input(&buffered[i]);
             if inject_tx.send((text, from_user)).await.is_err() {
                 let mut s = state.write().await;
-                for m in buffered.drain(i..) { s.buffer_message(m); }
+                for m in buffered.drain(i..) {
+                    s.buffer_message(m);
+                }
                 eprintln!("[Codex] inject replay failed, re-buffered tail");
                 break;
             }
@@ -179,9 +198,19 @@ pub async fn start(
         }
     }
     gui::emit_agent_status(&app, "codex", true, None);
-    gui::emit_system_log(&app, "info", &format!("[Codex] ready role={role_id} thread={thread_id}"));
+    gui::emit_system_log(
+        &app,
+        "info",
+        &format!("[Codex] ready role={role_id} thread={thread_id}"),
+    );
 
-    spawn_health_monitor(child_arc.clone(), launch_epoch, state.clone(), app.clone(), cancel.clone());
+    spawn_health_monitor(
+        child_arc.clone(),
+        launch_epoch,
+        state.clone(),
+        app.clone(),
+        cancel.clone(),
+    );
 
     Ok(CodexHandle {
         process: child_arc,

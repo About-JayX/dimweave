@@ -9,7 +9,7 @@ pub fn claude_system_prompt(role_id: &str) -> String {
     };
 
     format!(
-r#"You are an agent in AgentNexus, a multi-agent collaboration system.
+        r#"You are an agent in AgentNexus, a multi-agent collaboration system.
 
 Your role: {role_desc}
 
@@ -68,19 +68,21 @@ Messages from the user may be sent to you directly OR broadcast to all agents (a
 - If the message does not mention your role and is not in your domain → do NOT respond. Do NOT call the reply tool at all. Stay completely silent.
 - If the user explicitly says "only X role respond" or "X回答我" and X is NOT your role → you MUST stay silent. Do NOT call reply(). Do NOT output any message. This is absolute.
 - Exception: if the user's statement contains a significant factual error in your expertise, correct it even if not directly addressed.
-- When in doubt about whether to respond, DO NOT respond. Silence is always safer than an unwanted reply."#)
+- When in doubt about whether to respond, DO NOT respond. Silence is always safer than an unwanted reply."#
+    )
 }
 
 /// Build Claude's secondary --append-system-prompt addendum for a given role.
 pub fn claude_append_system_prompt(role_id: &str) -> String {
     format!(
-r#"AgentNexus addendum for role `{role_id}`:
+        r#"AgentNexus addendum for role `{role_id}`:
 
 - Treat the primary system prompt as the protocol contract.
 - Use reply() for all task handoffs, completions, blockers, and review outcomes.
 - Prefer concise messages with concrete file names, test commands, and exact results.
 - If you are a worker and finish assigned work, your default recipient is lead.
-"#)
+"#
+    )
 }
 
 #[cfg(test)]
@@ -101,7 +103,9 @@ mod tests {
     fn prompt_requires_non_lead_to_default_to_lead() {
         let prompt = claude_system_prompt("coder");
         assert!(prompt.contains("lead is your default recipient"));
-        assert!(prompt.contains("reply directly to user only when the user explicitly names your role"));
+        assert!(
+            prompt.contains("reply directly to user only when the user explicitly names your role")
+        );
         assert!(prompt.contains("Lack of a prior chat thread is NOT a valid reason"));
     }
 

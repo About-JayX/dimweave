@@ -1,7 +1,7 @@
+use super::window_focus::focus_main_window;
 use crate::daemon::types::{BridgeMessage, PermissionRequest};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use super::window_focus::focus_main_window;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -112,15 +112,27 @@ pub fn emit_claude_terminal_attention(app: &AppHandle) {
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum CodexStreamPayload {
     Thinking,
-    Delta { text: String },
-    Message { text: String },
-    TurnDone { status: String },
+    Delta {
+        text: String,
+    },
+    Message {
+        text: String,
+    },
+    TurnDone {
+        status: String,
+    },
     /// Codex started a discrete work item (command, file edit, etc.)
-    Activity { label: String },
+    Activity {
+        label: String,
+    },
     /// Streaming reasoning summary text (accumulated)
-    Reasoning { text: String },
+    Reasoning {
+        text: String,
+    },
     /// Streaming command stdout/stderr
-    CommandOutput { text: String },
+    CommandOutput {
+        text: String,
+    },
 }
 
 pub fn emit_codex_stream(app: &AppHandle, payload: CodexStreamPayload) {

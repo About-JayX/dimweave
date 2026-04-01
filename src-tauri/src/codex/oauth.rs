@@ -31,7 +31,12 @@ impl OAuthHandle {
     }
 
     pub fn cancel(&self) -> bool {
-        if let Some(tx) = self.cancel_tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(tx) = self
+            .cancel_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             let _ = tx.send(());
             true
         } else {

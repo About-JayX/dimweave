@@ -100,7 +100,10 @@ mod tests {
         let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
         let status = handle_get_status(&state).await;
         let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
-        assert!(v["online_agents"].is_array(), "top-level online_agents must be array");
+        assert!(
+            v["online_agents"].is_array(),
+            "top-level online_agents must be array"
+        );
     }
 
     #[tokio::test]
@@ -116,7 +119,10 @@ mod tests {
         let agent = &agents[0];
         assert_eq!(agent["agentId"], "codex");
         assert!(agent["role"].is_string(), "role must be string");
-        assert!(agent["modelSource"].is_string(), "modelSource must be string");
+        assert!(
+            agent["modelSource"].is_string(),
+            "modelSource must be string"
+        );
     }
 
     #[tokio::test]

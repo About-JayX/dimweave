@@ -63,7 +63,10 @@ fn bind_session_id_updates_existing_session() {
     let ok = claude::bind_session_id(&mut store, &sess.session_id, "claude_sess_late");
     assert!(ok);
     let updated = store.get_session(&sess.session_id).unwrap();
-    assert_eq!(updated.external_session_id.as_deref(), Some("claude_sess_late"));
+    assert_eq!(
+        updated.external_session_id.as_deref(),
+        Some("claude_sess_late")
+    );
 }
 
 #[test]
@@ -97,13 +100,17 @@ fn register_on_connect_as_coder_sets_coder_session() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "T1");
     let tid = task.task_id.clone();
-    s.task_graph.update_task_status(&tid, TaskStatus::Implementing);
+    s.task_graph
+        .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
     claude::register_on_connect(&mut s, "coder", "/ws", Some("claude_coder_1"));
 
     let task = s.task_graph.get_task(&tid).unwrap();
-    let coder_sid = task.current_coder_session_id.as_ref().expect("coder session set");
+    let coder_sid = task
+        .current_coder_session_id
+        .as_ref()
+        .expect("coder session set");
     let sess = s.task_graph.get_session(coder_sid).unwrap();
     assert_eq!(sess.provider, Provider::Claude);
     assert_eq!(sess.role, SessionRole::Coder);

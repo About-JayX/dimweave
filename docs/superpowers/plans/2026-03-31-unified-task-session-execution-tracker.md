@@ -69,35 +69,41 @@
 **已覆盖：**
 - Codex WS 握手、resume helper、thread id 获取逻辑已整理
 - `session.rs` / `ws_client.rs` 已为 thread 生命周期处理打基础
+- `provider/{mod,codex,shared}.rs` 已创建，provider adapter 骨架已落地
+- 已有 `SessionRegistration` 共享 DTO
+- Codex 启动时已能把 normalized session 注册进 task graph，并绑定 `thread.id`
+- `codex_tests.rs` 已覆盖 session 注册、child 关系、late bind 与 launch registration
 
 **未完成：**
-- `provider/codex.rs` 不存在
 - 没有统一 DTO 映射层
 - 没有 `thread/list` / `thread/fork` / `thread/archive` 适配
-- Codex `thread.id` 尚未标准化落入 task graph session 记录
-- 没有 `codex_tests.rs`
+- provider 级 `resume/list/fork/archive` 仍未接到真实 Codex WS 调用
 
 **本阶段子任务：**
-1. 新建 provider adapter 目录与共享 DTO
-2. 把 Codex 启动得到的 `thread.id` 绑定到 normalized session
-3. 实现 list/resume/fork/archive 适配接口
-4. 补测试覆盖 thread 注册与 DTO 映射
+1. 完成 provider DTO 映射层
+2. 实现 list/resume/fork/archive 适配接口
+3. 把 provider adapter 真正接入 commands / resume path
+4. 补真实 provider 调用覆盖，而不仅是 registration 测试
 
 ### Task 3：补齐 Claude provider adapter、session capture、history、resume
 
 **状态：❌ 未完成（优先级 P1）**
 
+**已覆盖：**
+- `provider/{mod,claude,shared}.rs` 已创建，Claude adapter 骨架已落地
+- Claude connect 时已能注册 normalized session，并写回 lead/coder pointer
+- `claude_tests.rs` 已覆盖 session 注册、late bind 与 connect registration
+
 **未完成：**
-- `provider/claude.rs` 不存在
 - Claude session metadata capture 未接入 task graph
 - 本地 history index/resume 入口未实现
-- 无 `claude_tests.rs`
+- provider 级 resume 仍未真正重连 Claude runtime
 
 **本阶段子任务：**
 1. 设计 Claude session 元数据采集点
 2. 建立 workspace 级本地 history index
 3. 实现 normalized session 映射与 resume 流程
-4. 增加测试
+4. 把 provider adapter 真正接入 commands / resume path，并补更高层测试
 
 ### Task 4：构建 Task Orchestrator 与严格 Review Gate
 

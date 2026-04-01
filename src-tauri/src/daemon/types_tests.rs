@@ -61,18 +61,28 @@ fn task_snapshot_serializes_camel_case() {
     use crate::daemon::task_graph::types::*;
     let snap = TaskSnapshot {
         task: Task {
-            task_id: "task_1".into(), workspace_root: "/ws".into(),
-            title: "Test".into(), status: TaskStatus::Implementing,
+            task_id: "task_1".into(),
+            workspace_root: "/ws".into(),
+            title: "Test".into(),
+            status: TaskStatus::Implementing,
             review_status: Some(ReviewStatus::InReview),
-            lead_session_id: Some("s1".into()), current_coder_session_id: Some("s2".into()),
-            created_at: 1000, updated_at: 2000,
+            lead_session_id: Some("s1".into()),
+            current_coder_session_id: Some("s2".into()),
+            created_at: 1000,
+            updated_at: 2000,
         },
         sessions: vec![SessionHandle {
-            session_id: "s1".into(), task_id: "task_1".into(),
-            parent_session_id: None, provider: Provider::Claude,
-            role: SessionRole::Lead, external_session_id: None,
-            status: SessionStatus::Active, cwd: "/ws".into(),
-            title: "Lead".into(), created_at: 1000, updated_at: 2000,
+            session_id: "s1".into(),
+            task_id: "task_1".into(),
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            external_session_id: None,
+            status: SessionStatus::Active,
+            cwd: "/ws".into(),
+            title: "Lead".into(),
+            created_at: 1000,
+            updated_at: 2000,
         }],
         artifacts: vec![],
     };
@@ -90,12 +100,18 @@ fn task_snapshot_roundtrip() {
     use crate::daemon::task_graph::types::*;
     let snap = TaskSnapshot {
         task: Task {
-            task_id: "t1".into(), workspace_root: "/ws".into(),
-            title: "T".into(), status: TaskStatus::Draft,
-            review_status: None, lead_session_id: None,
-            current_coder_session_id: None, created_at: 100, updated_at: 200,
+            task_id: "t1".into(),
+            workspace_root: "/ws".into(),
+            title: "T".into(),
+            status: TaskStatus::Draft,
+            review_status: None,
+            lead_session_id: None,
+            current_coder_session_id: None,
+            created_at: 100,
+            updated_at: 200,
         },
-        sessions: vec![], artifacts: vec![],
+        sessions: vec![],
+        artifacts: vec![],
     };
     let json_str = serde_json::to_string(&snap).unwrap();
     let decoded: TaskSnapshot = serde_json::from_str(&json_str).unwrap();
@@ -109,11 +125,17 @@ fn session_tree_snapshot_serializes_camel_case() {
     let snap = SessionTreeSnapshot {
         task_id: "t1".into(),
         sessions: vec![SessionHandle {
-            session_id: "s1".into(), task_id: "t1".into(),
-            parent_session_id: None, provider: Provider::Claude,
-            role: SessionRole::Lead, external_session_id: None,
-            status: SessionStatus::Active, cwd: "/ws".into(),
-            title: "Lead".into(), created_at: 100, updated_at: 200,
+            session_id: "s1".into(),
+            task_id: "t1".into(),
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            external_session_id: None,
+            status: SessionStatus::Active,
+            cwd: "/ws".into(),
+            title: "Lead".into(),
+            created_at: 100,
+            updated_at: 200,
         }],
     };
     let json = serde_json::to_value(&snap).unwrap();
@@ -127,10 +149,15 @@ fn history_entry_serializes_camel_case() {
     use crate::daemon::task_graph::types::*;
     let entry = HistoryEntry {
         task: Task {
-            task_id: "t1".into(), workspace_root: "/ws".into(),
-            title: "T".into(), status: TaskStatus::Done,
-            review_status: None, lead_session_id: None,
-            current_coder_session_id: None, created_at: 100, updated_at: 200,
+            task_id: "t1".into(),
+            workspace_root: "/ws".into(),
+            title: "T".into(),
+            status: TaskStatus::Done,
+            review_status: None,
+            lead_session_id: None,
+            current_coder_session_id: None,
+            created_at: 100,
+            updated_at: 200,
         },
         session_count: 3,
         artifact_count: 1,
@@ -146,7 +173,9 @@ fn serialize_online_agents_response_to_agent() {
     let agents = serde_json::json!([
         {"agentId": "claude", "role": "lead", "modelSource": "claude"}
     ]);
-    let outbound = ToAgent::OnlineAgentsResponse { online_agents: agents };
+    let outbound = ToAgent::OnlineAgentsResponse {
+        online_agents: agents,
+    };
     let json = serde_json::to_value(outbound).unwrap();
     assert_eq!(json["type"], "online_agents_response");
     assert!(json["online_agents"].is_array());

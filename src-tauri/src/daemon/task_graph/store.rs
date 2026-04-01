@@ -93,7 +93,11 @@ impl TaskGraphStore {
         }
     }
 
-    pub fn update_task_review_status(&mut self, task_id: &str, review_status: Option<ReviewStatus>) -> bool {
+    pub fn update_task_review_status(
+        &mut self,
+        task_id: &str,
+        review_status: Option<ReviewStatus>,
+    ) -> bool {
         if let Some(task) = self.tasks.get_mut(task_id) {
             task.review_status = review_status;
             task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
@@ -104,10 +108,7 @@ impl TaskGraphStore {
     }
 
     /// Create a new session linked to a task.
-    pub fn create_session(
-        &mut self,
-        params: CreateSessionParams,
-    ) -> SessionHandle {
+    pub fn create_session(&mut self, params: CreateSessionParams) -> SessionHandle {
         let now = chrono::Utc::now().timestamp_millis() as u64;
         let session = SessionHandle {
             session_id: self.next_id_str("sess"),
@@ -155,10 +156,7 @@ impl TaskGraphStore {
     }
 
     /// Add an artifact to the store.
-    pub fn add_artifact(
-        &mut self,
-        params: CreateArtifactParams,
-    ) -> Artifact {
+    pub fn add_artifact(&mut self, params: CreateArtifactParams) -> Artifact {
         let now = chrono::Utc::now().timestamp_millis() as u64;
         let artifact = Artifact {
             artifact_id: self.next_id_str("art"),
@@ -187,5 +185,7 @@ impl TaskGraphStore {
 }
 
 impl Default for TaskGraphStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

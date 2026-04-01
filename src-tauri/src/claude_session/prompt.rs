@@ -1,9 +1,9 @@
+use crate::daemon::gui::ClaudeStreamPayload;
 use std::{
     io::{Read, Write},
     sync::{Arc, Mutex},
 };
 use tauri::AppHandle;
-use crate::daemon::gui::ClaudeStreamPayload;
 
 const CHANNEL_MARKER: &str = "channels: server:agentnexus";
 const LOCAL_DEV_OPTION: &str = "1. i am using this for local development";
@@ -115,7 +115,8 @@ pub fn should_auto_confirm_development_prompt(output: &str) -> bool {
     let compact = normalize_prompt_compact_text(output);
 
     let has_hint = normalized.contains(CHANNELS_HINT) || compact.contains(CHANNELS_HINT_COMPACT);
-    let has_channel = normalized.contains(CHANNEL_MARKER) || compact.contains(CHANNEL_MARKER_COMPACT);
+    let has_channel =
+        normalized.contains(CHANNEL_MARKER) || compact.contains(CHANNEL_MARKER_COMPACT);
     let has_local_dev =
         normalized.contains(LOCAL_DEV_OPTION) || compact.contains(LOCAL_DEV_OPTION_COMPACT);
 
@@ -125,10 +126,14 @@ pub fn should_auto_confirm_development_prompt(output: &str) -> bool {
 pub fn drain_log_lines(pending: &mut String, chunk: &str) -> Vec<String> {
     pending.push_str(chunk);
     let normalized = strip_ansi(pending).replace('\r', "\n");
-    let mut parts = normalized.split('\n').map(str::to_string).collect::<Vec<_>>();
+    let mut parts = normalized
+        .split('\n')
+        .map(str::to_string)
+        .collect::<Vec<_>>();
     let tail = parts.pop().unwrap_or_default();
     *pending = tail;
-    parts.into_iter()
+    parts
+        .into_iter()
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty())
         .collect()
@@ -198,7 +203,9 @@ fn next_attention_event(
     }
 }
 
-use super::text_utils::{normalize_prompt_compact_text, normalize_prompt_text, strip_ansi, tail_chars};
+use super::text_utils::{
+    normalize_prompt_compact_text, normalize_prompt_text, strip_ansi, tail_chars,
+};
 
 #[cfg(test)]
 #[path = "prompt_tests.rs"]

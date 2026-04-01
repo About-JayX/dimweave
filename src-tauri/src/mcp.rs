@@ -30,7 +30,10 @@ fn resolve_release_bridge_cmd() -> Result<String, String> {
             }
         }
     }
-    Err(format!("agent-nexus-bridge not found near {}", exe_dir.display()))
+    Err(format!(
+        "agent-nexus-bridge not found near {}",
+        exe_dir.display()
+    ))
 }
 
 #[tauri::command]
@@ -156,28 +159,41 @@ pub async fn launch_claude_terminal(
 ) -> Result<(), String> {
     let dir = cwd.unwrap_or_else(|| ".".to_string());
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    daemon_tx.0
+    daemon_tx
+        .0
         .send(crate::daemon::DaemonCmd::ReadClaudeRole { reply: reply_tx })
         .await
         .map_err(|_| "daemon channel closed".to_string())?;
-    let role = reply_rx.await.map_err(|_| "daemon did not reply".to_string())?;
+    let role = reply_rx
+        .await
+        .map_err(|_| "daemon did not reply".to_string())?;
     let (snapshot_tx, snapshot_rx) = tokio::sync::oneshot::channel();
-    daemon_tx.0
+    daemon_tx
+        .0
         .send(crate::daemon::DaemonCmd::ReadStatusSnapshot { reply: snapshot_tx })
         .await
         .map_err(|_| "daemon channel closed".to_string())?;
-    let snapshot: DaemonStatusSnapshot =
-        snapshot_rx.await.map_err(|_| "daemon did not reply".to_string())?;
+    let snapshot: DaemonStatusSnapshot = snapshot_rx
+        .await
+        .map_err(|_| "daemon did not reply".to_string())?;
     let codex_online = snapshot
         .agents
         .iter()
         .any(|agent| agent.agent == "codex" && agent.online);
     if codex_online && snapshot.codex_role == role {
-        return Err(format!(
-            "role '{role}' already in use by online codex"
-        ));
+        return Err(format!("role '{role}' already in use by online codex"));
     }
-    crate::claude_launch::launch(&dir, model, effort, &role, cols, rows, session.inner().clone(), app).await
+    crate::claude_launch::launch(
+        &dir,
+        model,
+        effort,
+        &role,
+        cols,
+        rows,
+        session.inner().clone(),
+        app,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -230,6 +246,9 @@ mod tests {
 
         let (next, changed) = upsert_mcp_server(config, "/tmp/bridge", &[], "reviewer").unwrap();
         assert!(changed);
-        assert_eq!(next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"], "reviewer");
+        assert_eq!(
+            next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
+            "reviewer"
+        );
     }
 }

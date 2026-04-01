@@ -1,6 +1,6 @@
 use super::*;
-use crate::daemon::{state::DaemonState, types::BridgeMessage};
 use crate::daemon::routing_display::{is_renderable_message, should_emit_claude_thinking};
+use crate::daemon::{state::DaemonState, types::BridgeMessage};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -9,7 +9,10 @@ use tokio::sync::RwLock;
 #[test]
 fn valid_roles_accepted() {
     for role in &["lead", "coder", "reviewer"] {
-        assert!(crate::daemon::is_valid_agent_role(role), "{role} should be valid");
+        assert!(
+            crate::daemon::is_valid_agent_role(role),
+            "{role} should be valid"
+        );
     }
 }
 

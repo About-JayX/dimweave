@@ -14,16 +14,24 @@ pub fn enriched_path() -> String {
             .collect();
         vers.sort();
         vers.reverse();
-        for v in vers { dirs.push(v.to_string_lossy().into()); }
+        for v in vers {
+            dirs.push(v.to_string_lossy().into());
+        }
     }
     for d in &[".bun/bin", ".local/bin", ".cargo/bin"] {
         let p = PathBuf::from(&home).join(d);
-        if p.exists() { dirs.push(p.to_string_lossy().into()); }
+        if p.exists() {
+            dirs.push(p.to_string_lossy().into());
+        }
     }
     for d in &["/usr/local/bin", "/opt/homebrew/bin"] {
-        if PathBuf::from(d).exists() { dirs.push((*d).into()); }
+        if PathBuf::from(d).exists() {
+            dirs.push((*d).into());
+        }
     }
-    if !sys_path.is_empty() { dirs.push(sys_path); }
+    if !sys_path.is_empty() {
+        dirs.push(sys_path);
+    }
     dirs.join(":")
 }
 
@@ -72,7 +80,9 @@ pub fn resolve_claude_bin() -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let sidecar = dir.join("claude");
-            if sidecar.exists() { return Ok(sidecar); }
+            if sidecar.exists() {
+                return Ok(sidecar);
+            }
         }
     }
     let path = enriched_path();
@@ -137,7 +147,8 @@ mod tests {
     #[test]
     fn accept_previously_blocked_version() {
         let version = parse_claude_version("2.1.85 (Claude Code)").expect("version should parse");
-        let accepted = validate_claude_channel_ready(version).expect("2.1.85 should now be allowed");
+        let accepted =
+            validate_claude_channel_ready(version).expect("2.1.85 should now be allowed");
         assert_eq!(accepted, version);
     }
 
