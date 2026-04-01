@@ -361,7 +361,21 @@ fn normalize_text(text: &str) -> Option<String> {
     if collapsed.is_empty() {
         None
     } else {
-        Some(collapsed)
+        strip_channel_wrapper(&collapsed).or(Some(collapsed))
+    }
+}
+
+fn strip_channel_wrapper(text: &str) -> Option<String> {
+    if !text.starts_with("<channel") || !text.ends_with("</channel>") {
+        return None;
+    }
+    let start = text.find('>')? + 1;
+    let end = text.rfind("</channel>")?;
+    let inner = text[start..end].trim();
+    if inner.is_empty() {
+        None
+    } else {
+        Some(inner.to_string())
     }
 }
 

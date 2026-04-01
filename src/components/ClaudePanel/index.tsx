@@ -1,10 +1,20 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CyberSelect } from "@/components/ui/cyber-select";
 import { invoke } from "@tauri-apps/api/core";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
+import { useTaskStore } from "@/stores/task-store";
+import type { ProviderSessionInfo } from "@/types";
 import { RoleSelect } from "@/components/AgentStatus/RoleSelect";
 import { StatusDot } from "@/components/AgentStatus/StatusDot";
+import {
+  buildProviderHistoryOptions,
+  findProviderHistoryEntry,
+  formatProviderConnectionLabel,
+  NEW_PROVIDER_SESSION_VALUE,
+  resolveProviderHistoryWorkspace,
+} from "@/components/AgentStatus/provider-session-view-model";
 import { DevConfirmDialog } from "./DevConfirmDialog";
 import { ClaudeConfigRows } from "./ClaudeConfigRows";
 import { ClaudeHint } from "./ClaudeHint";
@@ -16,9 +26,14 @@ import {
 interface ClaudePanelProps {
   connected: boolean;
   terminalRunning: boolean;
+  providerSession?: ProviderSessionInfo;
 }
 
-export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
+export function ClaudePanel({
+  connected,
+  terminalRunning,
+  providerSession,
+}: ClaudePanelProps) {
   const [cwd, setCwd] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
@@ -27,7 +42,38 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [showDevConfirm, setShowDevConfirm] = useState(false);
   const [rememberChoice, setRememberChoice] = useState(true);
+  const [selectedHistoryId, setSelectedHistoryId] = useState(
+    NEW_PROVIDER_SESSION_VALUE,
+  );
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
+  const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
+  const providerHistory = useTaskStore((s) => s.providerHistory);
+  const providerHistoryLoading = useTaskStore((s) => s.providerHistoryLoading);
+  const providerHistoryError = useTaskStore((s) => s.providerHistoryError);
+  const effectiveCwd = useMemo(
+    () => resolveProviderHistoryWorkspace(cwd, providerSession),
+    [cwd, providerSession],
+  );
+
+  const workspaceHistory = effectiveCwd
+    ? providerHistory[effectiveCwd] ?? []
+    : [];
+  const historyOptions = useMemo(
+    () => buildProviderHistoryOptions("claude", workspaceHistory),
+    [workspaceHistory],
+  );
+  const selectedHistory = useMemo(
+    () => findProviderHistoryEntry("claude", workspaceHistory, selectedHistoryId),
+    [selectedHistoryId, workspaceHistory],
+  );
+  const historyLoading = effectiveCwd
+    ? providerHistoryLoading[effectiveCwd]
+    : false;
+  const historyError = effectiveCwd ? providerHistoryError[effectiveCwd] : null;
+  const connectionLabel = useMemo(
+    () => formatProviderConnectionLabel(providerSession),
+    [providerSession],
+  );
 
   useEffect(() => {
     if (!connected && !terminalRunning) {
@@ -35,25 +81,40 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
     }
   }, [connected, terminalRunning]);
 
+  useEffect(() => {
+    if (!effectiveCwd) return;
+    void fetchProviderHistory(effectiveCwd).catch(() => {});
+  }, [effectiveCwd, fetchProviderHistory]);
+
+  useEffect(() => {
+    if (selectedHistoryId !== NEW_PROVIDER_SESSION_VALUE && !selectedHistory) {
+      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
+    }
+  }, [selectedHistory, selectedHistoryId]);
+
   const handlePickDir = useCallback(async () => {
     const dir = await pickDirectory();
-    if (dir) setCwd(dir);
+    if (dir) {
+      setCwd(dir);
+      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
+    }
   }, [pickDirectory]);
 
   const doLaunch = useCallback(async () => {
     setConnecting(true);
     try {
       setActionError(null);
-      await invoke("register_mcp", { cwd });
+      await invoke("register_mcp", { cwd: effectiveCwd });
       // Estimate terminal dimensions from current window layout.
       // Sidebar ~280px, terminal padding ~16px, char width ~7.8px for 13px Geist Mono,
       // line height ~15px. UI chrome (tabs + header + input) ~140px.
       const cols = Math.max(80, Math.floor((window.innerWidth - 296) / 7.8));
       const rows = Math.max(24, Math.floor((window.innerHeight - 140) / 15));
       await invoke("launch_claude_terminal", {
-        cwd,
+        cwd: effectiveCwd,
         model: model || null,
         effort: effort || null,
+        resumeSessionId: selectedHistory?.externalId ?? null,
         cols,
         rows,
       });
@@ -62,24 +123,24 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
     } finally {
       setConnecting(false);
     }
-  }, [cwd, model, effort]);
+  }, [effectiveCwd, model, effort, selectedHistory]);
 
   const handleLaunch = useCallback(async () => {
-    if (!cwd) return;
-    if (shouldPromptForClaudeDevConfirm(cwd)) {
+    if (!effectiveCwd) return;
+    if (shouldPromptForClaudeDevConfirm(effectiveCwd)) {
       setShowDevConfirm(true);
       return;
     }
     doLaunch();
-  }, [cwd, doLaunch]);
+  }, [effectiveCwd, doLaunch]);
 
   const confirmDevLaunch = useCallback(async () => {
     if (rememberChoice) {
-      rememberClaudeDevConfirm(cwd);
+      rememberClaudeDevConfirm(effectiveCwd);
     }
     setShowDevConfirm(false);
     doLaunch();
-  }, [cwd, rememberChoice, doLaunch]);
+  }, [effectiveCwd, rememberChoice, doLaunch]);
 
   const handleDisconnect = useCallback(async () => {
     setDisconnecting(true);
@@ -130,15 +191,38 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
           </span>
         </div>
 
+        {connectionLabel && (
+          <div className="mt-1 font-mono text-[11px] text-muted-foreground/80">
+            {connectionLabel}
+          </div>
+        )}
+
         <ClaudeConfigRows
           model={model}
           effort={effort}
-          cwd={cwd}
+          cwd={effectiveCwd}
           disabled={connected || terminalRunning || connecting || disconnecting}
           onModelChange={setModel}
           onEffortChange={setEffort}
           onPickDir={handlePickDir}
         />
+
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">History</span>
+          <CyberSelect
+            value={selectedHistoryId}
+            options={historyOptions}
+            onChange={setSelectedHistoryId}
+            disabled={
+              connected ||
+              terminalRunning ||
+              connecting ||
+              disconnecting ||
+              !effectiveCwd
+            }
+            placeholder="New session"
+          />
+        </div>
 
         {connected && (
           <Button
@@ -163,7 +247,9 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
           <Button
             size="sm"
             className="mt-2 w-full bg-claude text-white hover:bg-claude/90 hover:shadow-[0_0_16px_#8b5cf640] active:scale-[0.98] transition-all duration-200 btn-ripple"
-            disabled={!cwd || terminalRunning || connecting || disconnecting}
+            disabled={
+              !effectiveCwd || terminalRunning || connecting || disconnecting
+            }
             onClick={handleLaunch}
           >
             {connecting ? (
@@ -184,16 +270,21 @@ export function ClaudePanel({ connected, terminalRunning }: ClaudePanelProps) {
 
         <ClaudeHint
           connected={connected}
-          cwd={cwd}
+          cwd={effectiveCwd}
           terminalRunning={terminalRunning}
           disconnecting={disconnecting}
-          actionError={actionError}
+          actionError={actionError ?? historyError}
         />
+        {!connected && effectiveCwd && historyLoading && (
+          <div className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            Loading Claude history...
+          </div>
+        )}
       </div>
 
       {showDevConfirm && (
         <DevConfirmDialog
-          cwd={cwd}
+          cwd={effectiveCwd}
           rememberChoice={rememberChoice}
           onRememberChoiceChange={setRememberChoice}
           onCancel={() => setShowDevConfirm(false)}

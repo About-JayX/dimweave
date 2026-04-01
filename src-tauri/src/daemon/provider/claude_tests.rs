@@ -273,6 +273,33 @@ fn list_sessions_reads_workspace_transcripts() {
 }
 
 #[test]
+fn list_sessions_extracts_user_text_from_channel_wrapper() {
+    let base = std::env::temp_dir().join(format!(
+        "agentnexus-claude-channel-history-{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    let history_dir = claude::workspace_history_dir("/tmp/ws", &base);
+    fs::create_dir_all(&history_dir).unwrap();
+
+    let transcript = history_dir.join("channel-session.jsonl");
+    fs::write(
+        &transcript,
+        concat!(
+            "{\"type\":\"user\",\"timestamp\":\"2026-04-01T08:13:19.916Z\",\"sessionId\":\"channel-session\",\"cwd\":\"/tmp/ws\",\"message\":{\"role\":\"user\",\"content\":\"<channel source=\\\"agentnexus\\\" from=\\\"user\\\">\\n都回答我1\\n</channel>\"}}\n",
+            "{\"type\":\"assistant\",\"timestamp\":\"2026-04-01T08:13:28.050Z\",\"sessionId\":\"channel-session\",\"cwd\":\"/tmp/ws\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"1\"}]}}\n"
+        ),
+    )
+    .unwrap();
+
+    let page = claude::list_sessions("/tmp/ws", Some(base.as_path())).unwrap();
+    assert_eq!(page.entries.len(), 1);
+    assert_eq!(page.entries[0].title.as_deref(), Some("都回答我1"));
+    assert_eq!(page.entries[0].preview.as_deref(), Some("1"));
+
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn build_resume_target_requires_external_session_id() {
     let session = SessionHandle {
         session_id: "sess_1".into(),

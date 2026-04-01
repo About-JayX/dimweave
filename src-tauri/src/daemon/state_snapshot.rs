@@ -8,10 +8,12 @@ impl DaemonState {
             AgentRuntimeStatus {
                 agent: "claude".into(),
                 online: self.is_agent_online("claude"),
+                provider_session: self.provider_connection("claude"),
             },
             AgentRuntimeStatus {
                 agent: "codex".into(),
                 online: self.is_agent_online("codex"),
+                provider_session: self.provider_connection("codex"),
             },
         ];
 
@@ -25,6 +27,7 @@ impl DaemonState {
         agents.extend(other_agents.into_iter().map(|agent| AgentRuntimeStatus {
             agent,
             online: true,
+            provider_session: None,
         }));
 
         DaemonStatusSnapshot {

@@ -1,5 +1,5 @@
 use super::window_focus::focus_main_window;
-use crate::daemon::types::{BridgeMessage, PermissionRequest};
+use crate::daemon::types::{BridgeMessage, PermissionRequest, ProviderConnectionState};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -40,6 +40,8 @@ pub struct AgentStatusEvent {
     pub online: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_session: Option<ProviderConnectionState>,
 }
 
 #[derive(Serialize, Clone)]
@@ -157,13 +159,20 @@ pub fn emit_claude_stream(app: &AppHandle, payload: ClaudeStreamPayload) {
     let _ = app.emit("claude_stream", payload);
 }
 
-pub fn emit_agent_status(app: &AppHandle, agent: &str, online: bool, exit_code: Option<i32>) {
+pub fn emit_agent_status(
+    app: &AppHandle,
+    agent: &str,
+    online: bool,
+    exit_code: Option<i32>,
+    provider_session: Option<ProviderConnectionState>,
+) {
     let _ = app.emit(
         "agent_status",
         AgentStatusEvent {
             agent: agent.into(),
             online,
             exit_code,
+            provider_session,
         },
     );
 }

@@ -4,7 +4,7 @@ use crate::daemon::{
     task_graph::TaskGraphStore,
     types::{
         AgentRuntimeStatus, BridgeMessage, DaemonStatusSnapshot, OnlineAgentInfo,
-        PermissionBehavior, PermissionRequest, PermissionVerdict, ToAgent,
+        PermissionBehavior, PermissionRequest, PermissionVerdict, ProviderConnectionState, ToAgent,
     },
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -41,6 +41,8 @@ pub struct DaemonState {
     codex_session_epoch: u64,
     pub claude_role: String,
     pub codex_role: String,
+    pub claude_connection: Option<ProviderConnectionState>,
+    pub codex_connection: Option<ProviderConnectionState>,
     pub session_mgr: Arc<Mutex<SessionManager>>,
     /// Monotonic counter for agent connection generations.
     pub next_agent_gen: u64,
@@ -61,6 +63,8 @@ impl Default for DaemonState {
             codex_session_epoch: 0,
             claude_role: "lead".into(),
             codex_role: "coder".into(),
+            claude_connection: None,
+            codex_connection: None,
             session_mgr: Arc::new(Mutex::new(SessionManager::new())),
             next_agent_gen: 0,
             task_graph: TaskGraphStore::new(),
@@ -103,6 +107,7 @@ impl DaemonState {
     pub fn invalidate_codex_session(&mut self) {
         self.begin_codex_launch();
         self.codex_inject_tx = None;
+        self.codex_connection = None;
     }
 
     pub fn attach_codex_session_if_current(
@@ -122,6 +127,7 @@ impl DaemonState {
             return false;
         }
         self.codex_inject_tx = None;
+        self.codex_connection = None;
         true
     }
 
@@ -130,6 +136,30 @@ impl DaemonState {
             "claude" => self.attached_agents.contains_key("claude"),
             "codex" => self.codex_inject_tx.is_some(),
             other => self.attached_agents.contains_key(other),
+        }
+    }
+
+    pub fn provider_connection(&self, agent: &str) -> Option<ProviderConnectionState> {
+        match agent {
+            "claude" => self.claude_connection.clone(),
+            "codex" => self.codex_connection.clone(),
+            _ => None,
+        }
+    }
+
+    pub fn set_provider_connection(&mut self, agent: &str, connection: ProviderConnectionState) {
+        match agent {
+            "claude" => self.claude_connection = Some(connection),
+            "codex" => self.codex_connection = Some(connection),
+            _ => {}
+        }
+    }
+
+    pub fn clear_provider_connection(&mut self, agent: &str) {
+        match agent {
+            "claude" => self.claude_connection = None,
+            "codex" => self.codex_connection = None,
+            _ => {}
         }
     }
 

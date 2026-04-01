@@ -103,6 +103,8 @@ export interface TaskStoreData {
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;
   providerHistory: Record<string, ProviderHistoryInfo[]>;
+  providerHistoryLoading: Record<string, boolean>;
+  providerHistoryError: Record<string, string | null>;
 }
 
 export interface TaskStoreState extends TaskStoreData {

@@ -94,6 +94,77 @@ fn status_snapshot_reports_current_online_agents() {
 }
 
 #[test]
+fn status_snapshot_includes_provider_session_metadata() {
+    let mut s = DaemonState::new();
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
+    s.codex_inject_tx = Some(codex_tx);
+    s.set_provider_connection(
+        "claude",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Claude,
+            external_session_id: "claude_resume_42".into(),
+            cwd: "/tmp/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::Resumed,
+        },
+    );
+    s.set_provider_connection(
+        "codex",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Codex,
+            external_session_id: "thread_123".into(),
+            cwd: "/tmp/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+        },
+    );
+
+    let snapshot = s.status_snapshot();
+    let claude = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.agent == "claude")
+        .expect("claude present");
+    let codex = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.agent == "codex")
+        .expect("codex present");
+
+    assert_eq!(
+        claude
+            .provider_session
+            .as_ref()
+            .map(|session| session.external_session_id.as_str()),
+        Some("claude_resume_42")
+    );
+    assert_eq!(
+        claude
+            .provider_session
+            .as_ref()
+            .map(|session| session.connection_mode.as_str()),
+        Some("resumed")
+    );
+    assert_eq!(
+        codex
+            .provider_session
+            .as_ref()
+            .map(|session| session.external_session_id.as_str()),
+        Some("thread_123")
+    );
+    assert_eq!(
+        codex
+            .provider_session
+            .as_ref()
+            .map(|session| session.connection_mode.as_str()),
+        Some("new")
+    );
+}
+
+#[test]
 fn online_role_conflict_only_blocks_live_other_agent() {
     let mut s = DaemonState::new();
     s.claude_role = "lead".into();

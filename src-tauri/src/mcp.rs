@@ -1,9 +1,32 @@
 /// MCP registration helpers and related Tauri commands.
 use crate::claude_session::ClaudeSessionManager;
-use crate::daemon::types::DaemonStatusSnapshot;
+use crate::daemon::types::{DaemonStatusSnapshot, ProviderConnectionMode};
 use crate::DaemonSender;
 use std::sync::Arc;
 use tauri::State;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ClaudeLaunchMode {
+    New { session_id: String },
+    Resume { session_id: String },
+}
+
+fn resolve_claude_launch_mode(
+    resume_session_id: Option<&str>,
+    generated_session_id: &str,
+) -> ClaudeLaunchMode {
+    match resume_session_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(session_id) => ClaudeLaunchMode::Resume {
+            session_id: session_id.to_string(),
+        },
+        None => ClaudeLaunchMode::New {
+            session_id: generated_session_id.to_string(),
+        },
+    }
+}
 
 fn resolve_release_bridge_cmd() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -151,6 +174,7 @@ pub async fn launch_claude_terminal(
     cwd: Option<String>,
     model: Option<String>,
     effort: Option<String>,
+    resume_session_id: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     session: State<'_, Arc<ClaudeSessionManager>>,
@@ -184,24 +208,45 @@ pub async fn launch_claude_terminal(
         return Err(format!("role '{role}' already in use by online codex"));
     }
 
-    let claude_session_id = uuid::Uuid::new_v4().to_string();
+    let generated_session_id = uuid::Uuid::new_v4().to_string();
+    let launch_mode =
+        resolve_claude_launch_mode(resume_session_id.as_deref(), &generated_session_id);
+    let (claude_session_id, connection_mode) = match &launch_mode {
+        ClaudeLaunchMode::New { session_id } => {
+            crate::claude_launch::launch_new(
+                &dir,
+                model.clone(),
+                effort.clone(),
+                &role,
+                session_id,
+                cols,
+                rows,
+                session.inner().clone(),
+                app.clone(),
+            )
+            .await?;
+            (session_id.clone(), ProviderConnectionMode::New)
+        }
+        ClaudeLaunchMode::Resume { session_id } => {
+            crate::claude_launch::resume(
+                &dir,
+                model.clone(),
+                effort.clone(),
+                &role,
+                session_id,
+                cols,
+                rows,
+                session.inner().clone(),
+                app.clone(),
+            )
+            .await?;
+            (session_id.clone(), ProviderConnectionMode::Resumed)
+        }
+    };
     let transcript_path =
         crate::daemon::provider::claude::default_transcript_path(&dir, &claude_session_id)?
             .to_string_lossy()
             .to_string();
-
-    crate::claude_launch::launch_new(
-        &dir,
-        model,
-        effort,
-        &role,
-        &claude_session_id,
-        cols,
-        rows,
-        session.inner().clone(),
-        app.clone(),
-    )
-    .await?;
 
     let (register_tx, register_rx) = tokio::sync::oneshot::channel();
     let register_result = daemon_tx
@@ -211,6 +256,7 @@ pub async fn launch_claude_terminal(
             cwd: dir,
             external_id: claude_session_id,
             transcript_path,
+            connection_mode,
             reply: register_tx,
         })
         .await
@@ -231,7 +277,7 @@ pub async fn launch_claude_terminal(
 
 #[cfg(test)]
 mod tests {
-    use super::upsert_mcp_server;
+    use super::{resolve_claude_launch_mode, upsert_mcp_server, ClaudeLaunchMode};
 
     #[test]
     fn upsert_mcp_server_marks_unchanged_when_entry_matches() {
@@ -282,6 +328,26 @@ mod tests {
         assert_eq!(
             next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
             "reviewer"
+        );
+    }
+
+    #[test]
+    fn resolve_claude_launch_mode_uses_new_when_no_resume_session_selected() {
+        assert_eq!(
+            resolve_claude_launch_mode(None, "generated-123"),
+            ClaudeLaunchMode::New {
+                session_id: "generated-123".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_claude_launch_mode_uses_resume_when_history_session_selected() {
+        assert_eq!(
+            resolve_claude_launch_mode(Some("resume-456"), "generated-123"),
+            ClaudeLaunchMode::Resume {
+                session_id: "resume-456".into(),
+            }
         );
     }
 }

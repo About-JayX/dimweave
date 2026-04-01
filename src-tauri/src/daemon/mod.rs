@@ -75,7 +75,7 @@ async fn stop_codex_session(
         h.stop().await;
     }
     state.write().await.invalidate_codex_session();
-    gui::emit_agent_status(app, "codex", false, None);
+    gui::emit_agent_status(app, "codex", false, None, None);
 }
 
 async fn stop_claude_session(claude_manager: &ClaudeSessionManager) {
@@ -251,6 +251,7 @@ pub async fn run(
                 cwd,
                 model,
                 reasoning_effort,
+                resume_thread_id,
                 reply,
             } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
@@ -259,7 +260,7 @@ pub async fn run(
                     daemon.online_role_conflict("codex", &role_id)
                 } {
                     let err = format!("role '{role_id}' already in use by online {conflict_agent}");
-                    gui::emit_agent_status(&app, "codex", false, None);
+                    gui::emit_agent_status(&app, "codex", false, None, None);
                     gui::emit_system_log(
                         &app,
                         "error",
@@ -269,33 +270,80 @@ pub async fn run(
                     continue;
                 }
                 let launch_epoch = state.write().await.begin_codex_launch();
-                let launch_result = match codex::start(
-                    codex::StartOpts {
-                        role_id,
-                        cwd,
-                        model,
-                        effort: reasoning_effort,
-                        launch_epoch,
-                        codex_port: 4500,
+                let launch_result = match resume_thread_id {
+                    Some(thread_id) => {
+                        let resumed_thread_id = thread_id.clone();
+                        match codex::resume(
+                            codex::ResumeOpts {
+                                role_id,
+                                cwd,
+                                thread_id,
+                                launch_epoch,
+                                codex_port: 4500,
+                            },
+                            state.clone(),
+                            app.clone(),
+                        )
+                        .await
+                        {
+                            Ok(h) => {
+                                codex_handle = Some(h);
+                                let task_id = state
+                                    .read()
+                                    .await
+                                    .task_graph
+                                    .find_session_by_external_id(
+                                        crate::daemon::task_graph::types::Provider::Codex,
+                                        &resumed_thread_id,
+                                    )
+                                    .map(|session| session.task_id.clone());
+                                if let Some(task_id) = task_id {
+                                    emit_task_context_events(&state, &app, &task_id).await;
+                                }
+                                Ok(())
+                            }
+                            Err(e) => {
+                                gui::emit_agent_status(&app, "codex", false, None, None);
+                                gui::emit_system_log(
+                                    &app,
+                                    "error",
+                                    &format!("[Daemon] Codex start failed: {e}"),
+                                );
+                                Err(e.to_string())
+                            }
+                        }
+                    }
+                    None => match codex::start(
+                        codex::StartOpts {
+                            role_id,
+                            cwd,
+                            model,
+                            effort: reasoning_effort,
+                            launch_epoch,
+                            codex_port: 4500,
+                        },
+                        state.clone(),
+                        app.clone(),
+                    )
+                    .await
+                    {
+                        Ok(h) => {
+                            codex_handle = Some(h);
+                            if let Some(task_id) = state.read().await.active_task_id.clone() {
+                                emit_task_context_events(&state, &app, &task_id).await;
+                            }
+                            Ok(())
+                        }
+                        Err(e) => {
+                            gui::emit_agent_status(&app, "codex", false, None, None);
+                            gui::emit_system_log(
+                                &app,
+                                "error",
+                                &format!("[Daemon] Codex start failed: {e}"),
+                            );
+                            Err(e.to_string())
+                        }
                     },
-                    state.clone(),
-                    app.clone(),
-                )
-                .await
-                {
-                    Ok(h) => {
-                        codex_handle = Some(h);
-                        Ok(())
-                    }
-                    Err(e) => {
-                        gui::emit_agent_status(&app, "codex", false, None);
-                        gui::emit_system_log(
-                            &app,
-                            "error",
-                            &format!("[Daemon] Codex start failed: {e}"),
-                        );
-                        Err(e.to_string())
-                    }
                 };
                 let _ = reply.send(launch_result);
             }
@@ -310,18 +358,56 @@ pub async fn run(
                 cwd,
                 external_id,
                 transcript_path,
+                connection_mode,
                 reply,
             } => {
                 let task_id = {
                     let mut daemon = state.write().await;
-                    crate::daemon::provider::claude::register_on_launch(
-                        &mut daemon,
-                        &role_id,
-                        &cwd,
-                        &external_id,
-                        &transcript_path,
+                    daemon.set_provider_connection(
+                        "claude",
+                        crate::daemon::types::ProviderConnectionState {
+                            provider: crate::daemon::task_graph::types::Provider::Claude,
+                            external_session_id: external_id.clone(),
+                            cwd: cwd.clone(),
+                            connection_mode,
+                        },
                     );
-                    daemon.active_task_id.clone()
+                    match connection_mode {
+                        crate::daemon::types::ProviderConnectionMode::New => {
+                            crate::daemon::provider::claude::register_on_launch(
+                                &mut daemon,
+                                &role_id,
+                                &cwd,
+                                &external_id,
+                                &transcript_path,
+                            );
+                            daemon.active_task_id.clone()
+                        }
+                        crate::daemon::types::ProviderConnectionMode::Resumed => {
+                            let normalized_session_id = daemon
+                                .task_graph
+                                .find_session_by_external_id(
+                                    crate::daemon::task_graph::types::Provider::Claude,
+                                    &external_id,
+                                )
+                                .map(|session| session.session_id.clone());
+                            if let Some(session_id) = normalized_session_id {
+                                if let Ok(path) =
+                                    crate::daemon::provider::claude::default_transcript_path(
+                                        &cwd,
+                                        &external_id,
+                                    )
+                                {
+                                    let _ = daemon
+                                        .task_graph
+                                        .set_transcript_path(&session_id, &path.to_string_lossy());
+                                }
+                                daemon.resume_session(&session_id).ok()
+                            } else {
+                                None
+                            }
+                        }
+                    }
                 };
                 if let Some(task_id) = task_id {
                     emit_task_context_events(&state, &app, &task_id).await;
@@ -357,9 +443,12 @@ pub async fn run(
                     .is_some();
                 if removed {
                     if agent_id == "claude" {
+                        state.write().await.clear_provider_connection("claude");
                         gui::emit_claude_stream(&app, gui::ClaudeStreamPayload::Reset);
+                    } else if agent_id == "codex" {
+                        state.write().await.clear_provider_connection("codex");
                     }
-                    gui::emit_agent_status(&app, &agent_id, false, None);
+                    gui::emit_agent_status(&app, &agent_id, false, None, None);
                     gui::emit_system_log(
                         &app,
                         "info",

@@ -26,7 +26,17 @@ pub async fn list_workspace_provider_history(
     .await
     {
         Ok(page) => entries.extend(page.entries),
-        Err(err) => eprintln!("[Daemon] Codex history list failed for {workspace}: {err}"),
+        Err(err) => {
+            eprintln!("[Daemon] Codex history list failed for {workspace}: {err}");
+            match codex::list_local_sessions(workspace, None) {
+                Ok(page) => entries.extend(page.entries),
+                Err(local_err) => {
+                    eprintln!(
+                        "[Daemon] Codex local history fallback failed for {workspace}: {local_err}"
+                    );
+                }
+            }
+        }
     }
 
     let daemon = state.read().await;

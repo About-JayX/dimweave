@@ -81,7 +81,8 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 };
                 replay_messages(&tx, &state, buffered_messages).await;
                 replay_verdicts(&tx, &state, &id, buffered_verdicts).await;
-                gui::emit_agent_status(&app, &id, true, None);
+                let provider_session = state.read().await.provider_connection(&id);
+                gui::emit_agent_status(&app, &id, true, None, provider_session);
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} connected"));
             }
             FromAgent::AgentReply { mut message } => {
@@ -154,11 +155,12 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             .is_some_and(|s| s.gen == my_gen);
         if is_ours {
             daemon.attached_agents.remove(id);
+            daemon.clear_provider_connection(id);
             drop(daemon);
             if id == "claude" {
                 gui::emit_claude_stream(&app, ClaudeStreamPayload::Reset);
             }
-            gui::emit_agent_status(&app, id, false, None);
+            gui::emit_agent_status(&app, id, false, None, None);
             gui::emit_system_log(&app, "info", &format!("[Control] {id} disconnected"));
         } else {
             drop(daemon);

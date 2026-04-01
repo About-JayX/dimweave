@@ -63,7 +63,7 @@ pub(super) fn spawn_health_monitor(
                             daemon.clear_codex_session_if_current(session_epoch)
                         };
                         if cleared_current {
-                            gui::emit_agent_status(&app, "codex", false, None);
+                            gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,
                                 "warn",

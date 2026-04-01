@@ -1,4 +1,4 @@
-import type { BridgeMessage, PermissionPrompt } from "@/types";
+import type { BridgeMessage, PermissionPrompt, ProviderSessionInfo } from "@/types";
 
 export interface AgentMessagePayload {
   payload: BridgeMessage;
@@ -24,6 +24,7 @@ export interface AgentStatusPayload {
   agent: string;
   online: boolean;
   exitCode?: number;
+  providerSession?: ProviderSessionInfo;
 }
 
 export interface PermissionPromptPayload extends PermissionPrompt {}

@@ -66,6 +66,7 @@ export interface BridgeState {
     model?: string;
     reasoningEffort?: string;
     cwd?: string;
+    resumeThreadId?: string;
   }) => Promise<void>;
   setRole: (agent: "claude" | "codex", role: string) => void;
   cleanup: () => void;

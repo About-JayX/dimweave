@@ -34,6 +34,22 @@ describe("buildCodexLaunchConfig", () => {
       cwd: "/tmp/project",
     });
   });
+
+  test("passes through resumeThreadId when reconnecting an existing thread", () => {
+    expect(
+      buildCodexLaunchConfig({
+        model: "gpt-5.4",
+        reasoningEffort: "xhigh",
+        cwd: "/tmp/project",
+        resumeThreadId: "thread_123",
+      }),
+    ).toEqual({
+      model: "gpt-5.4",
+      reasoningEffort: "xhigh",
+      cwd: "/tmp/project",
+      resumeThreadId: "thread_123",
+    });
+  });
 });
 
 describe("getDefaultReasoningEffort", () => {

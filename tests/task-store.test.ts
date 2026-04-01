@@ -23,6 +23,8 @@ function emptyState(): TaskStoreData {
     sessions: {},
     artifacts: {},
     providerHistory: {},
+    providerHistoryLoading: {},
+    providerHistoryError: {},
   };
 }
 

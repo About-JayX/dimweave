@@ -42,6 +42,7 @@ pub async fn daemon_launch_codex(
     cwd: String,
     model: Option<String>,
     reasoning_effort: Option<String>,
+    resume_thread_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     validate_codex_launch_args(&role_id, &cwd)?;
@@ -53,6 +54,7 @@ pub async fn daemon_launch_codex(
             cwd,
             model,
             reasoning_effort,
+            resume_thread_id,
             reply: reply_tx,
         })
         .await

@@ -1,4 +1,12 @@
 export type MessageStatus = "in_progress" | "done" | "error";
+export type ProviderConnectionMode = "new" | "resumed";
+
+export interface ProviderSessionInfo {
+  provider: "claude" | "codex";
+  externalSessionId: string;
+  cwd: string;
+  connectionMode: ProviderConnectionMode;
+}
 
 export interface BridgeMessage {
   id: string;
@@ -33,6 +41,7 @@ export interface AgentInfo {
   status: AgentStatus;
   error?: string;
   threadId?: string;
+  providerSession?: ProviderSessionInfo;
 }
 
 export interface TokenUsage {

@@ -5,6 +5,12 @@ import { logError } from "./helpers";
 interface AgentRuntimeStatusPayload {
   agent: string;
   online: boolean;
+  providerSession?: {
+    provider: "claude" | "codex";
+    externalSessionId: string;
+    cwd: string;
+    connectionMode: "new" | "resumed";
+  };
 }
 interface DaemonStatusSnapshotPayload {
   agents: AgentRuntimeStatusPayload[];
@@ -33,10 +39,12 @@ export async function syncStatusSnapshot(
           name: agent,
           displayName: info.displayName ?? agent,
           status: onlineAgents.has(agent) ? "connected" : "disconnected",
+          providerSession:
+            snapshot.agents.find((item) => item.agent === agent)?.providerSession,
         };
       }
 
-      for (const { agent, online } of snapshot.agents) {
+      for (const { agent, online, providerSession } of snapshot.agents) {
         nextAgents[agent] = {
           ...(nextAgents[agent] ?? {
             name: agent,
@@ -45,6 +53,7 @@ export async function syncStatusSnapshot(
           name: agent,
           displayName: nextAgents[agent]?.displayName ?? agent,
           status: online ? "connected" : "disconnected",
+          providerSession,
         };
       }
 

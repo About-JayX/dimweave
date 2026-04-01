@@ -241,21 +241,41 @@ async fn launch(
         }
     };
 
-    let (attached, mut buffered) = {
+    let (attached, mut buffered, provider_session) = {
         let mut s = state.write().await;
         s.codex_role = role_id.clone();
         let attached = s.attach_codex_session_if_current(launch_epoch, inject_tx.clone());
+        let provider_session = crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Codex,
+            external_session_id: thread_id.clone(),
+            cwd: cwd.clone(),
+            connection_mode: if is_new_session {
+                crate::daemon::types::ProviderConnectionMode::New
+            } else {
+                crate::daemon::types::ProviderConnectionMode::Resumed
+            },
+        };
         let buffered = if attached {
+            s.set_provider_connection("codex", provider_session.clone());
             if is_new_session {
                 crate::daemon::provider::codex::register_on_launch(
                     &mut s, &role_id, &cwd, &thread_id,
                 );
+            } else if let Some(existing_session_id) = s
+                .task_graph
+                .find_session_by_external_id(
+                    crate::daemon::task_graph::types::Provider::Codex,
+                    &thread_id,
+                )
+                .map(|session| session.session_id.clone())
+            {
+                let _ = s.resume_session(&existing_session_id);
             }
             s.take_buffered_for(&role_id)
         } else {
             Vec::new()
         };
-        (attached, buffered)
+        (attached, buffered, provider_session)
     };
     if !attached {
         cancel.cancel();
@@ -281,7 +301,7 @@ async fn launch(
             i += 1;
         }
     }
-    gui::emit_agent_status(&app, "codex", true, None);
+    gui::emit_agent_status(&app, "codex", true, None, Some(provider_session));
     gui::emit_system_log(
         &app,
         "info",

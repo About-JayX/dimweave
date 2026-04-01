@@ -1,7 +1,8 @@
 use crate::daemon::provider::shared::ProviderHistoryEntry;
 use crate::daemon::task_graph::types::{Provider, SessionRole, Task};
 use crate::daemon::types::{
-    self, HistoryEntry, PermissionBehavior, SessionTreeSnapshot, TaskSnapshot,
+    self, HistoryEntry, PermissionBehavior, ProviderConnectionMode, SessionTreeSnapshot,
+    TaskSnapshot,
 };
 use tokio::sync::{mpsc, oneshot};
 
@@ -15,6 +16,7 @@ pub enum DaemonCmd {
         cwd: String,
         model: Option<String>,
         reasoning_effort: Option<String>,
+        resume_thread_id: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     StopCodex,
@@ -29,6 +31,7 @@ pub enum DaemonCmd {
         cwd: String,
         external_id: String,
         transcript_path: String,
+        connection_mode: ProviderConnectionMode,
         reply: oneshot::Sender<Result<(), String>>,
     },
     ReadClaudeRole {

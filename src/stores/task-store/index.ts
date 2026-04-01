@@ -26,12 +26,16 @@ type TaskSetter = (
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
+    providerHistoryLoading: Record<string, boolean>;
+    providerHistoryError: Record<string, string | null>;
   }) => Partial<{
     activeTaskId: string | null;
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
+    providerHistoryLoading: Record<string, boolean>;
+    providerHistoryError: Record<string, string | null>;
   }>,
 ) => void;
 
@@ -67,6 +71,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     sessions: {},
     artifacts: {},
     providerHistory: {},
+    providerHistoryLoading: {},
+    providerHistoryError: {},
 
     createTask: async (workspace, title) => {
       const task = await invoke<TaskInfo>("daemon_create_task", {
@@ -97,15 +103,38 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     },
 
     fetchProviderHistory: async (workspace) => {
-      const entries = await invoke<ProviderHistoryInfo[]>(
-        "daemon_list_provider_history",
-        {
-          workspace,
-        },
-      );
       set((s) => ({
-        providerHistory: { ...s.providerHistory, [workspace]: entries },
+        providerHistoryLoading: { ...s.providerHistoryLoading, [workspace]: true },
+        providerHistoryError: { ...s.providerHistoryError, [workspace]: null },
       }));
+      try {
+        const entries = await invoke<ProviderHistoryInfo[]>(
+          "daemon_list_provider_history",
+          {
+            workspace,
+          },
+        );
+        set((s) => ({
+          providerHistory: { ...s.providerHistory, [workspace]: entries },
+          providerHistoryLoading: {
+            ...s.providerHistoryLoading,
+            [workspace]: false,
+          },
+          providerHistoryError: { ...s.providerHistoryError, [workspace]: null },
+        }));
+      } catch (error) {
+        set((s) => ({
+          providerHistoryLoading: {
+            ...s.providerHistoryLoading,
+            [workspace]: false,
+          },
+          providerHistoryError: {
+            ...s.providerHistoryError,
+            [workspace]: error instanceof Error ? error.message : String(error),
+          },
+        }));
+        throw error;
+      }
     },
 
     resumeSession: async (sessionId) => {

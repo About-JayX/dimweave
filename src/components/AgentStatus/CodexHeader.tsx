@@ -3,10 +3,10 @@ import { StatusDot } from "./StatusDot";
 
 interface CodexHeaderProps {
   running: boolean;
-  threadId: string | null;
+  connectionLabel: string | null;
 }
 
-export function CodexHeader({ running, threadId }: CodexHeaderProps) {
+export function CodexHeader({ running, connectionLabel }: CodexHeaderProps) {
   return (
     <>
       <div className="flex items-center gap-2">
@@ -26,9 +26,9 @@ export function CodexHeader({ running, threadId }: CodexHeaderProps) {
         </span>
       </div>
 
-      {threadId && (
+      {connectionLabel && (
         <div className="mt-1 font-mono text-[11px] text-muted-foreground/80">
-          Thread {threadId.slice(0, 16)}...
+          {connectionLabel}
         </div>
       )}
     </>

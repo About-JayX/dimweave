@@ -5,6 +5,8 @@ use crate::daemon::provider::shared::{
 use crate::daemon::task_graph::store::TaskGraphStore;
 use crate::daemon::task_graph::types::*;
 use serde_json::json;
+use std::fs;
+use uuid::Uuid;
 
 // ── register_session ───────────────────────────────────────
 
@@ -268,6 +270,93 @@ fn map_thread_page_response_rejects_missing_thread_id() {
     .unwrap_err();
 
     assert!(err.contains("missing thread id"));
+}
+
+#[test]
+fn list_local_sessions_reads_workspace_history_without_app_server() {
+    let base = std::env::temp_dir().join(format!("codex-local-history-{}", Uuid::new_v4()));
+    let sessions_dir = base.join("sessions").join("2026").join("04").join("01");
+    fs::create_dir_all(&sessions_dir).unwrap();
+
+    let matching = sessions_dir.join("rollout-2026-04-01T14-31-53-thread_ws.jsonl");
+    fs::write(
+        &matching,
+        concat!(
+            "{\"timestamp\":\"2026-04-01T06:31:53.678Z\",\"type\":\"session_meta\",",
+            "\"payload\":{\"id\":\"thread_ws\",\"timestamp\":\"2026-04-01T06:31:53.678Z\",",
+            "\"cwd\":\"/tmp/ws\"}}\n",
+            "{\"timestamp\":\"2026-04-01T06:32:05.995Z\",\"type\":\"response_item\",",
+            "\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[",
+            "{\"type\":\"input_text\",\"text\":\"Restore the workspace history panel\"}]}}\n",
+            "{\"timestamp\":\"2026-04-01T06:32:10.995Z\",\"type\":\"event_msg\",",
+            "\"payload\":{\"type\":\"agent_message\",\"message\":\"Investigating provider history.\"}}\n"
+        ),
+    )
+    .unwrap();
+
+    let other = sessions_dir.join("rollout-2026-04-01T14-31-53-thread_other.jsonl");
+    fs::write(
+        &other,
+        concat!(
+            "{\"timestamp\":\"2026-04-01T06:31:53.678Z\",\"type\":\"session_meta\",",
+            "\"payload\":{\"id\":\"thread_other\",\"timestamp\":\"2026-04-01T06:31:53.678Z\",",
+            "\"cwd\":\"/tmp/elsewhere\"}}\n"
+        ),
+    )
+    .unwrap();
+
+    let page =
+        codex::list_local_sessions("/tmp/ws", Some(base.join("sessions").as_path())).unwrap();
+
+    assert_eq!(page.next_cursor, None);
+    assert_eq!(page.entries.len(), 1);
+    assert_eq!(page.entries[0].external_id, "thread_ws");
+    assert_eq!(
+        page.entries[0].title.as_deref(),
+        Some("Restore the workspace history panel")
+    );
+    assert_eq!(
+        page.entries[0].preview.as_deref(),
+        Some("Investigating provider history.")
+    );
+    assert_eq!(page.entries[0].cwd.as_deref(), Some("/tmp/ws"));
+    assert_eq!(page.entries[0].provider, Provider::Codex);
+
+    let _ = fs::remove_dir_all(base);
+}
+
+#[test]
+fn list_local_sessions_ignores_environment_context_and_uses_user_message_summary() {
+    let base = std::env::temp_dir().join(format!("codex-local-history-{}", Uuid::new_v4()));
+    let sessions_dir = base.join("sessions").join("2026").join("04").join("01");
+    fs::create_dir_all(&sessions_dir).unwrap();
+
+    let transcript = sessions_dir.join("rollout-2026-04-01T14-31-53-thread_ws.jsonl");
+    fs::write(
+        &transcript,
+        concat!(
+            "{\"timestamp\":\"2026-04-01T06:31:53.678Z\",\"type\":\"session_meta\",",
+            "\"payload\":{\"id\":\"thread_ws\",\"timestamp\":\"2026-04-01T06:31:53.678Z\",",
+            "\"cwd\":\"/tmp/ws\"}}\n",
+            "{\"timestamp\":\"2026-04-01T06:32:02.261Z\",\"type\":\"response_item\",",
+            "\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[",
+            "{\"type\":\"input_text\",\"text\":\"<environment_context>\\n  <cwd>/tmp/ws</cwd>\\n</environment_context>\"}]}}\n",
+            "{\"timestamp\":\"2026-04-01T06:32:03.261Z\",\"type\":\"event_msg\",",
+            "\"payload\":{\"type\":\"user_message\",\"message\":\"都回答我1\"}}\n",
+            "{\"timestamp\":\"2026-04-01T06:32:05.625Z\",\"type\":\"event_msg\",",
+            "\"payload\":{\"type\":\"agent_message\",\"message\":\"{\\\"message\\\":\\\"1\\\",\\\"send_to\\\":\\\"user\\\",\\\"status\\\":\\\"done\\\"}\"}}\n"
+        ),
+    )
+    .unwrap();
+
+    let page =
+        codex::list_local_sessions("/tmp/ws", Some(base.join("sessions").as_path())).unwrap();
+
+    assert_eq!(page.entries.len(), 1);
+    assert_eq!(page.entries[0].title.as_deref(), Some("都回答我1"));
+    assert_eq!(page.entries[0].preview.as_deref(), Some("1"));
+
+    let _ = fs::remove_dir_all(base);
 }
 
 #[test]

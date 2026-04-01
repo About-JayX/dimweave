@@ -122,7 +122,7 @@ pub fn spawn_exit_watcher(
                     level,
                     &format!("[Claude PTY] {summary}"),
                 );
-                crate::daemon::gui::emit_agent_status(&app, "claude", false, exit_code);
+                crate::daemon::gui::emit_agent_status(&app, "claude", false, exit_code, None);
             });
         });
 }

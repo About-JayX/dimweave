@@ -105,6 +105,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
           cwd: config.cwd,
           model: config.model ?? null,
           reasoningEffort: config.reasoningEffort ?? null,
+          resumeThreadId: config.resumeThreadId ?? null,
         });
       } catch (error) {
         logError(set)(error);

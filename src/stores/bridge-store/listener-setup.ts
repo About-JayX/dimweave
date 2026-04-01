@@ -66,7 +66,7 @@ export function createBridgeListeners(
       }));
     }),
     listen<AgentStatusPayload>("agent_status", (e) => {
-      const { agent, online } = e.payload;
+      const { agent, online, providerSession } = e.payload;
       set((s) => ({
         agents: {
           ...s.agents,
@@ -75,6 +75,7 @@ export function createBridgeListeners(
             name: agent,
             displayName: s.agents[agent]?.displayName ?? agent,
             status: online ? ("connected" as const) : ("disconnected" as const),
+            providerSession: online ? providerSession : undefined,
           },
         },
         ...(agent === "claude" && !online

@@ -31,6 +31,31 @@ impl MessageStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderConnectionMode {
+    New,
+    Resumed,
+}
+
+impl ProviderConnectionMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::New => "new",
+            Self::Resumed => "resumed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderConnectionState {
+    pub provider: crate::daemon::task_graph::types::Provider,
+    pub external_session_id: String,
+    pub cwd: String,
+    pub connection_mode: ProviderConnectionMode,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
@@ -82,6 +107,8 @@ impl BridgeMessage {
 pub struct AgentRuntimeStatus {
     pub agent: String,
     pub online: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_session: Option<ProviderConnectionState>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

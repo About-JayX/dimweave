@@ -4,6 +4,7 @@ import {
   buildHistoryPickerModel,
   buildSessionTreeRows,
   getReviewBadge,
+  getTaskPanelEmptyStateMessage,
 } from "../src/components/TaskPanel/view-model";
 import type {
   ArtifactInfo,
@@ -184,5 +185,13 @@ describe("getReviewBadge", () => {
 
   test("returns null for missing review state", () => {
     expect(getReviewBadge(null)).toBeNull();
+  });
+});
+
+describe("getTaskPanelEmptyStateMessage", () => {
+  test("keeps the no-task copy scoped to task workspace semantics", () => {
+    expect(getTaskPanelEmptyStateMessage()).toBe(
+      "No active task. Create or select a task to inspect task progress, review status, and artifacts.",
+    );
   });
 });

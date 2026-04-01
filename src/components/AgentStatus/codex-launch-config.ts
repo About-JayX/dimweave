@@ -13,6 +13,7 @@ interface CodexLaunchInputs {
   model?: string;
   reasoningEffort?: string;
   cwd?: string;
+  resumeThreadId?: string;
 }
 
 export function getDefaultReasoningEffort(
@@ -36,14 +37,17 @@ export function buildCodexLaunchConfig({
   model,
   reasoningEffort,
   cwd,
+  resumeThreadId,
 }: CodexLaunchInputs): {
   model?: string;
   reasoningEffort?: string;
   cwd?: string;
+  resumeThreadId?: string;
 } {
   return {
     model: model || undefined,
     reasoningEffort: reasoningEffort || undefined,
     cwd: cwd?.trim() || undefined,
+    resumeThreadId: resumeThreadId?.trim() || undefined,
   };
 }

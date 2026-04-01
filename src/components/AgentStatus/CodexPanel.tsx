@@ -1,12 +1,22 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CyberSelect } from "@/components/ui/cyber-select";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
+import { useTaskStore } from "@/stores/task-store";
+import type { ProviderSessionInfo } from "@/types";
 import { AuthActions } from "./AuthActions";
 import { CodexHeader } from "./CodexHeader";
 import { CodexUsageSection, type CodexUsageData } from "./CodexUsageSection";
 import { CodexConfigRows } from "./CodexConfigRows";
+import {
+  buildProviderHistoryOptions,
+  findProviderHistoryEntry,
+  formatProviderConnectionLabel,
+  NEW_PROVIDER_SESSION_VALUE,
+  resolveProviderHistoryWorkspace,
+} from "./provider-session-view-model";
 import {
   buildCodexLaunchConfig,
   canConnectCodex,
@@ -15,31 +25,42 @@ import {
 
 interface CodexPanelProps {
   codexTuiRunning: boolean;
-  threadId: string | null;
   stopCodexTui: () => void;
   profile: { name?: string; planType?: string } | null;
   usage: CodexUsageData | null;
   refreshing: boolean;
   refreshUsage: () => void;
+  providerSession?: ProviderSessionInfo;
 }
 
 export function CodexPanel({
   codexTuiRunning,
-  threadId,
   stopCodexTui,
   profile,
   usage,
   refreshing,
   refreshUsage,
+  providerSession,
 }: CodexPanelProps) {
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
+  const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
+  const providerHistory = useTaskStore((s) => s.providerHistory);
+  const providerHistoryLoading = useTaskStore((s) => s.providerHistoryLoading);
+  const providerHistoryError = useTaskStore((s) => s.providerHistoryError);
 
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedReasoning, setSelectedReasoning] = useState("");
   const [cwd, setCwd] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState(
+    NEW_PROVIDER_SESSION_VALUE,
+  );
+  const effectiveCwd = useMemo(
+    () => resolveProviderHistoryWorkspace(cwd, providerSession),
+    [cwd, providerSession],
+  );
 
   const [connecting, setConnecting] = useState(false);
   const locked = codexTuiRunning;
@@ -85,6 +106,25 @@ export function CodexPanel({
     () => reasoningOptions.map((r) => ({ value: r.effort, label: r.effort })),
     [reasoningOptions],
   );
+  const workspaceHistory = effectiveCwd
+    ? providerHistory[effectiveCwd] ?? []
+    : [];
+  const historyOptions = useMemo(
+    () => buildProviderHistoryOptions("codex", workspaceHistory),
+    [workspaceHistory],
+  );
+  const selectedHistory = useMemo(
+    () => findProviderHistoryEntry("codex", workspaceHistory, selectedHistoryId),
+    [selectedHistoryId, workspaceHistory],
+  );
+  const connectionLabel = useMemo(
+    () => formatProviderConnectionLabel(providerSession),
+    [providerSession],
+  );
+  const historyLoading = effectiveCwd
+    ? providerHistoryLoading[effectiveCwd]
+    : false;
+  const historyError = effectiveCwd ? providerHistoryError[effectiveCwd] : null;
 
   const handleModelChange = useCallback(
     (slug: string) => {
@@ -99,8 +139,22 @@ export function CodexPanel({
 
   const handlePickDir = useCallback(async () => {
     const dir = await pickDirectory();
-    if (dir) setCwd(dir);
+    if (dir) {
+      setCwd(dir);
+      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
+    }
   }, [pickDirectory]);
+
+  useEffect(() => {
+    if (!effectiveCwd) return;
+    void fetchProviderHistory(effectiveCwd).catch(() => {});
+  }, [effectiveCwd, fetchProviderHistory]);
+
+  useEffect(() => {
+    if (selectedHistoryId !== NEW_PROVIDER_SESSION_VALUE && !selectedHistory) {
+      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
+    }
+  }, [selectedHistory, selectedHistoryId]);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
@@ -109,13 +163,20 @@ export function CodexPanel({
         buildCodexLaunchConfig({
           model: selectedModel,
           reasoningEffort: selectedReasoning,
-          cwd,
+          cwd: effectiveCwd,
+          resumeThreadId: selectedHistory?.externalId,
         }),
       );
     } catch {
       setConnecting(false);
     }
-  }, [applyConfig, selectedModel, selectedReasoning, cwd]);
+  }, [
+    applyConfig,
+    selectedModel,
+    selectedReasoning,
+    effectiveCwd,
+    selectedHistory,
+  ]);
 
   return (
     <div
@@ -127,7 +188,10 @@ export function CodexPanel({
         justConnected && "card-connect-anim",
       )}
     >
-      <CodexHeader running={codexTuiRunning} threadId={threadId} />
+      <CodexHeader
+        running={codexTuiRunning}
+        connectionLabel={connectionLabel}
+      />
 
       {locked && usage && (
         <CodexUsageSection
@@ -148,9 +212,20 @@ export function CodexPanel({
         selectedReasoning={selectedReasoning}
         setSelectedReasoning={setSelectedReasoning}
         reasoningSelectOptions={reasoningSelectOptions}
-        cwd={cwd}
+        cwd={effectiveCwd}
         handlePickDir={handlePickDir}
       />
+
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground">History</span>
+        <CyberSelect
+          value={selectedHistoryId}
+          options={historyOptions}
+          onChange={setSelectedHistoryId}
+          disabled={locked || !effectiveCwd || connecting}
+          placeholder="New session"
+        />
+      </div>
 
       {locked && (
         <Button
@@ -169,7 +244,7 @@ export function CodexPanel({
           size="sm"
           disabled={
             !canConnectCodex({
-              cwd,
+              cwd: effectiveCwd,
               connecting,
               running: !!codexTuiRunning,
             })
@@ -189,6 +264,14 @@ export function CodexPanel({
 
       {!locked && <AuthActions />}
 
+      {!locked && effectiveCwd && historyLoading && (
+        <div className="mt-1.5 text-[11px] text-muted-foreground">
+          Loading Codex history...
+        </div>
+      )}
+      {!locked && effectiveCwd && historyError && (
+        <div className="mt-1.5 text-[11px] text-destructive">{historyError}</div>
+      )}
       {!!codexTuiRunning && (
         <div className="mt-1.5 text-[11px] text-muted-foreground">
           Codex app-server is starting...

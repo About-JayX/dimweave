@@ -25,26 +25,11 @@ export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const tasks = useTaskStore((s) => s.tasks);
-  const sessions = useTaskStore((s) => s.sessions);
 
   // Derive agent states from the agents map (populated via agent_status Tauri events)
   const claudeConnected = agents.claude?.status === "connected";
   const codexConnected = agents.codex?.status === "connected";
   const activeTask = activeTaskId ? tasks[activeTaskId] : null;
-  const activeTaskSessions = activeTaskId ? sessions[activeTaskId] ?? [] : [];
-  const activeCodexSession =
-    activeTaskSessions.find(
-      (session) =>
-        session.provider === "codex" &&
-        session.sessionId === activeTask?.currentCoderSessionId,
-    ) ??
-    activeTaskSessions.find(
-      (session) =>
-        session.provider === "codex" &&
-        session.sessionId === activeTask?.leadSessionId,
-    ) ??
-    activeTaskSessions.find((session) => session.provider === "codex") ??
-    null;
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   useEffect(() => {
@@ -89,17 +74,18 @@ export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
         <ClaudePanel
           connected={claudeConnected}
           terminalRunning={claudeTerminalRunning}
+          providerSession={agents.claude?.providerSession}
         />
 
         {/* Codex */}
         <CodexPanel
           codexTuiRunning={codexConnected}
-          threadId={activeCodexSession?.externalSessionId ?? null}
           stopCodexTui={stopCodexTui}
           profile={profile}
           usage={usage}
           refreshing={refreshing}
           refreshUsage={refreshUsage}
+          providerSession={agents.codex?.providerSession}
         />
 
         {/* Other agents */}
