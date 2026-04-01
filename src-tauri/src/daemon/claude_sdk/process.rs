@@ -29,8 +29,30 @@ pub struct ClaudeLaunchOpts {
 ///
 /// The process connects back to the daemon via `--sdk-url ws://127.0.0.1:{port}/claude`.
 /// All output is NDJSON on stdout; events are POSTed to `http://127.0.0.1:{port}/claude/events`.
+pub fn sdk_ws_url(daemon_port: u16) -> String {
+    format!("ws://127.0.0.1:{daemon_port}/claude")
+}
+
+pub fn sdk_events_url(daemon_port: u16) -> String {
+    format!("http://127.0.0.1:{daemon_port}/claude/events")
+}
+
+pub fn format_launch_trace(opts: &ClaudeLaunchOpts) -> String {
+    format!(
+        "chain=launch ws={} events={} bridge=reply/get_online_agents role={} session={} resume={} model={} effort={} cwd={}",
+        sdk_ws_url(opts.daemon_port),
+        sdk_events_url(opts.daemon_port),
+        opts.role.as_deref().unwrap_or("lead"),
+        opts.session_id,
+        opts.resume.as_deref().unwrap_or("-"),
+        opts.model.as_deref().unwrap_or("-"),
+        opts.effort.as_deref().unwrap_or("-"),
+        opts.cwd,
+    )
+}
+
 fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
-    let sdk_url = format!("ws://127.0.0.1:{}/claude", opts.daemon_port);
+    let sdk_url = sdk_ws_url(opts.daemon_port);
 
     let mut cmd = Command::new(&opts.claude_bin);
     cmd.current_dir(&opts.cwd);
@@ -63,9 +85,10 @@ fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
     let mcp_json = opts.mcp_config.as_deref().unwrap_or("{}");
     cmd.arg("--strict-mcp-config").arg(mcp_json);
 
-    // Optional agent role
+    // Inject role system prompt directly (--agent file discovery doesn't work in bridge mode)
     if let Some(role) = &opts.role {
-        cmd.arg("--agent").arg(format!("nexus-{role}"));
+        let prompt = crate::daemon::role_config::claude_prompt::claude_system_prompt(role);
+        cmd.arg("--system-prompt").arg(prompt);
     }
 
     // Optional model
@@ -100,7 +123,7 @@ pub fn spawn_claude(opts: &ClaudeLaunchOpts) -> anyhow::Result<Child> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_claude_command, ClaudeLaunchOpts};
+    use super::{build_claude_command, format_launch_trace, ClaudeLaunchOpts};
     use std::path::PathBuf;
 
     #[test]
@@ -136,7 +159,7 @@ mod tests {
 
         assert_eq!(std_cmd.get_current_dir(), Some(std::path::Path::new("/tmp/workspace")));
         assert!(args.windows(2).any(|w| w[0] == "--sdk-url" && w[1] == "ws://127.0.0.1:4502/claude"));
-        assert!(args.windows(2).any(|w| w[0] == "--agent" && w[1] == "nexus-reviewer"));
+        assert!(args.windows(2).any(|w| w[0] == "--system-prompt" && w[1].contains("reviewer")));
         assert!(args.windows(2).any(|w| w[0] == "--model" && w[1] == "claude-sonnet-4-6"));
         assert!(args.windows(2).any(|w| w[0] == "--effort" && w[1] == "high"));
         assert!(args.windows(2).any(|w| w[0] == "--session-id" && w[1] == "session-123"));
@@ -175,5 +198,30 @@ mod tests {
 
         assert!(args.windows(2).any(|w| w[0] == "--resume" && w[1] == "resume-456"));
         assert!(!args.iter().any(|arg| arg == "--session-id"));
+    }
+
+    #[test]
+    fn launch_trace_describes_sdk_transport_chain() {
+        let opts = ClaudeLaunchOpts {
+            claude_bin: PathBuf::from("/usr/local/bin/claude"),
+            role: Some("lead".into()),
+            cwd: "/tmp/workspace".into(),
+            session_id: "session-123".into(),
+            model: Some("claude-sonnet-4-6".into()),
+            effort: Some("high".into()),
+            resume: None,
+            daemon_port: 4502,
+            mcp_config: Some("{\"mcpServers\":{}}".into()),
+        };
+
+        let trace = format_launch_trace(&opts);
+
+        assert!(trace.contains("chain=launch"));
+        assert!(trace.contains("ws://127.0.0.1:4502/claude"));
+        assert!(trace.contains("http://127.0.0.1:4502/claude/events"));
+        assert!(trace.contains("bridge=reply/get_online_agents"));
+        assert!(trace.contains("role=lead"));
+        assert!(trace.contains("model=claude-sonnet-4-6"));
+        assert!(trace.contains("effort=high"));
     }
 }
