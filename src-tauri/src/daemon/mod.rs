@@ -1,4 +1,5 @@
 mod cmd;
+pub mod claude_sdk;
 pub mod codex;
 pub mod control;
 pub mod gui;
@@ -80,6 +81,66 @@ async fn stop_codex_session(
 
 async fn stop_claude_session(claude_manager: &ClaudeSessionManager) {
     crate::claude_session::stop_if_running(claude_manager).await;
+}
+
+async fn stop_claude_sdk_session(
+    handle: &mut Option<claude_sdk::ClaudeSdkHandle>,
+    state: &SharedState,
+    app: &AppHandle,
+) {
+    if let Some(h) = handle.take() {
+        h.stop().await;
+    }
+    state.write().await.invalidate_claude_sdk_session();
+    gui::emit_agent_status(app, "claude", false, None, None);
+    gui::emit_system_log(app, "info", "[Daemon] Claude SDK session stopped");
+}
+
+async fn launch_claude_sdk(
+    role_id: &str,
+    cwd: &str,
+    model: Option<String>,
+    resume_session_id: Option<String>,
+    state: &SharedState,
+    app: &AppHandle,
+) -> Result<claude_sdk::ClaudeSdkHandle, String> {
+    if let Some(conflict_agent) = {
+        let daemon = state.read().await;
+        daemon.online_role_conflict("claude", role_id)
+    } {
+        let err = format!("role '{role_id}' already in use by online {conflict_agent}");
+        gui::emit_system_log(app, "error", &format!("[Daemon] Claude SDK failed: {err}"));
+        return Err(err);
+    }
+    // Previous session is already stopped by the daemon loop caller.
+    let claude_bin = which::which("claude")
+        .map_err(|e| format!("claude CLI not found: {e}"))?;
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    let opts = claude_sdk::process::ClaudeLaunchOpts {
+        claude_bin,
+        role: Some(role_id.to_string()),
+        cwd: cwd.to_string(),
+        session_id: session_id.clone(),
+        model,
+        effort: None,
+        resume: resume_session_id,
+        daemon_port: 4502,
+        mcp_config: None,
+    };
+
+    match claude_sdk::launch(opts, state.clone(), app.clone()).await {
+        Ok(handle) => Ok(handle),
+        Err(e) => {
+            gui::emit_agent_status(app, "claude", false, None, None);
+            gui::emit_system_log(
+                app,
+                "error",
+                &format!("[Daemon] Claude SDK launch failed: {e}"),
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 fn session_role_name(role: crate::daemon::task_graph::types::SessionRole) -> &'static str {
@@ -241,6 +302,7 @@ pub async fn run(
         });
     }
     let mut codex_handle: Option<codex::CodexHandle> = None;
+    let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             DaemonCmd::SendUserInput { content, target } => {
@@ -348,8 +410,32 @@ pub async fn run(
                 let _ = reply.send(launch_result);
             }
             DaemonCmd::StopCodex => stop_codex_session(&mut codex_handle, &state, &app).await,
+            DaemonCmd::LaunchClaudeSdk {
+                role_id,
+                cwd,
+                model,
+                resume_session_id,
+                reply,
+            } => {
+                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                let result =
+                    launch_claude_sdk(&role_id, &cwd, model, resume_session_id, &state, &app).await;
+                match result {
+                    Ok(handle) => {
+                        claude_sdk_handle = Some(handle);
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(e) => {
+                        let _ = reply.send(Err(e));
+                    }
+                }
+            }
+            DaemonCmd::StopClaudeSdk => {
+                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+            }
             DaemonCmd::Shutdown { reply } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
+                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
                 let _ = reply.send(());
                 break;
             }

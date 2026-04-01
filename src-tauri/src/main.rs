@@ -144,6 +144,8 @@ fn main() {
             commands::stop_claude,
             commands::claude_terminal_input,
             commands::claude_terminal_resize,
+            commands::daemon_launch_claude_sdk,
+            commands::daemon_stop_claude_sdk,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

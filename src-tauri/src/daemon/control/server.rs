@@ -1,8 +1,8 @@
-use crate::daemon::{control::handler, SharedState};
+use crate::daemon::{control::handler, control::claude_sdk_handler, SharedState};
 use axum::{
     extract::{State, WebSocketUpgrade},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use tauri::AppHandle;
@@ -12,6 +12,8 @@ pub async fn start(port: u16, state: SharedState, app: AppHandle) -> anyhow::Res
     let router = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/ws", get(ws_handler))
+        .route("/claude", get(claude_sdk_handler::ws_handler))
+        .route("/claude/events", post(claude_sdk_handler::events_handler))
         .with_state(shared);
 
     let addr = format!("127.0.0.1:{port}");

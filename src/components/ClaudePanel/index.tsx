@@ -56,14 +56,15 @@ export function ClaudePanel({
   );
 
   const workspaceHistory = effectiveCwd
-    ? providerHistory[effectiveCwd] ?? []
+    ? (providerHistory[effectiveCwd] ?? [])
     : [];
   const historyOptions = useMemo(
     () => buildProviderHistoryOptions("claude", workspaceHistory),
     [workspaceHistory],
   );
   const selectedHistory = useMemo(
-    () => findProviderHistoryEntry("claude", workspaceHistory, selectedHistoryId),
+    () =>
+      findProviderHistoryEntry("claude", workspaceHistory, selectedHistoryId),
     [selectedHistoryId, workspaceHistory],
   );
   const historyLoading = effectiveCwd
@@ -104,33 +105,22 @@ export function ClaudePanel({
     setConnecting(true);
     try {
       setActionError(null);
-      await invoke("register_mcp", { cwd: effectiveCwd });
-      // Estimate terminal dimensions from current window layout.
-      // Sidebar ~280px, terminal padding ~16px, char width ~7.8px for 13px Geist Mono,
-      // line height ~15px. UI chrome (tabs + header + input) ~140px.
-      const cols = Math.max(80, Math.floor((window.innerWidth - 296) / 7.8));
-      const rows = Math.max(24, Math.floor((window.innerHeight - 140) / 15));
-      await invoke("launch_claude_terminal", {
+      await invoke("daemon_launch_claude_sdk", {
+        roleId: "lead",
         cwd: effectiveCwd,
         model: model || null,
-        effort: effort || null,
         resumeSessionId: selectedHistory?.externalId ?? null,
-        cols,
-        rows,
       });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
-  }, [effectiveCwd, model, effort, selectedHistory]);
+  }, [effectiveCwd, model, selectedHistory]);
 
   const handleLaunch = useCallback(async () => {
     if (!effectiveCwd) return;
-    if (shouldPromptForClaudeDevConfirm(effectiveCwd)) {
-      setShowDevConfirm(true);
-      return;
-    }
+    // SDK mode: no dev-confirm needed (no channel prompt)
     doLaunch();
   }, [effectiveCwd, doLaunch]);
 
@@ -148,6 +138,12 @@ export function ClaudePanel({
     try {
       await invoke("stop_claude");
     } catch (e) {
+      // Also try SDK-specific stop as fallback
+      try {
+        await invoke("daemon_stop_claude_sdk");
+      } catch {
+        /* ignore */
+      }
       setDisconnecting(false);
       setActionError(e instanceof Error ? e.message : String(e));
     }

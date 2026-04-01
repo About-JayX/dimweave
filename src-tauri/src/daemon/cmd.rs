@@ -19,6 +19,14 @@ pub enum DaemonCmd {
         resume_thread_id: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    LaunchClaudeSdk {
+        role_id: String,
+        cwd: String,
+        model: Option<String>,
+        resume_session_id: Option<String>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    StopClaudeSdk,
     StopCodex,
     Shutdown {
         reply: oneshot::Sender<()>,

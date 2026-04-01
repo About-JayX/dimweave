@@ -148,15 +148,59 @@ pub async fn daemon_get_status_snapshot(
         .map_err(|_| "daemon dropped status snapshot reply".to_string())
 }
 
+/// Launch Claude via --sdk-url direct WS connection (new path).
+#[tauri::command]
+pub async fn daemon_launch_claude_sdk(
+    role_id: String,
+    cwd: String,
+    model: Option<String>,
+    resume_session_id: Option<String>,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    if !crate::daemon::is_valid_agent_role(&role_id) {
+        return Err(format!("invalid role: {role_id}"));
+    }
+    if cwd.trim().is_empty() {
+        return Err("cwd is required".to_string());
+    }
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::LaunchClaudeSdk {
+            role_id,
+            cwd,
+            model,
+            resume_session_id,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped claude sdk launch result".to_string())?
+}
+
+/// Stop Claude SDK session.
+#[tauri::command]
+pub async fn daemon_stop_claude_sdk(sender: State<'_, DaemonSender>) -> Result<(), String> {
+    sender
+        .0
+        .send(DaemonCmd::StopClaudeSdk)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Stop the tracked Claude CLI session and/or force-disconnect the bridge agent.
-/// Handles both managed PTY sessions and externally-connected Claude instances.
+/// Handles managed PTY, SDK, and externally-connected Claude instances.
 #[tauri::command]
 pub async fn stop_claude(
     session: State<'_, Arc<ClaudeSessionManager>>,
     sender: State<'_, DaemonSender>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // Try to stop managed PTY session (may not exist if Claude connected externally)
+    // 1. Try to stop SDK session
+    let _ = sender.0.send(DaemonCmd::StopClaudeSdk).await;
+    // 2. Try to stop managed PTY session (legacy path)
     let had_pty = crate::claude_session::stop(session.inner().as_ref())
         .await
         .is_ok();
@@ -171,9 +215,8 @@ pub async fn stop_claude(
             &app,
             "\r\n[AgentNexus] Claude terminal stopped by user\r\n",
         );
-        eprintln!("[Claude] stop: terminated managed Claude PTY session");
     }
-    // Force-disconnect the bridge agent (handles externally-connected Claude)
+    // 3. Force-disconnect bridge agent (handles externally-connected Claude)
     let _ = sender
         .0
         .send(DaemonCmd::ForceDisconnectAgent {

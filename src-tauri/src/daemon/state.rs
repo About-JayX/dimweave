@@ -39,6 +39,11 @@ pub struct DaemonState {
     buffered_verdicts: HashMap<String, Vec<PermissionVerdict>>,
     pub codex_inject_tx: Option<mpsc::Sender<(String, bool)>>,
     codex_session_epoch: u64,
+    // Claude SDK connection (hybrid WS + HTTP POST mode)
+    pub claude_sdk_ws_tx: Option<mpsc::Sender<String>>,
+    /// Oneshot that fires when Claude connects via WS, carrying the inject sender.
+    pub claude_sdk_ready_tx: Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>>,
+    claude_sdk_session_epoch: u64,
     pub claude_role: String,
     pub codex_role: String,
     pub claude_connection: Option<ProviderConnectionState>,
@@ -61,6 +66,9 @@ impl Default for DaemonState {
             buffered_verdicts: HashMap::new(),
             codex_inject_tx: None,
             codex_session_epoch: 0,
+            claude_sdk_ws_tx: None,
+            claude_sdk_ready_tx: None,
+            claude_sdk_session_epoch: 0,
             claude_role: "lead".into(),
             codex_role: "coder".into(),
             claude_connection: None,
@@ -131,9 +139,49 @@ impl DaemonState {
         true
     }
 
+    // ── Claude SDK session lifecycle ────────────────────────
+
+    pub fn begin_claude_sdk_launch(&mut self) -> u64 {
+        self.claude_sdk_session_epoch = self.claude_sdk_session_epoch.wrapping_add(1);
+        self.claude_sdk_session_epoch
+    }
+
+    pub fn claude_sdk_epoch(&self) -> u64 {
+        self.claude_sdk_session_epoch
+    }
+
+    pub fn attach_claude_sdk_ws(&mut self, epoch: u64, tx: mpsc::Sender<String>) -> bool {
+        if self.claude_sdk_session_epoch != epoch {
+            return false;
+        }
+        self.claude_sdk_ws_tx = Some(tx);
+        true
+    }
+
+    pub fn clear_claude_sdk_ws(&mut self, epoch: u64) -> bool {
+        if self.claude_sdk_session_epoch != epoch {
+            return false;
+        }
+        self.claude_sdk_ws_tx = None;
+        true
+    }
+
+    pub fn invalidate_claude_sdk_session(&mut self) {
+        self.begin_claude_sdk_launch();
+        self.claude_sdk_ws_tx = None;
+        self.claude_sdk_ready_tx = None;
+        self.claude_connection = None;
+    }
+
+    pub fn is_claude_sdk_online(&self) -> bool {
+        self.claude_sdk_ws_tx.is_some()
+    }
+
     pub fn is_agent_online(&self, agent: &str) -> bool {
         match agent {
-            "claude" => self.attached_agents.contains_key("claude"),
+            "claude" => {
+                self.attached_agents.contains_key("claude") || self.is_claude_sdk_online()
+            }
             "codex" => self.codex_inject_tx.is_some(),
             other => self.attached_agents.contains_key(other),
         }

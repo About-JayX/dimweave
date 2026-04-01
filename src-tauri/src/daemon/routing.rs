@@ -41,6 +41,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
 
     enum Target {
         Claude(tokio::sync::mpsc::Sender<ToAgent>),
+        ClaudeSdk(tokio::sync::mpsc::Sender<String>, String),
         Codex(tokio::sync::mpsc::Sender<(String, bool)>, String, bool),
         NeedBuffer,
     }
@@ -76,8 +77,14 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                     emit_claude_thinking: false,
                 };
             }
-            // Collect online candidates for the target role
-            let claude_tx = if claude_matches {
+            // Collect online candidates for the target role.
+            // Prefer Claude SDK WS over bridge for Claude delivery.
+            let claude_sdk_tx = if claude_matches {
+                s.claude_sdk_ws_tx.clone()
+            } else {
+                None
+            };
+            let claude_tx = if claude_matches && claude_sdk_tx.is_none() {
                 s.attached_agents.get("claude").map(|a| a.tx.clone())
             } else {
                 None
@@ -88,7 +95,10 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 None
             };
 
-            if let Some(tx) = claude_tx {
+            if let Some(tx) = claude_sdk_tx {
+                let ndjson = format_ndjson_user_message(&msg);
+                (Target::ClaudeSdk(tx, ndjson), emit_claude_thinking)
+            } else if let Some(tx) = claude_tx {
                 (Target::Claude(tx), emit_claude_thinking)
             } else if let Some(tx) = codex_tx {
                 let from_user = msg.from == "user";
@@ -111,6 +121,20 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 .await
                 .is_ok()
             {
+                RouteOutcome {
+                    result: RouteResult::Delivered,
+                    emit_claude_thinking,
+                }
+            } else {
+                state.write().await.buffer_message(msg);
+                RouteOutcome {
+                    result: RouteResult::Buffered,
+                    emit_claude_thinking: false,
+                }
+            }
+        }
+        Target::ClaudeSdk(tx, ndjson) => {
+            if tx.send(ndjson).await.is_ok() {
                 RouteOutcome {
                     result: RouteResult::Delivered,
                     emit_claude_thinking,
@@ -186,6 +210,27 @@ async fn route_message_with_display(
             Box::pin(route_message_with_display(state, app, released_msg, false)).await;
         }
     }
+}
+
+/// Format a BridgeMessage as NDJSON user message for Claude SDK WS delivery.
+/// Uses the verified stream-json protocol format.
+/// Wraps content in `<channel>` tags to match agent prompt instructions.
+pub fn format_ndjson_user_message(msg: &BridgeMessage) -> String {
+    let wrapped = format!(
+        "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
+        msg.from, msg.content
+    );
+    let payload = serde_json::json!({
+        "type": "user",
+        "session_id": "",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": wrapped}]
+        },
+        "parent_tool_use_id": null
+    });
+    // NDJSON: single line, newline terminated
+    format!("{}\n", payload)
 }
 
 pub fn format_codex_input(msg: &BridgeMessage) -> String {
