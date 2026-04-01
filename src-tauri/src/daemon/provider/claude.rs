@@ -325,6 +325,8 @@ fn summarize_transcript(path: &Path) -> Result<Option<ProviderHistoryEntry>, Str
         created_at: created_at.unwrap_or_default(),
         updated_at: updated_at.unwrap_or_default(),
         status: SessionStatus::Paused,
+        normalized_session_id: None,
+        normalized_task_id: None,
     }))
 }
 

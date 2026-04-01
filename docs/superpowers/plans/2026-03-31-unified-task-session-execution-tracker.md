@@ -13,7 +13,6 @@
 - 基础 orchestrator / review gate / task store / 最小 task shell
 
 当前主缺口已经收敛到：
-- Task 7：更完整的 session tree / history picker / artifact timeline / review badge UI
 - Task 8：全流程验证、文档收尾与最终交付证据
 
 ### 已有进展
@@ -178,18 +177,29 @@
 
 ### Task 7：新增 session tree / history picker / artifact timeline / review badge
 
-**状态：❌ 未完成（仅有最小 TaskPanel 雏形，优先级 P2）**
+**状态：✅ 已完成第一阶段（优先级 P2）**
 
-**已有最小进展：**
-- 已新增 `src/components/TaskPanel/index.tsx`
-- 当前可显示 active task、task status、review status、session 数量
+**本轮新增完成：**
+1. 已新增 TaskPanel 细分组件：
+   - `src/components/TaskPanel/SessionTree.tsx`
+   - `src/components/TaskPanel/ArtifactTimeline.tsx`
+   - `src/components/TaskPanel/HistoryPicker.tsx`
+   - `src/components/TaskPanel/ReviewGateBadge.tsx`
+2. 已实现 lead / coder 父子 session tree 展示，并在当前 coder 节点挂 review badge
+3. 已实现 unified history picker：
+   - 当前 task 已挂载历史
+   - 其他 task 已映射历史
+   - 外部 provider history attach 为 lead/coder
+4. 已实现 artifact timeline，并将 artifact 关联回 session title
+5. 已把 task context 摘要接入：
+   - `TaskPanel`
+   - `MessagePanel`
+   - `ReplyInput`
+   - `AgentStatus/CodexHeader`
+6. 已新增 provider history commands / store action / attach flow，并补齐前后端验证
 
-**本阶段仍未完成：**
-1. TaskPanel 细分组件拆分
-2. lead / coder 父子 session tree 正式展示
-3. provider-agnostic history picker
-4. artifact timeline
-5. 更完整的 review badge / gate 可视化
+**仍待后续阶段完成：**
+- Task 7 UI 目前已是完整第一阶段版本，但跨 provider 的手工 GUI 回放仍放到 Task 8 一并验收
 
 ### Task 8：整体验证、文档与硬化
 

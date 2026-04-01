@@ -27,8 +27,8 @@ export function CodexHeader({ running, threadId }: CodexHeaderProps) {
       </div>
 
       {threadId && (
-        <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-          Thread: {threadId.slice(0, 16)}...
+        <div className="mt-1 font-mono text-[11px] text-muted-foreground/80">
+          Thread {threadId.slice(0, 16)}...
         </div>
       )}
     </>

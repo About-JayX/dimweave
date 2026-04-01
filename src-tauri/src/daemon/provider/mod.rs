@@ -1,5 +1,6 @@
 pub mod claude;
 pub mod codex;
+pub mod history;
 pub mod shared;
 
 #[cfg(test)]

@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
 import type { BridgeMessage } from "@/types";
 import { PermissionQueue } from "./PermissionQueue";
 import { TabBtn } from "./TabBtn";
 import { MessageList } from "./MessageList";
 import { ClaudeTerminalPane } from "./ClaudeTerminalPane";
+import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
+import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import {
   filterRenderableChatMessages,
   getClaudeAttentionResolution,
@@ -40,8 +43,12 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const claudeFocusNonce = useBridgeStore((s) => s.claudeFocusNonce);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const tasks = useTaskStore((s) => s.tasks);
   const claudeTerminalAvailable =
     claudeConnected || claudeTerminalRunning || claudeTerminalChunks.length > 0;
+  const activeTask = activeTaskId ? tasks[activeTaskId] : null;
+  const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   const chatMessages = useMemo(
     () => filterRenderableChatMessages(messages),
@@ -102,6 +109,14 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
           {permissionPrompts.length > 0 && ` (${permissionPrompts.length})`}
         </TabBtn>
         <div className="flex-1" />
+        {activeTask && (
+          <div className="hidden min-w-0 items-center gap-2 md:flex">
+            <span className="truncate rounded-full border border-border/50 px-2 py-0.5 text-[10px] text-muted-foreground">
+              Task: {activeTask.title}
+            </span>
+            {reviewBadge && <ReviewGateBadge badge={reviewBadge} />}
+          </div>
+        )}
         {tab !== "approvals" && (
           <Button variant="secondary" size="xs" onClick={clearMessages}>
             Clear

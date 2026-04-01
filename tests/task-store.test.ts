@@ -17,7 +17,13 @@ import type {
 } from "../src/stores/task-store/types";
 
 function emptyState(): TaskStoreData {
-  return { activeTaskId: null, tasks: {}, sessions: {}, artifacts: {} };
+  return {
+    activeTaskId: null,
+    tasks: {},
+    sessions: {},
+    artifacts: {},
+    providerHistory: {},
+  };
 }
 
 function makeTask(id: string, title = "Test"): TaskInfo {

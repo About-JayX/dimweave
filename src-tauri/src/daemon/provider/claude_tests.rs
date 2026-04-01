@@ -248,6 +248,8 @@ fn list_sessions_reads_workspace_transcripts() {
                     created_at: 1_774_951_200_000,
                     updated_at: 1_774_951_500_000,
                     status: SessionStatus::Paused,
+                    normalized_session_id: None,
+                    normalized_task_id: None,
                 },
                 crate::daemon::provider::shared::ProviderHistoryEntry {
                     provider: Provider::Claude,
@@ -259,6 +261,8 @@ fn list_sessions_reads_workspace_transcripts() {
                     created_at: 1_774_861_200_000,
                     updated_at: 1_774_861_800_000,
                     status: SessionStatus::Paused,
+                    normalized_session_id: None,
+                    normalized_task_id: None,
                 },
             ],
             next_cursor: None,

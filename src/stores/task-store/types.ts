@@ -42,11 +42,26 @@ export interface SessionInfo {
   provider: Provider;
   role: SessionRole;
   externalSessionId?: string | null;
+  transcriptPath?: string | null;
   status: SessionStatus;
   cwd: string;
   title: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ProviderHistoryInfo {
+  provider: Provider;
+  externalId: string;
+  title?: string | null;
+  preview?: string | null;
+  cwd?: string | null;
+  archived: boolean;
+  createdAt: number;
+  updatedAt: number;
+  status: SessionStatus;
+  normalizedSessionId?: string | null;
+  normalizedTaskId?: string | null;
 }
 
 export interface ArtifactInfo {
@@ -87,6 +102,7 @@ export interface TaskStoreData {
   tasks: Record<string, TaskInfo>;
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;
+  providerHistory: Record<string, ProviderHistoryInfo[]>;
 }
 
 export interface TaskStoreState extends TaskStoreData {
@@ -94,6 +110,13 @@ export interface TaskStoreState extends TaskStoreData {
   selectTask: (taskId: string) => Promise<void>;
   approveReview: () => Promise<void>;
   fetchSnapshot: () => Promise<void>;
+  fetchProviderHistory: (workspace: string) => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;
+  attachProviderHistory: (
+    provider: Provider,
+    externalId: string,
+    cwd: string,
+    role: SessionRole,
+  ) => Promise<void>;
   cleanup: () => void;
 }

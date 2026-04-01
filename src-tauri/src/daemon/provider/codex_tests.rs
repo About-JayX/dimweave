@@ -234,6 +234,8 @@ fn map_thread_page_response_maps_history_entries() {
                     created_at: 1730831111,
                     updated_at: 1730832222,
                     status: SessionStatus::Paused,
+                    normalized_session_id: None,
+                    normalized_task_id: None,
                 },
                 ProviderHistoryEntry {
                     provider: Provider::Codex,
@@ -245,6 +247,8 @@ fn map_thread_page_response_maps_history_entries() {
                     created_at: 1730750000,
                     updated_at: 1730750100,
                     status: SessionStatus::Active,
+                    normalized_session_id: None,
+                    normalized_task_id: None,
                 },
             ],
             next_cursor: Some("cursor_2".into()),

@@ -1,4 +1,5 @@
-use crate::daemon::task_graph::types::Task;
+use crate::daemon::provider::shared::ProviderHistoryEntry;
+use crate::daemon::task_graph::types::{Provider, SessionRole, Task};
 use crate::daemon::types::{
     self, HistoryEntry, PermissionBehavior, SessionTreeSnapshot, TaskSnapshot,
 };
@@ -76,8 +77,19 @@ pub enum DaemonCmd {
         workspace: Option<String>,
         reply: oneshot::Sender<Vec<HistoryEntry>>,
     },
+    ListProviderHistory {
+        workspace: Option<String>,
+        reply: oneshot::Sender<Vec<ProviderHistoryEntry>>,
+    },
     ResumeSession {
         session_id: String,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    AttachProviderHistory {
+        provider: Provider,
+        external_id: String,
+        cwd: String,
+        role: SessionRole,
         reply: oneshot::Sender<Result<(), String>>,
     },
 }

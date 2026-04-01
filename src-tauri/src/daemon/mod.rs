@@ -82,6 +82,125 @@ async fn stop_claude_session(claude_manager: &ClaudeSessionManager) {
     crate::claude_session::stop_if_running(claude_manager).await;
 }
 
+fn session_role_name(role: crate::daemon::task_graph::types::SessionRole) -> &'static str {
+    match role {
+        crate::daemon::task_graph::types::SessionRole::Lead => "lead",
+        crate::daemon::task_graph::types::SessionRole::Coder => "coder",
+    }
+}
+
+async fn attach_provider_history(
+    provider: crate::daemon::task_graph::types::Provider,
+    external_id: String,
+    cwd: String,
+    role: crate::daemon::task_graph::types::SessionRole,
+    codex_handle: &mut Option<codex::CodexHandle>,
+    claude_manager: Arc<ClaudeSessionManager>,
+    state: &SharedState,
+    app: &AppHandle,
+) -> Result<String, String> {
+    if let Some(existing_session_id) = {
+        let daemon = state.read().await;
+        daemon
+            .task_graph
+            .find_session_by_external_id(provider, &external_id)
+            .map(|session| session.session_id.clone())
+    } {
+        return state.write().await.resume_session(&existing_session_id);
+    }
+
+    if state.read().await.active_task_id.is_none() {
+        return Err("no active task selected".into());
+    }
+
+    match provider {
+        crate::daemon::task_graph::types::Provider::Claude => {
+            let role_id = session_role_name(role);
+            if let Some(conflict_agent) = {
+                let daemon = state.read().await;
+                daemon.online_role_conflict("claude", role_id)
+            } {
+                return Err(format!(
+                    "role '{role_id}' already in use by online {conflict_agent}"
+                ));
+            }
+            stop_claude_session(claude_manager.as_ref()).await;
+            crate::claude_launch::resume(
+                &cwd,
+                None,
+                None,
+                role_id,
+                &external_id,
+                None,
+                None,
+                claude_manager,
+                app.clone(),
+            )
+            .await?;
+            let transcript_path =
+                crate::daemon::provider::claude::default_transcript_path(&cwd, &external_id)?
+                    .to_string_lossy()
+                    .to_string();
+            let task_id = {
+                let mut daemon = state.write().await;
+                crate::daemon::provider::claude::register_on_launch(
+                    &mut daemon,
+                    role_id,
+                    &cwd,
+                    &external_id,
+                    &transcript_path,
+                );
+                daemon
+                    .active_task_id
+                    .clone()
+                    .ok_or_else(|| "no active task selected".to_string())?
+            };
+            Ok(task_id)
+        }
+        crate::daemon::task_graph::types::Provider::Codex => {
+            let role_id = session_role_name(role).to_string();
+            if let Some(conflict_agent) = {
+                let daemon = state.read().await;
+                daemon.online_role_conflict("codex", &role_id)
+            } {
+                return Err(format!(
+                    "role '{role_id}' already in use by online {conflict_agent}"
+                ));
+            }
+            stop_codex_session(codex_handle, state, app).await;
+            let launch_epoch = state.write().await.begin_codex_launch();
+            let handle = codex::resume(
+                codex::ResumeOpts {
+                    role_id: role_id.clone(),
+                    cwd: cwd.clone(),
+                    thread_id: external_id.clone(),
+                    launch_epoch,
+                    codex_port: 4500,
+                },
+                state.clone(),
+                app.clone(),
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+            *codex_handle = Some(handle);
+            let task_id = {
+                let mut daemon = state.write().await;
+                crate::daemon::provider::codex::register_on_launch(
+                    &mut daemon,
+                    &role_id,
+                    &cwd,
+                    &external_id,
+                );
+                daemon
+                    .active_task_id
+                    .clone()
+                    .ok_or_else(|| "no active task selected".to_string())?
+            };
+            Ok(task_id)
+        }
+    }
+}
+
 /// Emit a full task context sync for the selected task.
 async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id: &str) {
     let s = state.read().await;
@@ -289,6 +408,29 @@ pub async fn run(
             DaemonCmd::ListHistory { workspace, reply } => {
                 let _ = reply.send(state.read().await.task_history(workspace.as_deref()));
             }
+            DaemonCmd::ListProviderHistory { workspace, reply } => {
+                let workspace = match workspace {
+                    Some(workspace) => Some(workspace),
+                    None => {
+                        let daemon = state.read().await;
+                        daemon
+                            .active_task_id
+                            .as_ref()
+                            .and_then(|task_id| daemon.task_graph.get_task(task_id))
+                            .map(|task| task.workspace_root.clone())
+                    }
+                };
+                let entries = match workspace {
+                    Some(workspace) => {
+                        crate::daemon::provider::history::list_workspace_provider_history(
+                            &state, &workspace, &app,
+                        )
+                        .await
+                    }
+                    None => Vec::new(),
+                };
+                let _ = reply.send(entries);
+            }
             DaemonCmd::ResumeSession { session_id, reply } => {
                 let session = state
                     .read()
@@ -390,6 +532,29 @@ pub async fn run(
                     Some(_) => state.write().await.resume_session(&session_id),
                     None => Err(format!("session not found: {session_id}")),
                 };
+                if let Ok(ref task_id) = result {
+                    emit_task_context_events(&state, &app, task_id).await;
+                }
+                let _ = reply.send(result.map(|_| ()));
+            }
+            DaemonCmd::AttachProviderHistory {
+                provider,
+                external_id,
+                cwd,
+                role,
+                reply,
+            } => {
+                let result = attach_provider_history(
+                    provider,
+                    external_id,
+                    cwd,
+                    role,
+                    &mut codex_handle,
+                    claude_manager.clone(),
+                    &state,
+                    &app,
+                )
+                .await;
                 if let Ok(ref task_id) = result {
                     emit_task_context_events(&state, &app, task_id).await;
                 }

@@ -1,6 +1,9 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
+import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
+import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import { Send, ChevronDown } from "lucide-react";
 
 const MIN_ROWS = 2;
@@ -28,6 +31,10 @@ export function ReplyInput({ connected }: ReplyInputProps) {
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const tasks = useTaskStore((s) => s.tasks);
+  const activeTask = activeTaskId ? tasks[activeTaskId] : null;
+  const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
@@ -116,29 +123,48 @@ export function ReplyInput({ connected }: ReplyInputProps) {
           rows={MIN_ROWS}
         />
         <div className="flex items-center justify-between px-3 py-1.5">
-          <div className="relative" ref={pickerRef}>
-            <button
-              onClick={() => setShowPicker(!showPicker)}
-              className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium transition-colors ${TARGET_COLORS[target]}`}
-            >
-              To {target}
-              <ChevronDown className="size-3 opacity-60" />
-            </button>
-            {showPicker && (
-              <div className="absolute bottom-full left-0 mb-1 rounded-md border border-border bg-popover shadow-lg py-1 z-20 min-w-[100px]">
-                {TARGETS.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      setTarget(t);
-                      setShowPicker(false);
-                    }}
-                    className={`block w-full text-left px-3 py-1 text-[11px] hover:bg-accent transition-colors ${t === target ? "font-bold" : ""} ${TARGET_COLORS[t].split(" ")[0]}`}
-                  >
-                    {t}
-                  </button>
-                ))}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative shrink-0" ref={pickerRef}>
+              <button
+                onClick={() => setShowPicker(!showPicker)}
+                className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium transition-colors ${TARGET_COLORS[target]}`}
+              >
+                To {target}
+                <ChevronDown className="size-3 opacity-60" />
+              </button>
+              {showPicker && (
+                <div className="absolute bottom-full left-0 z-20 mb-1 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-lg">
+                  {TARGETS.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setTarget(t);
+                        setShowPicker(false);
+                      }}
+                      className={`block w-full px-3 py-1 text-left text-[11px] transition-colors hover:bg-accent ${t === target ? "font-bold" : ""} ${TARGET_COLORS[t].split(" ")[0]}`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {activeTask ? (
+              <div className="min-w-0 space-y-0.5">
+                <div className="truncate text-[10px] font-medium text-foreground/85">
+                  {activeTask.title}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[10px] text-muted-foreground/55">
+                    {activeTask.workspaceRoot}
+                  </span>
+                  {reviewBadge && <ReviewGateBadge badge={reviewBadge} />}
+                </div>
               </div>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/55">
+                No active task
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">

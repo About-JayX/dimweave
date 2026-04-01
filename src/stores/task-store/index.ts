@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { TaskInfo, TaskStoreState } from "./types";
+import type {
+  Provider,
+  ProviderHistoryInfo,
+  SessionRole,
+  TaskInfo,
+  TaskStoreState,
+} from "./types";
 import { createTaskListeners } from "./events";
 
 export type { TaskInfo, TaskStoreState } from "./types";
@@ -19,11 +25,13 @@ type TaskSetter = (
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
+    providerHistory: Record<string, ProviderHistoryInfo[]>;
   }) => Partial<{
     activeTaskId: string | null;
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
+    providerHistory: Record<string, ProviderHistoryInfo[]>;
   }>,
 ) => void;
 
@@ -48,7 +56,7 @@ export async function bootstrapTaskStore(
   unlisteners = await listenImpl(set as any);
 }
 
-export const useTaskStore = create<TaskStoreState>((set) => {
+export const useTaskStore = create<TaskStoreState>((set, get) => {
   if (typeof window !== "undefined") {
     void bootstrapTaskStore(set as any);
   }
@@ -58,6 +66,7 @@ export const useTaskStore = create<TaskStoreState>((set) => {
     tasks: {},
     sessions: {},
     artifacts: {},
+    providerHistory: {},
 
     createTask: async (workspace, title) => {
       const task = await invoke<TaskInfo>("daemon_create_task", {
@@ -87,8 +96,40 @@ export const useTaskStore = create<TaskStoreState>((set) => {
       }));
     },
 
+    fetchProviderHistory: async (workspace) => {
+      const entries = await invoke<ProviderHistoryInfo[]>(
+        "daemon_list_provider_history",
+        {
+          workspace,
+        },
+      );
+      set((s) => ({
+        providerHistory: { ...s.providerHistory, [workspace]: entries },
+      }));
+    },
+
     resumeSession: async (sessionId) => {
       await invoke("daemon_resume_session", { sessionId });
+    },
+
+    attachProviderHistory: async (
+      provider: Provider,
+      externalId: string,
+      cwd: string,
+      role: SessionRole,
+    ) => {
+      await invoke("daemon_attach_provider_history", {
+        provider,
+        externalId,
+        cwd,
+        role,
+      });
+      await get().fetchSnapshot();
+      const activeTaskId = get().activeTaskId;
+      const task = activeTaskId ? get().tasks[activeTaskId] : null;
+      if (task) {
+        await get().fetchProviderHistory(task.workspaceRoot);
+      }
     },
 
     cleanup: () => {

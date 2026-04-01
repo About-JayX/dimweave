@@ -68,10 +68,17 @@ pub fn register_on_launch(
         transcript_path: None,
     };
     let sess = register_session(&mut state.task_graph, reg);
-    if session_role == SessionRole::Coder {
-        state
-            .task_graph
-            .set_coder_session(&task_id, &sess.session_id);
+    match session_role {
+        SessionRole::Lead => {
+            state
+                .task_graph
+                .set_lead_session(&task_id, &sess.session_id);
+        }
+        SessionRole::Coder => {
+            state
+                .task_graph
+                .set_coder_session(&task_id, &sess.session_id);
+        }
     }
     state.auto_save_task_graph();
 }
@@ -103,6 +110,8 @@ pub fn map_thread_page_response(
             created_at: item["createdAt"].as_u64().unwrap_or_default(),
             updated_at: item["updatedAt"].as_u64().unwrap_or_default(),
             status,
+            normalized_session_id: None,
+            normalized_task_id: None,
         });
     }
     Ok(ProviderHistoryPage {
