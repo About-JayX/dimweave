@@ -23,6 +23,28 @@ pub(super) async fn wait_for_rpc_id(ws: &mut FullWs, expected_id: u64, secs: u64
     .unwrap_or(false)
 }
 
+pub(super) async fn wait_for_rpc_response(
+    ws: &mut FullWs,
+    expected_id: u64,
+    secs: u64,
+) -> Option<Value> {
+    timeout(Duration::from_secs(secs), async {
+        while let Some(Ok(msg)) = ws.next().await {
+            let Ok(text) = msg.to_text() else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(text) else {
+                continue;
+            };
+            if v["id"].as_u64() == Some(expected_id) {
+                return Some(v);
+            }
+        }
+        None
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 pub(super) async fn wait_for_thread_id(ws: &mut FullWs, secs: u64) -> Option<String> {
     timeout(Duration::from_secs(secs), async {
         while let Some(Ok(msg)) = ws.next().await {

@@ -64,6 +64,36 @@ impl CodexWsClient {
     }
 }
 
+pub(crate) async fn thread_list(
+    port: u16,
+    params: Value,
+    app: &AppHandle,
+) -> Result<Value, String> {
+    rpc_call(port, 20, "thread/list", params, app).await
+}
+
+pub(crate) async fn thread_fork(
+    port: u16,
+    thread_id: &str,
+    app: &AppHandle,
+) -> Result<String, String> {
+    let result = rpc_call(port, 21, "thread/fork", json!({ "threadId": thread_id }), app).await?;
+    result["thread"]["id"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "invalid thread/fork response: missing thread.id".to_string())
+}
+
+pub(crate) async fn thread_archive(
+    port: u16,
+    thread_id: &str,
+    app: &AppHandle,
+) -> Result<(), String> {
+    rpc_call(port, 22, "thread/archive", json!({ "threadId": thread_id }), app)
+        .await
+        .map(|_| ())
+}
+
 async fn open_ws(port: u16, app: &AppHandle) -> Option<FullWs> {
     let url = format!("ws://127.0.0.1:{port}");
     match connect_async(&url).await {
@@ -73,6 +103,39 @@ async fn open_ws(port: u16, app: &AppHandle) -> Option<FullWs> {
             None
         }
     }
+}
+
+async fn rpc_call(
+    port: u16,
+    id: u64,
+    method: &str,
+    params: Value,
+    app: &AppHandle,
+) -> Result<Value, String> {
+    let mut ws = open_ws(port, app)
+        .await
+        .ok_or_else(|| format!("[Codex] connect failed for {method}"))?;
+    do_initialize(&mut ws, app)
+        .await
+        .ok_or_else(|| format!("[Codex] initialize failed for {method}"))?;
+    let msg = json!({
+        "method": method,
+        "id": id,
+        "params": params,
+    });
+    ws.send(Message::Text(msg.to_string()))
+        .await
+        .map_err(|e| format!("[Codex] failed to send {method}: {e}"))?;
+    let response = ws_helpers::wait_for_rpc_response(&mut ws, id, 30)
+        .await
+        .ok_or_else(|| format!("[Codex] {method} timed out"))?;
+    if response.get("error").is_some() {
+        return Err(format!(
+            "[Codex] {method} failed: {}",
+            serde_json::to_string(&response["error"]).unwrap_or_default()
+        ));
+    }
+    Ok(response["result"].clone())
 }
 
 async fn do_initialize(ws: &mut FullWs, app: &AppHandle) -> Option<()> {

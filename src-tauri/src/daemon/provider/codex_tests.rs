@@ -1,7 +1,8 @@
 use crate::daemon::provider::codex;
-use crate::daemon::provider::shared::SessionRegistration;
+use crate::daemon::provider::shared::{ProviderHistoryEntry, ProviderHistoryPage, SessionRegistration};
 use crate::daemon::task_graph::store::TaskGraphStore;
 use crate::daemon::task_graph::types::*;
+use serde_json::json;
 
 // ── register_session ───────────────────────────────────────
 
@@ -178,4 +179,164 @@ fn codex_adapter_has_expected_interface() {
     let _ =
         codex::register_session as fn(&mut TaskGraphStore, SessionRegistration) -> SessionHandle;
     let _ = codex::bind_thread_id as fn(&mut TaskGraphStore, &str, &str) -> bool;
+    let _ = codex::list_threads;
+    let _ = codex::fork_thread;
+    let _ = codex::archive_thread;
+}
+
+#[test]
+fn map_thread_page_response_maps_history_entries() {
+    let page = codex::map_thread_page_response(
+        &json!({
+            "data": [
+                {
+                    "id": "thr_a",
+                    "preview": "Create a TUI",
+                    "ephemeral": false,
+                    "modelProvider": "openai",
+                    "createdAt": 1730831111_u64,
+                    "updatedAt": 1730832222_u64,
+                    "name": "TUI prototype",
+                    "status": { "type": "notLoaded" }
+                },
+                {
+                    "id": "thr_b",
+                    "preview": "Fix tests",
+                    "ephemeral": true,
+                    "modelProvider": "openai",
+                    "createdAt": 1730750000_u64,
+                    "updatedAt": 1730750100_u64,
+                    "status": { "type": "active", "activeFlags": ["waitingOnApproval"] }
+                }
+            ],
+            "nextCursor": "cursor_2"
+        }),
+        false,
+    )
+    .unwrap();
+
+    assert_eq!(
+        page,
+        ProviderHistoryPage {
+            entries: vec![
+                ProviderHistoryEntry {
+                    provider: Provider::Codex,
+                    external_id: "thr_a".into(),
+                    title: Some("TUI prototype".into()),
+                    preview: Some("Create a TUI".into()),
+                    cwd: None,
+                    archived: false,
+                    created_at: 1730831111,
+                    updated_at: 1730832222,
+                    status: SessionStatus::Paused,
+                },
+                ProviderHistoryEntry {
+                    provider: Provider::Codex,
+                    external_id: "thr_b".into(),
+                    title: None,
+                    preview: Some("Fix tests".into()),
+                    cwd: None,
+                    archived: false,
+                    created_at: 1730750000,
+                    updated_at: 1730750100,
+                    status: SessionStatus::Active,
+                },
+            ],
+            next_cursor: Some("cursor_2".into()),
+        }
+    );
+}
+
+#[test]
+fn map_thread_page_response_rejects_missing_thread_id() {
+    let err = codex::map_thread_page_response(
+        &json!({
+            "data": [{ "preview": "oops", "status": { "type": "idle" } }],
+            "nextCursor": null
+        }),
+        true,
+    )
+    .unwrap_err();
+
+    assert!(err.contains("missing thread id"));
+}
+
+#[test]
+fn register_forked_session_preserves_task_and_parent_linkage() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let lead = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    let source = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: Some(&lead.session_id),
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Source coder",
+    });
+
+    let forked = codex::register_forked_session(
+        &mut store,
+        &source.session_id,
+        "thread_forked",
+        Some("Forked coder"),
+    )
+    .unwrap();
+
+    assert_eq!(forked.task_id, task.task_id);
+    assert_eq!(forked.provider, Provider::Codex);
+    assert_eq!(forked.role, SessionRole::Coder);
+    assert_eq!(
+        forked.parent_session_id.as_deref(),
+        Some(lead.session_id.as_str())
+    );
+    assert_eq!(forked.external_session_id.as_deref(), Some("thread_forked"));
+    assert_eq!(forked.title, "Forked coder");
+}
+
+#[test]
+fn build_resume_target_requires_external_thread_id() {
+    let session = SessionHandle {
+        session_id: "sess_1".into(),
+        task_id: "task_1".into(),
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        external_session_id: None,
+        status: SessionStatus::Paused,
+        cwd: "/ws".into(),
+        title: "Codex coder".into(),
+        created_at: 1,
+        updated_at: 2,
+    };
+
+    let err = codex::build_resume_target(&session).unwrap_err();
+    assert!(err.contains("missing external thread id"));
+}
+
+#[test]
+fn mark_archived_updates_normalized_session_status() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let session = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
+    });
+
+    assert!(codex::mark_session_archived(&mut store, &session.session_id));
+    assert_eq!(
+        store.get_session(&session.session_id).unwrap().status,
+        SessionStatus::Completed
+    );
 }

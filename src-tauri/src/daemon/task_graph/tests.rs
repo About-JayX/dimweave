@@ -434,3 +434,33 @@ fn persist_no_path_save_is_noop() {
                                        // save on in-memory-only store should succeed (no-op)
     store.save().expect("noop save should succeed");
 }
+
+#[test]
+fn find_session_by_external_id_filters_by_provider() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Lookup");
+    let codex = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Codex",
+    });
+    let claude = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Claude",
+    });
+    assert!(store.set_external_session_id(&codex.session_id, "shared_id"));
+    assert!(store.set_external_session_id(&claude.session_id, "shared_id"));
+
+    let found = store
+        .find_session_by_external_id(Provider::Codex, "shared_id")
+        .expect("codex session");
+    assert_eq!(found.session_id, codex.session_id);
+    assert_eq!(found.provider, Provider::Codex);
+}

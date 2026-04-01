@@ -258,7 +258,54 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(state.read().await.task_history(workspace.as_deref()));
             }
             DaemonCmd::ResumeSession { session_id, reply } => {
-                let result = state.write().await.resume_session(&session_id);
+                let session = state
+                    .read()
+                    .await
+                    .task_graph
+                    .get_session(&session_id)
+                    .cloned();
+                let result = match session {
+                    Some(sess)
+                        if sess.provider == crate::daemon::task_graph::types::Provider::Codex =>
+                    {
+                        let target = crate::daemon::provider::codex::build_resume_target(&sess);
+                        match target {
+                            Ok(target) => {
+                                stop_codex_session(&mut codex_handle, &state, &app).await;
+                                let launch_epoch = state.write().await.begin_codex_launch();
+                                let role_id = match target.role {
+                                    crate::daemon::task_graph::types::SessionRole::Lead => "lead",
+                                    crate::daemon::task_graph::types::SessionRole::Coder => {
+                                        "coder"
+                                    }
+                                }
+                                .to_string();
+                                match codex::resume(
+                                    codex::ResumeOpts {
+                                        role_id,
+                                        cwd: target.cwd,
+                                        thread_id: target.external_id,
+                                        launch_epoch,
+                                        codex_port: 4500,
+                                    },
+                                    state.clone(),
+                                    app.clone(),
+                                )
+                                .await
+                                {
+                                    Ok(handle) => {
+                                        codex_handle = Some(handle);
+                                        state.write().await.resume_session(&session_id)
+                                    }
+                                    Err(err) => Err(err.to_string()),
+                                }
+                            }
+                            Err(err) => Err(err),
+                        }
+                    }
+                    Some(_) => state.write().await.resume_session(&session_id),
+                    None => Err(format!("session not found: {session_id}")),
+                };
                 if let Ok(ref task_id) = result {
                     emit_task_context_events(&state, &app, task_id).await;
                 }

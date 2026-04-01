@@ -2,6 +2,8 @@ use crate::daemon::codex::handler;
 use crate::daemon::codex::structured_output::{
     parse_structured_output, should_emit_final_message, StreamPreviewState,
 };
+use crate::daemon::gui_task::TaskUiEvent;
+use crate::daemon::task_graph::types::{Provider, SessionStatus};
 use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::gui::{self, CodexStreamPayload};
 use crate::daemon::types::{BridgeMessage, MessageStatus};
@@ -28,6 +30,9 @@ pub(super) async fn handle_codex_event(
             stream_preview.reset();
             gui::emit_codex_stream(app, CodexStreamPayload::Thinking);
         }
+        "thread/status/changed" => sync_thread_status_change(v, state, app).await,
+        "thread/archived" => sync_thread_archive(v, state, app).await,
+        "thread/unarchived" => sync_thread_unarchive(v, state, app).await,
         "item/started" => emit_activity_from_item(v, app),
         "item/reasoning/summaryTextDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
@@ -174,6 +179,70 @@ fn emit_activity_from_item(v: &Value, app: &AppHandle) {
     }
 }
 
+fn map_thread_runtime_status(raw: &str) -> SessionStatus {
+    match raw {
+        "active" => SessionStatus::Active,
+        "systemError" => SessionStatus::Error,
+        _ => SessionStatus::Paused,
+    }
+}
+
+async fn sync_thread_status_change(v: &Value, state: &SharedState, app: &AppHandle) {
+    let thread_id = v["params"]["threadId"].as_str().unwrap_or("");
+    let status_type = v["params"]["status"]["type"].as_str().unwrap_or("notLoaded");
+    sync_thread_session_status(thread_id, map_thread_runtime_status(status_type), state, app).await;
+}
+
+async fn sync_thread_archive(v: &Value, state: &SharedState, app: &AppHandle) {
+    let thread_id = v["params"]["threadId"].as_str().unwrap_or("");
+    sync_thread_session_status(thread_id, SessionStatus::Completed, state, app).await;
+}
+
+async fn sync_thread_unarchive(v: &Value, state: &SharedState, app: &AppHandle) {
+    let thread_id = v["params"]["threadId"].as_str().unwrap_or("");
+    sync_thread_session_status(thread_id, SessionStatus::Paused, state, app).await;
+}
+
+async fn sync_thread_session_status(
+    thread_id: &str,
+    new_status: SessionStatus,
+    state: &SharedState,
+    app: &AppHandle,
+) {
+    if thread_id.is_empty() {
+        return;
+    }
+    let payload = {
+        let mut s = state.write().await;
+        let Some(session) = s
+            .task_graph
+            .find_session_by_external_id(Provider::Codex, thread_id)
+            .cloned()
+        else {
+            return;
+        };
+        if !s
+            .task_graph
+            .update_session_status(&session.session_id, new_status)
+        {
+            return;
+        }
+        let sessions = s
+            .task_graph
+            .sessions_for_task(&session.task_id)
+            .into_iter()
+            .cloned()
+            .collect();
+        s.auto_save_task_graph();
+        (session.task_id, sessions)
+    };
+    TaskUiEvent::SessionTreeChanged {
+        task_id: payload.0,
+        sessions: payload.1,
+    }
+    .emit(app);
+}
+
 fn truncate_label(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
@@ -313,6 +382,22 @@ mod tests {
         assert_eq!(
             activity_label_from_item(&item).as_deref(),
             Some("Opening: https://example.com/docs")
+        );
+    }
+
+    #[test]
+    fn thread_runtime_status_maps_to_normalized_session_status() {
+        assert_eq!(
+            map_thread_runtime_status("active"),
+            crate::daemon::task_graph::types::SessionStatus::Active
+        );
+        assert_eq!(
+            map_thread_runtime_status("systemError"),
+            crate::daemon::task_graph::types::SessionStatus::Error
+        );
+        assert_eq!(
+            map_thread_runtime_status("notLoaded"),
+            crate::daemon::task_graph::types::SessionStatus::Paused
         );
     }
 }

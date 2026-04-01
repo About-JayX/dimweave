@@ -32,6 +32,19 @@ pub struct StartOpts {
     pub codex_port: u16,
 }
 
+pub struct ResumeOpts {
+    pub role_id: String,
+    pub cwd: String,
+    pub thread_id: String,
+    pub launch_epoch: u64,
+    pub codex_port: u16,
+}
+
+enum LaunchMode {
+    New(SessionOpts),
+    Resume { role_id: String, thread_id: String },
+}
+
 impl CodexHandle {
     pub async fn stop(&self) {
         self.cancel.cancel();
@@ -60,17 +73,81 @@ pub async fn start(
         codex_port,
     } = opts;
     let (sandbox_mode, approval_policy, network_access, base_instructions) =
-        if let Some(rc) = role_config::get_role(&role_id) {
-            (
-                rc.sandbox_mode.to_string(),
-                rc.approval_policy.to_string(),
-                rc.network_access,
-                Some(rc.base_instructions.to_string()),
-            )
-        } else {
-            ("workspace-write".into(), "never".into(), false, None)
-        };
+        resolve_role_launch_config(&role_id);
+    let session_opts = SessionOpts {
+        role_id: role_id.clone(),
+        cwd: cwd.clone(),
+        model,
+        effort,
+        sandbox_mode: Some(sandbox_mode.clone()),
+        network_access,
+        base_instructions,
+    };
+    launch(
+        LaunchMode::New(session_opts),
+        role_id,
+        cwd,
+        launch_epoch,
+        codex_port,
+        sandbox_mode,
+        approval_policy,
+        state,
+        app,
+    )
+    .await
+}
 
+pub async fn resume(
+    opts: ResumeOpts,
+    state: SharedState,
+    app: AppHandle,
+) -> anyhow::Result<CodexHandle> {
+    let ResumeOpts {
+        role_id,
+        cwd,
+        thread_id,
+        launch_epoch,
+        codex_port,
+    } = opts;
+    let (sandbox_mode, approval_policy, _, _) = resolve_role_launch_config(&role_id);
+    launch(
+        LaunchMode::Resume { role_id: role_id.clone(), thread_id },
+        role_id,
+        cwd,
+        launch_epoch,
+        codex_port,
+        sandbox_mode,
+        approval_policy,
+        state,
+        app,
+    )
+    .await
+}
+
+fn resolve_role_launch_config(role_id: &str) -> (String, String, bool, Option<String>) {
+    if let Some(rc) = role_config::get_role(role_id) {
+        (
+            rc.sandbox_mode.to_string(),
+            rc.approval_policy.to_string(),
+            rc.network_access,
+            Some(rc.base_instructions.to_string()),
+        )
+    } else {
+        ("workspace-write".into(), "never".into(), false, None)
+    }
+}
+
+async fn launch(
+    mode: LaunchMode,
+    role_id: String,
+    cwd: String,
+    launch_epoch: u64,
+    codex_port: u16,
+    sandbox_mode: String,
+    approval_policy: String,
+    state: SharedState,
+    app: AppHandle,
+) -> anyhow::Result<CodexHandle> {
     let session_mgr = state.read().await.session_mgr.clone();
     let session_id = session_mgr.lock().await.next_session_id();
     let codex_home =
@@ -125,26 +202,26 @@ pub async fn start(
     }
 
     let (inject_tx, inject_rx) = mpsc::channel::<(String, bool)>(64);
-    let opts = SessionOpts {
-        role_id: role_id.clone(),
-        cwd: cwd.clone(),
-        model,
-        effort,
-        sandbox_mode: Some(sandbox_mode),
-        network_access,
-        base_instructions,
-    };
-
     let cancel = CancellationToken::new();
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<String>();
 
     let state2 = state.clone();
     let app2 = app.clone();
     let cancel_session = cancel.clone();
+    let is_new_session = matches!(&mode, LaunchMode::New(_));
     tokio::spawn(async move {
         tokio::select! {
             _ = cancel_session.cancelled() => {}
-            _ = session::run(codex_port, launch_epoch, opts, state2, app2, inject_rx, ready_tx) => {}
+            _ = async {
+                match mode {
+                    LaunchMode::New(opts) => {
+                        session::run(codex_port, launch_epoch, opts, state2, app2, inject_rx, ready_tx).await;
+                    }
+                    LaunchMode::Resume { role_id, thread_id } => {
+                        session::resume(codex_port, launch_epoch, role_id, thread_id, state2, app2, inject_rx, ready_tx).await;
+                    }
+                }
+            } => {}
         }
     });
 
@@ -166,7 +243,9 @@ pub async fn start(
         s.codex_role = role_id.clone();
         let attached = s.attach_codex_session_if_current(launch_epoch, inject_tx.clone());
         let buffered = if attached {
-            crate::daemon::provider::codex::register_on_launch(&mut s, &role_id, &cwd, &thread_id);
+            if is_new_session {
+                crate::daemon::provider::codex::register_on_launch(&mut s, &role_id, &cwd, &thread_id);
+            }
             s.take_buffered_for(&role_id)
         } else {
             Vec::new()

@@ -55,6 +55,39 @@ pub async fn run(
     }
 }
 
+pub async fn resume(
+    port: u16,
+    session_epoch: u64,
+    role_id: String,
+    thread_id: String,
+    state: SharedState,
+    app: AppHandle,
+    mut inject_rx: mpsc::Receiver<(String, bool)>,
+    ready_tx: tokio::sync::oneshot::Sender<String>,
+) {
+    match CodexWsClient::reconnect(port, &thread_id, &app).await {
+        Some((client, ws_rx)) => {
+            let ws_tx = client.sender().clone();
+            let _ = ready_tx.send(thread_id.clone());
+            run_with_reconnect(
+                port,
+                session_epoch,
+                &role_id,
+                &state,
+                &app,
+                &mut inject_rx,
+                thread_id,
+                ws_tx,
+                ws_rx,
+            )
+            .await;
+        }
+        None => {
+            let _ = ready_tx.send(String::new());
+        }
+    }
+}
+
 async fn run_with_reconnect(
     port: u16,
     session_epoch: u64,

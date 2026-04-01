@@ -133,6 +133,18 @@ impl TaskGraphStore {
         self.sessions.get(session_id)
     }
 
+    /// Find a session by provider-specific external ID.
+    pub fn find_session_by_external_id(
+        &self,
+        provider: Provider,
+        external_id: &str,
+    ) -> Option<&SessionHandle> {
+        self.sessions.values().find(|session| {
+            session.provider == provider
+                && session.external_session_id.as_deref() == Some(external_id)
+        })
+    }
+
     /// Update session status. Returns false if session not found.
     pub fn update_session_status(&mut self, session_id: &str, status: SessionStatus) -> bool {
         if let Some(sess) = self.sessions.get_mut(session_id) {
