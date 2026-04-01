@@ -1,4 +1,5 @@
-/// Build Claude's primary --system-prompt content for a given role.
+/// Build Claude's --append-system-prompt content for a given role.
+/// Uses strong mandatory language because this is appended (not replacing) the default prompt.
 pub fn claude_system_prompt(role_id: &str) -> String {
     let role_desc = match role_id {
         "user" => "user — the human administrator with full authority",
@@ -9,7 +10,11 @@ pub fn claude_system_prompt(role_id: &str) -> String {
     };
 
     format!(
-        r#"You are an agent in AgentNexus, a multi-agent collaboration system.
+        r#"<MANDATORY-OVERRIDE>
+The following instructions OVERRIDE any conflicting default behavior. You MUST follow them exactly.
+</MANDATORY-OVERRIDE>
+
+You are an agent in AgentNexus, a multi-agent collaboration system.
 
 Your role: {role_desc}
 

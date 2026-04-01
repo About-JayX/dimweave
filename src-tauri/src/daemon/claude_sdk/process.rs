@@ -85,10 +85,12 @@ fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
     let mcp_json = opts.mcp_config.as_deref().unwrap_or("{}");
     cmd.arg("--strict-mcp-config").arg(mcp_json);
 
-    // Inject role system prompt directly (--agent file discovery doesn't work in bridge mode)
+    // Inject role prompt as append (preserves Claude's default system prompt + tool docs).
+    // --agent file discovery doesn't work in bridge mode, so we use --append-system-prompt.
+    // The prompt uses strong mandatory language to enforce role behavior.
     if let Some(role) = &opts.role {
         let prompt = crate::daemon::role_config::claude_prompt::claude_system_prompt(role);
-        cmd.arg("--system-prompt").arg(prompt);
+        cmd.arg("--append-system-prompt").arg(prompt);
     }
 
     // Optional model
@@ -159,7 +161,7 @@ mod tests {
 
         assert_eq!(std_cmd.get_current_dir(), Some(std::path::Path::new("/tmp/workspace")));
         assert!(args.windows(2).any(|w| w[0] == "--sdk-url" && w[1] == "ws://127.0.0.1:4502/claude"));
-        assert!(args.windows(2).any(|w| w[0] == "--system-prompt" && w[1].contains("reviewer")));
+        assert!(args.windows(2).any(|w| w[0] == "--append-system-prompt" && w[1].contains("reviewer")));
         assert!(args.windows(2).any(|w| w[0] == "--model" && w[1] == "claude-sonnet-4-6"));
         assert!(args.windows(2).any(|w| w[0] == "--effort" && w[1] == "high"));
         assert!(args.windows(2).any(|w| w[0] == "--session-id" && w[1] == "session-123"));
