@@ -5,6 +5,7 @@ import {
   getCodexStreamIndicatorViewModel,
   getStreamTextTail,
 } from "./view-model";
+import { getStreamSurfacePresentation } from "./surface-styles";
 
 export function CodexStreamIndicator() {
   const thinking = useBridgeStore((s) => s.codexStream.thinking);
@@ -30,35 +31,36 @@ export function CodexStreamIndicator() {
     () => getStreamTextTail(commandOutput, 500),
     [commandOutput],
   );
+  const surface = getStreamSurfacePresentation("codex");
 
   if (!viewModel.visible) return null;
 
   return (
     <div className="py-2">
       <div className="flex py-2.5 justify-start">
-        <div className="max-w-[80%] rounded-xl px-3 py-2 bg-emerald-500/10 border border-emerald-500/30">
+        <div className={surface.containerClass}>
           <div className="flex items-center gap-2 mb-1">
             <SourceBadge source="codex" />
             {viewModel.showStatusLabel && (
               <span
-                className={`text-[11px] text-emerald-400 ${viewModel.animatePulse ? "animate-pulse" : ""}`}
+                className={`${surface.statusClass} ${viewModel.animatePulse ? "animate-pulse" : ""}`}
               >
-                {viewModel.statusLabel}
+                {currentDelta ? "working draft" : viewModel.statusLabel}
               </span>
             )}
           </div>
           {reasoning && !currentDelta && (
-            <div className="text-[12px] text-foreground/50 italic whitespace-pre-wrap max-h-24 overflow-y-auto mb-1">
+            <div className={`${surface.metaClass} mb-1 whitespace-pre-wrap max-h-24 overflow-y-auto`}>
               {displayReasoning}
             </div>
           )}
           {commandOutput && !currentDelta && (
-            <div className="text-[11px] text-emerald-300/70 font-mono whitespace-pre-wrap max-h-20 overflow-y-auto mb-1 bg-black/20 rounded px-1.5 py-1">
+            <div className={`${surface.commandClass} mb-1`}>
               {displayCommandOutput}
             </div>
           )}
           {currentDelta && (
-            <div className="text-[13px] text-foreground/80 whitespace-pre-wrap max-h-40 overflow-y-auto">
+            <div className="text-[13px] text-foreground/82 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
               {currentDelta}
             </div>
           )}

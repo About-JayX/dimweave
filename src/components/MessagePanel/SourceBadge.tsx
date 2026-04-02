@@ -4,43 +4,51 @@ import { Badge } from "@/components/ui/badge";
 const sourceStyle: Record<string, { label: string; className: string }> = {
   claude: {
     label: "Claude",
-    className:
-      "border-claude/40 bg-claude/10 text-claude shadow-[0_0_8px_#8b5cf620]",
+    className: "border-claude/24 bg-claude/6 text-claude/90",
   },
   codex: {
     label: "Codex",
-    className:
-      "border-codex/40 bg-codex/10 text-codex shadow-[0_0_8px_#22c55e20]",
+    className: "border-codex/24 bg-codex/6 text-codex/90",
   },
   user: {
     label: "You",
-    className:
-      "border-sky-500/40 bg-sky-500/10 text-sky-400 shadow-[0_0_8px_#0ea5e920]",
+    className: "border-sky-500/24 bg-sky-500/6 text-sky-300",
   },
   system: {
     label: "System",
-    className: "border-system/40 bg-system/10 text-system",
+    className: "border-system/24 bg-system/8 text-system/90",
   },
   lead: {
     label: "Lead",
-    className:
-      "border-claude/40 bg-claude/10 text-claude shadow-[0_0_8px_var(--color-claude-glow)]",
+    className: "border-claude/24 bg-claude/6 text-claude/90",
   },
   coder: {
     label: "Coder",
-    className:
-      "border-codex/40 bg-codex/10 text-codex shadow-[0_0_8px_var(--color-codex-glow)]",
+    className: "border-codex/24 bg-codex/6 text-codex/90",
   },
   reviewer: {
     label: "Reviewer",
-    className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
+    className: "border-yellow-500/24 bg-yellow-500/8 text-yellow-300",
   },
 };
 
+export function getSourceBadgePresentation(source: string): {
+  label: string;
+  className: string;
+} {
+  return sourceStyle[source] ?? sourceStyle.system;
+}
+
 export function SourceBadge({ source }: { source: string }) {
-  const style = sourceStyle[source] ?? sourceStyle.system;
+  const style = getSourceBadgePresentation(source);
   return (
-    <Badge variant="outline" className={cn("uppercase", style.className)}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "uppercase border px-2 py-0.5 text-[10px] tracking-[0.14em]",
+        style.className,
+      )}
+    >
       {style.label}
     </Badge>
   );

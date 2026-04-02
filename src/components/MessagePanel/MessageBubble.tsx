@@ -3,6 +3,7 @@ import { MessageMarkdown } from "@/components/MessageMarkdown";
 import { SourceBadge } from "./SourceBadge";
 import type { BridgeMessage } from "@/types";
 import { getMessageIdentityPresentation } from "./view-model";
+import { getMessageSurfacePresentation } from "./surface-styles";
 
 export function areMessageBubblePropsEqual(
   prev: { msg: BridgeMessage },
@@ -21,27 +22,22 @@ export function areMessageBubblePropsEqual(
 function MessageBubbleInner({ msg }: { msg: BridgeMessage }) {
   const isUser = msg.from === "user";
   const { badgeSource, roleLabel } = getMessageIdentityPresentation(msg);
+  const surface = getMessageSurfacePresentation(isUser);
   return (
     <div
       className={`flex py-2.5 msg-enter ${isUser ? "justify-end" : "justify-start"}`}
     >
-      <div
-        className={`max-w-[80%] rounded-xl px-3 py-2 ${
-          isUser
-            ? "bg-sky-500/15 border border-sky-500/30"
-            : "bg-card/60 border border-border/50"
-        }`}
-      >
+      <div className={`max-w-[80%] rounded-xl px-3 py-2.5 ${surface.containerClass}`}>
         <div
           className={`flex items-center gap-2 mb-1 ${isUser ? "justify-end" : ""}`}
         >
           <SourceBadge source={badgeSource} />
           {roleLabel ? (
-            <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground/80">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
               {roleLabel}
             </span>
           ) : null}
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span className="font-mono text-[10px] text-muted-foreground/75">
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
         </div>

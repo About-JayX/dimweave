@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { getStreamTextTail } from "./view-model";
 import { SourceBadge } from "./SourceBadge";
+import { getStreamSurfacePresentation } from "./surface-styles";
 
 export function ClaudeStreamIndicator() {
   const thinking = useBridgeStore((s) => s.claudeStream.thinking);
@@ -9,6 +10,7 @@ export function ClaudeStreamIndicator() {
   if (!thinking && !previewText) return null;
 
   const hasContent = previewText.length > 0;
+  const surface = getStreamSurfacePresentation("claude");
   // Show tail of long content to keep it responsive
   const displayText = useMemo(
     () => getStreamTextTail(previewText, 3000),
@@ -18,22 +20,22 @@ export function ClaudeStreamIndicator() {
   return (
     <div className="py-2">
       <div className="flex py-2.5 justify-start">
-        <div className="max-w-[85%] rounded-xl px-3 py-2 bg-claude/10 border border-claude/30">
+        <div className={surface.containerClass}>
           <div className="flex items-center gap-2 mb-1">
             <SourceBadge source="claude" />
             <span
-              className={`text-[11px] text-claude ${!hasContent ? "animate-pulse" : ""}`}
+              className={`${surface.statusClass} ${!hasContent ? "animate-pulse" : ""}`}
             >
-              {hasContent ? "streaming…" : "thinking…"}
+              {hasContent ? "working draft" : "thinking…"}
             </span>
             {hasContent && (
-              <span className="text-[10px] text-muted-foreground/60">
+              <span className={surface.metaClass}>
                 {previewText.length} chars
               </span>
             )}
           </div>
           {hasContent && (
-            <div className="text-[13px] text-card-foreground leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+            <div className={surface.commandClass}>
               {displayText}
             </div>
           )}
