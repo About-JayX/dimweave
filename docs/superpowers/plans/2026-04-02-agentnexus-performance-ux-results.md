@@ -27,6 +27,12 @@
 | `f418ae99` | Coalesce stream rail updates | 前端把 Claude/Codex 高频流式事件收口成短窗口 flush，去掉 Claude rail 的逐次强制滚动 |
 | `c24e80d9` | Soften message and stream surfaces | 消息气泡、badge、Claude/Codex stream rail 改成更轻的草稿态层级 |
 | `22b220d3` | Collapse shell header context | header 中间大 task block 改成左侧 compact trigger + task popover，移除长 no-task copy |
+| `f780fe05` | Adopt a VS Code-style left activity rail | 引入 VS Code 风格左 rail，右侧常驻区退出主布局 |
+| `f1a0e0da` | Route shell nav through a dedicated left rail | 统一 `Task / Agents / Approvals / Logs` 的壳层导航状态机，`Logs` 开始替换主区 |
+| `94b17ec0` | Embed the left drawer and preserve pane state | 左侧 drawer 改成嵌入式布局，`Task / Agents / Approvals` 切换或收起后状态保留 |
+| `03536b7c` | Add a minimal top bar with workspace context | 顶部收成极简标题 + 当前 workspace，不再承担功能切换 |
+| `e59bfadf` | Add shell navigation regression tests | 给 left rail、drawer、logs 主区切换补回归测试 |
+| `03d0c0de` | Keep chat-only actions off the logs surface | 去掉 logs 主区里误导性的聊天 `Clear` 操作 |
 
 ## 已完成修复
 
@@ -78,28 +84,26 @@
 
 ### 5. Shell 信息架构重排
 
-界面从之前的“左侧大控制面板 + 顶部 task panel + 中部 tabs”改成了：
+界面最终从“顶部大 header + 分散的面板入口”收口成了：
 
-- 顶部 `ShellContextBar`
-  - 显示 runtime online/offline
-  - 当前 task 标题 / workspace / session 数 / artifact 数
-  - Claude/Codex 状态摘要
-  - approvals 和 error logs 的高优先级 chip
+- 左侧独立 `activity rail`
+  - 只保留 `Task / Agents / Approvals / Logs`
+  - 同一 icon 再点一次就收起
+- 左侧共享 drawer
+  - `Task / Agents / Approvals` 共用一个面板容器
+  - 切换 pane 或收起后不丢内部状态
 - 中央主区域
-  - 永远以 conversation timeline 为主
-  - 不再让 logs/approvals 抢一级视图
-- 右侧 inspector
-  - provider 状态
-  - task session tree
-  - artifact timeline
-- 底部 secondary drawer
-  - logs
-  - approvals
+  - 默认就是聊天页，不再需要 `Conversation` 一级入口
+  - `Logs` 是唯一例外，选中后直接替换整个聊天主区
+- 顶部极简 bar
+  - 只保留 `AgentNexus` 和当前 workspace
+  - 不再承担主功能切换，不再像第二个 dashboard
 
 直接收益：
 
-- 主回复链路更清晰。
-- task context 和 provider control 还在，但不会压过主对话。
+- 主回复链路更清晰，主区默认永远是聊天。
+- 功能入口不再分散在顶部、右侧和底部多个区域。
+- 侧边导航逻辑和 IDE 习惯更接近，认知负担更低。
 
 ### 6. Provider 控件改成 progressive disclosure
 
@@ -119,6 +123,7 @@
 
 - provider 面板不再长期占据大量视觉权重。
 - “连接”和“查看/调整配置”的语义被清楚分开。
+- provider 配置现在被正确收进左侧共享 drawer，而不是漂在主界面不同位置。
 
 ### 7. Composer 更聚焦主动作
 
@@ -153,7 +158,10 @@
 - Claude/Codex stream rail 现在先短窗口合并，再写入 Zustand；高频流式状态不再每条事件都触发一次可见渲染。
 - Claude rail 去掉了每次 preview 更新都 `scrollTop = scrollHeight` 的路径，减少了长回复时的 sticky scroll 和 layout 抖动。
 - 消息气泡、SourceBadge、Claude/Codex 流式卡片都重新降权：accent 保留，但 glow、重边框和“像第二条正式消息”的块感已经被压掉。
-- Header 中间长期占位的 task 大块被收成左侧 `Task context` trigger，点击后才展开 popover；没有 active task 时也不再渲染那段长解释文案。
+- 最终进一步把 `Task / Agents / Approvals` 统一收进左侧共享 drawer，不再保留分散的顶部 header 控件或右侧常驻区。
+- `Logs` 现在作为真正的主区模式，而不是会和聊天并排或上下抢空间的 secondary panel。
+- 顶部最终只保留极简标题和当前 workspace；没有 active task 时也不再渲染那段长解释文案。
+- logs 主区里去掉了只适用于聊天区的 `Clear` 按钮，避免行为歧义。
 
 直接收益：
 
@@ -161,16 +169,17 @@
 - 流式过程更顺，不再靠高频 repaint “假装实时”。
 - 主对话、实时工作态、metadata 三层视觉关系更清楚。
 - Header 从第二个 dashboard 收回到真正的 status bar。
+- 左侧导航、侧边 pane、主区模式三者的职责边界终于稳定。
 
 ## 结果指标
 
 ### Bundle
 
-在完成 markdown lazy-load 和后续 UX 稳定性迭代后，主前端 chunk 收敛到：
+在完成 markdown lazy-load、稳定性迭代和最终壳层收口后，主前端 chunk 收敛到：
 
-- `dist/assets/index-BSONjy3X.js` `357.67 kB`
-- `dist/assets/markdown-DRufzcaI.js` `165.73 kB`
-- `dist/assets/MessageMarkdownRenderer-DhmnDPCf.js` `2.41 kB`
+- `dist/assets/index-CsrEiTuV.js` `353.59 kB`
+- `dist/assets/markdown-BTletENE.js` `165.73 kB`
+- `dist/assets/MessageMarkdownRenderer-DDkbupb7.js` `2.41 kB`
 
 这意味着 markdown 相关重量依然已经从主启动路径剥离出来，而后续稳定性和 header/popover 改造并没有把 bundle 拉回到早期的膨胀状态。
 
@@ -187,7 +196,7 @@
 
 结果：
 
-- `bun test`：`92 passed`
+- `bun test`：`108 passed`
 - `cargo test --manifest-path src-tauri/Cargo.toml`：`257 passed`
 - `cargo test --manifest-path bridge/Cargo.toml`：`29 passed`
 - `bun x tsc --noEmit`：通过
@@ -196,8 +205,12 @@
 
 额外 smoke：
 
-- 在运行中的 dev 页面里确认了新的 `Task context` 触发器存在、点击后能展开 popover、header 中不再出现旧的长 no-task 文案。
-- 这次 smoke 验证的是前端结构和交互层；真实的 Tauri `invoke` provider connect 流程仍主要依赖代码回归与原生启动验证，而不是浏览器页面本身。
+- 在 `1400px` 和 `920px` 宽度下分别用浏览器检查了最终布局：
+  - 左侧 rail 独立存在
+  - `Task / Agents / Approvals` 走左侧 drawer
+  - 重复点击当前 icon 会收起
+  - `Logs` 会替换整个主聊天区
+- 这次 smoke 主要覆盖前端壳层和交互结构；真实的 Tauri `invoke` provider connect 流程仍主要依赖代码回归与原生启动验证，而不是浏览器页面本身。
 
 ## 额外修正
 
