@@ -55,5 +55,6 @@ describe("MessagePanel", () => {
     expect(html).toContain("Runtime logs");
     expect(html).toContain("No logs.");
     expect(html).not.toContain("Primary timeline");
+    expect(html).not.toContain(">Clear<");
   });
 });

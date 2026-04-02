@@ -76,9 +76,11 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
               {errorLines.length} errors
             </span>
           )}
-          <Button variant="secondary" size="xs" onClick={clearMessages}>
-            Clear
-          </Button>
+          {surfaceMode === "chat" && (
+            <Button variant="secondary" size="xs" onClick={clearMessages}>
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 
