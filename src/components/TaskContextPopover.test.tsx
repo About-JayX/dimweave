@@ -14,7 +14,9 @@ describe("TaskContextPopover", () => {
       />,
     );
 
+    expect(html).toContain("data-task-context-drawer=\"true\"");
     expect(html).toContain("No active task");
+    expect(html).not.toContain("bg-background/28");
     expect(html).not.toContain(
       "The conversation timeline stays live, but task context and review state will appear here once a task is active.",
     );

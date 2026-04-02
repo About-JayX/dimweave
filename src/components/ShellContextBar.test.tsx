@@ -24,7 +24,7 @@ function installTauriStub() {
 }
 
 describe("ShellContextBar", () => {
-  test("renders a mobile inspector toggle when the shell exposes one", async () => {
+  test("renders task context as a side trigger instead of a top runtime header", async () => {
     installTauriStub();
     const { ShellContextBar } = await import("./ShellContextBar");
     const html = renderToStaticMarkup(
@@ -34,8 +34,10 @@ describe("ShellContextBar", () => {
       />,
     );
 
-    expect(html).toContain("Open inspector");
     expect(html).toContain("Task context");
-    expect(html).not.toContain("No active task selected. The conversation timeline stays live");
+    expect(html).not.toContain("AGENTNEXUS");
+    expect(html).not.toContain("Runtime");
+    expect(html).not.toContain("Claude");
+    expect(html).not.toContain("Codex");
   });
 });
