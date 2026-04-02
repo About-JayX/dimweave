@@ -31,6 +31,8 @@ describe("ShellContextBar", () => {
 
     expect(html).toContain("Task context");
     expect(html).toContain("Agents");
+    expect(html).toContain("Approvals");
+    expect(html).toContain("Logs");
     expect(html).not.toContain("AGENTNEXUS");
     expect(html).not.toContain("Daemon online");
   });

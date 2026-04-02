@@ -33,7 +33,7 @@ describe("TaskContextPopover", () => {
     installTauriStub();
     const html = renderToStaticMarkup(
       <TaskContextPopover
-        activePane="context"
+        activePane="task"
         onClose={() => {}}
         task={null}
       />,
@@ -69,5 +69,16 @@ describe("TaskContextPopover", () => {
     expect(html).toContain("Agents");
     expect(html).toContain("Runtime control");
     expect(html).not.toContain("Task workspace");
+  });
+
+  test("renders approvals inside the shared shell drawer", () => {
+    installTauriStub();
+    const html = renderToStaticMarkup(
+      <TaskContextPopover activePane="approvals" onClose={() => {}} task={null} />,
+    );
+
+    expect(html).toContain("Approvals");
+    expect(html).toContain("Permission queue");
+    expect(html).toContain("No pending approvals.");
   });
 });

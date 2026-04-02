@@ -1,60 +1,58 @@
-import { useState } from "react";
-import { Bot, Workflow } from "lucide-react";
-import { TaskContextPopover } from "@/components/TaskContextPopover";
-import { useTaskStore } from "@/stores/task-store";
-import { selectActiveTask } from "@/stores/task-store/selectors";
+import {
+  AlertTriangle,
+  Bot,
+  TerminalSquare,
+  Workflow,
+} from "lucide-react";
+import type { ShellNavItem } from "./shell-layout-state";
 
-type SidebarPane = "context" | "agents";
+interface ShellContextBarProps {
+  activeItem: ShellNavItem | null;
+  onToggle: (item: ShellNavItem) => void;
+}
 
-export function ShellContextBar() {
-  const [activePane, setActivePane] = useState<SidebarPane | null>(null);
-  const activeTask = useTaskStore(selectActiveTask);
+const NAV_ITEMS: Array<{
+  id: ShellNavItem;
+  label: string;
+  icon: typeof Workflow;
+}> = [
+  { id: "task", label: "Task context", icon: Workflow },
+  { id: "agents", label: "Agents", icon: Bot },
+  { id: "approvals", label: "Approvals", icon: AlertTriangle },
+  { id: "logs", label: "Logs", icon: TerminalSquare },
+];
 
-  const togglePane = (pane: SidebarPane) => {
-    setActivePane((current) => (current === pane ? null : pane));
-  };
-
+export function ShellContextBar({
+  activeItem,
+  onToggle,
+}: ShellContextBarProps) {
   return (
-    <>
-      <div className="pointer-events-none fixed inset-y-0 left-0 z-30 flex items-center">
-        <div className="pointer-events-auto ml-2 flex w-16 flex-col items-center gap-3 rounded-3xl border border-border/45 bg-background/90 px-2 py-4 shadow-xl backdrop-blur-sm lg:ml-4">
-          <button
-            type="button"
-            data-shell-pane-trigger="true"
-            aria-label="Open task context"
-            aria-pressed={activePane === "context"}
-            className="group relative flex size-11 items-center justify-center rounded-2xl border border-transparent bg-background/35 text-muted-foreground/72 transition-colors hover:border-border/55 hover:bg-card/80 hover:text-foreground/88 aria-pressed:border-primary/40 aria-pressed:bg-card aria-pressed:text-foreground"
-            onClick={() => togglePane("context")}
-          >
-            <span className="sr-only">Task context</span>
-            <Workflow className="size-4" />
-            {activePane === "context" && (
-              <span className="absolute -left-2 h-6 w-1 rounded-full bg-primary" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            data-shell-pane-trigger="true"
-            aria-label="Open agents"
-            aria-pressed={activePane === "agents"}
-            className="group relative flex size-11 items-center justify-center rounded-2xl border border-transparent bg-background/35 text-muted-foreground/72 transition-colors hover:border-border/55 hover:bg-card/80 hover:text-foreground/88 aria-pressed:border-primary/40 aria-pressed:bg-card aria-pressed:text-foreground"
-            onClick={() => togglePane("agents")}
-          >
-            <span className="sr-only">Agents</span>
-            <Bot className="size-4" />
-            {activePane === "agents" && (
-              <span className="absolute -left-2 h-6 w-1 rounded-full bg-primary" />
-            )}
-          </button>
-        </div>
+    <aside className="flex w-20 shrink-0 flex-col border-r border-border/45 bg-background/78 px-3 py-4 backdrop-blur-sm">
+      <div className="mb-4 flex h-12 items-center justify-center rounded-2xl border border-border/35 bg-card/55">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/88">
+          AN
+        </span>
       </div>
 
-      <TaskContextPopover
-        activePane={activePane}
-        onClose={() => setActivePane(null)}
-        task={activeTask}
-      />
-    </>
+      <nav className="flex flex-1 flex-col items-center gap-3">
+        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            data-shell-pane-trigger="true"
+            aria-label={`Open ${label.toLowerCase()}`}
+            aria-pressed={activeItem === id}
+            className="group relative flex size-11 items-center justify-center rounded-2xl border border-transparent bg-background/35 text-muted-foreground/72 transition-colors hover:border-border/55 hover:bg-card/80 hover:text-foreground/88 aria-pressed:border-primary/40 aria-pressed:bg-card aria-pressed:text-foreground"
+            onClick={() => onToggle(id)}
+          >
+            <span className="sr-only">{label}</span>
+            <Icon className="size-4" />
+            {activeItem === id && (
+              <span className="absolute -left-3 h-6 w-1 rounded-full bg-primary" />
+            )}
+          </button>
+        ))}
+      </nav>
+    </aside>
   );
 }
