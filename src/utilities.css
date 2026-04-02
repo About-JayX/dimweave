@@ -21,12 +21,12 @@
   .border-glow-claude {
     --glow-color: var(--color-claude-glow);
     --glow-color-strong: color-mix(in srgb, var(--color-claude) 50%, transparent);
-    animation: border-glow 3s ease-in-out infinite;
+    border-color: var(--glow-color);
   }
   .border-glow-codex {
     --glow-color: var(--color-codex-glow);
     --glow-color-strong: color-mix(in srgb, var(--color-codex) 50%, transparent);
-    animation: border-glow 3s ease-in-out infinite;
+    border-color: var(--glow-color);
   }
 
   .dot-glow {
@@ -54,8 +54,7 @@
 
   .text-gradient-cyber {
     background: linear-gradient(135deg, #8b5cf6, #a78bfa, #22c55e, #8b5cf6);
-    background-size: 300% 300%;
-    animation: gradient-shift 6s ease infinite;
+    background-size: 180% 180%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

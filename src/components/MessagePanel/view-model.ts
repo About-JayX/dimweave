@@ -6,6 +6,11 @@ import type {
 
 export type StreamIndicatorId = "claude" | "codex";
 export type MessagePanelTab = "messages" | "logs" | "approvals";
+const DEFAULT_LOG_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
 
 export interface CodexStreamIndicatorViewModel {
   visible: boolean;
@@ -75,6 +80,13 @@ export function getStreamTextTail(text: string, maxChars: number): string {
   }
 
   return `…${text.slice(-maxChars)}`;
+}
+
+export function formatTerminalTimestamp(
+  timestamp: number,
+  formatter: Intl.DateTimeFormat = DEFAULT_LOG_TIME_FORMATTER,
+): string {
+  return formatter.format(timestamp);
 }
 
 export function getCodexStreamIndicatorViewModel(

@@ -5,19 +5,9 @@
   50% { box-shadow: 0 0 8px currentColor, 0 0 16px currentColor; opacity: 0.8; }
 }
 
-@keyframes border-glow {
-  0%, 100% { border-color: var(--glow-color, #8b5cf640); }
-  50% { border-color: var(--glow-color-strong, #8b5cf680); }
-}
-
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
-}
-
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
 }
 
 @keyframes message-enter {

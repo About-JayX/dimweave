@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
@@ -11,6 +12,7 @@ import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import {
   filterRenderableChatMessages,
   getClaudeAttentionResolution,
+  formatTerminalTimestamp,
 } from "./view-model";
 
 type Tab = "messages" | "logs" | "approvals";
@@ -26,7 +28,6 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
     setTabState(t);
     onTabChange?.(t);
   };
-  const logRef = useRef<HTMLDivElement>(null);
 
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
@@ -92,29 +93,32 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
       </div>
       {tab === "messages" && <MessageList messages={chatMessages} />}
       {tab === "logs" && (
-        <div
-          ref={logRef}
-          className="flex-1 overflow-y-auto px-4 py-2 font-mono text-[11px] leading-relaxed"
-        >
+        <div className="flex-1 min-h-0">
           {allTerminalLines.length === 0 && (
             <div className="py-10 text-center text-[13px] text-muted-foreground font-sans">
               No logs.
             </div>
           )}
-          {allTerminalLines.map((l) => (
-            <div
-              key={l.id}
-              className={`py-0.5 ${l.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
-            >
-              <span className="opacity-50 mr-2">
-                {new Date(l.timestamp).toLocaleTimeString()}
-              </span>
-              <span className="mr-1 text-secondary-foreground">
-                [{l.agent}]
-              </span>
-              {l.line}
-            </div>
-          ))}
+          {allTerminalLines.length > 0 && (
+            <Virtuoso
+              data={allTerminalLines}
+              className="h-full px-4 py-2 font-mono text-[11px] leading-relaxed"
+              increaseViewportBy={160}
+              itemContent={(_, line) => (
+                <div
+                  className={`py-0.5 ${line.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  <span className="opacity-50 mr-2">
+                    {formatTerminalTimestamp(line.timestamp)}
+                  </span>
+                  <span className="mr-1 text-secondary-foreground">
+                    [{line.agent}]
+                  </span>
+                  {line.line}
+                </div>
+              )}
+            />
+          )}
         </div>
       )}
       {tab === "approvals" && (
