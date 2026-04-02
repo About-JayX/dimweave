@@ -8,7 +8,8 @@ describe("ShellTopBar", () => {
       <ShellTopBar workspaceLabel="~/Desktop/figma" />,
     );
 
-    expect(html).toContain("AgentNexus");
+    expect(html).toContain("Dimweave");
+    expect(html).toContain("Dimweave logo");
     expect(html).toContain("Current workspace");
     expect(html).toContain("~/Desktop/figma");
     expect(html).not.toContain("Logs");

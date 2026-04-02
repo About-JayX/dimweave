@@ -1,0 +1,66 @@
+<svg
+  width="256"
+  height="256"
+  viewBox="0 0 128 128"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <radialGradient id="dimweave-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 58) rotate(90) scale(42)">
+      <stop offset="0" stop-color="#8DE4FF" stop-opacity="0.95" />
+      <stop offset="0.45" stop-color="#4BC7FF" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#4BC7FF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="dimweave-web" x1="18" y1="86" x2="110" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2BAAF2" stop-opacity="0.72" />
+      <stop offset="0.5" stop-color="#86E1FF" stop-opacity="0.95" />
+      <stop offset="1" stop-color="#2BAAF2" stop-opacity="0.72" />
+    </linearGradient>
+    <filter id="dimweave-blur" x="-32" y="-32" width="192" height="192" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="10" />
+    </filter>
+  </defs>
+
+  <circle cx="64" cy="58" r="34" fill="url(#dimweave-glow)" filter="url(#dimweave-blur)" />
+
+  <g stroke="url(#dimweave-web)" stroke-linecap="round" stroke-width="1.75">
+    <path d="M18 78L64 66L110 78" />
+    <path d="M30 58L64 66L98 58" />
+    <path d="M38 94L64 66L90 94" />
+    <path d="M64 36V106" />
+    <path d="M30 58L18 78L30 94" />
+    <path d="M98 58L110 78L98 94" />
+    <path d="M64 66L42 46L30 58" />
+    <path d="M64 66L86 46L98 58" />
+    <path d="M42 46L64 36L86 46" />
+    <path d="M30 58C40 64 49 66 64 66C79 66 88 64 98 58" />
+    <path d="M18 78C30 82 43 84 64 84C85 84 98 82 110 78" />
+    <path d="M30 94C40 88 49 86 64 86C79 86 88 88 98 94" />
+    <path d="M42 46C48 54 54 59 64 66C74 59 80 54 86 46" />
+  </g>
+
+  <g fill="#091A2E" stroke="#0B4E86" stroke-linejoin="round" stroke-width="1.2">
+    <path d="M64 49L74 58L66 72L55 70L51 58L64 49Z" />
+    <path d="M63 43L69 49L64 57L57 50L63 43Z" />
+  </g>
+
+  <g stroke="#0E2F52" stroke-linecap="round" stroke-width="2">
+    <path d="M56 56L45 49" />
+    <path d="M56 60L41 60" />
+    <path d="M57 65L47 76" />
+    <path d="M58 69L54 88" />
+    <path d="M72 56L83 49" />
+    <path d="M72 60L87 60" />
+    <path d="M71 65L81 76" />
+    <path d="M70 69L74 88" />
+  </g>
+
+  <g fill="#4BC7FF">
+    <circle cx="60" cy="30" r="1.8" fill-opacity="0.75" />
+    <circle cx="69" cy="26" r="1.5" fill-opacity="0.68" />
+    <circle cx="74" cy="33" r="1.4" fill-opacity="0.6" />
+    <circle cx="66" cy="18" r="1.2" fill-opacity="0.5" />
+    <circle cx="79" cy="40" r="1.3" fill-opacity="0.55" />
+    <circle cx="52" cy="38" r="1.1" fill-opacity="0.5" />
+  </g>
+</svg>

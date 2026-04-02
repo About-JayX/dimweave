@@ -102,7 +102,7 @@ pub fn format_user_message(content: &str) -> String {
     format!("{msg}\n")
 }
 
-/// Format a channel-wrapped user message matching AgentNexus routing semantics.
+/// Format a channel-wrapped user message matching Dimweave routing semantics.
 pub fn format_channel_user_message(from: &str, content: &str) -> String {
     let wrapped = format!(
         "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
@@ -138,7 +138,7 @@ pub fn format_control_response(request_id: &str, allow: bool) -> String {
     } else {
         serde_json::json!({
             "behavior": "deny",
-            "message": "Denied by AgentNexus daemon",
+            "message": "Denied by Dimweave daemon",
             "updatedInput": {}
         })
     };
@@ -178,7 +178,7 @@ pub fn format_keep_alive() -> String {
 
 /// Format an initialize control_response.
 pub fn format_initialize_response(request_id: &str) -> String {
-    // Claude accepts an empty capability inventory here for AgentNexus's
+    // Claude accepts an empty capability inventory here for Dimweave's
     // current SDK transport. We keep this response intentionally minimal until
     // the host needs to surface models, commands, or account metadata.
     let msg = serde_json::json!({

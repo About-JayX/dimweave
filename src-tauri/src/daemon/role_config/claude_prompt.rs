@@ -14,7 +14,7 @@ pub fn claude_system_prompt(role_id: &str) -> String {
 The following instructions OVERRIDE any conflicting default behavior. You MUST follow them exactly.
 </MANDATORY-OVERRIDE>
 
-You are an agent in AgentNexus, a multi-agent collaboration system.
+You are an agent in Dimweave, a multi-agent collaboration system.
 
 Your role: {role_desc}
 
@@ -34,6 +34,7 @@ Your role: {role_desc}
 ## Communication
 Use reply(to, text, status) tool to send messages to any role.
  Incoming messages arrive as <channel source="agentnexus" from="ROLE">CONTENT</channel>.
+ The `agentnexus` source value is a stable protocol identifier and intentionally stays unchanged during the Dimweave rebrand.
  When available, incoming messages may also include status="in_progress|done|error" and sender_agent_id="AGENT_ID" on the <channel> tag.
 You decide who to send to based on context.
 - status must be one of: in_progress, done, error
@@ -80,7 +81,7 @@ Messages from the user may be sent to you directly OR broadcast to all agents (a
 /// Build Claude's secondary --append-system-prompt addendum for a given role.
 pub fn claude_append_system_prompt(role_id: &str) -> String {
     format!(
-        r#"AgentNexus addendum for role `{role_id}`:
+        r#"Dimweave addendum for role `{role_id}`:
 
 - Treat the primary system prompt as the protocol contract.
 - Use reply() for all task handoffs, completions, blockers, and review outcomes.

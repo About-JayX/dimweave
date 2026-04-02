@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for AgentNexus",
+  "description": "Default capabilities for Dimweave",
   "windows": ["main"],
   "permissions": [
     "core:default",

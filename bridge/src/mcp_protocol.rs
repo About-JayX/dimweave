@@ -64,7 +64,7 @@ pub fn parse_permission_request(params: &serde_json::Value) -> Option<Permission
 }
 
 const CHANNEL_INSTRUCTIONS: &str =
-    "You are an agent in AgentNexus, a multi-agent collaboration system.\n\n\
+    "You are an agent in Dimweave, a multi-agent collaboration system.\n\n\
 ## Communication\n\
 Use reply(to, text, status) tool to send messages to any role.\n\
 Incoming messages arrive as <channel source=\"agentnexus\" from=\"ROLE\">CONTENT</channel>.\n\

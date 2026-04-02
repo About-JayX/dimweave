@@ -99,7 +99,7 @@ fn validate_claude_channel_ready(version: ClaudeVersion) -> Result<ClaudeVersion
     }
     if version.is_known_bad_managed_pty() {
         return Err(format!(
-            "Claude Code {version} is blocked in AgentNexus managed PTY: this release can crash with `_4.useRef is not a function` after Claude starts rendering tool activity. Downgrade to 2.1.84 (for example: `claude install 2.1.84 --force` or `npm i -g @anthropic-ai/claude-code@2.1.84`) or upgrade once Anthropic ships a fixed release."
+            "Claude Code {version} is blocked in Dimweave managed PTY: this release can crash with `_4.useRef is not a function` after Claude starts rendering tool activity. Downgrade to 2.1.84 (for example: `claude install 2.1.84 --force` or `npm i -g @anthropic-ai/claude-code@2.1.84`) or upgrade once Anthropic ships a fixed release."
         ));
     }
     Ok(version)

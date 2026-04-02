@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickelpack/tauri-v2-nightly/main/tauri-config-schema.json",
-  "productName": "AgentNexus",
+  "productName": "Dimweave",
   "version": "0.1.0",
   "identifier": "com.agentnexus.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "AgentNexus",
+        "title": "Dimweave",
         "width": 1000,
         "height": 700,
         "resizable": true,

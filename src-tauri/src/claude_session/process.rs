@@ -115,7 +115,7 @@ pub fn spawn_exit_watcher(
                 );
                 crate::daemon::gui::emit_claude_terminal_data(
                     &app,
-                    &format!("\r\n[AgentNexus] {summary}\r\n"),
+                    &format!("\r\n[Dimweave] {summary}\r\n"),
                 );
                 crate::daemon::gui::emit_system_log(
                     &app,

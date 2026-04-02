@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
-/// Tracks AgentNexus-owned Codex launches while reusing a stable shared
+/// Tracks Dimweave-owned Codex launches while reusing a stable shared
 /// `CODEX_HOME` so provider-native thread history remains resumable.
 pub struct SessionManager {
     sessions: HashMap<String, PathBuf>,

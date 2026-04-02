@@ -25,7 +25,7 @@ impl std::fmt::Display for ToolCallError {
 pub fn reply_tool_schema() -> serde_json::Value {
     serde_json::json!({
         "name": "reply",
-        "description": "Send a message to another agent role in AgentNexus. The system routes it automatically.",
+        "description": "Send a message to another agent role in Dimweave. The system routes it automatically.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -52,7 +52,7 @@ pub fn reply_tool_schema() -> serde_json::Value {
 pub fn get_online_agents_schema() -> serde_json::Value {
     serde_json::json!({
         "name": "get_online_agents",
-        "description": "Query which agents are currently online in AgentNexus and their roles.",
+        "description": "Query which agents are currently online in Dimweave and their roles.",
         "inputSchema": { "type": "object", "properties": {} }
     })
 }

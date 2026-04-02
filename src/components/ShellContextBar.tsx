@@ -29,9 +29,11 @@ export function ShellContextBar({
   return (
     <aside className="flex w-20 shrink-0 flex-col border-r border-border/45 bg-background/78 px-3 py-4 backdrop-blur-sm">
       <div className="mb-4 flex h-12 items-center justify-center rounded-2xl border border-border/35 bg-card/55">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-foreground/88">
-          AN
-        </span>
+        <img
+          src="/dimweave-mark.svg"
+          alt="Dimweave logo"
+          className="h-8 w-8 object-contain"
+        />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-3">

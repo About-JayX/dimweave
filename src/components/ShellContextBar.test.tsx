@@ -27,13 +27,16 @@ describe("ShellContextBar", () => {
   test("renders a VS Code-style side rail without reviving the top runtime header", async () => {
     installTauriStub();
     const { ShellContextBar } = await import("./ShellContextBar");
-    const html = renderToStaticMarkup(<ShellContextBar />);
+    const html = renderToStaticMarkup(
+      <ShellContextBar activeItem={null} onToggle={() => {}} />,
+    );
 
     expect(html).toContain("Task context");
     expect(html).toContain("Agents");
     expect(html).toContain("Approvals");
     expect(html).toContain("Logs");
-    expect(html).not.toContain("AGENTNEXUS");
+    expect(html).toContain("Dimweave logo");
+    expect(html).not.toContain("AgentNexus");
     expect(html).not.toContain("Daemon online");
   });
 });
