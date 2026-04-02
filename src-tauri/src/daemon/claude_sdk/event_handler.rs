@@ -12,7 +12,7 @@ use delivery::{
     begin_sdk_direct_text_turn_if_allowed, build_direct_sdk_gui_message,
     claim_sdk_terminal_delivery, finish_sdk_direct_text_turn,
 };
-use stream::{extract_assistant_text, handle_stream_event};
+use stream::{extract_assistant_text, flush_pending_preview_batch, handle_stream_event};
 
 #[path = "event_handler_delivery.rs"]
 mod delivery;
@@ -36,7 +36,7 @@ pub async fn handle_events(events: Vec<Value>, role: &str, state: SharedState, a
             "system" => handle_system(&event, &app),
             "result" => handle_result(&event, role, &state, &app).await,
             "user" | "keep_alive" | "control_cancel_request" => { /* echo / heartbeat / cancel — ignore */ }
-            "stream_event" => handle_stream_event(&event, &app),
+            "stream_event" => handle_stream_event(&event, &state, &app).await,
             "rate_limit_event" => {
                 let status = event["rate_limit_info"]["status"].as_str().unwrap_or("?");
                 gui::emit_system_log(&app, "info", &format!("[Claude SDK] rate_limit: {status}"));
@@ -144,6 +144,7 @@ fn handle_system(event: &Value, app: &AppHandle) {
 }
 
 async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &AppHandle) {
+    flush_pending_preview_batch(state, app).await;
     gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
     // Extract final text if present in result
     let text = event["result"]

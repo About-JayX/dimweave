@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
-import { handleCodexStreamEvent } from "./listener-setup";
+import { handleCodexStreamEvent } from "./stream-reducers";
 import type { CodexStreamPayload } from "./listener-payloads";
 
 function baseState(): BridgeState {

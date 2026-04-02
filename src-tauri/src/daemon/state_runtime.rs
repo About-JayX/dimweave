@@ -43,6 +43,7 @@ impl DaemonState {
         self.claude_sdk_pending_nonce = Some(launch_nonce);
         self.claude_sdk_active_nonce = None;
         self.claude_sdk_ws_tx = None;
+        self.clear_claude_preview_batch();
         epoch
     }
 
@@ -102,7 +103,36 @@ impl DaemonState {
         self.claude_sdk_pending_nonce = None;
         self.claude_sdk_active_nonce = None;
         self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::Inactive;
+        self.clear_claude_preview_batch();
         self.claude_connection = None;
+    }
+
+    pub fn append_claude_preview_delta(&mut self, text: &str) -> bool {
+        if text.is_empty() {
+            return false;
+        }
+
+        self.claude_preview_buffer.push_str(text);
+        if self.claude_preview_flush_scheduled {
+            return false;
+        }
+
+        self.claude_preview_flush_scheduled = true;
+        true
+    }
+
+    pub fn take_claude_preview_batch(&mut self) -> Option<String> {
+        self.claude_preview_flush_scheduled = false;
+        if self.claude_preview_buffer.is_empty() {
+            return None;
+        }
+
+        Some(std::mem::take(&mut self.claude_preview_buffer))
+    }
+
+    pub fn clear_claude_preview_batch(&mut self) {
+        self.claude_preview_buffer.clear();
+        self.claude_preview_flush_scheduled = false;
     }
 
     #[cfg(test)]

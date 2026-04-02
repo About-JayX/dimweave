@@ -270,6 +270,27 @@ fn stale_disconnect_cannot_clear_reconnected_ws_for_same_launch() {
 }
 
 #[test]
+fn claude_preview_batch_schedules_once_until_flushed() {
+    let mut s = DaemonState::new();
+
+    assert!(s.append_claude_preview_delta("Hello"));
+    assert!(!s.append_claude_preview_delta(" world"));
+    assert_eq!(s.take_claude_preview_batch().as_deref(), Some("Hello world"));
+    assert_eq!(s.take_claude_preview_batch(), None);
+    assert!(s.append_claude_preview_delta("Again"));
+}
+
+#[test]
+fn invalidating_claude_session_clears_preview_batch() {
+    let mut s = DaemonState::new();
+
+    assert!(s.append_claude_preview_delta("preview"));
+    s.invalidate_claude_sdk_session();
+
+    assert_eq!(s.take_claude_preview_batch(), None);
+}
+
+#[test]
 fn sdk_terminal_delivery_claim_blocks_later_bridge_terminal_delivery() {
     let mut s = DaemonState::new();
 
