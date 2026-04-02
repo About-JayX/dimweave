@@ -71,6 +71,8 @@ fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
     cmd.arg("--output-format").arg("stream-json");
     cmd.arg("--replay-user-messages");
     cmd.arg("--dangerously-skip-permissions");
+    cmd.arg("--verbose");
+    cmd.arg("--include-partial-messages");
 
     // Session identity: new or resume
     match &opts.resume {
