@@ -1,5 +1,12 @@
 import { useCallback, useMemo } from "react";
-import { useTaskStore } from "@/stores/task-store";
+import {
+  useTaskStore,
+} from "@/stores/task-store";
+import {
+  selectActiveTask,
+  selectActiveTaskArtifacts,
+  selectActiveTaskSessions,
+} from "@/stores/task-store/selectors";
 import { ArtifactTimeline } from "./ArtifactTimeline";
 import { SessionTree } from "./SessionTree";
 import { TaskHeader } from "./TaskHeader";
@@ -11,15 +18,10 @@ import {
 } from "./view-model";
 
 export function TaskPanel() {
-  const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const tasks = useTaskStore((s) => s.tasks);
-  const sessions = useTaskStore((s) => s.sessions);
-  const artifacts = useTaskStore((s) => s.artifacts);
+  const task = useTaskStore(selectActiveTask);
+  const taskSessions = useTaskStore(selectActiveTaskSessions);
+  const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
-
-  const task = activeTaskId ? tasks[activeTaskId] : null;
-  const taskSessions = activeTaskId ? sessions[activeTaskId] ?? [] : [];
-  const taskArtifacts = activeTaskId ? artifacts[activeTaskId] ?? [] : [];
 
   const reviewBadge = useMemo(
     () => getReviewBadge(task?.reviewStatus),

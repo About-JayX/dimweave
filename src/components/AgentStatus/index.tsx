@@ -1,20 +1,21 @@
 import { useEffect } from "react";
 import { ClaudePanel } from "@/components/ClaudePanel";
 import { useBridgeStore } from "@/stores/bridge-store";
+import {
+  selectAgents,
+  selectConnected,
+} from "@/stores/bridge-store/selectors";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useTaskStore } from "@/stores/task-store";
+import { selectActiveTask } from "@/stores/task-store/selectors";
 import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
 import { getReviewBadge } from "@/components/TaskPanel/view-model";
-import type { AgentInfo } from "@/types";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
 
-interface AgentStatusProps {
-  agents: Record<string, AgentInfo>;
-  connected: boolean;
-}
-
-export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
+export function AgentStatusPanel() {
+  const agents = useBridgeStore(selectAgents);
+  const connected = useBridgeStore(selectConnected);
   const stopCodexTui = useBridgeStore((s) => s.stopCodexTui);
   const profile = useCodexAccountStore((s) => s.profile);
   const usage = useCodexAccountStore((s) => s.usage);
@@ -22,13 +23,11 @@ export function AgentStatusPanel({ agents, connected }: AgentStatusProps) {
   const fetchProfile = useCodexAccountStore((s) => s.fetchProfile);
   const fetchUsage = useCodexAccountStore((s) => s.fetchUsage);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
-  const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const tasks = useTaskStore((s) => s.tasks);
+  const activeTask = useTaskStore(selectActiveTask);
 
   // Derive agent states from the agents map (populated via agent_status Tauri events)
   const claudeConnected = agents.claude?.status === "connected";
   const codexConnected = agents.codex?.status === "connected";
-  const activeTask = activeTaskId ? tasks[activeTaskId] : null;
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   useEffect(() => {

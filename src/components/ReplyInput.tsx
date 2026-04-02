@@ -1,7 +1,9 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { selectAnyAgentConnected } from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
+import { selectActiveTask } from "@/stores/task-store/selectors";
 import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
 import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import { Send, ChevronDown } from "lucide-react";
@@ -18,11 +20,8 @@ const TARGET_COLORS: Record<Target, string> = {
   reviewer: "text-orange-400 border-orange-400/30",
 };
 
-interface ReplyInputProps {
-  connected: boolean;
-}
-
-export function ReplyInput({ connected }: ReplyInputProps) {
+export function ReplyInput() {
+  const connected = useBridgeStore(selectAnyAgentConnected);
   const draft = useBridgeStore((s) => s.draft);
   const setDraft = useBridgeStore((s) => s.setDraft);
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
@@ -31,9 +30,7 @@ export function ReplyInput({ connected }: ReplyInputProps) {
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const tasks = useTaskStore((s) => s.tasks);
-  const activeTask = activeTaskId ? tasks[activeTaskId] : null;
+  const activeTask = useTaskStore(selectActiveTask);
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   const handleSend = useCallback(() => {

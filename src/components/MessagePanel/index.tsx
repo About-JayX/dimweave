@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { selectMessages } from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
+import { selectActiveTask } from "@/stores/task-store/selectors";
 import type { BridgeMessage } from "@/types";
 import { PermissionQueue } from "./PermissionQueue";
 import { TabBtn } from "./TabBtn";
@@ -18,11 +20,10 @@ import {
 type Tab = "messages" | "logs" | "approvals";
 
 interface MessagePanelProps {
-  messages: BridgeMessage[];
   onTabChange?: (tab: Tab) => void;
 }
 
-export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
+export function MessagePanel({ onTabChange }: MessagePanelProps) {
   const [tab, setTabState] = useState<Tab>("messages");
   const setTab = (t: Tab) => {
     setTabState(t);
@@ -30,14 +31,13 @@ export function MessagePanel({ messages, onTabChange }: MessagePanelProps) {
   };
 
   const clearMessages = useBridgeStore((s) => s.clearMessages);
+  const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const permissionPrompts = useBridgeStore((s) => s.permissionPrompts);
   const respondToPermission = useBridgeStore((s) => s.respondToPermission);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
-  const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const tasks = useTaskStore((s) => s.tasks);
-  const activeTask = activeTaskId ? tasks[activeTaskId] : null;
+  const activeTask = useTaskStore(selectActiveTask);
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
 
   const chatMessages = useMemo(
