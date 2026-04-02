@@ -122,6 +122,16 @@ pub fn format_control_response(request_id: &str, allow: bool) -> String {
     format!("{msg}\n")
 }
 
+#[cfg(test)]
+#[path = "protocol_tests.rs"]
+mod tests;
+
+/// Format a keep_alive message.
+pub fn format_keep_alive() -> String {
+    let msg = serde_json::json!({"type": "keep_alive"});
+    format!("{msg}\n")
+}
+
 /// Format an initialize control_response.
 pub fn format_initialize_response(request_id: &str) -> String {
     let msg = serde_json::json!({

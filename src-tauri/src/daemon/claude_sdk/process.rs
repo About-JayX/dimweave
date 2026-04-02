@@ -206,6 +206,103 @@ mod tests {
     }
 
     #[test]
+    fn build_claude_command_includes_stream_and_permission_flags() {
+        let opts = ClaudeLaunchOpts {
+            claude_bin: PathBuf::from("/usr/local/bin/claude"),
+            role: None,
+            cwd: "/tmp".into(),
+            session_id: "s".into(),
+            model: None,
+            effort: None,
+            resume: None,
+            daemon_port: 4502,
+            mcp_config: None,
+        };
+        let cmd = build_claude_command(&opts);
+        let args: Vec<String> = cmd
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(args.contains(&"--verbose".to_string()), "missing --verbose");
+        assert!(
+            args.contains(&"--include-partial-messages".to_string()),
+            "missing --include-partial-messages (required for stream_event)"
+        );
+        assert!(
+            args.contains(&"--dangerously-skip-permissions".to_string()),
+            "missing --dangerously-skip-permissions"
+        );
+        assert!(
+            args.contains(&"--replay-user-messages".to_string()),
+            "missing --replay-user-messages"
+        );
+        assert!(
+            args.windows(2).any(|w| w[0] == "--input-format" && w[1] == "stream-json"),
+            "missing --input-format stream-json"
+        );
+        assert!(
+            args.windows(2).any(|w| w[0] == "--output-format" && w[1] == "stream-json"),
+            "missing --output-format stream-json"
+        );
+    }
+
+    #[test]
+    fn build_claude_command_sets_all_required_env_vars() {
+        let opts = ClaudeLaunchOpts {
+            claude_bin: PathBuf::from("/usr/local/bin/claude"),
+            role: None,
+            cwd: "/tmp".into(),
+            session_id: "s".into(),
+            model: None,
+            effort: None,
+            resume: None,
+            daemon_port: 4502,
+            mcp_config: None,
+        };
+        let cmd = build_claude_command(&opts);
+        let envs: Vec<(String, Option<String>)> = cmd
+            .as_std()
+            .get_envs()
+            .map(|(k, v)| (k.to_string_lossy().into(), v.map(|v| v.to_string_lossy().into())))
+            .collect();
+
+        let get_env = |name: &str| -> Option<String> {
+            envs.iter()
+                .find(|(k, _)| k == name)
+                .and_then(|(_, v)| v.clone())
+        };
+
+        assert_eq!(get_env("CLAUDE_CODE_ENVIRONMENT_KIND"), Some("bridge".into()));
+        assert_eq!(get_env("CLAUDE_CODE_SESSION_ACCESS_TOKEN"), Some("agentnexus-local".into()));
+        assert_eq!(get_env("CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2"), Some("1".into()));
+        assert_eq!(get_env("CLAUDE_CODE_OAUTH_TOKEN"), Some("".into()), "OAuth must be cleared");
+    }
+
+    #[test]
+    fn build_claude_command_no_role_omits_system_prompt() {
+        let opts = ClaudeLaunchOpts {
+            claude_bin: PathBuf::from("/usr/local/bin/claude"),
+            role: None,
+            cwd: "/tmp".into(),
+            session_id: "s".into(),
+            model: None,
+            effort: None,
+            resume: None,
+            daemon_port: 4502,
+            mcp_config: None,
+        };
+        let cmd = build_claude_command(&opts);
+        let args: Vec<String> = cmd
+            .as_std()
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(!args.contains(&"--append-system-prompt".to_string()));
+    }
+
+    #[test]
     fn launch_trace_describes_sdk_transport_chain() {
         let opts = ClaudeLaunchOpts {
             claude_bin: PathBuf::from("/usr/local/bin/claude"),
