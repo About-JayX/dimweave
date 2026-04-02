@@ -17,7 +17,7 @@ fn parse_tools_list_request() {
 
 #[test]
 fn initialize_result_includes_instructions_and_permission_capability() {
-    let result = initialize_result("lead");
+    let result = initialize_result("lead", true);
     assert_eq!(
         result["capabilities"]["experimental"]["claude/channel"],
         serde_json::json!({})
@@ -34,7 +34,7 @@ fn initialize_result_includes_instructions_and_permission_capability() {
 
 #[test]
 fn initialize_result_includes_silence_rules() {
-    let result = initialize_result("coder");
+    let result = initialize_result("coder", true);
     let instructions = result["instructions"].as_str().unwrap_or_default();
     assert!(
         instructions.contains("Stay completely silent"),
@@ -52,7 +52,7 @@ fn initialize_result_includes_silence_rules() {
 
 #[test]
 fn initialize_result_mentions_reply_status_contract() {
-    let result = initialize_result("lead");
+    let result = initialize_result("lead", true);
     let instructions = result["instructions"].as_str().unwrap_or_default();
     assert!(instructions.contains("reply(to, text, status)"));
     assert!(instructions.contains("in_progress"));
@@ -72,7 +72,7 @@ fn serialize_channel_notification() {
 
 #[test]
 fn instructions_document_online_agents_query() {
-    let result = initialize_result("lead");
+    let result = initialize_result("lead", true);
     let instructions = result["instructions"].as_str().unwrap_or_default();
     assert!(
         instructions.contains("get_online_agents"),
@@ -94,4 +94,14 @@ fn instructions_document_online_agents_query() {
         instructions.contains("transport layer does NOT automatically select"),
         "instructions must state that lead must choose the target agent"
     );
+}
+
+#[test]
+fn initialize_result_omits_permission_capability_in_sdk_mode() {
+    let result = initialize_result("lead", false);
+    assert_eq!(
+        result["capabilities"]["experimental"]["claude/channel"],
+        serde_json::json!({})
+    );
+    assert!(result["capabilities"]["experimental"]["claude/channel/permission"].is_null());
 }

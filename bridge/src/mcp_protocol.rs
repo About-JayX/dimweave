@@ -23,15 +23,17 @@ pub fn id_to_value(id: &Option<RpcId>) -> serde_json::Value {
     }
 }
 
-pub fn initialize_result(role: &str) -> serde_json::Value {
+pub fn initialize_result(role: &str, include_permission_relay: bool) -> serde_json::Value {
+    let mut experimental = serde_json::Map::new();
+    experimental.insert("claude/channel".into(), serde_json::json!({}));
+    if include_permission_relay {
+        experimental.insert("claude/channel/permission".into(), serde_json::json!({}));
+    }
     serde_json::json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
             "tools": {},
-            "experimental": {
-                "claude/channel": {},
-                "claude/channel/permission": {}
-            }
+            "experimental": experimental
         },
         "instructions": format!("{}\n\nYour role: {role}", CHANNEL_INSTRUCTIONS),
         "serverInfo": { "name": "agentnexus", "version": "0.1.0" }

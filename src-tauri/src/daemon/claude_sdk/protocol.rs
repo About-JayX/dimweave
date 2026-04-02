@@ -3,9 +3,8 @@
 //! Inbound (daemon → Claude): WS text frames, one NDJSON object per line.
 //! Outbound (Claude → daemon): HTTP POST body `{ "events": [...] }`.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
-
 /// Top-level envelope for events POSTed by Claude to `/claude/events`.
 #[derive(Debug, Deserialize)]
 pub struct PostEventsBody {
@@ -13,6 +12,11 @@ pub struct PostEventsBody {
 }
 
 /// Inbound NDJSON event types that Claude sends to the daemon.
+///
+/// This is a partial typed subset used by the formatter tests and the pieces of
+/// the transport we validate structurally. Events like `stream_event` still
+/// flow through the runtime as raw `Value` in `event_handler.rs`.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NdjsonEvent {
@@ -68,6 +72,7 @@ pub enum NdjsonEvent {
 }
 
 /// Inner body of a `control_request` event.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ControlRequestInner {
     #[serde(default)]
@@ -97,6 +102,31 @@ pub fn format_user_message(content: &str) -> String {
     format!("{msg}\n")
 }
 
+/// Format a channel-wrapped user message matching AgentNexus routing semantics.
+pub fn format_channel_user_message(from: &str, content: &str) -> String {
+    let wrapped = format!(
+        "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
+        xml_escape_attr(from),
+        xml_escape_text(content)
+    );
+    format_user_message(&wrapped)
+}
+
+fn xml_escape_attr(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn xml_escape_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// Format a control_response (allow) with required `updatedInput` field.
 /// Spec: TnY requires `{ behavior: "allow", updatedInput: {} }`.
 pub fn format_control_response(request_id: &str, allow: bool) -> String {
@@ -108,7 +138,8 @@ pub fn format_control_response(request_id: &str, allow: bool) -> String {
     } else {
         serde_json::json!({
             "behavior": "deny",
-            "message": "Denied by AgentNexus daemon"
+            "message": "Denied by AgentNexus daemon",
+            "updatedInput": {}
         })
     };
     let msg = serde_json::json!({
@@ -117,6 +148,19 @@ pub fn format_control_response(request_id: &str, allow: bool) -> String {
             "subtype": "success",
             "request_id": request_id,
             "response": inner
+        }
+    });
+    format!("{msg}\n")
+}
+
+/// Format a generic empty success control_response for non-interactive requests.
+pub fn format_generic_ack(request_id: &str) -> String {
+    let msg = serde_json::json!({
+        "type": "control_response",
+        "response": {
+            "subtype": "success",
+            "request_id": request_id,
+            "response": {}
         }
     });
     format!("{msg}\n")
@@ -134,6 +178,9 @@ pub fn format_keep_alive() -> String {
 
 /// Format an initialize control_response.
 pub fn format_initialize_response(request_id: &str) -> String {
+    // Claude accepts an empty capability inventory here for AgentNexus's
+    // current SDK transport. We keep this response intentionally minimal until
+    // the host needs to surface models, commands, or account metadata.
     let msg = serde_json::json!({
         "type": "control_response",
         "response": {

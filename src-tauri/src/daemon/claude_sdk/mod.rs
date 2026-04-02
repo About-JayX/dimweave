@@ -12,6 +12,7 @@ pub mod stdio;
 use crate::daemon::{gui, SharedState};
 use process::ClaudeLaunchOpts;
 use std::sync::Arc;
+use serde_json::Value;
 use tauri::AppHandle;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -51,9 +52,23 @@ pub async fn launch(
     let ready_rx = {
         let (ready_tx, ready_rx) =
             tokio::sync::oneshot::channel::<tokio::sync::mpsc::Sender<String>>();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Vec<Value>>(256);
         let mut s = state.write().await;
-        let _epoch = s.begin_claude_sdk_launch();
+        let _epoch = s.begin_claude_sdk_launch(opts.launch_nonce.clone());
         s.claude_sdk_ready_tx = Some(ready_tx);
+        s.claude_sdk_event_tx = Some(event_tx);
+        let event_state = state.clone();
+        let event_app = app.clone();
+        tokio::spawn(async move {
+            while let Some(events) = event_rx.recv().await {
+                crate::daemon::control::claude_sdk_handler::process_sdk_events(
+                    &event_state,
+                    &event_app,
+                    events,
+                )
+                .await;
+            }
+        });
         ready_rx
     };
 

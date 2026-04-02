@@ -84,11 +84,11 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 1. `ClaudePanel` 先根据当前项目目录拉 Claude provider history；用户可选择 `New session` 或某个历史 `session_id`。
 2. 前端选择项目目录后调用 `register_mcp`。
 3. Tauri 在项目根写入 **`.mcp.json`**，注册 `agent-nexus-bridge`。
-4. 前端再调用 `launch_claude_terminal`，由 Tauri 在 managed PTY 中运行 `claude`。
-5. Claude Code 读取项目 `.mcp.json`，以 MCP stdio 方式启动 bridge sidecar。
-6. bridge 通过 `ws://127.0.0.1:4502/ws` 连入内嵌 daemon。
-7. Permission 链路: bridge `permission_request` → daemon → GUI → `permission_verdict` → bridge
-8. Claude 新会话显式分配 `--session-id`，恢复历史会话走 `--resume <session_id>`
+4. 前端调用 `daemon_launch_claude_sdk`，由 Tauri 直接启动 `claude --sdk-url ws://127.0.0.1:4502/claude?launch_nonce=...`。
+5. Claude Code 读取项目 `.mcp.json`，以 MCP stdio 方式启动 bridge sidecar；bridge 继续提供 `reply(to, text, status)` 和 `get_online_agents()`。
+6. Claude 通过 `WS /claude` 收取宿主 NDJSON，通过 `POST /claude/events` 回传 `system/user/assistant/result/control_request` 事件；`launch_nonce` 用于绑定当前 launch 并允许安全重连。
+7. SDK 模式当前 **不走 GUI permission gate**：运行时保留 `--dangerously-skip-permissions`，daemon 对偶发 `control_request(can_use_tool)` 直接回 `control_response(allow)`；因此 `permission_request -> GUI -> permission_verdict` 只属于旧 channel 链路。
+8. Claude 新会话显式分配 `--session-id`，恢复历史会话走 `--resume <session_id>`，两者都统一走 `--sdk-url` 运行时。
 
 ### Codex 链路
 
@@ -418,9 +418,9 @@ src/
 - Rust 内嵌 daemon（无独立 Bun daemon）
 - Rust bridge sidecar（Cargo workspace 成员）
 - Claude 项目级 `.mcp.json` 注册
-- Claude channel preview 启动链路与版本 preflight
-- Claude channel `instructions` / `reply(to, text, status)` / `get_online_agents()` / permission relay
-- managed PTY 启动 Claude CLI
+- Claude `--sdk-url` 启动链路与版本 preflight
+- Claude MCP bridge `reply(to, text, status)` / `get_online_agents()` + SDK transport
+- SDK 控制面权限 auto-allow（不再经过 GUI permission relay）
 - Codex account / OAuth / models / usage
 - 临时 `CODEX_HOME` + `auth.json` symlink + `config.toml`
 - Rust control server + routing + message buffering
@@ -431,7 +431,7 @@ src/
 
 - `daemon/**/*.ts` Bun daemon 体系
 - GUI WebSocket `:4503`
-- 旧 PTY 注入链路（`node-pty` 和旧 TS daemon 的 PTY 方案；当前 `portable-pty` 用于 `claude_session/`）
+- 旧 PTY / channel 注入链路（`node-pty`、旧 TS daemon、`claude_session/`）
 - 旧 `test-e2e.ts` / `test-routing.ts` / `test-codex-mcp.ts` 手工脚本
 - `tsconfig.daemon.json`
 

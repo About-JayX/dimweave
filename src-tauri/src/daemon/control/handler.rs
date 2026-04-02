@@ -17,6 +17,19 @@ fn claude_terminal_reply_claims_visible_result(status: MessageStatus, content: &
     status.is_terminal() && !content.trim().is_empty()
 }
 
+fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
+    format!(
+        "BridgeMessage{{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id}} from={} to={} status={} content_len={} task_id={} session_id={} sender_agent_id={}",
+        message.from,
+        message.to,
+        message.status.map(MessageStatus::as_str).unwrap_or("none"),
+        message.content.len(),
+        message.task_id.as_deref().unwrap_or("-"),
+        message.session_id.as_deref().unwrap_or("-"),
+        message.sender_agent_id.as_deref().unwrap_or("-"),
+    )
+}
+
 pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHandle) {
     let (mut sink, mut stream) = socket.split();
     let (tx, mut rx) = mpsc::channel::<ToAgent>(64);
@@ -111,6 +124,16 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         .read()
                         .await
                         .stamp_message_context(&role, &mut message);
+                    if id == "claude" {
+                        gui::emit_system_log(
+                            &app,
+                            "info",
+                            &format!(
+                                "[Claude Trace] chain=bridge_reply {}",
+                                summarize_bridge_message_shape(&message)
+                            ),
+                        );
+                    }
                     if id == "claude" && status.is_terminal() {
                         if claude_terminal_reply_claims_visible_result(status, &message.content) {
                             let should_route = state
@@ -212,8 +235,8 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
 
 #[cfg(test)]
 mod tests {
-    use super::claude_terminal_reply_claims_visible_result;
-    use crate::daemon::types::MessageStatus;
+    use super::{claude_terminal_reply_claims_visible_result, summarize_bridge_message_shape};
+    use crate::daemon::types::{BridgeMessage, MessageStatus};
 
     #[test]
     fn empty_terminal_claude_reply_only_ends_thinking() {
@@ -237,6 +260,34 @@ mod tests {
             MessageStatus::Error,
             "blocked"
         ));
+    }
+
+    #[test]
+    fn summarize_bridge_reply_reports_shape_and_lengths() {
+        let message = BridgeMessage {
+            id: "msg-1".into(),
+            from: "lead".into(),
+            display_source: Some("claude".into()),
+            to: "user".into(),
+            content: "final answer".into(),
+            timestamp: 1,
+            reply_to: None,
+            priority: None,
+            status: Some(MessageStatus::Done),
+            task_id: Some("task-1".into()),
+            session_id: Some("session-1".into()),
+            sender_agent_id: Some("claude".into()),
+        };
+
+        let summary = summarize_bridge_message_shape(&message);
+
+        assert!(summary.contains("BridgeMessage{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id}"));
+        assert!(summary.contains("from=lead"));
+        assert!(summary.contains("to=user"));
+        assert!(summary.contains("status=done"));
+        assert!(summary.contains("content_len=12"));
+        assert!(summary.contains("task_id=task-1"));
+        assert!(summary.contains("session_id=session-1"));
     }
 }
 

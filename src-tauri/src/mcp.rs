@@ -59,7 +59,7 @@ fn read_mcp_config(project_dir: &str) -> Result<serde_json::Value, String> {
 }
 
 pub(crate) fn build_inline_mcp_config(command: &str, role: &str) -> Result<String, String> {
-    let (config, _) = upsert_mcp_server(serde_json::json!({}), command, &[], role)?;
+    let (config, _) = upsert_mcp_server(serde_json::json!({}), command, &[], role, &[])?;
     serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 
@@ -69,13 +69,21 @@ pub(crate) fn build_project_mcp_config(
     role: &str,
 ) -> Result<String, String> {
     let base = read_mcp_config(project_dir)?;
-    let (config, _) = upsert_mcp_server(base, command, &[], role)?;
+    let (config, _) = upsert_mcp_server(base, command, &[], role, &[])?;
     serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 
 pub(crate) fn build_agentnexus_mcp_config(project_dir: &str, role: &str) -> Result<String, String> {
     let command = resolve_agentnexus_bridge_cmd()?;
-    build_project_mcp_config(project_dir, &command, role)
+    let base = read_mcp_config(project_dir)?;
+    let (config, _) = upsert_mcp_server(
+        base,
+        &command,
+        &[],
+        role,
+        &[("AGENTBRIDGE_SDK_MODE", "1")],
+    )?;
+    serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 
 #[tauri::command]
@@ -110,7 +118,7 @@ fn write_mcp_config(
     let mcp_path = std::path::Path::new(project_dir).join(".mcp.json");
     let config = read_mcp_config(project_dir)?;
 
-    let (config, changed) = upsert_mcp_server(config, command, args, role)?;
+    let (config, changed) = upsert_mcp_server(config, command, args, role, &[])?;
     if mcp_path.exists() && !changed {
         return Ok(true);
     }
@@ -126,6 +134,7 @@ fn upsert_mcp_server(
     command: &str,
     args: &[&str],
     role: &str,
+    extra_env: &[(&str, &str)],
 ) -> Result<(serde_json::Value, bool), String> {
     let before = config.clone();
 
@@ -135,9 +144,14 @@ fn upsert_mcp_server(
         .entry("mcpServers")
         .or_insert_with(|| serde_json::json!({}));
 
+    let mut env = serde_json::Map::new();
+    env.insert("AGENTBRIDGE_ROLE".into(), serde_json::json!(role));
+    for (key, value) in extra_env {
+        env.insert((*key).into(), serde_json::json!(value));
+    }
     let mut entry = serde_json::json!({
         "command": command,
-        "env": { "AGENTBRIDGE_ROLE": role }
+        "env": env
     });
     if !args.is_empty() {
         entry["args"] = serde_json::json!(args);
@@ -167,104 +181,5 @@ pub fn check_mcp_registered(cwd: Option<String>) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{build_inline_mcp_config, build_project_mcp_config, upsert_mcp_server};
-
-    #[test]
-    fn upsert_mcp_server_marks_unchanged_when_entry_matches() {
-        let config = serde_json::json!({
-            "mcpServers": {
-                "agentnexus": {
-                    "command": "/tmp/bridge",
-                    "args": ["--foo"],
-                    "env": { "AGENTBRIDGE_ROLE": "lead" }
-                }
-            }
-        });
-
-        let (next, changed) =
-            upsert_mcp_server(config.clone(), "/tmp/bridge", &["--foo"], "lead").unwrap();
-        assert_eq!(next, config);
-        assert!(!changed);
-    }
-
-    #[test]
-    fn upsert_mcp_server_marks_changed_when_command_differs() {
-        let config = serde_json::json!({
-            "mcpServers": {
-                "agentnexus": {
-                    "command": "/tmp/old"
-                }
-            }
-        });
-
-        let (next, changed) = upsert_mcp_server(config, "/tmp/new", &[], "lead").unwrap();
-        assert!(changed);
-        assert_eq!(next["mcpServers"]["agentnexus"]["command"], "/tmp/new");
-    }
-
-    #[test]
-    fn upsert_mcp_server_marks_changed_when_role_differs() {
-        let config = serde_json::json!({
-            "mcpServers": {
-                "agentnexus": {
-                    "command": "/tmp/bridge",
-                    "env": { "AGENTBRIDGE_ROLE": "lead" }
-                }
-            }
-        });
-
-        let (next, changed) = upsert_mcp_server(config, "/tmp/bridge", &[], "reviewer").unwrap();
-        assert!(changed);
-        assert_eq!(
-            next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
-            "reviewer"
-        );
-    }
-
-    #[test]
-    fn build_inline_mcp_config_serializes_agentnexus_server() {
-        let raw = build_inline_mcp_config("/tmp/agent-nexus-bridge", "reviewer").unwrap();
-        let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(
-            value["mcpServers"]["agentnexus"]["command"],
-            "/tmp/agent-nexus-bridge"
-        );
-        assert_eq!(
-            value["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
-            "reviewer"
-        );
-    }
-
-    #[test]
-    fn build_project_mcp_config_preserves_existing_servers() {
-        let temp =
-            std::env::temp_dir().join(format!("agent-nexus-mcp-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&temp);
-        std::fs::create_dir_all(&temp).unwrap();
-        let path = temp.join(".mcp.json");
-        std::fs::write(
-            &path,
-            serde_json::json!({
-                "mcpServers": {
-                    "other": {
-                        "command": "/tmp/other-bridge"
-                    }
-                }
-            })
-            .to_string(),
-        )
-        .unwrap();
-
-        let raw =
-            build_project_mcp_config(temp.to_str().unwrap(), "/tmp/agent-nexus-bridge", "lead")
-                .unwrap();
-        let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(value["mcpServers"]["other"]["command"], "/tmp/other-bridge");
-        assert_eq!(
-            value["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
-            "lead"
-        );
-        let _ = std::fs::remove_dir_all(&temp);
-    }
-}
+#[path = "mcp_tests.rs"]
+mod tests;

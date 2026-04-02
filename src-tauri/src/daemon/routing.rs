@@ -218,21 +218,7 @@ async fn route_message_with_display(
 /// Uses the verified stream-json protocol format.
 /// Wraps content in `<channel>` tags to match agent prompt instructions.
 pub fn format_ndjson_user_message(msg: &BridgeMessage) -> String {
-    let wrapped = format!(
-        "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
-        msg.from, msg.content
-    );
-    let payload = serde_json::json!({
-        "type": "user",
-        "session_id": "",
-        "message": {
-            "role": "user",
-            "content": [{"type": "text", "text": wrapped}]
-        },
-        "parent_tool_use_id": null
-    });
-    // NDJSON: single line, newline terminated
-    format!("{}\n", payload)
+    crate::daemon::claude_sdk::protocol::format_channel_user_message(&msg.from, &msg.content)
 }
 
 pub fn format_codex_input(msg: &BridgeMessage) -> String {

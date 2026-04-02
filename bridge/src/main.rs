@@ -24,8 +24,13 @@ async fn main() {
             "lead".into()
         }
     };
+    let sdk_mode = std::env::var("AGENTBRIDGE_SDK_MODE")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
-    eprintln!("[Bridge/{agent_id}] starting, daemon port {control_port}, role {role}");
+    eprintln!(
+        "[Bridge/{agent_id}] starting, daemon port {control_port}, role {role}, sdk_mode={sdk_mode}"
+    );
 
     // daemon_client → mcp: push routed messages as Channel notifications
     let (push_tx, push_rx) = tokio::sync::mpsc::channel::<types::DaemonInbound>(64);
@@ -38,7 +43,7 @@ async fn main() {
         push_tx,
         reply_rx,
     ));
-    let mcp_task = tokio::spawn(mcp::run(agent_id, role, push_rx, reply_tx));
+    let mcp_task = tokio::spawn(mcp::run(agent_id, role, sdk_mode, push_rx, reply_tx));
 
     let _ = tokio::join!(dc, mcp_task);
 }

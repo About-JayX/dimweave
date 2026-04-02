@@ -100,14 +100,7 @@ export function handleClaudeStreamEvent(
         },
       };
     case "preview":
-      return {
-        claudeStream: {
-          thinking: true,
-          previewText:
-            (state.claudeStream.previewText ?? "") + (payload.text ?? ""),
-          lastUpdatedAt: Date.now(),
-        },
-      };
+      return {};
     case "done":
     case "reset":
       return { claudeStream: resetClaudeStream(state) };

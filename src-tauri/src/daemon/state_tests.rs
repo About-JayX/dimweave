@@ -203,14 +203,70 @@ fn invalidating_claude_sdk_session_clears_direct_text_handoff_state() {
     let mut s = DaemonState::new();
     assert!(s.begin_claude_sdk_direct_text_turn());
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (event_tx, _event_rx) = tokio::sync::mpsc::channel::<Vec<serde_json::Value>>(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),
     );
+    let (sdk_tx, _sdk_rx) = tokio::sync::mpsc::channel::<String>(1);
+    assert!(s
+        .attach_claude_sdk_ws(epoch, "nonce-a", sdk_tx)
+        .is_some());
+    s.claude_sdk_event_tx = Some(event_tx);
 
     s.invalidate_claude_sdk_session();
 
     assert!(!s.should_route_claude_sdk_text_directly());
+    assert!(s.claude_sdk_event_tx.is_none());
+    assert_eq!(s.claude_sdk_pending_nonce(), None);
+    assert_eq!(s.claude_sdk_active_nonce(), None);
+}
+
+#[test]
+fn pending_nonce_promotes_to_active_on_first_ws_attach() {
+    let mut s = DaemonState::new();
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+
+    let generation = s.attach_claude_sdk_ws(epoch, "nonce-a", tx);
+
+    assert!(generation.is_some());
+    assert_eq!(s.claude_sdk_pending_nonce(), None);
+    assert_eq!(s.claude_sdk_active_nonce(), Some("nonce-a"));
+}
+
+#[test]
+fn stale_nonce_is_rejected_for_attach_and_disconnect() {
+    let mut s = DaemonState::new();
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+
+    assert!(s.attach_claude_sdk_ws(epoch, "wrong-nonce", tx).is_none());
+    assert!(!s.clear_claude_sdk_ws(epoch, "wrong-nonce", 1));
+    assert_eq!(s.claude_sdk_pending_nonce(), Some("nonce-a"));
+    assert_eq!(s.claude_sdk_active_nonce(), None);
+}
+
+#[test]
+fn stale_disconnect_cannot_clear_reconnected_ws_for_same_launch() {
+    let mut s = DaemonState::new();
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    let (first_tx, _first_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let first_generation = s
+        .attach_claude_sdk_ws(epoch, "nonce-a", first_tx)
+        .expect("first ws should attach");
+
+    let (second_tx, _second_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let second_generation = s
+        .attach_claude_sdk_ws(epoch, "nonce-a", second_tx)
+        .expect("reconnect should attach");
+
+    assert_ne!(first_generation, second_generation);
+    assert!(!s.clear_claude_sdk_ws(epoch, "nonce-a", first_generation));
+    assert!(s.is_claude_sdk_online());
+    assert!(s.clear_claude_sdk_ws(epoch, "nonce-a", second_generation));
+    assert!(!s.is_claude_sdk_online());
 }
 
 #[test]

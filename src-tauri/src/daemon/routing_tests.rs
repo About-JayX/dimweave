@@ -41,6 +41,32 @@ async fn route_to_claude_from_unknown_sender_drops() {
     assert!(matches!(result, RouteResult::Dropped));
 }
 
+#[test]
+fn format_ndjson_user_message_wraps_channel_payload() {
+    let msg = BridgeMessage {
+        id: "msg-1".into(),
+        from: "coder".into(),
+        display_source: None,
+        to: "lead".into(),
+        content: "finished".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+    };
+
+    let ndjson = format_ndjson_user_message(&msg);
+    let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();
+
+    assert_eq!(
+        parsed["message"]["content"][0]["text"],
+        "<channel source=\"agentnexus\" from=\"coder\">finished</channel>"
+    );
+}
+
 // ── resolve_user_targets tests ──────────────────────────────────────
 
 #[test]
@@ -71,8 +97,8 @@ fn auto_with_claude_only() {
 fn auto_with_claude_sdk_only() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    s.begin_claude_sdk_launch();
-    assert!(s.attach_claude_sdk_ws(s.claude_sdk_epoch(), tx));
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", tx).is_some());
     let targets = resolve_user_targets(&s, "auto");
     assert_eq!(targets, vec!["lead"]);
 }

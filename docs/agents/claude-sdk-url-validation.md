@@ -18,6 +18,8 @@
 - SDK 子进程现在复用 `resolve_claude_bin()` 和 `enriched_path()`；对 macOS GUI 场景下的 sidecar / `env node` 包装脚本更稳。
 - 前端不再暴露 Claude Terminal / dev-confirm / channel-preview UX，Claude 用户面已经是 SDK-only。
 - SDK 文本 fallback 不再在 bridge attach 边界直接硬切；当前用“本轮是否已开始直出”的 state 来保证 bridge 中途附着时不会吞掉最后一个 `result`。
+- daemon 现在会为每次 Claude launch 生成 `launch_nonce` 并追加到 `--sdk-url` query string；WS 连接和 HTTP POST `/claude/events` 都必须回带这个 nonce，宿主用它绑定当前 launch 并允许安全重连。
+- SDK 模式当前仍保留 `--dangerously-skip-permissions` + daemon auto-allow 的权限策略，但 `agentnexus` MCP server 不再声明 `claude/channel/permission` capability，避免把 channel permission relay 和 SDK `control_request` 链路混在一起。
 
 当前结论不是“`--sdk-url` 是官方稳定公共 API”，而是“在 AgentNexus 当前规划下，它已经是主运行时方案，并且需要由宿主自己承担协议回归保护”。
 
@@ -437,17 +439,19 @@ daemon 通过 WS 发回：
 1. WS Server 接受 Claude 连接（同端口处理 WS upgrade 和 HTTP POST）
 2. HTTP POST `/events` 端点接收 `{"events":[...]}` 并解析
 3. WS 发送 NDJSON user messages（`\n` 结尾）
-4. Permission relay: `control_request(can_use_tool)` → GUI → `control_response` via WS
-5. Initialize 握手: `control_request(initialize)` → respond with commands/settings
-6. 监听 `result` 事件标记会话结束
+4. 为 WS / HTTP POST 校验 launch-bound nonce，拒绝 stale session
+5. 正确响应 `control_request(can_use_tool)`；当前 AgentNexus 运行时使用 auto-allow
+6. Initialize 握手: `control_request(initialize)` → respond with commands/settings
+7. 监听 `result` 事件标记会话结束
 
 **建议实现：**
-7. 心跳检测（`keep_alive` 双向）
-8. 解析 `assistant` 消息提取 text/tool_use 用于 UI 展示
-9. 解析 `stream_event` 用于实时流式展示
-10. 处理 `rate_limit_event` 用于用量统计
-11. 支持 `update_environment_variables` 动态更新
+8. 心跳检测（`keep_alive` 双向）
+9. 解析 `assistant` 消息提取 text/tool_use 用于 UI 展示
+10. session-scoped 顺序处理多次 HTTP POST，避免跨批次乱序
+11. 解析 `stream_event` 用于实时流式展示
+12. 处理 `rate_limit_event` 用于用量统计
+13. 支持 `update_environment_variables` 动态更新
 
 **可忽略：**
-12. `prompt_suggestion`（除非需要建议下一步功能）
-13. `control_cancel_request`（除非需要取消 pending permission）
+14. `prompt_suggestion`（除非需要建议下一步功能）
+15. `control_cancel_request`（除非需要取消 pending permission）

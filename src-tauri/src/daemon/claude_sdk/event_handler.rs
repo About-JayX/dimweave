@@ -3,11 +3,26 @@
 use crate::daemon::{
     gui::{self, ClaudeStreamPayload},
     routing,
-    types::{BridgeMessage, MessageStatus, PermissionRequest},
+    types::MessageStatus,
     SharedState,
 };
 use serde_json::Value;
 use tauri::AppHandle;
+use delivery::{
+    begin_sdk_direct_text_turn_if_allowed, build_direct_sdk_gui_message,
+    claim_sdk_terminal_delivery, finish_sdk_direct_text_turn,
+};
+use stream::{extract_assistant_text, handle_stream_event};
+
+#[path = "event_handler_delivery.rs"]
+mod delivery;
+
+#[path = "event_handler_stream.rs"]
+mod stream;
+
+#[cfg(test)]
+#[path = "event_handler_tests.rs"]
+mod tests;
 
 /// Dispatch a batch of events from Claude's HTTP POST.
 pub async fn handle_events(events: Vec<Value>, role: &str, state: SharedState, app: AppHandle) {
@@ -67,6 +82,10 @@ async fn handle_control_request(event: &Value, state: &SharedState, app: &AppHan
     let ndjson = match subtype {
         "can_use_tool" => {
             let tool_name = request_obj["tool_name"].as_str().unwrap_or("unknown");
+            // SDK mode intentionally runs with Claude's local permission bypass
+            // enabled. If Claude still emits a can_use_tool request, we answer
+            // allow here so the transport stays self-consistent instead of
+            // stalling on a GUI permission flow that SDK mode no longer uses.
             gui::emit_system_log(
                 app,
                 "info",
@@ -85,15 +104,7 @@ async fn handle_control_request(event: &Value, state: &SharedState, app: &AppHan
                 "info",
                 &format!("[Claude SDK] acking control_request subtype={subtype} ({request_id})"),
             );
-            let msg = serde_json::json!({
-                "type": "control_response",
-                "response": {
-                    "subtype": "success",
-                    "request_id": request_id,
-                    "response": {}
-                }
-            });
-            format!("{msg}\n")
+            crate::daemon::claude_sdk::protocol::format_generic_ack(&request_id)
         }
     };
 
@@ -172,224 +183,4 @@ async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &App
         }
     }
     gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
-}
-
-async fn begin_sdk_direct_text_turn_if_allowed(state: &SharedState) -> bool {
-    state.write().await.begin_claude_sdk_direct_text_turn()
-}
-
-async fn claim_sdk_terminal_delivery(state: &SharedState) -> bool {
-    state.write().await.claim_claude_sdk_terminal_delivery()
-}
-
-async fn finish_sdk_direct_text_turn(state: &SharedState) {
-    state.write().await.finish_claude_sdk_direct_text_turn();
-}
-
-fn build_direct_sdk_gui_message(
-    role: &str,
-    text: &str,
-    status: MessageStatus,
-) -> Option<BridgeMessage> {
-    // Direct SDK fallback only renders terminal text. UI already exposes a
-    // single Claude thinking indicator, so surfacing partial assistant chunks
-    // here would reintroduce the duplicate/preview noise we removed.
-    if !status.is_terminal() || text.is_empty() {
-        return None;
-    }
-    let prefix = match status {
-        MessageStatus::Done => "claude_sdk_result",
-        MessageStatus::Error => "claude_sdk_error",
-        MessageStatus::InProgress => "claude_sdk",
-    };
-    Some(BridgeMessage {
-        id: format!("{prefix}_{}", chrono::Utc::now().timestamp_millis()),
-        from: role.to_string(),
-        display_source: Some("claude".to_string()),
-        to: "user".to_string(),
-        content: text.to_string(),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        reply_to: None,
-        priority: None,
-        status: Some(status),
-        task_id: None,
-        session_id: None,
-        sender_agent_id: Some("claude".to_string()),
-    })
-}
-
-/// Parse `stream_event` and emit `claude_stream` for real-time UI updates.
-///
-/// stream_event.event contains raw Anthropic API events:
-/// - content_block_start {content_block: {type: "text"|"tool_use"|...}}
-/// - content_block_delta {delta: {type: "text_delta", text: "..."}}
-/// - message_start, message_delta, message_stop
-fn handle_stream_event(event: &Value, app: &AppHandle) {
-    let inner = &event["event"];
-    let event_type = inner["type"].as_str().unwrap_or("");
-
-    match event_type {
-        "content_block_start" => {
-            let block_type = inner["content_block"]["type"].as_str().unwrap_or("");
-            if block_type == "text" {
-                gui::emit_claude_stream(app, ClaudeStreamPayload::ThinkingStarted);
-            }
-        }
-        "content_block_delta" => {
-            let delta_type = inner["delta"]["type"].as_str().unwrap_or("");
-            if delta_type == "text_delta" {
-                if let Some(text) = inner["delta"]["text"].as_str() {
-                    if !text.is_empty() {
-                        gui::emit_claude_stream(
-                            app,
-                            ClaudeStreamPayload::Preview {
-                                text: text.to_string(),
-                            },
-                        );
-                    }
-                }
-            }
-        }
-        // message_start, message_delta, message_stop — no UI action needed
-        _ => {}
-    }
-}
-
-fn extract_assistant_text(event: &Value) -> String {
-    let content = &event["message"]["content"];
-    match content {
-        Value::String(s) => s.clone(),
-        Value::Array(items) => items
-            .iter()
-            .filter_map(|item| {
-                if item["type"].as_str() == Some("text") {
-                    item["text"].as_str().map(ToOwned::to_owned)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(""),
-        _ => String::new(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::daemon::types::MessageStatus;
-    use serde_json::json;
-
-    #[test]
-    fn in_progress_sdk_text_does_not_create_visible_gui_message() {
-        let msg = build_direct_sdk_gui_message("lead", "partial reply", MessageStatus::InProgress);
-        assert!(msg.is_none());
-    }
-
-    #[test]
-    fn terminal_sdk_text_creates_visible_gui_message() {
-        let msg = build_direct_sdk_gui_message("lead", "final reply", MessageStatus::Done)
-            .expect("done messages should be visible");
-
-        assert_eq!(msg.from, "lead");
-        assert_eq!(msg.display_source.as_deref(), Some("claude"));
-        assert_eq!(msg.to, "user");
-        assert_eq!(msg.content, "final reply");
-        assert_eq!(msg.status, Some(MessageStatus::Done));
-    }
-
-    // ── extract_assistant_text ──────────────────────────
-
-    #[test]
-    fn extract_text_from_content_array() {
-        let event = json!({
-            "message": {
-                "content": [
-                    {"type": "text", "text": "Hello "},
-                    {"type": "tool_use", "name": "Bash"},
-                    {"type": "text", "text": "world"}
-                ]
-            }
-        });
-        assert_eq!(extract_assistant_text(&event), "Hello world");
-    }
-
-    #[test]
-    fn extract_text_from_string_content() {
-        let event = json!({"message": {"content": "plain text"}});
-        assert_eq!(extract_assistant_text(&event), "plain text");
-    }
-
-    #[test]
-    fn extract_text_returns_empty_for_missing_content() {
-        let event = json!({"message": {}});
-        assert_eq!(extract_assistant_text(&event), "");
-    }
-
-    #[test]
-    fn extract_text_returns_empty_for_only_tool_use() {
-        let event = json!({
-            "message": {
-                "content": [{"type": "tool_use", "name": "Edit"}]
-            }
-        });
-        assert_eq!(extract_assistant_text(&event), "");
-    }
-
-    // ── stream event parsing (unit-testable parts) ─────
-
-    #[test]
-    fn stream_event_text_delta_extracts_text() {
-        let event = json!({
-            "type": "stream_event",
-            "event": {
-                "type": "content_block_delta",
-                "delta": {"type": "text_delta", "text": "Hello"}
-            }
-        });
-        let inner = &event["event"];
-        let delta_type = inner["delta"]["type"].as_str().unwrap();
-        let text = inner["delta"]["text"].as_str().unwrap();
-        assert_eq!(delta_type, "text_delta");
-        assert_eq!(text, "Hello");
-    }
-
-    #[test]
-    fn stream_event_non_text_delta_has_no_text() {
-        let event = json!({
-            "type": "stream_event",
-            "event": {
-                "type": "content_block_delta",
-                "delta": {"type": "input_json_delta", "partial_json": "{\"cmd\""}
-            }
-        });
-        let text = event["event"]["delta"]["text"].as_str();
-        assert!(text.is_none());
-    }
-
-    #[test]
-    fn stream_event_content_block_start_text_type() {
-        let event = json!({
-            "type": "stream_event",
-            "event": {
-                "type": "content_block_start",
-                "content_block": {"type": "text"}
-            }
-        });
-        let block_type = event["event"]["content_block"]["type"].as_str().unwrap();
-        assert_eq!(block_type, "text");
-    }
-
-    #[test]
-    fn stream_event_content_block_start_tool_use_type() {
-        let event = json!({
-            "type": "stream_event",
-            "event": {
-                "type": "content_block_start",
-                "content_block": {"type": "tool_use", "name": "Bash"}
-            }
-        });
-        let block_type = event["event"]["content_block"]["type"].as_str().unwrap();
-        assert_eq!(block_type, "tool_use");
-    }
 }
