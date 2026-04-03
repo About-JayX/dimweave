@@ -96,6 +96,8 @@ export function ReplyInput() {
     if (paths) addFiles(paths);
   }, [addFiles]);
 
+  const addFilesRef = useRef(addFiles);
+  addFilesRef.current = addFiles;
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     getCurrentWebview()
@@ -103,7 +105,8 @@ export function ReplyInput() {
         if (event.payload.type === "over") setDragOver(true);
         else if (event.payload.type === "drop") {
           setDragOver(false);
-          if (event.payload.paths.length > 0) addFiles(event.payload.paths);
+          if (event.payload.paths.length > 0)
+            addFilesRef.current(event.payload.paths);
         } else setDragOver(false);
       })
       .then((fn) => {
@@ -112,7 +115,7 @@ export function ReplyInput() {
     return () => {
       unlisten?.();
     };
-  }, [addFiles]);
+  }, []);
 
   const isMac =
     typeof navigator !== "undefined" &&
