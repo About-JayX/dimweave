@@ -171,10 +171,62 @@ struct Attachment { file_path: String, file_name: String }
 - ✅ 工作区干净（git status clean）
 - ⏳ 手动集成测试待执行
 
+## Claude Code 图片支持逆向分析
+
+> 分析日期: 2026-04-03
+> 来源: Claude Code v2.1.89 (`cli.js` 反编译分析)
+> 路径: `/Users/jason/.nvm/versions/node/v24.14.0/lib/node_modules/@anthropic-ai/claude-code/cli.js`
+
+### 关键发现：Claude Code 确实支持 image content block
+
+**Image block 验证函数（`Ji_`）：**
+```javascript
+function Ji_(q) {
+  if (typeof q !== "object" || q === null) return false;
+  let K = q;
+  if (K.type !== "image") return false;
+  if (typeof K.source !== "object" || K.source === null) return false;
+  let _ = K.source;
+  return _.type === "base64" && typeof _.data === "string";
+}
+```
+
+**接受的 image block 格式（标准 Anthropic API `ImageBlockParam`）：**
+```json
+{
+  "type": "image",
+  "source": {
+    "type": "base64",
+    "media_type": "image/png",
+    "data": "<base64 encoded string>"
+  }
+}
+```
+
+**大小限制：** `Rk6 = 5242880`（5MB base64 data）
+
+**能力声明：** `"image_input": {"supported": true}`
+
+**content 数组处理：** Claude Code 遍历 `message.content` 数组，对 `type === "image"` 的 block 提取 `source.data` 和 `source.media_type`，传递给 Anthropic API。
+
+### 结论
+
+| Agent | 图片方案 | 格式 |
+|-------|---------|------|
+| Claude | `message.content[]` 加入 image block | `{"type":"image","source":{"type":"base64","media_type":"image/png","data":"<base64>"}}` |
+| Codex | `turn/start` input 数组加入 localImage | `{"type":"localImage","path":"/local/path.png"}` |
+
+两个 agent 的图片方案不同：
+- **Claude** 需要 base64 编码后嵌入 NDJSON content 数组（≤5MB）
+- **Codex** 只需本地路径，app-server 自行读取文件
+
+Phase 2 实现时，daemon 需要根据目标 agent 选择不同的格式化策略。
+
 ## Phase 2 范围（未实现）
 
 - 图片内联预览（缩略图）在气泡中渲染
-- Codex `localImage` 结构化输入（需要改 inject 通道类型）
-- Claude 图片支持（需要验证 `--sdk-url` 是否接受 image content block）
-- 文件大小/类型校验
+- Claude: 读取本地图片文件 → base64 → 插入 NDJSON content 数组的 image block
+- Codex: 改 inject 通道类型，发送 `{"type":"localImage","path":"..."}` 结构化输入
+- 文件大小/类型校验（Claude ≤5MB base64）
 - 粘贴板图片支持
+- 支持的 media_type: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
