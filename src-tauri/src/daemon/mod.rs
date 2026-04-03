@@ -4,6 +4,7 @@ pub mod codex;
 pub mod control;
 pub mod gui;
 pub mod gui_task;
+pub mod image_compress;
 pub mod orchestrator;
 mod permission;
 pub mod provider;
