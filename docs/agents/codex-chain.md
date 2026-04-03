@@ -126,7 +126,7 @@
 
 #### [已修复] CODEX_HOME 在进程仍引用时被删除
 
-**问题:** `CodexHandle::stop()` 中 `cleanup_session()` 删除 `/tmp/agentnexus-{pid}-{id}/`，但旧 codex 进程可能还在读取该目录下的文件。新 session 的 `thread/start` 报错: `CODEX_HOME points to "/tmp/agentnexus-...", but that path does not exist`。
+**问题:** `CodexHandle::stop()` 中 `cleanup_session()` 删除 `/tmp/dimweave-{pid}-{id}/`，但旧 codex 进程可能还在读取该目录下的文件。新 session 的 `thread/start` 报错: `CODEX_HOME points to "/tmp/dimweave-...", but that path does not exist`。
 
 **根因:** stop 删目录 → start 创建新 session 用新 ID → 但旧进程引用的目录已被删。这发生在端口还没释放、新进程复用了旧 CODEX_HOME 的路径时。
 

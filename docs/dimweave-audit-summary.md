@@ -1,4 +1,4 @@
-# AgentNexus 全链路审计总结
+# Dimweave 全链路审计总结
 
 > 目的：把本轮及相关连续审计过程收敛成一份总文档，覆盖前端、Tauri daemon、Codex app-server、Claude bridge、MCP 通道与消息路由。
 > 说明：本文件是“总摘要”。协议细节和专项修复仍分别保留在 `docs/agents/claude-chain.md`、`docs/agents/codex-chain.md` 等文档中。
@@ -204,7 +204,7 @@
 - `bun test tests/task-store.test.ts tests/task-panel-view-model.test.ts`
 - `bun run build`
 - 运行时 smoke：
-  - `agent-nexus` 进程持续监听 `127.0.0.1:4502`
+  - `dimweave` 进程持续监听 `127.0.0.1:4502`
   - `codex app-server` 持续监听 `127.0.0.1:4500`
   - `curl -fsS http://127.0.0.1:4500/readyz` 返回成功
 
@@ -442,7 +442,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### 21. [已修复] 2026-03-27 Claude Code `2.1.85` 已知坏版本前置阻断
 
-- [已修复] **Claude PTY 静默崩溃的根因已定位到上游版本回归** — 现场日志出现 `ERROR _4.useRef is not a function`，错误栈位于 `claude-standalone` 内部 tool activity 渲染函数，而不是 AgentNexus 的 `status` 协议或 PTY 输入链。
+- [已修复] **Claude PTY 静默崩溃的根因已定位到上游版本回归** — 现场日志出现 `ERROR _4.useRef is not a function`，错误栈位于 `claude-standalone` 内部 tool activity 渲染函数，而不是 Dimweave 的 `status` 协议或 PTY 输入链。
 - [已修复] **启动前版本校验新增黑名单保护** — `src-tauri/src/claude_cli.rs` 现在除了校验 `>= 2.1.80` 以外，还会额外拒绝 `2.1.85`。这能避免 Claude 以“看似已连接”的状态进入 managed PTY 后再静默炸掉。
 - [已修复] **错误提示改成可执行 workaround** — 阻断消息会明确提示当前已知坏版本、对应崩溃形态 `_4.useRef is not a function`，并给出回退命令：
   - `claude install 2.1.84 --force`

@@ -7,7 +7,7 @@ use tokio::process::{Child, Command};
 pub struct ClaudeLaunchOpts {
     /// Path to the `claude` binary (resolved via `which` or explicit).
     pub claude_bin: PathBuf,
-    /// Agent role id (e.g. "lead", "coder"). Maps to `--agent nexus-{role}`.
+    /// Agent role id (e.g. "lead", "coder"). Maps to `--agent dimweave-{role}`.
     pub role: Option<String>,
     /// Working directory for the Claude session.
     pub cwd: String,

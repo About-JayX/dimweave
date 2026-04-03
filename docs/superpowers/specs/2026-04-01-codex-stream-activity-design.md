@@ -2,7 +2,7 @@
 
 ## Summary
 
-AgentNexus will expose Codex work-in-progress state in the message panel so users can see what Codex is doing instead of a generic `thinking...` label. The stream indicator will show three kinds of live context: the current activity label, the current reasoning summary, and command stdout/stderr.
+Dimweave will expose Codex work-in-progress state in the message panel so users can see what Codex is doing instead of a generic `thinking...` label. The stream indicator will show three kinds of live context: the current activity label, the current reasoning summary, and command stdout/stderr.
 
 ## Product Goal
 

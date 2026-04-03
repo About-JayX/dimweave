@@ -155,7 +155,7 @@ async fn do_initialize(ws: &mut FullWs, app: &AppHandle) -> Option<()> {
     let msg = json!({
         "method": "initialize", "id": 1,
         "params": {
-            "clientInfo": {"name":"agentnexus","version":"0.1.0"},
+            "clientInfo": {"name":"dimweave","version":"0.1.0"},
             "capabilities": {"experimentalApi": true}
         }
     });

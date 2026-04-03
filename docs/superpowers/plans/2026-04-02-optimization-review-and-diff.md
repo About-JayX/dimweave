@@ -27,7 +27,7 @@
 | 17 | 原文档未涉及 | `listener-setup.ts` 的 `handleClaudeStreamEvent` preview case 当前被 revert 为 `return {}` — stream 文本不会累积到前端 | 恢复 preview 累积逻辑（之前已实现但被 revert） | **新增（bug fix）** |
 | 18 | 原文档未涉及 | `CodexStreamIndicator` 订阅整个 `codexStream` slice（7 个字段），任何字段变化都 re-render | 拆分为 `useBridgeStore(s => s.codexStream.thinking)` + 单独订阅需要的字段 | **新增** |
 | 19 | 原文档 WS1-S4: "Implement batching and caps" | 方向正确但没说 batch 什么、cap 什么 | 具体方案：stream delta → 50ms batch（Rust 侧）。system_log → 内存 cap 200 条（已有）。stream previewText → 前端 cap 5000 chars | **具体化** |
-| 20 | 原文档假设 "Claude stays on --sdk-url" | 正确但遗漏：SDK 路径当前仍注入 bridge MCP（`build_agentnexus_mcp_config`），bridge sidecar 仍然是 3 进程模型的一部分。优化 stream 时必须考虑 bridge WS 也在用同一个 event loop | 不假设 bridge 会被移除。优化方案必须兼容 bridge + SDK 共存 | **修正假设** |
+| 20 | 原文档假设 "Claude stays on --sdk-url" | 正确但遗漏：SDK 路径当前仍注入 bridge MCP（`build_dimweave_mcp_config`），bridge sidecar 仍然是 3 进程模型的一部分。优化 stream 时必须考虑 bridge WS 也在用同一个 event loop | 不假设 bridge 会被移除。优化方案必须兼容 bridge + SDK 共存 | **修正假设** |
 
 ---
 
@@ -95,7 +95,7 @@ Store 拆分有用但不是最高优先级。
 
 **原文档：** 假设 bridge 已移除，Claude 是纯 SDK 直连。
 
-**实际：** bridge MCP 仍被注入（`build_agentnexus_mcp_config`），3 进程共存。优化不能假设单一传输层。
+**实际：** bridge MCP 仍被注入（`build_dimweave_mcp_config`），3 进程共存。优化不能假设单一传输层。
 
 ---
 

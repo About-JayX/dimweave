@@ -73,7 +73,7 @@ fn build_claude_command(dir: &str, claude_bin: &Path, extra: &[String]) -> Comma
     cmd.arg("--dangerously-load-development-channels");
     cmd.arg("server:agentnexus");
     cmd.arg("--dangerously-skip-permissions");
-    // Explicitly load project .mcp.json so Claude spawns the agentnexus MCP server.
+    // Explicitly load project .mcp.json so Claude spawns the dimweave MCP server.
     // Without this, Claude may not read the project-level config and the channel bridge
     // never gets spawned, resulting in "1 MCP server failed".
     let mcp_config_path = std::path::Path::new(dir).join(".mcp.json");

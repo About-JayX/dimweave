@@ -207,7 +207,7 @@ fn workspace_history_dir_normalizes_relative_paths() {
 #[test]
 fn list_sessions_reads_workspace_transcripts() {
     let base = std::env::temp_dir().join(format!(
-        "agentnexus-claude-history-{}",
+        "dimweave-claude-history-{}",
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     ));
     let history_dir = claude::workspace_history_dir("/tmp/ws", &base);
@@ -275,7 +275,7 @@ fn list_sessions_reads_workspace_transcripts() {
 #[test]
 fn list_sessions_extracts_user_text_from_channel_wrapper() {
     let base = std::env::temp_dir().join(format!(
-        "agentnexus-claude-channel-history-{}",
+        "dimweave-claude-channel-history-{}",
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     ));
     let history_dir = claude::workspace_history_dir("/tmp/ws", &base);

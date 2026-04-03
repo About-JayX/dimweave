@@ -15,7 +15,7 @@
 
 ## 2026-04-02 集成落地补充
 
-这份协议验证在 2026-04-02 已经落到 AgentNexus 当前主链路，且运行时语义做了几项关键收口：
+这份协议验证在 2026-04-02 已经落到 Dimweave 当前主链路，且运行时语义做了几项关键收口：
 
 - Claude 的 `new / resume / provider history attach` 现在统一走 `--sdk-url`，不再依赖 PTY/channel runtime。
 - SDK 启动会复用 workspace `.mcp.json`，把 `agentnexus` server 以内联 `--strict-mcp-config` 方式 upsert 进去，而不是覆盖用户已有 MCP 配置。
@@ -25,7 +25,7 @@
 - daemon 现在会为每次 Claude launch 生成 `launch_nonce` 并追加到 `--sdk-url` query string；WS 连接和 HTTP POST `/claude/events` 都必须回带这个 nonce，宿主用它绑定当前 launch 并允许安全重连。
 - SDK 模式当前仍保留 `--dangerously-skip-permissions` + daemon auto-allow 的权限策略，但 `agentnexus` MCP server 不再声明 `claude/channel/permission` capability，避免把 channel permission relay 和 SDK `control_request` 链路混在一起。
 
-当前结论不是“`--sdk-url` 是官方稳定公共 API”，而是“在 AgentNexus 当前规划下，它已经是主运行时方案，并且需要由宿主自己承担协议回归保护”。
+当前结论不是”`--sdk-url` 是官方稳定公共 API”，而是”在 Dimweave 当前规划下，它已经是主运行时方案，并且需要由宿主自己承担协议回归保护”。
 
 ---
 
@@ -444,7 +444,7 @@ daemon 通过 WS 发回：
 2. HTTP POST `/events` 端点接收 `{"events":[...]}` 并解析
 3. WS 发送 NDJSON user messages（`\n` 结尾）
 4. 为 WS / HTTP POST 校验 launch-bound nonce，拒绝 stale session
-5. 正确响应 `control_request(can_use_tool)`；当前 AgentNexus 运行时使用 auto-allow
+5. 正确响应 `control_request(can_use_tool)`；当前 Dimweave 运行时使用 auto-allow
 6. Initialize 握手: `control_request(initialize)` → respond with commands/settings
 7. 监听 `result` 事件标记会话结束
 

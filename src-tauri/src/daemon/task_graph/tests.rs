@@ -323,7 +323,7 @@ use std::path::PathBuf;
 
 fn tmp_persist_path(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "agentnexus_test_{name}_{}.json",
+        "dimweave_test_{name}_{}.json",
         std::process::id()
     ))
 }

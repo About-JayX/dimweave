@@ -53,12 +53,12 @@ fn upsert_mcp_server_marks_changed_when_role_differs() {
 }
 
 #[test]
-fn build_inline_mcp_config_serializes_agentnexus_server() {
-    let raw = build_inline_mcp_config("/tmp/agent-nexus-bridge", "reviewer").unwrap();
+fn build_inline_mcp_config_serializes_dimweave_server() {
+    let raw = build_inline_mcp_config("/tmp/dimweave-bridge", "reviewer").unwrap();
     let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(
         value["mcpServers"]["agentnexus"]["command"],
-        "/tmp/agent-nexus-bridge"
+        "/tmp/dimweave-bridge"
     );
     assert_eq!(
         value["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
@@ -68,7 +68,7 @@ fn build_inline_mcp_config_serializes_agentnexus_server() {
 
 #[test]
 fn build_project_mcp_config_preserves_existing_servers() {
-    let temp = std::env::temp_dir().join(format!("agent-nexus-mcp-test-{}", std::process::id()));
+    let temp = std::env::temp_dir().join(format!("dimweave-mcp-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&temp);
     std::fs::create_dir_all(&temp).unwrap();
     let path = temp.join(".mcp.json");
@@ -86,7 +86,7 @@ fn build_project_mcp_config_preserves_existing_servers() {
     .unwrap();
 
     let raw =
-        build_project_mcp_config(temp.to_str().unwrap(), "/tmp/agent-nexus-bridge", "lead")
+        build_project_mcp_config(temp.to_str().unwrap(), "/tmp/dimweave-bridge", "lead")
             .unwrap();
     let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(value["mcpServers"]["other"]["command"], "/tmp/other-bridge");

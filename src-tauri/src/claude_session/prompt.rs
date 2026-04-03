@@ -159,7 +159,7 @@ fn needs_user_attention(transcript: &str) -> bool {
     let recent_text = recent_window.join("\n");
     let lower = recent_text.to_ascii_lowercase();
 
-    // Skip only when the most recent prompt window is the agentnexus dev confirmation itself.
+    // Skip only when the most recent prompt window is the dimweave dev confirmation itself.
     if lower.contains("server:agentnexus") && lower.contains("local development") {
         return false;
     }

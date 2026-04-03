@@ -1,4 +1,4 @@
-# AgentNexus UX Stability Iteration Plan
+# Dimweave UX Stability Iteration Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILLS: Use `superpowers:subagent-driven-development` (preferred) or `superpowers:executing-plans` to implement this plan checkpoint-by-checkpoint. Every checkpoint must also run the `superpowers:requesting-code-review`, `superpowers:receiving-code-review`, and `superpowers:verification-before-completion` workflow before commit. Steps use checkbox syntax for tracking.
 

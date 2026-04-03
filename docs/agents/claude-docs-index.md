@@ -1,6 +1,6 @@
 # Claude 文档索引与状态
 
-> **当前采用方案：** AgentNexus 的 Claude 主链路已经统一为 `--sdk-url`。
+> **当前采用方案：** Dimweave 的 Claude 主链路已经统一为 `--sdk-url`。
 >
 > **当前运行时形态：** `claude --print --sdk-url ... --input-format stream-json --output-format stream-json` + workspace `.mcp.json` / inline `--strict-mcp-config` 注入 `agentnexus` MCP server。  
 > Claude 主消息链路走 `WS /claude` + `POST /claude/events`，bridge sidecar 继续保留用于 `reply(to, text, status)` 和 `get_online_agents()`。

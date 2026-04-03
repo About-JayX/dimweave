@@ -575,7 +575,7 @@ fn lead_approve_review_effects_reports_task_ui_events() {
 #[test]
 fn daemon_state_task_graph_persist_round_trip() {
     let path =
-        std::env::temp_dir().join(format!("agentnexus_state_test_{}.json", std::process::id()));
+        std::env::temp_dir().join(format!("dimweave_state_test_{}.json", std::process::id()));
     let _ = std::fs::remove_file(&path);
 
     let mut s =
@@ -594,7 +594,7 @@ fn daemon_state_task_graph_persist_round_trip() {
 #[test]
 fn observe_task_message_auto_saves_without_explicit_call() {
     let path = std::env::temp_dir().join(format!(
-        "agentnexus_autosave_test_{}.json",
+        "dimweave_autosave_test_{}.json",
         std::process::id()
     ));
     let _ = std::fs::remove_file(&path);

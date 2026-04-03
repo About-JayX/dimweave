@@ -4,7 +4,7 @@ use super::{
 };
 
 #[test]
-fn matches_local_agentnexus_development_prompt() {
+fn matches_local_dimweave_development_prompt() {
     let prompt = r#"
       --dangerously-load-development-channels is for local channel development only.
       Please use --channels to run a list of approved channels.
@@ -16,7 +16,7 @@ fn matches_local_agentnexus_development_prompt() {
 }
 
 #[test]
-fn ignores_non_agentnexus_prompts() {
+fn ignores_non_dimweave_prompts() {
     let prompt = r#"
       Please use --channels to run a list of approved channels.
       Channels: server:someone-else

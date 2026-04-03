@@ -24,7 +24,7 @@ claude --dangerously-load-development-channels server:<mcp_server_name> --danger
 - `server:agentnexus` — 加载 `.mcp.json` 中名为 `agentnexus` 的 MCP server 作为 channel
 - `plugin:<name>@<marketplace>` — 加载插件形式的 channel
 - 此 flag 绕过 allowlist，仅限开发测试使用
-- `--dangerously-skip-permissions` — 默认跳过 Claude CLI 的本地 permission 确认，当前 AgentNexus 以 bypass permission 作为默认启动方式
+- `--dangerously-skip-permissions` — 默认跳过 Claude CLI 的本地 permission 确认，当前 Dimweave 以 bypass permission 作为默认启动方式
 - 需要 Claude Code >= 2.1.80
 - 需要 claude.ai 登录（不支持 Console/API key）
 
@@ -101,7 +101,7 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 {
   "mcpServers": {
     "agentnexus": {
-      "command": "/absolute/path/to/agent-nexus-bridge",
+      "command": "/absolute/path/to/dimweave-bridge",
       "args": []
     }
   }
@@ -155,7 +155,7 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 - `cargo test --manifest-path src-tauri/Cargo.toml`
 - `bun test tests/task-store.test.ts tests/task-panel-view-model.test.ts`
 - `bun run build`
-- 运行中的 `agent-nexus` daemon 继续监听 `127.0.0.1:4502`
+- 运行中的 `dimweave` daemon 继续监听 `127.0.0.1:4502`
 
 **已知限制:**
 - 原生 Tauri 窗口中的“完整人工点击恢复 Claude 历史会话”仍需在本机 GUI 上做最终人工回放；当前自动化环境只能完成启动 smoke 与后端/前端验证
@@ -258,12 +258,12 @@ tool 调用通过 `CallToolRequestSchema` handler 处理，返回格式:
 
 ### 2026-03-27: Claude Code 2.1.85 PTY 崩溃保护
 
-- [已修复] Claude Code `2.1.85` 在 AgentNexus 的 managed PTY 下会崩在上游 TUI bundle，报错形态为 `_4.useRef is not a function`，随后终端无响应但 GUI 仍可能残留“已连接”错觉
-- **根因**: 这不是 AgentNexus 的 `status` 协议或 PTY 写入链直接打坏，而是 Claude Code `2.1.85` 自身交互 TUI 的回归；错误栈位于 `claude-standalone` 内部 tool activity 渲染代码
+- [已修复] Claude Code `2.1.85` 在 Dimweave 的 managed PTY 下会崩在上游 TUI bundle，报错形态为 `_4.useRef is not a function`，随后终端无响应但 GUI 仍可能残留“已连接”错觉
+- **根因**: 这不是 Dimweave 的 `status` 协议或 PTY 写入链直接打坏，而是 Claude Code `2.1.85` 自身交互 TUI 的回归；错误栈位于 `claude-standalone` 内部 tool activity 渲染代码
 - **修复**: `ensure_claude_channel_ready()` 现在把 `2.1.85` 视为已知坏版本并在启动前直接拒绝，给出明确降级提示，不再让坏版本进入 managed PTY 后静默炸掉
 - **当前策略**:
   - `>= 2.1.80` 仍是 channel preview 最低版本要求
-  - `2.1.85` 被额外列为 AgentNexus managed PTY 黑名单版本
+  - `2.1.85` 被额外列为 Dimweave managed PTY 黑名单版本
   - 推荐回退到 `2.1.84`：`claude install 2.1.84 --force`
   - 或 `npm i -g @anthropic-ai/claude-code@2.1.84`
 - **验证**:
@@ -282,7 +282,7 @@ Claude PTY 启动后出现 `"Listening for channel messages from: server:agentne
 
 #### 根因
 
-`--dangerously-load-development-channels server:agentnexus` 只告知 Claude 要加载名为 `server:agentnexus` 的 channel，但 Claude Code 不知道如何 spawn 对应的 MCP server。没有 `--mcp-config`，Claude 不读取项目 `.mcp.json`，因此无法找到 `agent-nexus-bridge` 的命令路径。
+`--dangerously-load-development-channels server:agentnexus` 只告知 Claude 要加载名为 `server:agentnexus` 的 channel，但 Claude Code 不知道如何 spawn 对应的 MCP server。没有 `--mcp-config`，Claude 不读取项目 `.mcp.json`，因此无法找到 `dimweave-bridge` 的命令路径。
 
 #### 失败尝试
 
@@ -330,7 +330,7 @@ cmd.arg(mcp_config_path.to_string_lossy().to_string());
   - `claude --sdk-url ws://127.0.0.1:1 --system-prompt-file /definitely/missing -p hi`
   - `claude --channels server:test --system-prompt-file /definitely/missing -p hi`
   - `claude --parent-session-id abc --agent-id a --agent-name b --team-name c --teammate-mode auto --agent-type worker --system-prompt-file /definitely/missing -p hi`
-- [结论] AgentNexus 当前 Claude 链路只使用了较弱的 `--append-system-prompt`。若要把 Claude 侧强约束提升到接近 Codex `base_instructions` 的级别，应优先改为：
+- [结论] Dimweave 当前 Claude 链路只使用了较弱的 `--append-system-prompt`。若要把 Claude 侧强约束提升到接近 Codex `base_instructions` 的级别，应优先改为：
   - 主角色 contract → `--system-prompt`
   - 临时附加规则 / 调试尾注 → `--append-system-prompt`
 - [详情] 逆向链路与证据已单独记录到：`docs/agents/claude-cli-reverse-engineering.md`
@@ -359,8 +359,8 @@ cmd.arg(mcp_config_path.to_string_lossy().to_string());
 
 #### 诊断陷阱
 
-- `pgrep -la agent-nexus-bridge` 会匹配 `cargo build -p agent-nexus-bridge`（构建脚本），误报 bridge 存在
-- 正确方法: `pgrep -fl "target/debug/agent-nexus-bridge"` 匹配完整二进制路径
+- `pgrep -la dimweave-bridge` 会匹配 `cargo build -p dimweave-bridge`（构建脚本），误报 bridge 存在
+- 正确方法: `pgrep -fl "target/debug/dimweave-bridge"` 匹配完整二进制路径
 - 二进制替换为 shell wrapper 无效：`register_mcp` 每次都重写 `.mcp.json` 为 Tauri 注册的绝对路径，wrapper 不会被调用；且 wrapper 重定向 stdout 到日志会破坏 MCP stdio 协议
 
 ### 2026-03-26: Bridge → Claude Channel 通知端到端验证
@@ -574,7 +574,7 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 ### 2026-04-01: Claude SDK (`--sdk-url`) 链路补齐多代理协议
 
 - [已修复] SDK 直连模式下，`ReplyInput` 默认 `auto` 目标之前只把 legacy bridge `attached_agents["claude"]` 视为 Claude 在线，导致“只连了 Claude SDK 时，用户输入直接在 daemon 入口被判成没有在线目标”，消息面板连用户自己的发送也不显示。当前 `resolve_user_targets()` 已改为统一走 `DaemonState::is_agent_online()`，Claude SDK `claude_sdk_ws_tx` 也算在线。
-- [已修复] SDK 启动之前把 `mcp_config` 传成 `None`，实际等价于 `--strict-mcp-config '{}'`。这会把 `reply()` / `get_online_agents()` 两个 AgentNexus MCP tool 全部拿掉，而当前 Claude role prompt 又明确要求依赖这两个工具完成交付和委派。现在 SDK launch 会复用宿主生成的 `agentnexus` MCP 配置，直接把 inline `mcpServers.agentnexus` JSON 传给 `--strict-mcp-config`，恢复多代理协议。
+- [已修复] SDK 启动之前把 `mcp_config` 传成 `None`，实际等价于 `--strict-mcp-config '{}'`。这会把 `reply()` / `get_online_agents()` 两个 Dimweave MCP tool 全部拿掉，而当前 Claude role prompt 又明确要求依赖这两个工具完成交付和委派。现在 SDK launch 会复用宿主生成的 `agentnexus` MCP 配置，直接把 inline `mcpServers.agentnexus` JSON 传给 `--strict-mcp-config`，恢复多代理协议。
 - [已修复] SDK strict MCP config 现在会先读取目标 workspace 现有的 `.mcp.json`，再把 `agentnexus` server upsert 进去，而不是用空对象覆盖整个配置。这样用户项目里原本已有的其他 MCP servers 不会在 SDK 模式下丢失。
 - [已修复] ClaudePanel 的 SDK launch 请求之前把 `roleId` 写死成 `lead`，UI 上选中的 `coder` / `reviewer` 根本不会进入后端。现在前端会显式把当前 `claudeRole` 带进 `daemon_launch_claude_sdk` 请求，并加了回归测试锁住。
 - [已修复] SDK launch 的 ready 握手之前存在本地竞态：先 spawn Claude，再登记 `claude_sdk_ready_tx` 和 epoch。Claude 如果足够快先连回 `/claude`，launch 会错过 ready 信号并在 30 秒后假失败。现在改为先保留 ready slot，再 spawn 子进程。

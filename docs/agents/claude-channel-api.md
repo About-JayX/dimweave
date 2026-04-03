@@ -1,6 +1,6 @@
 > **文档状态：** `Legacy`
 >
-> **说明：** 本文描述的是 Claude Channel contract。AgentNexus 当前 Claude 主链路已经不再使用 channel transport，而是使用 `--sdk-url`。保留本文是为了追溯旧链路、理解 `claude/channel` / `claude/channel/permission` contract，以及对照历史设计。
+> **说明：** 本文描述的是 Claude Channel contract。Dimweave 当前 Claude 主链路已经不再使用 channel transport，而是使用 `--sdk-url`。保留本文是为了追溯旧链路、理解 `claude/channel` / `claude/channel/permission` contract，以及对照历史设计。
 >
 > ## Documentation Index
 > Fetch the complete documentation index at: https://code.claude.com/docs/llms.txt

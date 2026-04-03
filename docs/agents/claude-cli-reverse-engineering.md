@@ -2,7 +2,7 @@
 
 > **文档状态：** `Active reference`
 >
-> **说明：** 本文记录 Claude CLI 参数、prompt 注入位点和隐藏能力的逆向结果。它是理解 `--sdk-url` / `--append-system-prompt` / `--system-prompt` 的参考资料，但不直接代表 AgentNexus 当前启用了哪些能力。
+> **说明：** 本文记录 Claude CLI 参数、prompt 注入位点和隐藏能力的逆向结果。它是理解 `--sdk-url` / `--append-system-prompt` / `--system-prompt` 的参考资料，但不直接代表 Dimweave 当前启用了哪些能力。
 
 > 目标：确认 Claude CLI 是否存在比 `--append-system-prompt` 更强的 prompt 注入位点，并梳理它与 channel / stream / teammate 模式的真实链路。
 
@@ -322,11 +322,11 @@ source map 中 `main.tsx` 明确注册了：
 
 这说明 Claude CLI 自己就有一整套 teammate/swarm 输入面。
 
-因此，AgentNexus 当前用 channel 自行做多代理编排，并不是唯一可能路径；Claude CLI 内部其实也有自己的 agent/team 语义层。
+因此，Dimweave 当前用 channel 自行做多代理编排，并不是唯一可能路径；Claude CLI 内部其实也有自己的 agent/team 语义层。
 
 ---
 
-## 9. 与当前 AgentNexus 实现的对照
+## 9. 与当前 Dimweave 实现的对照
 
 ### 当前项目的 Claude 注入方式
 
@@ -381,7 +381,7 @@ source map 中 `main.tsx` 明确注册了：
 因为：
 
 - channel 与 stream-json 可共存
-- channel 仍然是 Claude 与 AgentNexus 间最自然的结构化通信入口
+- channel 仍然是 Claude 与 Dimweave 间最自然的结构化通信入口
 
 ### 方案 C：必要时加 daemon 侧协议校验
 

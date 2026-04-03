@@ -208,7 +208,7 @@
    - `bun test tests/task-store.test.ts tests/task-panel-view-model.test.ts`
    - `bun run build`
 2. 已完成运行时 smoke：
-   - `agent-nexus` 继续监听 `127.0.0.1:4502`
+   - `dimweave` 继续监听 `127.0.0.1:4502`
    - `codex app-server` 继续监听 `127.0.0.1:4500`
    - `curl -fsS http://127.0.0.1:4500/readyz` 成功
 3. 已更新架构与链路文档：

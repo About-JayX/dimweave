@@ -2,7 +2,7 @@
 
 ## Summary
 
-AgentNexus will become a single product centered on a **Task Graph** rather than raw provider sessions. A user creates one task, the system opens exactly one **lead parent session** for planning and review, and the lead session creates one or more **coder child sessions** for implementation. Claude and Codex remain separate providers underneath, but both are normalized behind a shared session/task model so the UI presents one coherent workflow.
+Dimweave will become a single product centered on a **Task Graph** rather than raw provider sessions. A user creates one task, the system opens exactly one **lead parent session** for planning and review, and the lead session creates one or more **coder child sessions** for implementation. Claude and Codex remain separate providers underneath, but both are normalized behind a shared session/task model so the UI presents one coherent workflow.
 
 ## Product Goal
 
@@ -65,11 +65,11 @@ This avoids forcing Claude into Codex-native semantics while still presenting a 
 
 ## Storage Strategy
 
-Persist task/session/artifact metadata locally in an AgentNexus-owned store instead of treating provider rollout files as the source of truth.
+Persist task/session/artifact metadata locally in an Dimweave-owned store instead of treating provider rollout files as the source of truth.
 
 ### Persisted sources
 
-- **AgentNexus registry**
+- **Dimweave registry**
   - tasks
   - normalized sessions
   - artifacts
@@ -80,7 +80,7 @@ Persist task/session/artifact metadata locally in an AgentNexus-owned store inst
 
 ### Rule
 
-AgentNexus owns orchestration metadata; providers own their raw conversation history.
+Dimweave owns orchestration metadata; providers own their raw conversation history.
 
 ## Runtime Components
 

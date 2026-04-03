@@ -55,7 +55,7 @@ UI textarea → invoke("daemon_launch_codex", { devInstructions })
 
 ---
 
-### Phase 2: 内置 AgentNexus Skills
+### Phase 2: 内置 Dimweave Skills
 
 **目标:** 在 CODEX_HOME 中写入内置 skills，Codex 自动发现。
 
@@ -63,9 +63,9 @@ UI textarea → invoke("daemon_launch_codex", { devInstructions })
 
 | Skill | 目录 | 用途 |
 |-------|------|------|
-| `agentnexus-comm` | `CODEX_HOME/skills/agentnexus-comm/SKILL.md` | 多 agent 通信：reply 路由决策树、结构化输出示例、角色交互模式 |
-| `agentnexus-review` | `CODEX_HOME/skills/agentnexus-review/SKILL.md` | 代码审查流程：coder→reviewer→lead 工作流模板 |
-| `agentnexus-debug` | `CODEX_HOME/skills/agentnexus-debug/SKILL.md` | 调试协作：收集→定位→修复→验证→汇报 |
+| `dimweave-comm` | `CODEX_HOME/skills/dimweave-comm/SKILL.md` | 多 agent 通信：reply 路由决策树、结构化输出示例、角色交互模式 |
+| `dimweave-review` | `CODEX_HOME/skills/dimweave-review/SKILL.md` | 代码审查流程：coder→reviewer→lead 工作流模板 |
+| `dimweave-debug` | `CODEX_HOME/skills/dimweave-debug/SKILL.md` | 调试协作：收集→定位→修复→验证→汇报 |
 
 **改动:**
 
@@ -100,7 +100,7 @@ UI textarea → invoke("daemon_launch_codex", { devInstructions })
 
 | 功能 | 说明 | 优先级 |
 |------|------|--------|
-| devInstructions 持久化 | 保存到 localStorage 或项目 `.agentnexus/config.json` | 中 |
+| devInstructions 持久化 | 保存到 localStorage 或项目 `.dimweave/config.json` | 中 |
 | 模型选择 UI（Codex 侧） | 下拉选 gpt-5.4 / gpt-5.3-codex 等 | 中 |
 | personality 参数 | 按角色设置 friendly/pragmatic | 低 |
 | collaborationMode | per-turn 切换 plan/execute/custom | 低 |

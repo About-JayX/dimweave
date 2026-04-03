@@ -1,8 +1,8 @@
-# AgentNexus Deep Performance And UX Rebuild Plan
+# Dimweave Deep Performance And UX Rebuild Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILLS: Use `superpowers:subagent-driven-development` (preferred) or `superpowers:executing-plans` to implement this plan checkpoint-by-checkpoint. Every checkpoint must also run the `superpowers:requesting-code-review`, `superpowers:receiving-code-review`, and `superpowers:verification-before-completion` workflow before commit. Steps use checkbox syntax for tracking.
 
-**Goal:** Rebuild AgentNexus so it stays fluid under long-running Claude/Codex sessions, reduces UI noise, and behaves more like a professional agent IDE than an internal diagnostics surface.
+**Goal:** Rebuild Dimweave so it stays fluid under long-running Claude/Codex sessions, reduces UI noise, and behaves more like a professional agent IDE than an internal diagnostics surface.
 
 **Product Direction:** Keep the balanced optimization strategy and aggressive UI restructure, but execute it in two stages: first remove the measured hot-path bottlenecks, then reshape the shell around a calmer professional IDE flow.
 

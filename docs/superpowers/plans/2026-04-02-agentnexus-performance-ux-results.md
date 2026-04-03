@@ -1,4 +1,4 @@
-# AgentNexus 性能与 UX 重构结果
+# Dimweave 性能与 UX 重构结果
 
 > 说明：本文件是本轮 `perf-ux-rebuild` 分支的结果摘要，回答“这次具体修了什么”。执行计划仍保留在 `docs/superpowers/plans/2026-04-02-agentnexus-performance-ux-rebuild.md`。
 
@@ -96,7 +96,7 @@
   - 默认就是聊天页，不再需要 `Conversation` 一级入口
   - `Logs` 是唯一例外，选中后直接替换整个聊天主区
 - 顶部极简 bar
-  - 只保留 `AgentNexus` 和当前 workspace
+  - 只保留 `Dimweave` 和当前 workspace
   - 不再承担主功能切换，不再像第二个 dashboard
 
 直接收益：
@@ -233,7 +233,7 @@
 
 ## 结论
 
-这轮修复不是单点 patch，而是先把 AgentNexus 从“诊断面板优先”的状态，推进到“主时间线优先”的 IDE 型 agent shell，然后再把第一轮重构暴露出来的噪音和突兀感收口：
+这轮修复不是单点 patch，而是先把 Dimweave 从”诊断面板优先”的状态，推进到“主时间线优先”的 IDE 型 agent shell，然后再把第一轮重构暴露出来的噪音和突兀感收口：
 
 - stream 更稳
 - markdown 更轻
