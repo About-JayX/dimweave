@@ -11,6 +11,8 @@ export interface ProviderSessionInfo {
 export interface Attachment {
   filePath: string;
   fileName: string;
+  isImage?: boolean;
+  mediaType?: string;
 }
 
 export interface BridgeMessage {

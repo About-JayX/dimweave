@@ -32,6 +32,10 @@ impl MessageStatus {
 pub struct Attachment {
     pub file_path: String,
     pub file_name: String,
+    #[serde(default)]
+    pub is_image: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

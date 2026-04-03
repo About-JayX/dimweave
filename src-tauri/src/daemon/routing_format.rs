@@ -57,6 +57,8 @@ mod tests {
         msg.attachments = Some(vec![Attachment {
             file_path: "/tmp/foo.rs".into(),
             file_name: "foo.rs".into(),
+            is_image: false,
+            media_type: None,
         }]);
         let out = format_codex_input(&msg);
         assert!(out.contains("[Attached files:"));
@@ -77,6 +79,8 @@ mod tests {
         msg.attachments = Some(vec![Attachment {
             file_path: "/tmp/bar.png".into(),
             file_name: "bar.png".into(),
+            is_image: true,
+            media_type: Some("image/png".into()),
         }]);
         let out = format_ndjson_user_message(&msg);
         assert!(out.contains("/tmp/bar.png"));
