@@ -1,5 +1,6 @@
 import type {
   AgentInfo,
+  Attachment,
   BridgeMessage,
   PermissionBehavior,
   PermissionPrompt,
@@ -44,7 +45,11 @@ export interface BridgeState {
 
   setDraft: (text: string) => void;
   clearClaudeAttention: () => void;
-  sendToCodex: (content: string, target?: string) => void;
+  sendToCodex: (
+    content: string,
+    target?: string,
+    attachments?: Attachment[],
+  ) => void;
   clearMessages: () => void;
   stopCodexTui: () => void;
   respondToPermission: (

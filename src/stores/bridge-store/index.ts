@@ -51,10 +51,11 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     setDraft: (text) => set({ draft: text }),
     clearClaudeAttention: () => set({ claudeNeedsAttention: false }),
 
-    sendToCodex: (content, target) => {
+    sendToCodex: (content, target, attachments) => {
       invoke("daemon_send_user_input", {
         content,
         target: target ?? "auto",
+        attachments: attachments?.length ? attachments : null,
       }).catch(logError(set));
     },
 
