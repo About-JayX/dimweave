@@ -145,6 +145,24 @@ struct Attachment { file_path: String, file_name: String }
 | 文件拖入输入区无反应 | Tauri 2 的 WebView 不通过浏览器 `File.path` 暴露本地路径，`dataTransfer.files` 拿到的 `File` 对象没有 `path` 属性 | 改用 Tauri 原生 `getCurrentWebview().onDragDropEvent()`，通过 `event.payload.paths` 直接获取本地文件路径数组 | `83f45afd` |
 | 拖入文件出现两份重复 | `addFiles` 作为 `useEffect` 依赖，回调引用变化导致 effect 重跑注册多个 `onDragDropEvent` 监听器，一次 drop 触发多个 handler | 用 `useRef` 持有最新 `addFiles` 引用，effect 依赖设为 `[]`，确保组件生命周期只注册一个监听器 | `1be59ad8` |
 
+## 运行时验证：Codex 文本路径方案测试
+
+> 测试日期: 2026-04-03
+> 测试脚本: `scripts/test-codex-file-path.ts`
+
+**测试方法:** 通过纯文本 `turn/start` 发送 `[Attached files:\n- /path/to/128x128.png]`，不使用 `localImage` 类型。
+
+**Codex 行为链:**
+1. 收到纯文本消息，识别出文件路径
+2. 自动执行 `file /path/to/128x128.png` 判断文件类型 → `PNG image data, 128 x 128, 8-bit/color RGBA`
+3. 执行 `stat` 获取元数据 → `16,513 bytes, 72 dpi, 2026-04-03`
+4. 返回完整文件描述（格式、尺寸、颜色空间、透明度）
+
+**结论:**
+- ✅ **代码/文本文件**: agent 可以 `cat`/`sed` 读取完整内容，Phase 1 方案完全够用
+- ⚠️ **图片文件**: agent 只能通过 shell 命令获取元数据，**不能做视觉内容分析**
+- 要让 Codex 真正"看到"图片内容，必须用 `{"type":"localImage","path":"..."}` 格式发送（Phase 2）
+
 ## 验证结果
 
 - ✅ 289 Rust 测试通过（含 3 个新 routing_format 测试）
