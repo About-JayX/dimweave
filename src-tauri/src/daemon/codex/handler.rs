@@ -110,7 +110,7 @@ mod tests {
     #[tokio::test]
     async fn get_status_includes_wired_codex_session() {
         let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
-        let (tx, _rx) = mpsc::channel::<(String, bool)>(1);
+        let (tx, _rx) = mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
         state.write().await.codex_inject_tx = Some(tx);
 
         let status = handle_get_status(&state).await;

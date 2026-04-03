@@ -15,7 +15,7 @@ impl DaemonState {
     pub fn attach_codex_session_if_current(
         &mut self,
         epoch: u64,
-        tx: mpsc::Sender<(String, bool)>,
+        tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
     ) -> bool {
         if self.codex_session_epoch != epoch {
             return false;

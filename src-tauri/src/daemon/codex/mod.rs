@@ -204,7 +204,7 @@ async fn launch(
         poll_delay = (poll_delay * 2).min(std::time::Duration::from_millis(500));
     }
 
-    let (inject_tx, inject_rx) = mpsc::channel::<(String, bool)>(64);
+    let (inject_tx, inject_rx) = mpsc::channel::<(Vec<serde_json::Value>, bool)>(64);
     let cancel = CancellationToken::new();
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<String>();
 
@@ -290,7 +290,7 @@ async fn launch(
         while i < buffered.len() {
             let from_user = buffered[i].from == "user";
             let text = crate::daemon::routing::format_codex_input(&buffered[i]);
-            if inject_tx.send((text, from_user)).await.is_err() {
+            if inject_tx.send((vec![serde_json::json!({"type":"text","text":text})], from_user)).await.is_err() {
                 let mut s = state.write().await;
                 for m in buffered.drain(i..) {
                     s.buffer_message(m);

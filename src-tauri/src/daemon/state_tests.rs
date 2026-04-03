@@ -73,7 +73,7 @@ fn expired_permissions_are_rejected() {
 fn status_snapshot_reports_current_online_agents() {
     let mut s = DaemonState::new();
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),
@@ -97,7 +97,7 @@ fn status_snapshot_reports_current_online_agents() {
 fn status_snapshot_includes_provider_session_metadata() {
     let mut s = DaemonState::new();
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),
@@ -391,7 +391,7 @@ fn stale_codex_session_cleanup_cannot_clear_new_session() {
     let mut s = DaemonState::new();
     let stale_epoch = s.begin_codex_launch();
     let current_epoch = s.begin_codex_launch();
-    let (current_tx, _current_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (current_tx, _current_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
 
     assert!(s.attach_codex_session_if_current(current_epoch, current_tx));
     assert!(!s.clear_codex_session_if_current(stale_epoch));

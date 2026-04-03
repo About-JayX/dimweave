@@ -42,7 +42,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
     enum Target {
         Claude(tokio::sync::mpsc::Sender<ToAgent>),
         ClaudeSdk(tokio::sync::mpsc::Sender<String>, String),
-        Codex(tokio::sync::mpsc::Sender<(String, bool)>, String, bool),
+        Codex(tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>, Vec<serde_json::Value>, bool),
         NeedBuffer,
     }
 
@@ -103,7 +103,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
             } else if let Some(tx) = codex_tx {
                 let from_user = msg.from == "user";
                 (
-                    Target::Codex(tx, format_codex_input(&msg), from_user),
+                    Target::Codex(tx, vec![serde_json::json!({"type":"text","text":format_codex_input(&msg)})], from_user),
                     false,
                 )
             } else {
@@ -149,8 +149,8 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 }
             }
         }
-        Target::Codex(tx, input, from_user) => {
-            if tx.send((input, from_user)).await.is_ok() {
+        Target::Codex(tx, items, from_user) => {
+            if tx.send((items, from_user)).await.is_ok() {
                 RouteOutcome {
                     result: RouteResult::Delivered,
                     emit_claude_thinking: false,

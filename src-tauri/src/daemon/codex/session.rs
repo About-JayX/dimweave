@@ -28,7 +28,7 @@ pub async fn run(
     opts: SessionOpts,
     state: SharedState,
     app: AppHandle,
-    mut inject_rx: mpsc::Receiver<(String, bool)>,
+    mut inject_rx: mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
     ready_tx: tokio::sync::oneshot::Sender<String>,
 ) {
     match CodexWsClient::connect(port, &opts, &app).await {
@@ -62,7 +62,7 @@ pub async fn resume(
     thread_id: String,
     state: SharedState,
     app: AppHandle,
-    mut inject_rx: mpsc::Receiver<(String, bool)>,
+    mut inject_rx: mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
     ready_tx: tokio::sync::oneshot::Sender<String>,
 ) {
     match CodexWsClient::reconnect(port, &thread_id, &app).await {
@@ -94,7 +94,7 @@ async fn run_with_reconnect(
     role_id: &str,
     state: &SharedState,
     app: &AppHandle,
-    inject_rx: &mut mpsc::Receiver<(String, bool)>,
+    inject_rx: &mut mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
     thread_id: String,
     mut ws_tx: WsTx,
     mut ws_rx: WsRx,
@@ -204,7 +204,7 @@ async fn event_loop(
     role_id: &str,
     state: &SharedState,
     app: &AppHandle,
-    inject_rx: &mut mpsc::Receiver<(String, bool)>,
+    inject_rx: &mut mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
     ws_tx: &WsTx,
     ws_rx: &mut WsRx,
 ) -> LoopExit {
@@ -232,7 +232,7 @@ async fn event_loop(
                 }
             }
             inject = inject_rx.recv() => {
-                let Some((text, from_user)) = inject else {
+                let Some((items, from_user)) = inject else {
                     eprintln!("[Codex] event_loop: inject_rx closed");
                     return LoopExit::InjectClosed;
                 };
@@ -240,7 +240,7 @@ async fn event_loop(
                 routed_turns.track_injected_request(id, from_user);
                 let mut turn_params = json!({
                     "threadId": thread_id,
-                    "input": [{"type":"text","text":text}],
+                    "input": items,
                     "outputSchema": crate::daemon::role_config::output_schema()
                 });
                 if turn_params["outputSchema"].is_null() {

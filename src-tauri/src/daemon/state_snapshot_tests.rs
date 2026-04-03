@@ -32,7 +32,7 @@ fn online_agents_snapshot_only_claude() {
 #[test]
 fn online_agents_snapshot_only_codex() {
     let mut s = DaemonState::new();
-    let (tx, _rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     s.codex_inject_tx = Some(tx);
 
     let snapshot = s.online_agents_snapshot();
@@ -51,7 +51,7 @@ fn online_agents_snapshot_only_codex() {
 fn online_agents_snapshot_both_agents_in_fixed_order() {
     let mut s = DaemonState::new();
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),
@@ -68,7 +68,7 @@ fn online_agents_snapshot_both_agents_in_fixed_order() {
 fn online_agents_snapshot_role_reflects_current_state() {
     let mut s = DaemonState::new();
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(String, bool)>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),

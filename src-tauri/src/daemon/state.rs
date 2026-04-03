@@ -45,7 +45,7 @@ pub struct DaemonState {
     pub buffered_messages: Vec<BridgeMessage>,
     pending_permissions: HashMap<String, PendingPermission>,
     buffered_verdicts: HashMap<String, Vec<PermissionVerdict>>,
-    pub codex_inject_tx: Option<mpsc::Sender<(String, bool)>>,
+    pub codex_inject_tx: Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>>,
     codex_session_epoch: u64,
     // Claude SDK connection (hybrid WS + HTTP POST mode)
     pub claude_sdk_ws_tx: Option<mpsc::Sender<String>>,
