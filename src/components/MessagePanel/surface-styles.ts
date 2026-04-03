@@ -1,25 +1,40 @@
-export function getMessageSurfacePresentation(isUser: boolean): {
-  containerClass: string;
-} {
-  return {
-    containerClass: isUser
-      ? "bg-sky-500/8 border border-sky-500/18"
-      : "bg-card/45 border border-border/35",
-  };
+const accentMap: Record<string, string> = {
+  claude: "text-claude",
+  lead: "text-claude",
+  codex: "text-codex",
+  coder: "text-codex",
+  user: "text-sky-400",
+  reviewer: "text-yellow-400",
+  system: "text-muted-foreground",
+};
+
+export function getAccentColor(source: string): string {
+  return accentMap[source] ?? accentMap.system;
 }
 
-export function getStreamSurfacePresentation(
-  provider: "claude" | "codex",
-): {
+const bgMap: Record<string, string> = {
+  claude: "bg-claude/8",
+  lead: "bg-claude/8",
+  codex: "bg-codex/8",
+  coder: "bg-codex/8",
+  user: "bg-sky-500/10",
+  reviewer: "bg-yellow-500/8",
+  system: "bg-muted/40",
+};
+
+export function getMessageSurfacePresentation(source: string): {
   containerClass: string;
+} {
+  return { containerClass: bgMap[source] ?? bgMap.system };
+}
+
+export function getStreamSurfacePresentation(provider: "claude" | "codex"): {
   statusClass: string;
   metaClass: string;
   commandClass: string;
 } {
   if (provider === "claude") {
     return {
-      containerClass:
-        "max-w-[82%] rounded-xl border border-dashed border-claude/18 bg-claude/6 px-3 py-2.5",
       statusClass: "text-[11px] text-claude/80",
       metaClass: "text-[10px] text-muted-foreground/55",
       commandClass:
@@ -28,8 +43,6 @@ export function getStreamSurfacePresentation(
   }
 
   return {
-    containerClass:
-      "max-w-[78%] rounded-xl border border-dashed border-codex/18 bg-codex/6 px-3 py-2.5",
     statusClass: "text-[11px] text-codex/80",
     metaClass: "text-[11px] text-muted-foreground/60 italic",
     commandClass:

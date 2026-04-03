@@ -192,9 +192,12 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
       </div>
 
       {connectionLabel && (
-        <div className="mt-1 font-mono text-[11px] text-muted-foreground/80">
-          {connectionLabel}
-        </div>
+        <span
+          className="mt-1.5 inline-block cursor-pointer truncate rounded-full border border-claude/15 bg-claude/8 px-2.5 py-0.5 text-[10px] text-claude/70 transition-colors hover:bg-claude/15 hover:text-claude"
+          title={connectionLabel.full}
+        >
+          {connectionLabel.short}
+        </span>
       )}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -212,7 +215,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
         {connected ? (
           <Button
             size="sm"
-            variant="secondary"
+            variant="destructive"
             className="flex-1 rounded-full"
             disabled={disconnecting}
             onClick={handleDisconnect}

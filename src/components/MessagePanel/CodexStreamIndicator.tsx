@@ -36,9 +36,9 @@ export function CodexStreamIndicator() {
   if (!viewModel.visible) return null;
 
   return (
-    <div className="py-2">
-      <div className="flex py-2.5 justify-start">
-        <div className={surface.containerClass}>
+    <div className="py-1.5">
+      <div className="flex justify-start">
+        <div className="max-w-[82%] rounded-xl bg-codex/8 px-3.5 py-2.5">
           <div className="flex items-center gap-2 mb-1">
             <SourceBadge source="codex" />
             {viewModel.showStatusLabel && (
@@ -50,7 +50,9 @@ export function CodexStreamIndicator() {
             )}
           </div>
           {reasoning && !currentDelta && (
-            <div className={`${surface.metaClass} mb-1 whitespace-pre-wrap max-h-24 overflow-y-auto`}>
+            <div
+              className={`${surface.metaClass} mb-1 whitespace-pre-wrap max-h-24 overflow-y-auto`}
+            >
               {displayReasoning}
             </div>
           )}

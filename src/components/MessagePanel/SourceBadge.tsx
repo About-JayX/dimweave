@@ -1,55 +1,34 @@
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { getAccentColor } from "./surface-styles";
 
-const sourceStyle: Record<string, { label: string; className: string }> = {
-  claude: {
-    label: "Claude",
-    className: "border-claude/24 bg-claude/6 text-claude/90",
-  },
-  codex: {
-    label: "Codex",
-    className: "border-codex/24 bg-codex/6 text-codex/90",
-  },
-  user: {
-    label: "You",
-    className: "border-sky-500/24 bg-sky-500/6 text-sky-300",
-  },
-  system: {
-    label: "System",
-    className: "border-system/24 bg-system/8 text-system/90",
-  },
-  lead: {
-    label: "Lead",
-    className: "border-claude/24 bg-claude/6 text-claude/90",
-  },
-  coder: {
-    label: "Coder",
-    className: "border-codex/24 bg-codex/6 text-codex/90",
-  },
-  reviewer: {
-    label: "Reviewer",
-    className: "border-yellow-500/24 bg-yellow-500/8 text-yellow-300",
-  },
+const sourceLabel: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  user: "You",
+  system: "System",
+  lead: "Lead",
+  coder: "Coder",
+  reviewer: "Reviewer",
 };
 
 export function getSourceBadgePresentation(source: string): {
   label: string;
   className: string;
 } {
-  return sourceStyle[source] ?? sourceStyle.system;
+  return {
+    label: sourceLabel[source] ?? source,
+    className: getAccentColor(source),
+  };
 }
 
 export function SourceBadge({ source }: { source: string }) {
-  const style = getSourceBadgePresentation(source);
+  const accent = getAccentColor(source);
+  const label = sourceLabel[source] ?? source;
   return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "uppercase border px-2 py-0.5 text-[10px] tracking-[0.14em]",
-        style.className,
-      )}
+    <span
+      className={`flex items-center gap-1 text-[10px] font-semibold ${accent}`}
     >
-      {style.label}
-    </Badge>
+      <span className={`inline-block size-1.5 rounded-full bg-current`} />
+      {label}
+    </span>
   );
 }

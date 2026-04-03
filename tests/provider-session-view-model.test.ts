@@ -61,10 +61,13 @@ describe("formatProviderConnectionLabel", () => {
       connectionMode: "new",
     };
 
-    expect(formatProviderConnectionLabel(resumed)).toBe(
-      "Resumed claude_resume_42",
-    );
-    expect(formatProviderConnectionLabel(fresh)).toBe("New thread thread_123");
+    const resumedLabel = formatProviderConnectionLabel(resumed);
+    expect(resumedLabel?.short).toBe("Resumed session claude…e_42");
+    expect(resumedLabel?.full).toBe("Resumed session claude_resume_42");
+
+    const freshLabel = formatProviderConnectionLabel(fresh);
+    expect(freshLabel?.short).toBe("New thread thread_123");
+    expect(freshLabel?.full).toBe("New thread thread_123");
   });
 });
 
@@ -77,7 +80,9 @@ describe("resolveProviderHistoryWorkspace", () => {
       connectionMode: "resumed",
     };
 
-    expect(resolveProviderHistoryWorkspace("", session)).toBe("/tmp/provider-ws");
+    expect(resolveProviderHistoryWorkspace("", session)).toBe(
+      "/tmp/provider-ws",
+    );
     expect(resolveProviderHistoryWorkspace("/tmp/manual-ws", session)).toBe(
       "/tmp/manual-ws",
     );

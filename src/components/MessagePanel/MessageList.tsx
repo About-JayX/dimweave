@@ -19,8 +19,8 @@ export function MessageList({ messages }: Props) {
   const didInitialScrollRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
   const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
-  const codexVisible = useBridgeStore((s) =>
-    getCodexStreamIndicatorViewModel(s.codexStream).visible,
+  const codexVisible = useBridgeStore(
+    (s) => getCodexStreamIndicatorViewModel(s.codexStream).visible,
   );
   const streamRailIndicators = useMemo(
     () => [
@@ -86,7 +86,7 @@ export function MessageList({ messages }: Props) {
         />
       </div>
       {displayState.streamRailIndicators.length > 0 && (
-        <div className="border-t border-border/60 px-4 pb-2 pt-1 bg-background/95">
+        <div className="px-4 pb-2">
           {displayState.streamRailIndicators.map((indicator) =>
             indicator === "claude" ? (
               <ClaudeStreamIndicator key={indicator} />

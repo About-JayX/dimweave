@@ -43,19 +43,25 @@ export function findProviderHistoryEntry(
   );
 }
 
+export interface ConnectionLabel {
+  short: string;
+  full: string;
+}
+
+function truncateId(id: string): string {
+  if (id.length <= 12) return id;
+  return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
+
 export function formatProviderConnectionLabel(
   session: ProviderSessionInfo | undefined,
-): string | null {
+): ConnectionLabel | null {
   if (!session) return null;
-  const shortId = session.externalSessionId.slice(0, 24);
-  if (session.provider === "codex") {
-    return session.connectionMode === "resumed"
-      ? `Resumed thread ${shortId}`
-      : `New thread ${shortId}`;
-  }
-  return session.connectionMode === "resumed"
-    ? `Resumed ${shortId}`
-    : `New session ${shortId}`;
+  const id = session.externalSessionId;
+  const shortId = truncateId(id);
+  const mode = session.connectionMode === "resumed" ? "Resumed" : "New";
+  const kind = session.provider === "codex" ? "thread" : "session";
+  return { short: `${mode} ${kind} ${shortId}`, full: `${mode} ${kind} ${id}` };
 }
 
 export function resolveProviderHistoryWorkspace(

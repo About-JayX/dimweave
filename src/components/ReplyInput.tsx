@@ -27,6 +27,7 @@ export function ReplyInput() {
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
   const [target, setTarget] = useState<Target>("auto");
   const [showPicker, setShowPicker] = useState(false);
+  const [sendOnEnter, setSendOnEnter] = useState(true);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -48,12 +49,18 @@ export function ReplyInput() {
         e.keyCode === 229
       )
         return;
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        handleSend();
+      if (e.key === "Enter") {
+        if (sendOnEnter) {
+          if (e.shiftKey) return; // Shift+Enter = newline
+          e.preventDefault();
+          handleSend();
+        } else if (e.metaKey || e.ctrlKey) {
+          e.preventDefault();
+          handleSend();
+        }
       }
     },
-    [handleSend],
+    [handleSend, sendOnEnter],
   );
 
   const autosize = useCallback(() => {
@@ -95,17 +102,16 @@ export function ReplyInput() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showPicker]);
-
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.userAgent);
 
   return (
-    <div className="border-t border-border/45 px-4 py-3">
-      <div className="rounded-2xl border border-input bg-card/85 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 transition-colors">
+    <div className="px-4 py-3">
+      <div className="overflow-hidden rounded-xl border border-border/50 bg-card/85 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 transition-colors">
         <textarea
           ref={textareaRef}
-          className="block w-full min-h-[44px] resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+          className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -166,9 +172,17 @@ export function ReplyInput() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] text-muted-foreground">
-              {isMac ? "⌘" : "Ctrl"}+Enter
-            </span>
+            <button
+              onClick={() => setSendOnEnter((v) => !v)}
+              className="rounded-full border border-border/35 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title={
+                sendOnEnter
+                  ? "Click to switch: ⌘+Enter to send"
+                  : "Click to switch: Enter to send"
+              }
+            >
+              {sendOnEnter ? "Enter ↵" : `${isMac ? "⌘" : "Ctrl"}+Enter`}
+            </button>
             <Button
               size="sm"
               disabled={!connected || !draft.trim()}

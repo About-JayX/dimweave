@@ -18,9 +18,9 @@ export function ClaudeStreamIndicator() {
   );
 
   return (
-    <div className="py-2">
-      <div className="flex py-2.5 justify-start">
-        <div className={surface.containerClass}>
+    <div className="py-1.5">
+      <div className="flex justify-start">
+        <div className="max-w-[82%] rounded-xl bg-claude/8 px-3.5 py-2.5">
           <div className="flex items-center gap-2 mb-1">
             <SourceBadge source="claude" />
             <span
@@ -35,9 +35,7 @@ export function ClaudeStreamIndicator() {
             )}
           </div>
           {hasContent && (
-            <div className={surface.commandClass}>
-              {displayText}
-            </div>
+            <div className={surface.commandClass}>{displayText}</div>
           )}
         </div>
       </div>

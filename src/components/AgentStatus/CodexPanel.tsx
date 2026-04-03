@@ -283,7 +283,7 @@ export function CodexPanel({
         {locked ? (
           <Button
             size="sm"
-            variant="secondary"
+            variant="destructive"
             className="flex-1 rounded-full"
             onClick={stopCodexTui}
           >

@@ -22,22 +22,24 @@ export function areMessageBubblePropsEqual(
 function MessageBubbleInner({ msg }: { msg: BridgeMessage }) {
   const isUser = msg.from === "user";
   const { badgeSource, roleLabel } = getMessageIdentityPresentation(msg);
-  const surface = getMessageSurfacePresentation(isUser);
+  const surface = getMessageSurfacePresentation(badgeSource);
   return (
     <div
-      className={`flex py-2.5 msg-enter ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex py-1.5 msg-enter ${isUser ? "justify-end" : "justify-start"}`}
     >
-      <div className={`max-w-[80%] rounded-xl px-3 py-2.5 ${surface.containerClass}`}>
+      <div
+        className={`max-w-[82%] rounded-xl px-3.5 py-2.5 ${surface.containerClass}`}
+      >
         <div
-          className={`flex items-center gap-2 mb-1 ${isUser ? "justify-end" : ""}`}
+          className={`flex items-center gap-1.5 mb-0.5 ${isUser ? "justify-end" : ""}`}
         >
           <SourceBadge source={badgeSource} />
-          {roleLabel ? (
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+          {roleLabel && (
+            <span className="text-[10px] text-muted-foreground/50">
               {roleLabel}
             </span>
-          ) : null}
-          <span className="font-mono text-[10px] text-muted-foreground/75">
+          )}
+          <span className="text-[10px] text-muted-foreground/30">
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
         </div>
@@ -47,5 +49,8 @@ function MessageBubbleInner({ msg }: { msg: BridgeMessage }) {
   );
 }
 
-export const MessageBubble = memo(MessageBubbleInner, areMessageBubblePropsEqual);
+export const MessageBubble = memo(
+  MessageBubbleInner,
+  areMessageBubblePropsEqual,
+);
 MessageBubble.displayName = "MessageBubble";

@@ -1,10 +1,11 @@
 import { CodexIcon } from "./BrandIcons";
 import { RoleSelect } from "./RoleSelect";
 import { StatusDot } from "./StatusDot";
+import type { ConnectionLabel } from "./provider-session-view-model";
 
 interface CodexHeaderProps {
   running: boolean;
-  connectionLabel: string | null;
+  connectionLabel: ConnectionLabel | null;
 }
 
 export function CodexHeader({ running, connectionLabel }: CodexHeaderProps) {
@@ -22,9 +23,12 @@ export function CodexHeader({ running, connectionLabel }: CodexHeaderProps) {
       </div>
 
       {connectionLabel && (
-        <div className="mt-1 font-mono text-[11px] text-muted-foreground/80">
-          {connectionLabel}
-        </div>
+        <span
+          className="mt-1.5 inline-block cursor-pointer truncate rounded-full border border-codex/15 bg-codex/8 px-2.5 py-0.5 text-[10px] text-codex/70 transition-colors hover:bg-codex/15 hover:text-codex"
+          title={connectionLabel.full}
+        >
+          {connectionLabel.short}
+        </span>
       )}
     </>
   );
