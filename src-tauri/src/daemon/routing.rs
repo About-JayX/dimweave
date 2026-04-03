@@ -41,7 +41,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
 
     enum Target {
         Claude(tokio::sync::mpsc::Sender<ToAgent>),
-        ClaudeSdk(tokio::sync::mpsc::Sender<String>, String),
+        ClaudeSdk(tokio::sync::mpsc::Sender<String>),
         Codex(tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>, Vec<serde_json::Value>, bool),
         NeedBuffer,
     }
@@ -96,14 +96,13 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
             };
 
             if let Some(tx) = claude_sdk_tx {
-                let ndjson = format_ndjson_user_message(&msg);
-                (Target::ClaudeSdk(tx, ndjson), emit_claude_thinking)
+                (Target::ClaudeSdk(tx), emit_claude_thinking)
             } else if let Some(tx) = claude_tx {
                 (Target::Claude(tx), emit_claude_thinking)
             } else if let Some(tx) = codex_tx {
                 let from_user = msg.from == "user";
                 (
-                    Target::Codex(tx, vec![serde_json::json!({"type":"text","text":format_codex_input(&msg)})], from_user),
+                    Target::Codex(tx, build_codex_input_items(&msg), from_user),
                     false,
                 )
             } else {
@@ -134,7 +133,8 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 }
             }
         }
-        Target::ClaudeSdk(tx, ndjson) => {
+        Target::ClaudeSdk(tx) => {
+            let ndjson = format_ndjson_user_message(&msg).await;
             if tx.send(ndjson).await.is_ok() {
                 state.write().await.prepare_claude_response_turn();
                 RouteOutcome {
@@ -214,7 +214,7 @@ async fn route_message_with_display(
     }
 }
 
-pub use super::routing_format::{format_codex_input, format_ndjson_user_message};
+pub use super::routing_format::{build_codex_input_items, format_codex_input, format_ndjson_user_message};
 
 #[cfg(test)]
 #[path = "routing_behavior_tests.rs"]

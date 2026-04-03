@@ -102,14 +102,32 @@ pub fn format_user_message(content: &str) -> String {
     format!("{msg}\n")
 }
 
-/// Format a channel-wrapped user message matching Dimweave routing semantics.
-pub fn format_channel_user_message(from: &str, content: &str) -> String {
-    let wrapped = format!(
+/// Wrap text in channel XML tags for Dimweave routing semantics.
+pub fn wrap_channel_content(from: &str, content: &str) -> String {
+    format!(
         "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
         xml_escape_attr(from),
         xml_escape_text(content)
-    );
-    format_user_message(&wrapped)
+    )
+}
+
+/// Format a channel-wrapped user message matching Dimweave routing semantics.
+pub fn format_channel_user_message(from: &str, content: &str) -> String {
+    format_user_message(&wrap_channel_content(from, content))
+}
+
+/// Format a user message with multi-block content array (text + image blocks).
+pub fn format_user_message_with_content(blocks: &[serde_json::Value]) -> String {
+    let msg = serde_json::json!({
+        "type": "user",
+        "session_id": "",
+        "message": {
+            "role": "user",
+            "content": blocks
+        },
+        "parent_tool_use_id": null
+    });
+    format!("{msg}\n")
 }
 
 fn xml_escape_attr(value: &str) -> String {

@@ -42,8 +42,8 @@ async fn route_to_claude_from_unknown_sender_drops() {
     assert!(matches!(result, RouteResult::Dropped));
 }
 
-#[test]
-fn format_ndjson_user_message_wraps_channel_payload() {
+#[tokio::test]
+async fn format_ndjson_user_message_wraps_channel_payload() {
     let msg = BridgeMessage {
         id: "msg-1".into(),
         from: "coder".into(),
@@ -60,7 +60,7 @@ fn format_ndjson_user_message_wraps_channel_payload() {
         attachments: None,
     };
 
-    let ndjson = format_ndjson_user_message(&msg);
+    let ndjson = format_ndjson_user_message(&msg).await;
     let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();
 
     assert_eq!(
