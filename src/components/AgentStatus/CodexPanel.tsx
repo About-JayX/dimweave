@@ -30,6 +30,7 @@ import {
   makeProviderHistoryErrorSelector,
   makeProviderHistoryLoadingSelector,
   makeProviderHistorySelector,
+  selectActiveTask,
 } from "@/stores/task-store/selectors";
 
 interface CodexPanelProps {
@@ -53,19 +54,18 @@ export function CodexPanel({
 }: CodexPanelProps) {
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
-  const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
+  const activeTask = useTaskStore(selectActiveTask);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
 
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedReasoning, setSelectedReasoning] = useState("");
-  const [cwd, setCwd] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState(
     NEW_PROVIDER_SESSION_VALUE,
   );
   const effectiveCwd = useMemo(
-    () => resolveProviderHistoryWorkspace(cwd, providerSession),
-    [cwd, providerSession],
+    () => resolveProviderHistoryWorkspace(activeTask?.workspaceRoot),
+    [activeTask?.workspaceRoot],
   );
 
   const [connecting, setConnecting] = useState(false);
@@ -186,14 +186,6 @@ export function CodexPanel({
     [models],
   );
 
-  const handlePickDir = useCallback(async () => {
-    const dir = await pickDirectory();
-    if (dir) {
-      setCwd(dir);
-      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
-    }
-  }, [pickDirectory]);
-
   useEffect(() => {
     if (!effectiveCwd) return;
     void fetchProviderHistory(effectiveCwd).catch(() => {});
@@ -235,7 +227,7 @@ export function CodexPanel({
     () => [
       effectiveCwd
         ? effectiveCwd.split("/").pop() || effectiveCwd
-        : "Project required",
+        : "Workspace required",
       selectedModel || "Select model",
       selectedReasoning || "Default reasoning",
       selectedHistory
@@ -343,7 +335,6 @@ export function CodexPanel({
             setSelectedReasoning={setSelectedReasoning}
             reasoningSelectOptions={reasoningSelectOptions}
             cwd={effectiveCwd}
-            handlePickDir={handlePickDir}
           />
 
           <div className="mt-2 flex items-center justify-between">

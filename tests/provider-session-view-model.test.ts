@@ -72,20 +72,10 @@ describe("formatProviderConnectionLabel", () => {
 });
 
 describe("resolveProviderHistoryWorkspace", () => {
-  test("falls back to the connected provider session cwd when no local cwd is selected", () => {
-    const session: ProviderSessionInfo = {
-      provider: "claude",
-      externalSessionId: "claude_resume_42",
-      cwd: "/tmp/provider-ws",
-      connectionMode: "resumed",
-    };
-
-    expect(resolveProviderHistoryWorkspace("", session)).toBe(
-      "/tmp/provider-ws",
-    );
-    expect(resolveProviderHistoryWorkspace("/tmp/manual-ws", session)).toBe(
+  test("uses the active task workspace only", () => {
+    expect(resolveProviderHistoryWorkspace("/tmp/manual-ws")).toBe(
       "/tmp/manual-ws",
     );
-    expect(resolveProviderHistoryWorkspace("", undefined)).toBe("");
+    expect(resolveProviderHistoryWorkspace("")).toBe("");
   });
 });

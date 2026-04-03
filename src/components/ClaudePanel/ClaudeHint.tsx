@@ -18,7 +18,7 @@ export function ClaudeHint({
   if (!connected && !cwd)
     return (
       <div className={`${cls} text-muted-foreground`}>
-        Select a project directory first
+        Select a workspace from the shell first
       </div>
     );
   if (!connected && cwd)

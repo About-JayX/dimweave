@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CyberSelect } from "@/components/ui/cyber-select";
 import { invoke } from "@tauri-apps/api/core";
-import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
 import type { ProviderSessionInfo } from "@/types";
@@ -14,6 +13,7 @@ import {
   makeProviderHistoryErrorSelector,
   makeProviderHistoryLoadingSelector,
   makeProviderHistorySelector,
+  selectActiveTask,
 } from "@/stores/task-store/selectors";
 import {
   buildProviderHistoryOptions,
@@ -33,7 +33,6 @@ interface ClaudePanelProps {
 }
 
 export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
-  const [cwd, setCwd] = useState("");
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -43,12 +42,12 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
   const [selectedHistoryId, setSelectedHistoryId] = useState(
     NEW_PROVIDER_SESSION_VALUE,
   );
-  const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
   const claudeRole = useBridgeStore((s) => s.claudeRole);
+  const activeTask = useTaskStore(selectActiveTask);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
   const effectiveCwd = useMemo(
-    () => resolveProviderHistoryWorkspace(cwd, providerSession),
-    [cwd, providerSession],
+    () => resolveProviderHistoryWorkspace(activeTask?.workspaceRoot),
+    [activeTask?.workspaceRoot],
   );
   const selectWorkspaceHistory = useMemo(
     () => makeProviderHistorySelector(effectiveCwd),
@@ -103,14 +102,6 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
     }
   }, [selectedHistory, selectedHistoryId]);
 
-  const handlePickDir = useCallback(async () => {
-    const dir = await pickDirectory();
-    if (dir) {
-      setCwd(dir);
-      setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
-    }
-  }, [pickDirectory]);
-
   const doLaunch = useCallback(async () => {
     setConnecting(true);
     try {
@@ -158,7 +149,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
     () => [
       effectiveCwd
         ? effectiveCwd.split("/").pop() || effectiveCwd
-        : "Project required",
+        : "Workspace required",
       model || "Default model",
       effort || "Default effort",
       selectedHistory
@@ -274,11 +265,10 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
             model={model}
             effort={effort}
             cwd={effectiveCwd}
-            disabled={connected || connecting || disconnecting}
-            onModelChange={setModel}
-            onEffortChange={setEffort}
-            onPickDir={handlePickDir}
-          />
+          disabled={connected || connecting || disconnecting}
+          onModelChange={setModel}
+          onEffortChange={setEffort}
+        />
 
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">History</span>

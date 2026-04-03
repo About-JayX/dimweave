@@ -65,8 +65,7 @@ export function formatProviderConnectionLabel(
 }
 
 export function resolveProviderHistoryWorkspace(
-  cwd: string,
-  session: ProviderSessionInfo | undefined,
+  activeTaskWorkspace: string | null | undefined,
 ): string {
-  return cwd || session?.cwd || "";
+  return activeTaskWorkspace?.trim() || "";
 }
