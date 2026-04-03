@@ -137,7 +137,7 @@ export function TaskContextPopover({
       ref={outerRef}
       data-shell-sidebar-panel="true"
       className={cn(
-        "relative min-h-0 shrink-0 overflow-hidden border-r border-border/45 bg-background/92 transition-[width,opacity] duration-200",
+        "relative min-h-0 shrink-0 overflow-hidden border-r border-border/45 bg-background transition-[width,opacity] duration-200",
         !activePane && "w-0 opacity-0",
       )}
       style={activePane ? { width: `${width}px`, opacity: 1 } : undefined}

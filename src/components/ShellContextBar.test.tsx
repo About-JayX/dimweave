@@ -31,7 +31,11 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         messageCount={0}
+        themeMode="auto"
+        radiusMode="rounded"
         onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
       />,
     );
 

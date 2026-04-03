@@ -48,7 +48,7 @@ export function CyberSelect({
           disabled
             ? "opacity-50 cursor-not-allowed border-input bg-muted text-foreground/60"
             : open
-              ? "border-primary/50 bg-muted/80 text-foreground shadow-[0_0_8px_rgba(139,92,246,0.12)]"
+              ? "border-primary/50 bg-muted/80 text-foreground ring-1 ring-primary/15"
               : "border-input bg-muted text-foreground hover:border-primary/40 hover:bg-muted/80 cursor-pointer",
         )}
       >
@@ -71,7 +71,7 @@ export function CyberSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-50 min-w-36 max-h-52 overflow-y-auto rounded-lg border border-border/60 bg-popover p-1 shadow-[0_10px_30px_rgba(0,0,0,0.32)] animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-7 z-50 min-w-36 max-h-52 overflow-y-auto rounded-lg border border-border/60 bg-popover p-1 shadow-xl animate-in fade-in zoom-in-95 duration-150">
           {options.map((opt) => (
             <button
               key={opt.value}

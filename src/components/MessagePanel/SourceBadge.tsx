@@ -27,7 +27,9 @@ export function SourceBadge({ source }: { source: string }) {
     <span
       className={`flex items-center gap-1 text-[10px] font-semibold ${accent}`}
     >
-      <span className={`inline-block size-1.5 rounded-full bg-current`} />
+      <span
+        className={`inline-block size-2.5 rounded-full radius-keep bg-current`}
+      />
       {label}
     </span>
   );

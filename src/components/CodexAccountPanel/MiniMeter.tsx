@@ -24,10 +24,10 @@ export function MiniMeter({
           {Math.round(remaining)}%
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-secondary overflow-hidden relative">
+      <div className="h-1.5 rounded-full radius-keep bg-secondary overflow-hidden relative">
         <div
           className={cn(
-            "h-full rounded-full transition-all duration-1000 ease-out relative",
+            "h-full rounded-full radius-keep transition-all duration-1000 ease-out relative",
             barColor(u),
           )}
           style={{
@@ -40,7 +40,7 @@ export function MiniMeter({
           }}
         >
           {u < 90 && (
-            <div className="absolute inset-0 overflow-hidden rounded-full">
+            <div className="absolute inset-0 overflow-hidden rounded-full radius-keep">
               <div
                 className="absolute inset-0"
                 style={{

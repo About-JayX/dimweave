@@ -107,8 +107,8 @@ export function ReplyInput() {
     /Mac|iPhone|iPad/.test(navigator.userAgent);
 
   return (
-    <div className="px-4 py-3">
-      <div className="overflow-hidden rounded-xl border border-border/50 bg-card/85 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 transition-colors">
+    <div className="relative px-4 py-3">
+      <div className="rounded-xl border border-border/50 bg-card/85 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 transition-colors">
         <textarea
           ref={textareaRef}
           className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
@@ -136,7 +136,7 @@ export function ReplyInput() {
                 <ChevronDown className="size-3 opacity-60" />
               </button>
               {showPicker && (
-                <div className="absolute bottom-full left-0 z-20 mb-2 min-w-[110px] rounded-xl border border-border bg-popover py-1 shadow-lg">
+                <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] rounded-xl border border-border bg-popover py-1 shadow-xl">
                   {TARGETS.map((t) => (
                     <button
                       key={t}

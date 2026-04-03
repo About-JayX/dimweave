@@ -79,7 +79,7 @@ export function StatusDot({
       {config.animation && (
         <span
           className={cn(
-            "absolute inset-0 rounded-full",
+            "absolute inset-0 rounded-full radius-keep",
             config.bg,
             config.glow,
             config.animation,
@@ -87,7 +87,10 @@ export function StatusDot({
         />
       )}
       <span
-        className={cn("relative inline-block size-2 rounded-full", config.bg)}
+        className={cn(
+          "relative inline-block size-2 rounded-full radius-keep",
+          config.bg,
+        )}
       />
     </span>
   );

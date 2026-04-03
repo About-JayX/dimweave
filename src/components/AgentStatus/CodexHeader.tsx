@@ -17,7 +17,7 @@ export function CodexHeader({ running, connectionLabel }: CodexHeaderProps) {
             status={running ? "connected" : "disconnected"}
             variant="codex"
           />
-          <CodexIcon className="size-5 text-codex" />
+          <CodexIcon className="size-7 text-codex" />
         </div>
         <RoleSelect agent="codex" disabled={running} />
       </div>

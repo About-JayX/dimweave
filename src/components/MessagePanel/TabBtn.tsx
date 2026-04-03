@@ -23,7 +23,7 @@ export function TabBtn({
       {children}
       <span
         className={cn(
-          "absolute bottom-0 left-0 right-0 h-0.5 rounded-full transition-all duration-300",
+          "absolute bottom-0 left-0 right-0 h-0.5 rounded-full radius-keep transition-all duration-300",
           active
             ? "bg-primary opacity-100 shadow-[0_0_8px_#8b5cf660]"
             : "bg-transparent opacity-0",

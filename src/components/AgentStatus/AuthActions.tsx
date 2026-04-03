@@ -13,7 +13,7 @@ export function AuthActions() {
     return (
       <div className="mt-2 rounded-md border border-codex/20 bg-codex/5 px-3 py-2.5 space-y-2">
         <div className="flex items-center gap-2 text-[11px] text-codex">
-          <span className="size-3 border-2 border-codex/30 border-t-codex rounded-full animate-spin shrink-0" />
+          <span className="size-3 border-2 border-codex/30 border-t-codex rounded-full radius-keep animate-spin shrink-0" />
           Waiting for browser login...
         </div>
         {loginUri && (
@@ -55,7 +55,7 @@ export function AuthActions() {
   return (
     <div className="mt-1.5 flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5">
       <div className="flex items-center gap-1.5 min-w-0">
-        <span className="size-1.5 rounded-full bg-codex shrink-0" />
+        <span className="size-1.5 rounded-full radius-keep bg-codex shrink-0" />
         <span
           className="text-[10px] text-foreground/80 truncate"
           title={profile.email}

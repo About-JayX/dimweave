@@ -304,7 +304,7 @@ export function CodexPanel({
           >
             {connecting ? (
               <span className="flex items-center gap-2">
-                <span className="size-3 border-2 border-codex/30 border-t-codex rounded-full animate-spin" />
+                <span className="size-3 border-2 border-codex/30 border-t-codex rounded-full radius-keep animate-spin" />
                 Connecting…
               </span>
             ) : (

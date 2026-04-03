@@ -183,7 +183,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
             status={connected ? "connected" : "disconnected"}
             variant="claude"
           />
-          <ClaudeIcon className="size-5 text-claude" />
+          <ClaudeIcon className="size-7 text-claude" />
         </div>
         <RoleSelect
           agent="claude"
@@ -222,7 +222,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
           >
             {disconnecting ? (
               <span className="flex items-center gap-2">
-                <span className="size-3 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" />
+                <span className="size-3 rounded-full radius-keep border-2 border-foreground/20 border-t-foreground animate-spin" />
                 Disconnecting…
               </span>
             ) : (
@@ -238,7 +238,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
           >
             {connecting ? (
               <span className="flex items-center gap-2">
-                <span className="size-3 rounded-full border-2 border-claude/30 border-t-claude animate-spin" />
+                <span className="size-3 rounded-full radius-keep border-2 border-claude/30 border-t-claude animate-spin" />
                 Connecting…
               </span>
             ) : (

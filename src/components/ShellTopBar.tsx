@@ -25,7 +25,7 @@ export function ShellTopBar({
         <img
           src="/dimweave-mark.svg"
           alt="Dimweave logo"
-          className="h-5 w-5 object-contain shrink-0"
+          className="h-7 w-7 object-contain shrink-0"
         />
         <span className="text-sm font-semibold text-foreground">
           {surfaceMode === "logs" ? "Runtime logs" : "Dimweave"}

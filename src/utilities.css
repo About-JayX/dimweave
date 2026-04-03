@@ -15,6 +15,9 @@
   }
 
   .card-depth {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  :is(.dark) .card-depth {
     box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.03);
   }
 
@@ -53,7 +56,7 @@
   }
 
   .text-gradient-cyber {
-    background: linear-gradient(135deg, #8b5cf6, #a78bfa, #22c55e, #8b5cf6);
+    background: linear-gradient(135deg, var(--color-claude), #a78bfa, var(--color-codex), var(--color-claude));
     background-size: 180% 180%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
