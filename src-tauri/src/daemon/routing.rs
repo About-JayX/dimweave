@@ -214,32 +214,7 @@ async fn route_message_with_display(
     }
 }
 
-/// Format a BridgeMessage as NDJSON user message for Claude SDK WS delivery.
-/// Uses the verified stream-json protocol format.
-/// Wraps content in `<channel>` tags to match agent prompt instructions.
-pub fn format_ndjson_user_message(msg: &BridgeMessage) -> String {
-    crate::daemon::claude_sdk::protocol::format_channel_user_message(&msg.from, &msg.content)
-}
-
-pub fn format_codex_input(msg: &BridgeMessage) -> String {
-    if msg.from == "user" {
-        msg.content.clone()
-    } else {
-        let sender_label = match &msg.sender_agent_id {
-            Some(aid) => format!("{} [{}]", msg.from, aid),
-            None => msg.from.clone(),
-        };
-        match msg.status {
-            Some(status) => format!(
-                "Message from {} (status: {}):\n{}",
-                sender_label,
-                status.as_str(),
-                msg.content
-            ),
-            None => format!("Message from {}:\n{}", sender_label, msg.content),
-        }
-    }
-}
+pub use super::routing_format::{format_codex_input, format_ndjson_user_message};
 
 #[cfg(test)]
 #[path = "routing_behavior_tests.rs"]

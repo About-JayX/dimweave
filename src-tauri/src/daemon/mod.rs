@@ -10,6 +10,7 @@ pub mod provider;
 pub mod role_config;
 pub mod routing;
 pub mod routing_display;
+pub mod routing_format;
 pub mod routing_user_input;
 pub mod session_manager;
 pub mod state;
