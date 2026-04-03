@@ -6,19 +6,14 @@ import { useTaskStore } from "@/stores/task-store";
 import { selectActiveTask } from "@/stores/task-store/selectors";
 import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
 import { getReviewBadge } from "@/components/TaskPanel/view-model";
-import { Send, ChevronDown } from "lucide-react";
+import { Send, Paperclip } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { TargetPicker, type Target } from "./TargetPicker";
+import { AttachmentStrip } from "./AttachmentStrip";
+import { useAttachments } from "./use-attachments";
 
 const MIN_ROWS = 2;
 const MAX_ROWS = 8;
-const TARGETS = ["auto", "lead", "coder", "reviewer"] as const;
-type Target = (typeof TARGETS)[number];
-
-const TARGET_COLORS: Record<Target, string> = {
-  auto: "text-purple-400 border-purple-400/30",
-  lead: "text-yellow-400 border-yellow-400/30",
-  coder: "text-emerald-400 border-emerald-400/30",
-  reviewer: "text-orange-400 border-orange-400/30",
-};
 
 export function ReplyInput() {
   const connected = useBridgeStore(selectAnyAgentConnected);
@@ -26,20 +21,25 @@ export function ReplyInput() {
   const setDraft = useBridgeStore((s) => s.setDraft);
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
   const [target, setTarget] = useState<Target>("auto");
-  const [showPicker, setShowPicker] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const activeTask = useTaskStore(selectActiveTask);
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
+  const { attachments, addFiles, removeAt, clear } = useAttachments();
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
     if (!trimmed || !connected) return;
-    sendToCodex(trimmed, target);
+    sendToCodex(
+      trimmed,
+      target,
+      attachments.length > 0 ? attachments : undefined,
+    );
     setDraft("");
-  }, [draft, connected, sendToCodex, setDraft, target]);
+    clear();
+  }, [draft, connected, sendToCodex, setDraft, target, attachments, clear]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -51,7 +51,7 @@ export function ReplyInput() {
         return;
       if (e.key === "Enter") {
         if (sendOnEnter) {
-          if (e.shiftKey) return; // Shift+Enter = newline
+          if (e.shiftKey) return;
           e.preventDefault();
           handleSend();
         } else if (e.metaKey || e.ctrlKey) {
@@ -74,11 +74,9 @@ export function ReplyInput() {
     el.style.height = "auto";
     el.style.height = `${Math.min(Math.max(el.scrollHeight, minH), maxH)}px`;
   }, []);
-
   useEffect(() => {
     autosize();
   }, [draft, autosize]);
-
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const debounced = () => {
@@ -92,23 +90,41 @@ export function ReplyInput() {
     };
   }, [autosize]);
 
-  // Close picker on outside click
-  useEffect(() => {
-    if (!showPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
-        setShowPicker(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showPicker]);
+  const handlePickFiles = useCallback(async () => {
+    const paths = await invoke<string[] | null>("pick_files");
+    if (paths) addFiles(paths);
+  }, [addFiles]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const files = Array.from(e.dataTransfer.files);
+      const paths = files
+        .map((f) => (f as unknown as { path?: string }).path)
+        .filter(Boolean) as string[];
+      if (paths.length > 0) addFiles(paths);
+    },
+    [addFiles],
+  );
+
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.userAgent);
 
   return (
-    <div className="relative px-4 py-3">
-      <div className="rounded-xl border border-border/50 bg-card/85 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 transition-colors">
+    <div
+      className="relative px-4 py-3"
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+    >
+      <div
+        className={`rounded-xl border bg-card/85 transition-colors focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 ${dragOver ? "border-primary/50 ring-2 ring-primary/20" : "border-border/50"}`}
+      >
         <textarea
           ref={textareaRef}
           className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
@@ -125,33 +141,18 @@ export function ReplyInput() {
           rows={MIN_ROWS}
         />
 
+        <AttachmentStrip attachments={attachments} onRemove={removeAt} />
+
         <div className="flex items-center justify-between gap-2 border-t border-border/35 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="relative shrink-0" ref={pickerRef}>
-              <button
-                onClick={() => setShowPicker(!showPicker)}
-                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${TARGET_COLORS[target]}`}
-              >
-                To {target}
-                <ChevronDown className="size-3 opacity-60" />
-              </button>
-              {showPicker && (
-                <div className="absolute bottom-full left-0 z-50 mb-2 min-w-[110px] rounded-xl border border-border bg-popover py-1 shadow-xl">
-                  {TARGETS.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        setTarget(t);
-                        setShowPicker(false);
-                      }}
-                      className={`block w-full px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-accent ${t === target ? "font-bold" : ""} ${TARGET_COLORS[t].split(" ")[0]}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <TargetPicker target={target} setTarget={setTarget} />
+            <button
+              onClick={handlePickFiles}
+              className="flex size-7 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+              title="Attach files"
+            >
+              <Paperclip className="size-3.5" />
+            </button>
             {activeTask ? (
               <span className="truncate text-[10px] text-foreground/80">
                 {activeTask.title}
@@ -170,7 +171,6 @@ export function ReplyInput() {
               </span>
             )}
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setSendOnEnter((v) => !v)}
