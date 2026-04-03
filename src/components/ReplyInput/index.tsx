@@ -9,8 +9,10 @@ import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import { Send, Paperclip } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { hasMessagePayload } from "@/lib/message-payload";
 import { TargetPicker, type Target } from "./TargetPicker";
 import { AttachmentStrip } from "./AttachmentStrip";
+import { createAsyncUnlistenCleanup } from "./async-unlisten";
 import { useAttachments } from "./use-attachments";
 
 const MIN_ROWS = 2;
@@ -32,7 +34,7 @@ export function ReplyInput() {
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
-    if (!trimmed || !connected) return;
+    if (!hasMessagePayload(trimmed, attachments) || !connected) return;
     sendToCodex(
       trimmed,
       target,
@@ -99,22 +101,16 @@ export function ReplyInput() {
   const addFilesRef = useRef(addFiles);
   addFilesRef.current = addFiles;
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
+    return createAsyncUnlistenCleanup(() =>
+      getCurrentWebview().onDragDropEvent((event) => {
         if (event.payload.type === "over") setDragOver(true);
         else if (event.payload.type === "drop") {
           setDragOver(false);
           if (event.payload.paths.length > 0)
             addFilesRef.current(event.payload.paths);
         } else setDragOver(false);
-      })
-      .then((fn) => {
-        unlisten = fn;
-      });
-    return () => {
-      unlisten?.();
-    };
+      }),
+    );
   }, []);
 
   const isMac =
@@ -186,7 +182,7 @@ export function ReplyInput() {
             </button>
             <Button
               size="sm"
-              disabled={!connected || !draft.trim()}
+              disabled={!connected || !hasMessagePayload(draft, attachments)}
               onClick={handleSend}
               className="h-7 gap-1.5 rounded-full px-3 text-[11px]"
             >

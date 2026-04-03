@@ -16,10 +16,17 @@ const MIN_WIDTH = 280;
 const MAX_WIDTH = 640;
 const DEFAULT_WIDTH = MIN_WIDTH;
 
+export function normalizeSidebarWidth(value: string | null): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_WIDTH;
+  }
+  return Math.min(Math.max(parsed, MIN_WIDTH), MAX_WIDTH);
+}
+
 function loadSidebarWidth(): number {
   try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v) return Math.min(Math.max(Number(v), MIN_WIDTH), MAX_WIDTH);
+    return normalizeSidebarWidth(localStorage.getItem(STORAGE_KEY));
   } catch {}
   return DEFAULT_WIDTH;
 }

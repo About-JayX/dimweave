@@ -28,6 +28,16 @@ function installTauriStub() {
 }
 
 describe("TaskContextPopover", () => {
+  test("normalizes invalid persisted sidebar widths", async () => {
+    installTauriStub();
+    const { normalizeSidebarWidth } = await import("./TaskContextPopover");
+
+    expect(normalizeSidebarWidth("not-a-number")).toBe(280);
+    expect(normalizeSidebarWidth("120")).toBe(280);
+    expect(normalizeSidebarWidth("999")).toBe(640);
+    expect(normalizeSidebarWidth("320")).toBe(320);
+  });
+
   test("renders an embedded shell panel even while collapsed", async () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");

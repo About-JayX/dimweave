@@ -58,7 +58,7 @@ pub(crate) fn emit_route_side_effects(
 }
 
 pub(crate) fn is_renderable_message(msg: &BridgeMessage) -> bool {
-    !msg.content.trim().is_empty()
+    !msg.content.trim().is_empty() || msg.attachments.as_ref().is_some_and(|atts| !atts.is_empty())
 }
 
 /// Pre-route check: is this message targeting Claude and eligible for thinking indicator?

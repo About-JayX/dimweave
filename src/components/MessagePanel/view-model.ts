@@ -3,6 +3,7 @@ import type {
   ClaudeStreamState,
   CodexStreamState,
 } from "@/stores/bridge-store/types";
+import { hasMessagePayload } from "@/lib/message-payload";
 
 export type StreamIndicatorId = "claude" | "codex";
 export type MessagePanelTab = "messages" | "logs" | "approvals";
@@ -46,7 +47,8 @@ export function filterRenderableChatMessages(
 ): BridgeMessage[] {
   return messages.filter(
     (message) =>
-      message.from !== "system" && message.content.trim().length > 0,
+      message.from !== "system" &&
+      hasMessagePayload(message.content, message.attachments),
   );
 }
 

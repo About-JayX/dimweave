@@ -25,7 +25,7 @@ function installTauriStub() {
 }
 
 describe("MessagePanel", () => {
-  test("keeps the chat header free of logs and approvals buttons", async () => {
+  test("renders the chat empty state without reviving header controls", async () => {
     installTauriStub();
     const [{ MessagePanel }, { useBridgeStore }] = await Promise.all([
       import("./index"),
@@ -41,20 +41,21 @@ describe("MessagePanel", () => {
 
     const html = renderToStaticMarkup(<MessagePanel surfaceMode="chat" />);
 
-    expect(html).toContain("Primary timeline");
+    expect(html).toContain("No messages yet. Connect Claude and Codex to start bridging.");
     expect(html).not.toContain("Approvals");
     expect(html).not.toContain(">Logs<");
+    expect(html).not.toContain("Runtime logs");
   });
 
-  test("renders runtime logs as the active main surface when requested", async () => {
+  test("renders the log surface body without duplicating the top bar title", async () => {
     installTauriStub();
     const { MessagePanel } = await import("./index");
 
     const html = renderToStaticMarkup(<MessagePanel surfaceMode="logs" />);
 
-    expect(html).toContain("Runtime logs");
     expect(html).toContain("No logs.");
-    expect(html).not.toContain("Primary timeline");
+    expect(html).not.toContain("No messages yet. Connect Claude and Codex to start bridging.");
+    expect(html).not.toContain("Runtime logs");
     expect(html).not.toContain(">Clear<");
   });
 });

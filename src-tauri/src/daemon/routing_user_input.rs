@@ -13,7 +13,7 @@ pub async fn route_user_input(
     target: String,
     attachments: Option<Vec<Attachment>>,
 ) {
-    if content.trim().is_empty() {
+    if !has_user_input_payload(&content, &attachments) {
         gui::emit_system_log(app, "warn", "[Route] ignoring empty user input");
         return;
     }
@@ -45,6 +45,10 @@ pub async fn route_user_input(
         }
         routing::route_message_silent(state, app, msg).await;
     }
+}
+
+fn has_user_input_payload(content: &str, attachments: &Option<Vec<Attachment>>) -> bool {
+    !content.trim().is_empty() || attachments.as_ref().is_some_and(|atts| !atts.is_empty())
 }
 
 /// "auto" → online agent roles (deduplicated, excludes "user"); otherwise the literal role.
@@ -99,5 +103,26 @@ fn build_user_message(
         session_id: None,
         sender_agent_id: None,
         attachments: attachments.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file_attachment() -> Attachment {
+        Attachment {
+            file_path: "/tmp/spec.md".into(),
+            file_name: "spec.md".into(),
+            is_image: false,
+            media_type: None,
+        }
+    }
+
+    #[test]
+    fn attachments_only_user_input_counts_as_payload() {
+        assert!(has_user_input_payload("   \n\t", &Some(vec![file_attachment()])));
+        assert!(!has_user_input_payload("   \n\t", &None));
+        assert!(!has_user_input_payload("   \n\t", &Some(vec![])));
     }
 }

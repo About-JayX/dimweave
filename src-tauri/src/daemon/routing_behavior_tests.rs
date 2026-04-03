@@ -1,8 +1,20 @@
 use super::*;
 use crate::daemon::routing_display::{is_renderable_message, should_emit_claude_thinking};
-use crate::daemon::{state::DaemonState, types::BridgeMessage};
+use crate::daemon::{
+    state::DaemonState,
+    types::{Attachment, BridgeMessage},
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+fn file_attachment() -> Attachment {
+    Attachment {
+        file_path: "/tmp/spec.md".into(),
+        file_name: "spec.md".into(),
+        is_image: false,
+        media_type: None,
+    }
+}
 
 // ── is_valid_agent_role tests ─────────────────────────────────────
 
@@ -140,7 +152,7 @@ async fn valid_role_offline_is_buffered() {
 }
 
 #[test]
-fn visible_messages_require_non_whitespace_content() {
+fn visible_messages_require_content_or_attachments() {
     let visible = BridgeMessage {
         id: "msg-visible".into(),
         from: "coder".into(),
@@ -155,6 +167,21 @@ fn visible_messages_require_non_whitespace_content() {
         session_id: None,
         sender_agent_id: None,
         attachments: None,
+    };
+    let attachment_only = BridgeMessage {
+        id: "msg-attachment".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "user".into(),
+        content: "   \n\t".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+        attachments: Some(vec![file_attachment()]),
     };
     let empty = BridgeMessage {
         id: "msg-empty".into(),
@@ -172,6 +199,7 @@ fn visible_messages_require_non_whitespace_content() {
         attachments: None,
     };
     assert!(is_renderable_message(&visible));
+    assert!(is_renderable_message(&attachment_only));
     assert!(!is_renderable_message(&empty));
 }
 
