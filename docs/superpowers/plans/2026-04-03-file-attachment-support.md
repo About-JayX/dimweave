@@ -126,17 +126,28 @@ struct Attachment { file_path: String, file_name: String }
 | `095ac038` | cargo fmt 全工作区格式化（无功能改动） | 19 |
 | `d2666a2c` | 更新计划文档，补全完整 commit 记录 | 1 |
 
+### Phase 2: 图片上传 + 视觉分析
+
+| Commit | 说明 | 文件数 |
+|--------|------|--------|
+| `dde86f6e` | Attachment 类型增强：添加 `isImage`, `mediaType` 字段 | 4 |
+| `c437ce32` | 前端图片检测：按扩展名自动识别 `.png/.jpg/.jpeg/.gif/.webp` | 1 |
+| `9347793e` | 图片压缩模块 `image_compress.rs`：复刻 Claude Code 流水线（resize 2000px + JPEG quality 递降） | 4 |
+| `c514a779` | Codex inject 通道类型变更：`(String, bool)` → `(Vec<Value>, bool)` | 8 |
+| `272177ff` | routing_format 重写：Codex `localImage` items + Claude async base64 image blocks | 4 |
+| `ab6503a2` | 前端缩略图预览：AttachmentStrip + MessageBubble 内联图片，启用 Tauri asset protocol | 5 |
+
 ### Bugfix
 
 | Commit | 说明 | 文件数 |
 |--------|------|--------|
-| `83f45afd` | **[FIXED]** 文件拖放无反应：浏览器 `dataTransfer.files` 在 Tauri 2 中不提供文件路径，改用 `getCurrentWebview().onDragDropEvent()` 获取 `event.payload.paths` 本地路径 | 1 |
+| `83f45afd` | **[FIXED]** 文件拖放无反应：改用 `getCurrentWebview().onDragDropEvent()` | 1 |
+| `1be59ad8` | **[FIXED]** 拖入文件重复：稳定 onDragDropEvent 监听器为单例 | 1 |
 
 ### 统计
 
-- **总 commit**: 15
-- **总改动文件**: ~160 次文件修改（含重复修改同一文件）
-- **新建文件**: types_dto.rs, routing_format.rs, use-theme.ts, use-border-radius.ts, BrandIcons.tsx, ReplyInput/TargetPicker.tsx, ReplyInput/AttachmentStrip.tsx, ReplyInput/use-attachments.ts, 2026-04-03-file-attachment-support.md
+- **总 commit**: 22+
+- **新建文件**: types_dto.rs, routing_format.rs, image_compress.rs, use-theme.ts, use-border-radius.ts, BrandIcons.tsx, ReplyInput/TargetPicker.tsx, ReplyInput/AttachmentStrip.tsx, ReplyInput/use-attachments.ts
 
 ## 已修复问题
 
@@ -165,11 +176,11 @@ struct Attachment { file_path: String, file_name: String }
 
 ## 验证结果
 
-- ✅ 289 Rust 测试通过（含 3 个新 routing_format 测试）
+- ✅ 291 Rust 测试通过（含 routing_format + image_compress 新测试）
 - ✅ TypeScript 无新错误
 - ✅ 所有新文件 ≤200 行
 - ✅ 工作区干净（git status clean）
-- ⏳ 手动集成测试待执行
+- ⏳ 手动集成测试：图片拖入 → 缩略图预览 → 发送 → Codex localImage / Claude base64
 
 ## Claude Code 图片支持逆向分析
 
@@ -222,11 +233,24 @@ function Ji_(q) {
 
 Phase 2 实现时，daemon 需要根据目标 agent 选择不同的格式化策略。
 
-## Phase 2 范围（未实现）
+## Phase 2 实现摘要（已完成）
 
-- 图片内联预览（缩略图）在气泡中渲染
-- Claude: 读取本地图片文件 → base64 → 插入 NDJSON content 数组的 image block
-- Codex: 改 inject 通道类型，发送 `{"type":"localImage","path":"..."}` 结构化输入
-- 文件大小/类型校验（Claude ≤5MB base64）
-- 粘贴板图片支持
-- 支持的 media_type: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
+| 能力 | Claude | Codex |
+|------|--------|-------|
+| 图片格式 | base64 image block（自动压缩 ≤3.75MB） | `localImage` 本地路径 |
+| 压缩流水线 | resize ≤2000px + JPEG quality 递降 | 无需压缩 |
+| 前端预览 | `convertFileSrc()` 缩略图 | 同左 |
+| 非图片文件 | 文本路径内联 | 同左 |
+
+**图片压缩常量（复刻 Claude Code v2.1.89）：**
+- `TARGET_BYTES = 3,932,160` (3.75MB buffer 上限)
+- `MAX_DIM = 2000` (最大宽高)
+- `QUALITY_STEPS = [80, 60, 40, 20]` (JPEG 递降)
+- `FALLBACK_WIDTH = 1000` (兜底 resize)
+
+## 后续可优化
+
+- 粘贴板图片支持（Ctrl+V 粘贴截图）
+- 图片预览点击放大（lightbox）
+- 发送进度指示（大图片压缩耗时）
+- Claude 压缩失败时的用户反馈
