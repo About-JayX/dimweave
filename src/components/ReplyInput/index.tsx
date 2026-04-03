@@ -8,6 +8,7 @@ import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
 import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import { Send, Paperclip } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { TargetPicker, type Target } from "./TargetPicker";
 import { AttachmentStrip } from "./AttachmentStrip";
 import { useAttachments } from "./use-attachments";
@@ -95,33 +96,30 @@ export function ReplyInput() {
     if (paths) addFiles(paths);
   }, [addFiles]);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const files = Array.from(e.dataTransfer.files);
-      const paths = files
-        .map((f) => (f as unknown as { path?: string }).path)
-        .filter(Boolean) as string[];
-      if (paths.length > 0) addFiles(paths);
-    },
-    [addFiles],
-  );
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type === "over") setDragOver(true);
+        else if (event.payload.type === "drop") {
+          setDragOver(false);
+          if (event.payload.paths.length > 0) addFiles(event.payload.paths);
+        } else setDragOver(false);
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, [addFiles]);
 
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/.test(navigator.userAgent);
 
   return (
-    <div
-      className="relative px-4 py-3"
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
+    <div className="relative px-4 py-3">
       <div
         className={`rounded-xl border bg-card/85 transition-colors focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15 ${dragOver ? "border-primary/50 ring-2 ring-primary/20" : "border-border/50"}`}
       >
