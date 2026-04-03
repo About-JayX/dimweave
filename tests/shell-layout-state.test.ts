@@ -77,20 +77,16 @@ describe("getMountedShellPanes", () => {
 
 describe("resolveShellWorkspaceLabel", () => {
   test("prefers the active task workspace when present", () => {
-    expect(
-      resolveShellWorkspaceLabel("/Users/jason/Desktop/figma", [
-        "/Users/jason/projects/other",
-      ]),
-    ).toBe("~/Desktop/figma");
+    expect(resolveShellWorkspaceLabel("/Users/jason/Desktop/figma")).toBe(
+      "~/Desktop/figma",
+    );
   });
 
-  test("falls back to the first connected provider workspace", () => {
-    expect(
-      resolveShellWorkspaceLabel(null, ["", "/Users/jason/projects/agent-bridge"]),
-    ).toBe("~/projects/agent-bridge");
+  test("does not fall back to provider session workspaces", () => {
+    expect(resolveShellWorkspaceLabel(null)).toBe("No workspace selected");
   });
 
   test("returns a clear empty label when nothing is active", () => {
-    expect(resolveShellWorkspaceLabel(null, [])).toBe("No workspace selected");
+    expect(resolveShellWorkspaceLabel(null)).toBe("No workspace selected");
   });
 });

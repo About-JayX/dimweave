@@ -88,7 +88,7 @@
 | Task | Commit | Status | Notes |
 |------|--------|--------|-------|
 | Task 1 | `a415e5f6` | Done | Workspace selection helper + recent history model |
-| Task 2 | _pending_ | Not started | Blocking entry overlay MVP |
+| Task 2 | `44e0cd29` | Done | Blocking entry overlay MVP |
 | Task 3 | _pending_ | Not started | Top-right switcher + task start flow |
 | Task 4 | _pending_ | Not started | Agent panel cleanup + regressions |
 

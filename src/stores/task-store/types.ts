@@ -111,6 +111,7 @@ export interface TaskStoreData {
 
 export interface TaskStoreState extends TaskStoreData {
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
+  startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
   approveReview: () => Promise<void>;
   fetchSnapshot: () => Promise<void>;

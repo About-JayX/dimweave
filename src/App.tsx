@@ -13,7 +13,7 @@ import {
   toggleShellNavItem,
 } from "./components/shell-layout-state";
 import { useBridgeStore } from "./stores/bridge-store";
-import { selectAgents, selectMessages } from "./stores/bridge-store/selectors";
+import { selectMessages } from "./stores/bridge-store/selectors";
 import { useTaskStore } from "./stores/task-store";
 import { selectActiveTask } from "./stores/task-store/selectors";
 import { filterRenderableChatMessages } from "./components/MessagePanel/view-model";
@@ -29,11 +29,6 @@ import {
 
 const RECENT_WORKSPACES_STORAGE_KEY = "dimweave:recent-workspaces";
 
-function deriveWorkspaceTaskTitle(workspace: string) {
-  const parts = workspace.split(/[\\/]/).filter(Boolean);
-  return parts.at(-1) || workspace;
-}
-
 export default function App() {
   const theme = useTheme();
   const radius = useBorderRadius();
@@ -45,16 +40,12 @@ export default function App() {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(
     null,
   );
-  const agents = useBridgeStore(selectAgents);
   const activeTask = useTaskStore(selectActiveTask);
   const bootstrapComplete = useTaskStore((s) => s.bootstrapComplete);
   const bootstrapError = useTaskStore((s) => s.bootstrapError);
-  const createTask = useTaskStore((s) => s.createTask);
+  const startWorkspaceTask = useTaskStore((s) => s.startWorkspaceTask);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
-  const workspaceLabel = resolveShellWorkspaceLabel(activeTask?.workspaceRoot, [
-    agents.claude?.providerSession?.cwd,
-    agents.codex?.providerSession?.cwd,
-  ]);
+  const workspaceLabel = resolveShellWorkspaceLabel(activeTask?.workspaceRoot);
 
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
@@ -116,12 +107,15 @@ export default function App() {
       return;
     }
 
+    if (selectedWorkspace.path === activeTask?.workspaceRoot) {
+      setSelectedWorkspace(null);
+      setWorkspaceActionError(null);
+      return;
+    }
+
     try {
       setWorkspaceActionError(null);
-      await createTask(
-        selectedWorkspace.path,
-        deriveWorkspaceTaskTitle(selectedWorkspace.path),
-      );
+      await startWorkspaceTask(selectedWorkspace.path);
       const nextRecent = pushRecentWorkspace(
         recentWorkspaces,
         selectedWorkspace.path,
@@ -138,7 +132,7 @@ export default function App() {
         error instanceof Error ? error.message : String(error),
       );
     }
-  }, [createTask, recentWorkspaces, selectedWorkspace]);
+  }, [activeTask?.workspaceRoot, recentWorkspaces, selectedWorkspace, startWorkspaceTask]);
 
   if (bootstrapError) {
     return <AppBootstrapGate status="error" message={bootstrapError} />;
@@ -172,16 +166,24 @@ export default function App() {
         <main className="flex min-w-0 flex-1 flex-col animate-in fade-in duration-500">
           <ShellTopBar
             workspaceLabel={workspaceLabel}
+            currentWorkspace={activeTask?.workspaceRoot ?? null}
+            selectedWorkspace={selectedWorkspace}
+            recentWorkspaces={recentWorkspaces}
+            workspaceActionError={workspaceActionError}
             surfaceMode={shellLayout.mainSurface}
             logLineCount={allTerminalLines.length}
             errorCount={errorCount}
             onClear={clearMessages}
+            onChooseWorkspace={handleChooseWorkspace}
+            onSelectRecentWorkspace={handleSelectRecentWorkspace}
+            onContinueIntoWorkspace={handleContinueIntoWorkspace}
           />
           <MessagePanel surfaceMode={shellLayout.mainSurface} />
           {shellLayout.mainSurface === "chat" && <ReplyInput />}
         </main>
       </div>
       {!activeTask && (
+        // Launch always re-enters through explicit workspace selection.
         <WorkspaceEntryOverlay
           selected={selectedWorkspace}
           recentWorkspaces={recentWorkspaces}

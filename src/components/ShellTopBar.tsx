@@ -1,24 +1,38 @@
-import { Button } from "@/components/ui/button";
-import { FolderOpen, TerminalSquare } from "lucide-react";
+import { TerminalSquare } from "lucide-react";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
+import { Button } from "@/components/ui/button";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import type { WorkspaceCandidate } from "@/components/workspace-entry-state";
 
 interface ShellTopBarProps {
   workspaceLabel: string;
+  currentWorkspace: string | null;
+  selectedWorkspace: WorkspaceCandidate | null;
+  recentWorkspaces: string[];
+  workspaceActionError: string | null;
   surfaceMode: ShellMainSurface;
   logLineCount: number;
   errorCount: number;
   onClear: () => void;
+  onChooseWorkspace: () => void;
+  onSelectRecentWorkspace: (workspace: WorkspaceCandidate) => void;
+  onContinueIntoWorkspace: () => void;
 }
 
 export function ShellTopBar({
   workspaceLabel,
+  currentWorkspace,
+  selectedWorkspace,
+  recentWorkspaces,
+  workspaceActionError,
   surfaceMode,
   logLineCount,
   errorCount,
   onClear,
+  onChooseWorkspace,
+  onSelectRecentWorkspace,
+  onContinueIntoWorkspace,
 }: ShellTopBarProps) {
-  const hasWorkspace = workspaceLabel !== "No workspace selected";
-
   return (
     <header className="flex h-14 items-center justify-between border-b border-border/45 px-4">
       <div className="flex items-center gap-3 min-w-0">
@@ -49,19 +63,16 @@ export function ShellTopBar({
             Clear
           </Button>
         )}
-        <div
-          className="flex items-center gap-1.5 rounded-full border border-border/45 bg-card/45 px-2.5 py-1 text-[11px] text-muted-foreground"
-          title={workspaceLabel}
-        >
-          <FolderOpen className="size-3 shrink-0 text-muted-foreground/55" />
-          {hasWorkspace ? (
-            <span className="max-w-[16rem] truncate text-foreground/82">
-              {workspaceLabel}
-            </span>
-          ) : (
-            <span className="text-muted-foreground/55">—</span>
-          )}
-        </div>
+        <WorkspaceSwitcher
+          workspaceLabel={workspaceLabel}
+          currentWorkspace={currentWorkspace}
+          selected={selectedWorkspace}
+          recentWorkspaces={recentWorkspaces}
+          actionError={workspaceActionError}
+          onChooseFolder={onChooseWorkspace}
+          onSelectRecent={onSelectRecentWorkspace}
+          onContinue={onContinueIntoWorkspace}
+        />
       </div>
     </header>
   );

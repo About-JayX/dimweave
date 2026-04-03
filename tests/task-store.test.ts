@@ -8,7 +8,9 @@ import {
 } from "../src/stores/task-store/events";
 import {
   bootstrapTaskStore,
+  createStartWorkspaceTaskAction,
   createFetchProviderHistoryAction,
+  deriveWorkspaceTaskTitle,
   snapshotToPatch,
 } from "../src/stores/task-store";
 import type {
@@ -396,5 +398,36 @@ describe("createFetchProviderHistoryAction", () => {
     ]);
 
     expect(invokeCalls).toBe(2);
+  });
+});
+
+describe("deriveWorkspaceTaskTitle", () => {
+  test("uses the last workspace path segment", () => {
+    expect(deriveWorkspaceTaskTitle("/Users/jason/projects/dimweave")).toBe(
+      "dimweave",
+    );
+  });
+});
+
+describe("createStartWorkspaceTaskAction", () => {
+  test("sets the created task active immediately", async () => {
+    const task = makeTask("t2", "repo-b");
+    let state = emptyState();
+    const set = (fn: (current: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+
+    const startWorkspaceTask = createStartWorkspaceTaskAction(
+      set,
+      async (_cmd, args) => {
+        expect(args).toEqual({ workspace: "/repo-b", title: "repo-b" });
+        return { ...task, workspaceRoot: "/repo-b", title: "repo-b" };
+      },
+    );
+
+    await startWorkspaceTask("/repo-b");
+
+    expect(state.activeTaskId).toBe("t2");
+    expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
   });
 });

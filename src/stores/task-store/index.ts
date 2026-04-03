@@ -79,6 +79,28 @@ type ProviderHistorySetter = (
   fn: (state: TaskStoreData) => Partial<TaskStoreData>,
 ) => void;
 
+export function deriveWorkspaceTaskTitle(workspace: string) {
+  const parts = workspace.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) || workspace;
+}
+
+export function createStartWorkspaceTaskAction(
+  set: ProviderHistorySetter,
+  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+) {
+  return async (workspace: string): Promise<TaskInfo> => {
+    const task = await invokeImpl<TaskInfo>("daemon_create_task", {
+      workspace,
+      title: deriveWorkspaceTaskTitle(workspace),
+    });
+    set((s) => ({
+      activeTaskId: task.taskId,
+      tasks: { ...s.tasks, [task.taskId]: task },
+    }));
+    return task;
+  };
+}
+
 export function createFetchProviderHistoryAction(
   set: ProviderHistorySetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
@@ -142,6 +164,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
   }
 
   const fetchProviderHistory = createFetchProviderHistoryAction(set as any);
+  const startWorkspaceTask = createStartWorkspaceTaskAction(set as any);
 
   return {
     activeTaskId: null,
@@ -159,9 +182,14 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
         workspace,
         title,
       });
-      set((s) => ({ tasks: { ...s.tasks, [task.taskId]: task } }));
+      set((s) => ({
+        activeTaskId: task.taskId,
+        tasks: { ...s.tasks, [task.taskId]: task },
+      }));
       return task;
     },
+
+    startWorkspaceTask,
 
     selectTask: async (taskId) => {
       await invoke("daemon_select_task", { taskId });
