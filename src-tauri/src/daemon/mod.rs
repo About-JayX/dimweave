@@ -15,6 +15,7 @@ pub mod session_manager;
 pub mod state;
 pub mod task_graph;
 pub mod types;
+pub mod types_dto;
 
 pub use cmd::{channel, is_valid_agent_role, DaemonCmd};
 pub use state::DaemonState;
@@ -281,10 +282,7 @@ async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id:
     }
 }
 
-pub async fn run(
-    app: AppHandle,
-    mut cmd_rx: mpsc::Receiver<DaemonCmd>,
-) {
+pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
     // WS control server — bridge processes connect here
     {
@@ -611,12 +609,8 @@ pub async fn run(
                                         "role '{role_id}' already in use by online {conflict_agent}"
                                     ))
                                 } else {
-                                    stop_claude_sdk_session(
-                                        &mut claude_sdk_handle,
-                                        &state,
-                                        &app,
-                                    )
-                                    .await;
+                                    stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app)
+                                        .await;
                                     match launch_claude_sdk(
                                         role_id,
                                         &target.cwd,

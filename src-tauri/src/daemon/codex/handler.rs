@@ -58,6 +58,7 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
+        attachments: None,
     };
     state.read().await.stamp_message_context(from, &mut msg);
 

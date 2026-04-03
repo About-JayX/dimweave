@@ -87,5 +87,6 @@ fn build_user_message(now: u64, to: &str, content: &str) -> BridgeMessage {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
+        attachments: None,
     }
 }

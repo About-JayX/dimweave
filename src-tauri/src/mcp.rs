@@ -76,13 +76,8 @@ pub(crate) fn build_project_mcp_config(
 pub(crate) fn build_dimweave_mcp_config(project_dir: &str, role: &str) -> Result<String, String> {
     let command = resolve_dimweave_bridge_cmd()?;
     let base = read_mcp_config(project_dir)?;
-    let (config, _) = upsert_mcp_server(
-        base,
-        &command,
-        &[],
-        role,
-        &[("AGENTBRIDGE_SDK_MODE", "1")],
-    )?;
+    let (config, _) =
+        upsert_mcp_server(base, &command, &[], role, &[("AGENTBRIDGE_SDK_MODE", "1")])?;
     serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 

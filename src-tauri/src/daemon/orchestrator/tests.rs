@@ -18,6 +18,7 @@ fn msg(from: &str, to: &str, status: MessageStatus) -> BridgeMessage {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
+        attachments: None,
     }
 }
 

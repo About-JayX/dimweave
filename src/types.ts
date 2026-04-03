@@ -8,6 +8,11 @@ export interface ProviderSessionInfo {
   connectionMode: ProviderConnectionMode;
 }
 
+export interface Attachment {
+  filePath: string;
+  fileName: string;
+}
+
 export interface BridgeMessage {
   id: string;
   from: string;
@@ -20,6 +25,7 @@ export interface BridgeMessage {
   priority?: "normal" | "urgent";
   status?: MessageStatus;
   senderAgentId?: string;
+  attachments?: Attachment[];
 }
 
 export type PermissionBehavior = "allow" | "deny";

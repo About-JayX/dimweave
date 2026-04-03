@@ -331,6 +331,7 @@ fn build_msg_with_status(
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
+        attachments: None,
     }
 }
 

@@ -86,6 +86,7 @@ mod tests {
             priority: None,
             status: None,
             sender_agent_id: None,
+            attachments: None,
         }
     }
 

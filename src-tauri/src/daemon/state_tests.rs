@@ -210,9 +210,7 @@ fn invalidating_claude_sdk_session_clears_direct_text_handoff_state() {
         crate::daemon::state::AgentSender::new(claude_tx, 0),
     );
     let (sdk_tx, _sdk_rx) = tokio::sync::mpsc::channel::<String>(1);
-    assert!(s
-        .attach_claude_sdk_ws(epoch, "nonce-a", sdk_tx)
-        .is_some());
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", sdk_tx).is_some());
     s.claude_sdk_event_tx = Some(event_tx);
 
     s.invalidate_claude_sdk_session();
@@ -275,7 +273,10 @@ fn claude_preview_batch_schedules_once_until_flushed() {
 
     assert!(s.append_claude_preview_delta("Hello"));
     assert!(!s.append_claude_preview_delta(" world"));
-    assert_eq!(s.take_claude_preview_batch().as_deref(), Some("Hello world"));
+    assert_eq!(
+        s.take_claude_preview_batch().as_deref(),
+        Some("Hello world")
+    );
     assert_eq!(s.take_claude_preview_batch(), None);
     assert!(s.append_claude_preview_delta("Again"));
 }
@@ -422,6 +423,7 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
+        attachments: None,
     };
     assert!(s.prepare_task_routing(&coder_done).is_allowed);
     let released = s.observe_task_message(&coder_done);
@@ -441,6 +443,7 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("claude".into()),
+        attachments: None,
     };
     let decision = s.prepare_task_routing(&blocked);
     assert!(!decision.is_allowed);
@@ -459,6 +462,7 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("claude".into()),
+        attachments: None,
     };
     assert!(s.prepare_task_routing(&lead_to_reviewer).is_allowed);
     let released = s.observe_task_message(&lead_to_reviewer);
@@ -477,6 +481,7 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("claude".into()),
+        attachments: None,
     };
     assert!(s.prepare_task_routing(&reviewer_done).is_allowed);
     let released = s.observe_task_message(&reviewer_done);
@@ -522,6 +527,7 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
+        attachments: None,
     };
 
     let effects = s.observe_task_message_effects(&coder_done);
@@ -624,6 +630,7 @@ fn observe_task_message_auto_saves_without_explicit_call() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
+        attachments: None,
     };
     let _ = s.observe_task_message(&coder_done);
 

@@ -29,6 +29,13 @@ impl MessageStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub file_path: String,
+    pub file_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
     pub id: String,
     pub from: String,
@@ -46,6 +53,8 @@ pub struct BridgeMessage {
     /// The agent instance that originated this message (e.g. "claude", "codex").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sender_agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<Attachment>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

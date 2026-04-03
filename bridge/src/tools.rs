@@ -115,6 +115,7 @@ pub fn handle_tool_call(
         priority: None,
         status: Some(status),
         sender_agent_id: None,
+        attachments: None,
     }))
 }
 

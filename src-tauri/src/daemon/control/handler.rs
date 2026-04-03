@@ -19,7 +19,7 @@ fn claude_terminal_reply_claims_visible_result(status: MessageStatus, content: &
 
 fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
     format!(
-        "BridgeMessage{{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id}} from={} to={} status={} content_len={} task_id={} session_id={} sender_agent_id={}",
+        "BridgeMessage{{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id,attachments}} from={} to={} status={} content_len={} task_id={} session_id={} sender_agent_id={} attachments={}",
         message.from,
         message.to,
         message.status.map(MessageStatus::as_str).unwrap_or("none"),
@@ -27,6 +27,7 @@ fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage)
         message.task_id.as_deref().unwrap_or("-"),
         message.session_id.as_deref().unwrap_or("-"),
         message.sender_agent_id.as_deref().unwrap_or("-"),
+        message.attachments.as_ref().map_or(0, |a| a.len()),
     )
 }
 
@@ -136,10 +137,8 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     }
                     if id == "claude" && status.is_terminal() {
                         if claude_terminal_reply_claims_visible_result(status, &message.content) {
-                            let should_route = state
-                                .write()
-                                .await
-                                .claim_claude_bridge_terminal_delivery();
+                            let should_route =
+                                state.write().await.claim_claude_bridge_terminal_delivery();
                             if should_route {
                                 gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                             } else {
@@ -277,11 +276,12 @@ mod tests {
             task_id: Some("task-1".into()),
             session_id: Some("session-1".into()),
             sender_agent_id: Some("claude".into()),
+            attachments: None,
         };
 
         let summary = summarize_bridge_message_shape(&message);
 
-        assert!(summary.contains("BridgeMessage{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id}"));
+        assert!(summary.contains("BridgeMessage{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id,attachments}"));
         assert!(summary.contains("from=lead"));
         assert!(summary.contains("to=user"));
         assert!(summary.contains("status=done"));

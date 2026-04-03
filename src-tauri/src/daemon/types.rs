@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+// Re-export frontend DTOs so existing `use daemon::types::X` paths keep working.
+pub use super::types_dto::{HistoryEntry, OnlineAgentInfo, SessionTreeSnapshot, TaskSnapshot};
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageStatus {
@@ -58,6 +61,13 @@ pub struct ProviderConnectionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub file_path: String,
+    pub file_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
     pub id: String,
     pub from: String,
@@ -80,6 +90,8 @@ pub struct BridgeMessage {
     /// Set by the daemon on inbound AgentReply; distinct from `from` (which is the role).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sender_agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<Attachment>>,
 }
 
 impl BridgeMessage {
@@ -98,6 +110,7 @@ impl BridgeMessage {
             task_id: None,
             session_id: None,
             sender_agent_id: None,
+            attachments: None,
         }
     }
 }
@@ -141,41 +154,6 @@ pub enum PermissionBehavior {
 pub struct PermissionVerdict {
     pub request_id: String,
     pub behavior: PermissionBehavior,
-}
-
-/// Frontend DTO: active task with its sessions and artifacts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskSnapshot {
-    pub task: crate::daemon::task_graph::types::Task,
-    pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
-    pub artifacts: Vec<crate::daemon::task_graph::types::Artifact>,
-}
-
-/// Frontend DTO: session tree for a task (flat list, tree via parent_session_id).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionTreeSnapshot {
-    pub task_id: String,
-    pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
-}
-
-/// Frontend DTO: task history entry with summary counts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryEntry {
-    pub task: crate::daemon::task_graph::types::Task,
-    pub session_count: usize,
-    pub artifact_count: usize,
-}
-
-/// Structured snapshot of one online agent, used in query responses.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct OnlineAgentInfo {
-    pub agent_id: String,
-    pub role: String,
-    pub model_source: String,
 }
 
 /// daemon → bridge (over WS :4502)

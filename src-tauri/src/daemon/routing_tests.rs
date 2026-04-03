@@ -36,6 +36,7 @@ async fn route_to_claude_from_unknown_sender_drops() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
+        attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));
@@ -56,6 +57,7 @@ fn format_ndjson_user_message_wraps_channel_payload() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
+        attachments: None,
     };
 
     let ndjson = format_ndjson_user_message(&msg);
