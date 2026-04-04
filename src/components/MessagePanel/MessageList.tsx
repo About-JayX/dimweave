@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useBridgeStore } from "@/stores/bridge-store";
-import type { BridgeMessage } from "@/types";
+import type { Attachment, BridgeMessage } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 import { CodexStreamIndicator } from "./CodexStreamIndicator";
 import { ClaudeStreamIndicator } from "./ClaudeStreamIndicator";
@@ -11,10 +11,16 @@ import {
 } from "./view-model";
 
 interface Props {
+  emptyStateMessage?: string;
   messages: BridgeMessage[];
+  onOpenImage?: (attachment: Attachment) => void;
 }
 
-export function MessageList({ messages }: Props) {
+export function MessageList({
+  emptyStateMessage,
+  messages,
+  onOpenImage,
+}: Props) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const didInitialScrollRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
@@ -61,7 +67,8 @@ export function MessageList({ messages }: Props) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-[13px] text-muted-foreground animate-in fade-in duration-500">
-          No messages yet. Connect Claude and Codex to start bridging.
+          {emptyStateMessage ??
+            "No messages yet. Connect Claude and Codex to start bridging."}
         </div>
       </div>
     );
@@ -80,7 +87,7 @@ export function MessageList({ messages }: Props) {
           increaseViewportBy={200}
           itemContent={(index) => (
             <div className="px-4">
-              <MessageBubble msg={messages[index]} />
+              <MessageBubble msg={messages[index]} onOpenImage={onOpenImage} />
             </div>
           )}
         />

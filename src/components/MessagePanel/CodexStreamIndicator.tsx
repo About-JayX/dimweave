@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { SourceBadge } from "./SourceBadge";
 import {
+  getExpandableTextState,
   getCodexStreamIndicatorViewModel,
   getStreamTextTail,
 } from "./view-model";
@@ -23,9 +24,10 @@ export function CodexStreamIndicator() {
     commandOutput,
   };
   const viewModel = getCodexStreamIndicatorViewModel(codexStream);
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
   const displayReasoning = useMemo(
-    () => getStreamTextTail(reasoning, 300),
-    [reasoning],
+    () => getExpandableTextState(reasoning, 300, reasoningExpanded),
+    [reasoning, reasoningExpanded],
   );
   const displayCommandOutput = useMemo(
     () => getStreamTextTail(commandOutput, 500),
@@ -33,8 +35,42 @@ export function CodexStreamIndicator() {
   );
   const surface = getStreamSurfacePresentation("codex");
 
+  useEffect(() => {
+    setReasoningExpanded(false);
+  }, [reasoning]);
+
   if (!viewModel.visible) return null;
 
+  return (
+    <CodexStreamIndicatorView
+      currentDelta={currentDelta}
+      displayCommandOutput={displayCommandOutput}
+      displayReasoning={displayReasoning}
+      reasoningExpanded={reasoningExpanded}
+      surface={surface}
+      viewModel={viewModel}
+      onToggleReasoning={() => setReasoningExpanded((value) => !value)}
+    />
+  );
+}
+
+export function CodexStreamIndicatorView({
+  currentDelta,
+  displayCommandOutput,
+  displayReasoning,
+  reasoningExpanded,
+  surface,
+  viewModel,
+  onToggleReasoning,
+}: {
+  currentDelta: string;
+  displayCommandOutput: string;
+  displayReasoning: ReturnType<typeof getExpandableTextState>;
+  reasoningExpanded: boolean;
+  surface: ReturnType<typeof getStreamSurfacePresentation>;
+  viewModel: ReturnType<typeof getCodexStreamIndicatorViewModel>;
+  onToggleReasoning: () => void;
+}) {
   return (
     <div className="py-1.5">
       <div className="flex justify-start">
@@ -49,14 +85,25 @@ export function CodexStreamIndicator() {
               </span>
             )}
           </div>
-          {reasoning && !currentDelta && (
+          {displayReasoning.text && !currentDelta && (
             <div
-              className={`${surface.metaClass} mb-1 whitespace-pre-wrap max-h-24 overflow-y-auto`}
+              className={`${surface.metaClass} mb-1 whitespace-pre-wrap ${
+                reasoningExpanded ? "" : "max-h-24 overflow-y-auto"
+              }`}
             >
-              {displayReasoning}
+              {displayReasoning.text}
             </div>
           )}
-          {commandOutput && !currentDelta && (
+          {displayReasoning.canExpand && !currentDelta && (
+            <button
+              type="button"
+              onClick={onToggleReasoning}
+              className="mb-1 text-[11px] font-medium text-codex hover:text-codex/80"
+            >
+              {displayReasoning.toggleLabel}
+            </button>
+          )}
+          {displayCommandOutput && !currentDelta && (
             <div className={`${surface.commandClass} mb-1`}>
               {displayCommandOutput}
             </div>

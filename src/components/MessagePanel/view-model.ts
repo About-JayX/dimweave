@@ -4,6 +4,13 @@ import type {
   CodexStreamState,
 } from "@/stores/bridge-store/types";
 import { hasMessagePayload } from "@/lib/message-payload";
+export {
+  filterMessagesByQuery,
+  getExpandableTextState,
+  getMessageSearchSummary,
+  getStreamTextTail,
+  type ExpandableTextState,
+} from "./text-tools";
 
 export type StreamIndicatorId = "claude" | "codex";
 export type MessagePanelTab = "messages" | "logs" | "approvals";
@@ -74,14 +81,6 @@ export function getMessageListDisplayState(
     streamRailIndicators,
     hasContent: messageCount > 0 || streamRailIndicators.length > 0,
   };
-}
-
-export function getStreamTextTail(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-
-  return `…${text.slice(-maxChars)}`;
 }
 
 export function formatTerminalTimestamp(

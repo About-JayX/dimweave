@@ -1,11 +1,15 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
+import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { selectMessages } from "@/stores/bridge-store/selectors";
 import { MessageList } from "./MessageList";
+import { MessageImageLightbox } from "./MessageBubble";
 import {
+  filterMessagesByQuery,
   filterRenderableChatMessages,
   formatTerminalTimestamp,
+  getMessageSearchSummary,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
 
@@ -14,15 +18,30 @@ interface MessagePanelProps {
 }
 
 export function MessagePanel({ surfaceMode }: MessagePanelProps) {
+  const [lightboxAttachment, setLightboxAttachment] = useState<Attachment | null>(
+    null,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const chatMessages = useMemo(
     () => filterRenderableChatMessages(messages),
     [messages],
   );
+  const filteredMessages = useMemo(
+    () => filterMessagesByQuery(chatMessages, deferredSearchQuery),
+    [chatMessages, deferredSearchQuery],
+  );
+  const searchSummary = useMemo(
+    () =>
+      getMessageSearchSummary(deferredSearchQuery, filteredMessages.length),
+    [deferredSearchQuery, filteredMessages.length],
+  );
+  const closeLightbox = useCallback(() => setLightboxAttachment(null), []);
 
   useEffect(() => {
     if (claudeNeedsAttention) {
@@ -31,8 +50,44 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
   }, [claudeNeedsAttention, clearClaudeAttention]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {surfaceMode === "chat" && <MessageList messages={chatMessages} />}
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {surfaceMode === "chat" && (
+        <>
+          {chatMessages.length > 0 && (
+            <div className="border-b border-border/35 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <input
+                  aria-label="Search messages"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search messages"
+                  className="flex-1 rounded-lg border border-border/45 bg-background/65 px-3 py-2 text-[13px] text-foreground outline-none transition-colors focus:border-primary/50"
+                />
+                {searchQuery.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="rounded-lg border border-border/45 px-3 py-2 text-[11px] font-medium text-muted-foreground hover:border-border/70 hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              {searchSummary ? (
+                <div className="mt-2 text-[11px] text-muted-foreground/70">
+                  {searchSummary}
+                </div>
+              ) : null}
+            </div>
+          )}
+          <MessageList
+            messages={filteredMessages}
+            emptyStateMessage={searchSummary ?? undefined}
+            onOpenImage={setLightboxAttachment}
+          />
+        </>
+      )}
 
       {surfaceMode === "logs" && (
         <div className="flex-1 min-h-0">
@@ -63,6 +118,13 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
           )}
         </div>
       )}
+
+      {surfaceMode === "chat" && lightboxAttachment ? (
+        <MessageImageLightbox
+          attachment={lightboxAttachment}
+          onClose={closeLightbox}
+        />
+      ) : null}
     </div>
   );
 }

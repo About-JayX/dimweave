@@ -58,4 +58,5 @@ describe("MessagePanel", () => {
     expect(html).not.toContain("Runtime logs");
     expect(html).not.toContain(">Clear<");
   });
+
 });
