@@ -1,5 +1,6 @@
 mod channel_state;
 mod daemon_client;
+mod daemon_client_io;
 mod mcp;
 mod mcp_io;
 mod mcp_protocol;
@@ -8,11 +9,12 @@ mod types;
 
 #[tokio::main]
 async fn main() {
+    let _ = tracing_subscriber::fmt::try_init();
     let control_port: u16 = std::env::var("AGENTBRIDGE_CONTROL_PORT")
         .unwrap_or_else(|_| "4502".into())
         .parse()
         .unwrap_or_else(|e| {
-            eprintln!("[Bridge] invalid AGENTBRIDGE_CONTROL_PORT: {e}");
+            tracing::error!(error = %e, "invalid AGENTBRIDGE_CONTROL_PORT");
             std::process::exit(1);
         });
     let agent_id = std::env::var("AGENTBRIDGE_AGENT").unwrap_or_else(|_| "claude".into());
@@ -20,7 +22,7 @@ async fn main() {
     let role = match role_raw.as_str() {
         "user" | "lead" | "coder" | "reviewer" => role_raw,
         _ => {
-            eprintln!("[Bridge] unknown role '{role_raw}', defaulting to 'lead'");
+            tracing::warn!(role = %role_raw, "unknown role, defaulting to lead");
             "lead".into()
         }
     };
@@ -28,8 +30,12 @@ async fn main() {
         .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    eprintln!(
-        "[Bridge/{agent_id}] starting, daemon port {control_port}, role {role}, sdk_mode={sdk_mode}"
+    tracing::info!(
+        agent_id = %agent_id,
+        control_port,
+        role = %role,
+        sdk_mode,
+        "bridge starting"
     );
 
     // daemon_client → mcp: push routed messages as Channel notifications

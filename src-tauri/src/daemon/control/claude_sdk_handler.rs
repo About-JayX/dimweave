@@ -12,6 +12,7 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use tauri::AppHandle;
 use tokio::sync::mpsc;
+use tracing::{error, info, warn};
 
 #[path = "claude_sdk_handler_nonce.rs"]
 mod nonce;
@@ -50,7 +51,7 @@ async fn handle_ws_connection(
         let mut s = state.write().await;
         let epoch = s.claude_sdk_epoch();
         let Some(ws_generation) = s.attach_claude_sdk_ws(epoch, &launch_nonce, tx.clone()) else {
-            eprintln!("[ClaudeSDK] failed to attach WS — epoch/nonce mismatch");
+            warn!(epoch, launch_nonce = %trace_nonce, "failed to attach WS: epoch/nonce mismatch");
             return;
         };
         if let Some(ready_tx) = s.claude_sdk_ready_tx.take() {
@@ -85,11 +86,11 @@ async fn handle_ws_connection(
     while let Some(Ok(msg)) = stream.next().await {
         match msg {
             Message::Ping(data) => {
-                eprintln!("[ClaudeSDK] received ping ({} bytes)", data.len());
+                info!(bytes = data.len(), "received Claude SDK ping");
             }
             Message::Close(_) => break,
             _ => {
-                eprintln!("[ClaudeSDK] unexpected WS message from Claude");
+                warn!("unexpected WS message from Claude");
             }
         }
     }
@@ -170,7 +171,7 @@ pub async fn events_handler(
             }
         }
         Err(err) => {
-            eprintln!("[ClaudeSDK] failed to parse events body: {err}");
+            error!(error = %err, "failed to parse Claude SDK events body");
             (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"ok": false, "error": err.to_string()})),

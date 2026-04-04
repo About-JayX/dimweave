@@ -1,12 +1,12 @@
-use crate::types::{BridgeMsg, BridgeOutbound, DaemonInbound, DaemonMsg};
+use crate::daemon_client_io::{handle_inbound, serialize_outbound, BridgeSink, OnlineAgentsReply};
+use crate::types::{BridgeMsg, BridgeOutbound, DaemonInbound};
 use futures_util::{SinkExt, StreamExt};
 use tokio::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tracing::{error, info, warn};
 
 const MAX_RETRIES: u32 = 20;
 const BACKOFF_BUF_CAP: usize = 64;
-
-type OnlineAgentsReply = tokio::sync::oneshot::Sender<serde_json::Value>;
 
 pub async fn run(
     port: u16,
@@ -21,7 +21,7 @@ pub async fn run(
     loop {
         match connect_async(&url).await {
             Ok((ws, _)) => {
-                eprintln!("[Bridge/{agent_id}] connected to daemon");
+                info!(agent_id = %agent_id, "connected to daemon");
                 let connected_at = tokio::time::Instant::now();
                 let (mut sink, mut stream) = ws.split();
 
@@ -29,7 +29,11 @@ pub async fn run(
                     agent_id: &agent_id,
                 })
                 .unwrap_or_else(|e| {
-                    eprintln!("[Bridge/{agent_id}] failed to serialize connect msg: {e}");
+                    error!(
+                        agent_id = %agent_id,
+                        error = %e,
+                        "failed to serialize connect message"
+                    );
                     "{}".to_string()
                 });
                 if sink.send(Message::Text(connect_msg)).await.is_err() {
@@ -84,17 +88,26 @@ pub async fn run(
                 if connected_at.elapsed() > Duration::from_secs(2) {
                     attempt = 0;
                 }
-                eprintln!("[Bridge/{agent_id}] daemon connection dropped, reconnecting...");
+                warn!(agent_id = %agent_id, "daemon connection dropped, reconnecting");
             }
             Err(e) => {
                 attempt += 1;
                 if attempt >= MAX_RETRIES {
-                    eprintln!("[Bridge/{agent_id}] max retries reached: {e}");
+                    error!(
+                        agent_id = %agent_id,
+                        error = %e,
+                        max_retries = MAX_RETRIES,
+                        "max retries reached"
+                    );
                     return;
                 }
                 let delay = Duration::from_millis(100 * (1u64 << attempt.min(6)));
-                eprintln!(
-                    "[Bridge/{agent_id}] connect failed (attempt {attempt}): {e}, retry in {delay:?}"
+                warn!(
+                    agent_id = %agent_id,
+                    attempt,
+                    error = %e,
+                    delay_ms = delay.as_millis(),
+                    "daemon connect failed, retrying"
                 );
                 // Buffer outbound during backoff — replayed after reconnect
                 let deadline = tokio::time::Instant::now() + delay;
@@ -107,11 +120,11 @@ pub async fn run(
                                     if pending.len() < BACKOFF_BUF_CAP {
                                         pending.push(m);
                                     } else {
-                                        eprintln!("[Bridge/{agent_id}] backoff buffer full, dropping");
+                                        warn!(agent_id = %agent_id, "backoff buffer full, dropping");
                                     }
                                 }
                                 None => {
-                                    eprintln!("[Bridge/{agent_id}] reply channel closed");
+                                    warn!(agent_id = %agent_id, "reply channel closed");
                                     return;
                                 }
                             }
@@ -125,12 +138,7 @@ pub async fn run(
 
 async fn send_outbound(
     agent_id: &str,
-    sink: &mut futures_util::stream::SplitSink<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-        Message,
-    >,
+    sink: &mut BridgeSink,
     pending: &mut Vec<BridgeOutbound>,
     outbound: BridgeOutbound,
     pending_query: &mut Option<OnlineAgentsReply>,
@@ -153,58 +161,4 @@ async fn send_outbound(
         }
     }
     true
-}
-
-fn serialize_outbound(agent_id: &str, outbound: &BridgeOutbound) -> Result<String, ()> {
-    let result = match outbound {
-        BridgeOutbound::AgentReply(reply) => {
-            serde_json::to_string(&BridgeMsg::AgentReply { message: reply })
-        }
-        BridgeOutbound::PermissionRequest(request) => {
-            serde_json::to_string(&BridgeMsg::PermissionRequest { request })
-        }
-        BridgeOutbound::GetOnlineAgents(_) => return Err(()),
-    };
-    result.map_err(|e| {
-        eprintln!("[Bridge/{agent_id}] failed to serialize outbound: {e}");
-    })
-}
-
-async fn handle_inbound(
-    agent_id: &str,
-    txt: &str,
-    push_tx: &tokio::sync::mpsc::Sender<DaemonInbound>,
-    pending_query: &mut Option<OnlineAgentsReply>,
-) {
-    match serde_json::from_str::<DaemonMsg>(txt) {
-        Ok(dm) => match dm {
-            DaemonMsg::RoutedMessage { message } => {
-                if push_tx
-                    .send(DaemonInbound::RoutedMessage(message))
-                    .await
-                    .is_err()
-                {
-                    eprintln!("[Bridge/{agent_id}] push channel closed");
-                }
-            }
-            DaemonMsg::PermissionVerdict { verdict } => {
-                if push_tx
-                    .send(DaemonInbound::PermissionVerdict(verdict))
-                    .await
-                    .is_err()
-                {
-                    eprintln!("[Bridge/{agent_id}] push channel closed");
-                }
-            }
-            DaemonMsg::OnlineAgentsResponse { online_agents } => {
-                if let Some(tx) = pending_query.take() {
-                    let _ = tx.send(online_agents);
-                }
-            }
-            DaemonMsg::Status { .. } => {}
-        },
-        Err(e) => {
-            eprintln!("[Bridge/{agent_id}] failed to parse daemon msg: {e}");
-        }
-    }
 }

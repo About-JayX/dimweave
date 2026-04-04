@@ -1,12 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[allow(dead_code)]
 mod claude_cli;
 mod codex;
 mod commands_artifact;
 mod commands_history;
 mod commands;
 mod commands_task;
+// TODO(audit-wave-2): pay down the pre-existing daemon lint debt and remove
+// these daemon-scoped allow attributes once the legacy warnings are fixed.
+#[allow(
+    dead_code,
+    clippy::items_after_test_module,
+    clippy::large_enum_variant,
+    clippy::needless_option_as_deref,
+    clippy::too_many_arguments
+)]
 mod daemon;
+#[allow(dead_code)]
 mod mcp;
 
 use codex::auth::CodexProfile;
@@ -82,6 +93,7 @@ async fn pick_files(app: tauri::AppHandle) -> Result<Option<Vec<String>>, String
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 fn main() {
+    let _ = tracing_subscriber::fmt::try_init();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())

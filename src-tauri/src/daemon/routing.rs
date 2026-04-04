@@ -8,6 +8,10 @@ use crate::daemon::{
 };
 use tauri::AppHandle;
 
+#[path = "routing_dispatch.rs"]
+mod dispatch;
+pub use dispatch::{route_message, route_message_silent};
+
 pub enum RouteResult {
     Delivered,
     Buffered,
@@ -181,50 +185,9 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
     route_message_inner_with_meta(state, msg).await.result
 }
 
-pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
-    route_message_with_display(state, app, msg, true).await;
-}
-
-pub async fn route_message_silent(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
-    route_message_with_display(state, app, msg, false).await;
-}
-
-async fn route_message_with_display(
-    state: &SharedState,
-    app: &AppHandle,
-    msg: BridgeMessage,
-    display_in_gui: bool,
-) {
-    let outcome = route_message_inner_with_meta(state, msg.clone()).await;
-    routing_display::emit_route_side_effects(
-        app,
-        &msg,
-        &outcome.result,
-        outcome.emit_claude_thinking,
-        display_in_gui,
-    );
-    if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
-        let effects = {
-            let mut s = state.write().await;
-            s.observe_task_message_effects(&msg)
-        };
-        for event in effects.ui_events {
-            event.emit(app);
-        }
-        for released_msg in effects.released {
-            Box::pin(route_message_with_display(state, app, released_msg, false)).await;
-        }
-    }
-}
-
 pub use super::routing_format::{build_codex_input_items, format_codex_input, format_ndjson_user_message};
 
-#[cfg(test)]
-#[path = "routing_behavior_tests.rs"]
-mod behavior_tests;
-#[cfg(test)]
-#[path = "routing_shared_role_tests.rs"]
-mod shared_role_tests;
-#[cfg(test)]
-#[path = "routing_tests.rs"]
-mod tests;
+#[cfg(test)] #[path = "routing_behavior_tests.rs"] mod behavior_tests;
+#[cfg(test)] #[path = "routing_shared_role_tests.rs"] mod shared_role_tests;
+#[cfg(test)] #[path = "routing_tests.rs"] mod tests;
+#[cfg(test)] #[path = "routing_user_target_tests.rs"] mod user_target_tests;
