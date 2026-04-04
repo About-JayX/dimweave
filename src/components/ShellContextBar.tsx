@@ -11,6 +11,7 @@ import {
   TerminalSquare,
   Workflow,
 } from "lucide-react";
+import type { RuntimeHealthInfo } from "@/types";
 import type { ShellNavItem } from "./shell-layout-state";
 import type { ThemeMode } from "./use-theme";
 import type { RadiusMode } from "./use-border-radius";
@@ -18,6 +19,7 @@ import type { RadiusMode } from "./use-border-radius";
 interface ShellContextBarProps {
   activeItem: ShellNavItem | null;
   messageCount: number;
+  runtimeHealth: RuntimeHealthInfo | null;
   themeMode: ThemeMode;
   radiusMode: RadiusMode;
   onToggle: (item: ShellNavItem) => void;
@@ -49,6 +51,7 @@ const THEME_OPTIONS: Array<{
 export function ShellContextBar({
   activeItem,
   messageCount,
+  runtimeHealth,
   themeMode,
   radiusMode,
   onToggle,
@@ -92,6 +95,19 @@ export function ShellContextBar({
       </nav>
 
       <div className="mt-auto flex flex-col items-center gap-3">
+        {runtimeHealth ? (
+          <button
+            type="button"
+            aria-label="Runtime degraded"
+            title={runtimeHealth.message}
+            className={`flex size-10 items-center justify-center rounded-xl transition-colors ${runtimeHealth.level === "error" ? "text-red-500 hover:bg-red-500/10" : "text-amber-500 hover:bg-amber-500/10"}`}
+          >
+            <AlertTriangle className="size-4" />
+            <span className="sr-only">
+              Runtime degraded: {runtimeHealth.message}
+            </span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onRadiusToggle}

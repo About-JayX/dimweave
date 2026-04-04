@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 // Re-export frontend DTOs so existing `use daemon::types::X` paths keep working.
 pub use super::types_dto::{HistoryEntry, OnlineAgentInfo, SessionTreeSnapshot, TaskSnapshot};
+#[path = "types_runtime.rs"]
+mod types_runtime;
+pub use types_runtime::{RuntimeHealthLevel, RuntimeHealthStatus};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -132,6 +135,8 @@ pub struct AgentRuntimeStatus {
 #[serde(rename_all = "camelCase")]
 pub struct DaemonStatusSnapshot {
     pub agents: Vec<AgentRuntimeStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_health: Option<RuntimeHealthStatus>,
     pub claude_role: String,
     pub codex_role: String,
 }

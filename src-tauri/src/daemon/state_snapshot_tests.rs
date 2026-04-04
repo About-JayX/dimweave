@@ -1,5 +1,5 @@
 use super::*;
-use crate::daemon::types::OnlineAgentInfo;
+use crate::daemon::types::{OnlineAgentInfo, RuntimeHealthLevel, RuntimeHealthStatus};
 
 #[test]
 fn online_agents_snapshot_empty_when_no_agents() {
@@ -80,4 +80,25 @@ fn online_agents_snapshot_role_reflects_current_state() {
     let snapshot = s.online_agents_snapshot();
     assert_eq!(snapshot[0].role, "reviewer");
     assert_eq!(snapshot[1].role, "tester");
+}
+
+#[test]
+fn status_snapshot_includes_runtime_health() {
+    let mut s = DaemonState::new();
+    s.set_runtime_health(RuntimeHealthStatus {
+        level: RuntimeHealthLevel::Error,
+        source: "claude_sdk".into(),
+        message: "Claude reconnect failed after 5 attempts".into(),
+    });
+
+    let snapshot = s.status_snapshot();
+
+    assert_eq!(
+        snapshot.runtime_health,
+        Some(RuntimeHealthStatus {
+            level: RuntimeHealthLevel::Error,
+            source: "claude_sdk".into(),
+            message: "Claude reconnect failed after 5 attempts".into(),
+        })
+    );
 }

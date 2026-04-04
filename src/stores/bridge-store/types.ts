@@ -4,6 +4,7 @@ import type {
   BridgeMessage,
   PermissionBehavior,
   PermissionPrompt,
+  RuntimeHealthInfo,
 } from "@/types";
 
 export interface TerminalLine {
@@ -36,6 +37,7 @@ export interface BridgeState {
   agents: Record<string, AgentInfo>;
   terminalLines: TerminalLine[];
   permissionPrompts: PermissionPrompt[];
+  runtimeHealth: RuntimeHealthInfo | null;
   claudeNeedsAttention: boolean;
   claudeRole: string;
   codexRole: string;

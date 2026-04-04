@@ -6,6 +6,7 @@ import {
   type ClaudeStreamPayload,
   type CodexStreamPayload,
   type PermissionPromptPayload,
+  type RuntimeHealthPayload,
   type SystemLogPayload,
 } from "./listener-payloads";
 import {
@@ -137,6 +138,11 @@ export function createBridgeListeners(
           ),
           e.payload,
         ],
+      }));
+    }),
+    listen<RuntimeHealthPayload>("runtime_health", (e) => {
+      set(() => ({
+        runtimeHealth: e.payload.health ?? null,
       }));
     }),
   ]).then((fns) => [...fns, cancelPendingFlush]);

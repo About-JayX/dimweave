@@ -8,14 +8,17 @@ pub mod event_handler;
 pub mod process;
 pub mod protocol;
 pub mod stdio;
+mod reconnect;
+mod runtime;
 
 use crate::daemon::{gui, SharedState};
 use process::ClaudeLaunchOpts;
-use serde_json::Value;
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
+use reconnect::{recover_ws_connection, wait_for_ws_disconnect};
+use runtime::{emit_runtime_health, poll_child_exit, spawn_runtime};
 
 /// Handle to a running Claude SDK subprocess.
 pub struct ClaudeSdkHandle {
@@ -45,150 +48,64 @@ pub async fn launch(
     state: SharedState,
     app: AppHandle,
 ) -> anyhow::Result<ClaudeSdkHandle> {
-    let session_id = opts.session_id.clone();
-    let role_id = opts.role.clone().unwrap_or_else(|| "lead".into());
-    let is_resume = opts.resume.is_some();
-
-    let ready_rx = {
-        let (ready_tx, ready_rx) =
-            tokio::sync::oneshot::channel::<tokio::sync::mpsc::Sender<String>>();
-        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<Vec<Value>>(256);
-        let mut s = state.write().await;
-        let _epoch = s.begin_claude_sdk_launch(opts.launch_nonce.clone());
-        s.claude_sdk_ready_tx = Some(ready_tx);
-        s.claude_sdk_event_tx = Some(event_tx);
-        let event_state = state.clone();
-        let event_app = app.clone();
-        tokio::spawn(async move {
-            while let Some(events) = event_rx.recv().await {
-                crate::daemon::control::claude_sdk_handler::process_sdk_events(
-                    &event_state,
-                    &event_app,
-                    events,
-                )
-                .await;
-            }
-        });
-        ready_rx
-    };
-
-    let mut child = match process::spawn_claude(&opts) {
-        Ok(child) => child,
-        Err(err) => {
-            state.write().await.invalidate_claude_sdk_session();
-            return Err(err);
-        }
-    };
-    stdio::spawn_stdio_drainers(child.stdout.take(), child.stderr.take());
-    let child_arc = Arc::new(Mutex::new(Some(child)));
-    gui::emit_system_log(
-        &app,
-        "info",
-        &format!("[Claude SDK] spawned session={session_id} role={role_id} resume={is_resume}"),
-    );
-    gui::emit_system_log(
-        &app,
-        "info",
-        &format!("[Claude Trace] {}", process::format_launch_trace(&opts)),
-    );
-
     let cancel = CancellationToken::new();
-
-    let connected = tokio::select! {
-        result = ready_rx => result.is_ok(),
-        _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => false,
-        _ = poll_child_exit(&child_arc, false) => false,
-    };
-
-    if !connected {
-        if let Some(mut c) = child_arc.lock().await.take() {
-            let _ = c.kill().await;
-        }
-        state.write().await.invalidate_claude_sdk_session();
-        anyhow::bail!("Claude SDK did not connect within 30s");
-    }
-
-    // Spawn a background monitor for process exit
-    let monitor_child = child_arc.clone();
+    let (child_arc, epoch) = spawn_runtime(&opts, state.clone(), app.clone()).await?;
     let monitor_cancel = cancel.clone();
     let monitor_app = app.clone();
     let monitor_state = state.clone();
-    let monitor_role = role_id.clone();
+    let monitor_role = opts.role.clone().unwrap_or_else(|| "lead".into());
+    let monitor_opts = opts.clone();
+    let monitor_child = child_arc.clone();
     tokio::spawn(async move {
-        tokio::select! {
-            _ = monitor_cancel.cancelled() => {}
-            _ = poll_child_exit(&monitor_child, true) => {
-                gui::emit_agent_status(&monitor_app, "claude", false, None, None);
-                gui::emit_claude_stream(&monitor_app, gui::ClaudeStreamPayload::Done);
-                gui::emit_system_log(
-                    &monitor_app,
-                    "info",
-                    &format!("[Claude SDK] process exited, role={monitor_role}"),
-                );
-                monitor_state.write().await.invalidate_claude_sdk_session();
+        let mut current_child = monitor_child;
+        let mut current_epoch = epoch;
+        loop {
+            tokio::select! {
+                _ = monitor_cancel.cancelled() => return,
+                ws_lost = wait_for_ws_disconnect(&monitor_state, current_epoch) => {
+                    if !ws_lost {
+                        return;
+                    }
+                    if !recover_ws_connection(
+                        &mut current_child,
+                        &mut current_epoch,
+                        &monitor_opts,
+                        &monitor_state,
+                        &monitor_app,
+                        &monitor_cancel,
+                    ).await {
+                        return;
+                    }
+                }
+                _ = poll_child_exit(&current_child, true) => {
+                    let cleared = monitor_state
+                        .write()
+                        .await
+                        .invalidate_claude_sdk_session_if_current(current_epoch);
+                    if !cleared {
+                        return;
+                    }
+                    emit_runtime_health(
+                        &monitor_state,
+                        &monitor_app,
+                        crate::daemon::types::RuntimeHealthLevel::Error,
+                        format!("Claude runtime exited for role={monitor_role}"),
+                    ).await;
+                    gui::emit_agent_status(&monitor_app, "claude", false, None, None);
+                    gui::emit_claude_stream(&monitor_app, gui::ClaudeStreamPayload::Done);
+                    gui::emit_system_log(
+                        &monitor_app,
+                        "info",
+                        &format!("[Claude SDK] process exited, role={monitor_role}"),
+                    );
+                    return;
+                }
             }
         }
     });
-
-    // Emit provider connection state
-    let provider_session = crate::daemon::types::ProviderConnectionState {
-        provider: crate::daemon::task_graph::types::Provider::Claude,
-        external_session_id: session_id.clone(),
-        cwd: opts.cwd.clone(),
-        connection_mode: if is_resume {
-            crate::daemon::types::ProviderConnectionMode::Resumed
-        } else {
-            crate::daemon::types::ProviderConnectionMode::New
-        },
-    };
-    {
-        let mut s = state.write().await;
-        s.set_provider_connection("claude", provider_session.clone());
-        s.claude_role = role_id.clone();
-    }
-    gui::emit_agent_status(&app, "claude", true, None, Some(provider_session.clone()));
-    gui::emit_system_log(
-        &app,
-        "info",
-        &format!("[Claude SDK] ready session={session_id}"),
-    );
-    gui::emit_system_log(
-        &app,
-        "info",
-        &format!(
-            "[Claude Trace] chain=ready session={} provider_session={{provider=claude,external_session_id={},cwd={},connection_mode={}}}",
-            session_id,
-            provider_session.external_session_id,
-            provider_session.cwd,
-            provider_session.connection_mode.as_str(),
-        ),
-    );
 
     Ok(ClaudeSdkHandle {
         process: child_arc,
         cancel,
     })
-}
-
-/// Poll until the child process has exited. If `take` is true, takes
-/// the child out of the Option on exit (used for the background monitor).
-async fn poll_child_exit(child: &Arc<Mutex<Option<tokio::process::Child>>>, take: bool) {
-    let interval = if take { 500 } else { 200 };
-    loop {
-        tokio::time::sleep(std::time::Duration::from_millis(interval)).await;
-        let mut guard = child.lock().await;
-        if let Some(ref mut c) = *guard {
-            match c.try_wait() {
-                Ok(Some(_)) | Err(_) => {
-                    if take {
-                        *guard = None;
-                    }
-                    return;
-                }
-                Ok(None) => {}
-            }
-        } else {
-            return;
-        }
-    }
 }

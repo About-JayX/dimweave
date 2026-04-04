@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { RuntimeHealthInfo } from "@/types";
 import type { BridgeState } from "./types";
 import { logError } from "./helpers";
 
@@ -14,6 +15,7 @@ interface AgentRuntimeStatusPayload {
 }
 interface DaemonStatusSnapshotPayload {
   agents: AgentRuntimeStatusPayload[];
+  runtimeHealth?: RuntimeHealthInfo | null;
   claudeRole: string;
   codexRole: string;
 }
@@ -59,6 +61,7 @@ export async function syncStatusSnapshot(
 
       return {
         agents: nextAgents,
+        runtimeHealth: snapshot.runtimeHealth ?? null,
         claudeRole: snapshot.claudeRole,
         codexRole: snapshot.codexRole,
       };

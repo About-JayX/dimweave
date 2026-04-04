@@ -1,6 +1,7 @@
 use super::{
     enqueue_events, nonce::current_launch_nonce, nonce::LaunchNonceError, nonce::LaunchNonceQuery,
-    processing::summarize_event_shape, processing::summarize_events_batch, EventEnqueueError,
+    processing::summarize_event_shape, processing::summarize_events_batch,
+    reconnect_delay_ms, EventEnqueueError,
 };
 use crate::daemon::claude_sdk::protocol::PostEventsBody as EventsBody;
 use crate::daemon::state::DaemonState;
@@ -144,4 +145,13 @@ async fn current_launch_nonce_rejects_stale_nonce() {
     .await;
 
     assert_eq!(result, Err(LaunchNonceError::Stale));
+}
+
+#[test]
+fn reconnect_delay_uses_bounded_exponential_backoff() {
+    assert_eq!(reconnect_delay_ms(1), Some(500));
+    assert_eq!(reconnect_delay_ms(2), Some(1_000));
+    assert_eq!(reconnect_delay_ms(3), Some(2_000));
+    assert_eq!(reconnect_delay_ms(5), Some(8_000));
+    assert_eq!(reconnect_delay_ms(6), None);
 }

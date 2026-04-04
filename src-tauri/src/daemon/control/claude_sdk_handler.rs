@@ -1,8 +1,5 @@
 use crate::daemon::claude_sdk::protocol::PostEventsBody as EventsBody;
-use crate::daemon::{
-    gui::{self, ClaudeStreamPayload},
-    SharedState,
-};
+use crate::daemon::{gui::{self, ClaudeStreamPayload}, SharedState};
 use axum::{
     extract::{
         ws::{Message, WebSocket},
@@ -20,8 +17,11 @@ use tokio::sync::mpsc;
 mod nonce;
 #[path = "claude_sdk_handler_processing.rs"]
 mod processing;
+#[path = "claude_sdk_handler_reconnect.rs"]
+mod reconnect;
 use nonce::{current_launch_nonce, launch_nonce_error_response, LaunchNonceQuery};
 pub(crate) use processing::process_sdk_events;
+pub(crate) use reconnect::{reconnect_delay_ms, MAX_WS_RECONNECT_ATTEMPTS};
 use processing::summarize_events_batch;
 
 pub async fn ws_handler(
@@ -180,10 +180,7 @@ pub async fn events_handler(
     }
 }
 
-async fn enqueue_events(
-    state: &SharedState,
-    events: Vec<serde_json::Value>,
-) -> Result<(), EventEnqueueError> {
+async fn enqueue_events(state: &SharedState, events: Vec<serde_json::Value>) -> Result<(), EventEnqueueError> {
     let tx = state
         .read()
         .await

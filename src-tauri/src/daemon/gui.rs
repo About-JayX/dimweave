@@ -1,4 +1,6 @@
-use crate::daemon::types::{BridgeMessage, PermissionRequest, ProviderConnectionState};
+use crate::daemon::types::{
+    BridgeMessage, PermissionRequest, ProviderConnectionState, RuntimeHealthStatus,
+};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -25,6 +27,13 @@ pub struct AgentStatusEvent {
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_session: Option<ProviderConnectionState>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeHealthEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<RuntimeHealthStatus>,
 }
 
 #[derive(Serialize, Clone)]
@@ -125,6 +134,10 @@ pub fn emit_agent_status(
             provider_session,
         },
     );
+}
+
+pub fn emit_runtime_health(app: &AppHandle, health: Option<RuntimeHealthStatus>) {
+    let _ = app.emit("runtime_health", RuntimeHealthEvent { health });
 }
 
 pub fn emit_permission_prompt(

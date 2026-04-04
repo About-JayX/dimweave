@@ -1,11 +1,18 @@
 export type MessageStatus = "in_progress" | "done" | "error";
 export type ProviderConnectionMode = "new" | "resumed";
+export type RuntimeHealthLevel = "warning" | "error";
 
 export interface ProviderSessionInfo {
   provider: "claude" | "codex";
   externalSessionId: string;
   cwd: string;
   connectionMode: ProviderConnectionMode;
+}
+
+export interface RuntimeHealthInfo {
+  level: RuntimeHealthLevel;
+  source: string;
+  message: string;
 }
 
 export interface Attachment {

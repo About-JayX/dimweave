@@ -1,4 +1,9 @@
-import type { BridgeMessage, PermissionPrompt, ProviderSessionInfo } from "@/types";
+import type {
+  BridgeMessage,
+  PermissionPrompt,
+  ProviderSessionInfo,
+  RuntimeHealthInfo,
+} from "@/types";
 
 export interface AgentMessagePayload {
   payload: BridgeMessage;
@@ -15,6 +20,10 @@ export interface AgentStatusPayload {
   online: boolean;
   exitCode?: number;
   providerSession?: ProviderSessionInfo;
+}
+
+export interface RuntimeHealthPayload {
+  health?: RuntimeHealthInfo | null;
 }
 
 export interface PermissionPromptPayload extends PermissionPrompt {}

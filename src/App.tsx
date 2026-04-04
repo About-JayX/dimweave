@@ -49,6 +49,7 @@ export default function App() {
 
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
+  const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
   const chatMessages = useMemo(
     () => filterRenderableChatMessages(messages),
@@ -141,6 +142,7 @@ export default function App() {
         <ShellContextBar
           activeItem={shellLayout.activeItem}
           messageCount={chatMessages.length}
+          runtimeHealth={runtimeHealth}
           themeMode={theme.mode}
           radiusMode={radius.mode}
           onToggle={(item) =>

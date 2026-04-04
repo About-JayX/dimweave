@@ -32,6 +32,7 @@ impl DaemonState {
 
         DaemonStatusSnapshot {
             agents,
+            runtime_health: self.runtime_health.clone(),
             claude_role: self.claude_role.clone(),
             codex_role: self.codex_role.clone(),
         }

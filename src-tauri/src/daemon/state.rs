@@ -4,7 +4,8 @@ use crate::daemon::{
     task_graph::TaskGraphStore,
     types::{
         AgentRuntimeStatus, BridgeMessage, DaemonStatusSnapshot, OnlineAgentInfo,
-        PermissionBehavior, PermissionRequest, PermissionVerdict, ProviderConnectionState, ToAgent,
+        PermissionBehavior, PermissionRequest, PermissionVerdict, ProviderConnectionState,
+        RuntimeHealthStatus, ToAgent,
     },
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -63,6 +64,7 @@ pub struct DaemonState {
     pub codex_role: String,
     pub claude_connection: Option<ProviderConnectionState>,
     pub codex_connection: Option<ProviderConnectionState>,
+    pub runtime_health: Option<RuntimeHealthStatus>,
     pub session_mgr: Arc<Mutex<SessionManager>>,
     /// Monotonic counter for agent connection generations.
     pub next_agent_gen: u64,
@@ -95,6 +97,7 @@ impl Default for DaemonState {
             codex_role: "coder".into(),
             claude_connection: None,
             codex_connection: None,
+            runtime_health: None,
             session_mgr: Arc::new(Mutex::new(SessionManager::new())),
             next_agent_gen: 0,
             task_graph: TaskGraphStore::new(),

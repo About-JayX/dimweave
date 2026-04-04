@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use tokio::process::{Child, Command};
 
 /// Options for launching a Claude subprocess.
+#[derive(Clone)]
 pub struct ClaudeLaunchOpts {
     /// Path to the `claude` binary (resolved via `which` or explicit).
     pub claude_bin: PathBuf,

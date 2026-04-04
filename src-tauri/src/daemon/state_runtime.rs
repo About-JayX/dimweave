@@ -107,6 +107,14 @@ impl DaemonState {
         self.claude_connection = None;
     }
 
+    pub fn invalidate_claude_sdk_session_if_current(&mut self, epoch: u64) -> bool {
+        if self.claude_sdk_session_epoch != epoch {
+            return false;
+        }
+        self.invalidate_claude_sdk_session();
+        true
+    }
+
     pub fn append_claude_preview_delta(&mut self, text: &str) -> bool {
         if text.is_empty() {
             return false;
@@ -179,5 +187,13 @@ impl DaemonState {
             "codex" => self.codex_connection = None,
             _ => {}
         }
+    }
+
+    pub fn set_runtime_health(&mut self, health: RuntimeHealthStatus) {
+        self.runtime_health = Some(health);
+    }
+
+    pub fn clear_runtime_health(&mut self) {
+        self.runtime_health = None;
     }
 }

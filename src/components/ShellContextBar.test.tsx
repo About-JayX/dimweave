@@ -31,6 +31,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         messageCount={0}
+        runtimeHealth={null}
         themeMode="auto"
         radiusMode="rounded"
         onToggle={() => {}}
@@ -45,5 +46,65 @@ describe("ShellContextBar", () => {
     expect(html).toContain("Logs");
     expect(html).not.toContain("AgentNexus");
     expect(html).not.toContain("Daemon online");
+  });
+
+  test("renders a compact runtime warning affordance when the daemon is degraded", async () => {
+    installTauriStub();
+    const { ShellContextBar } = await import("./ShellContextBar");
+    const html = renderToStaticMarkup(
+      <ShellContextBar
+        activeItem={null}
+        messageCount={0}
+        runtimeHealth={{
+          level: "error",
+          source: "claude_sdk",
+          message: "Claude reconnect failed after 5 attempts",
+        }}
+        themeMode="auto"
+        radiusMode="rounded"
+        onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Runtime degraded");
+    expect(html).toContain("Claude reconnect failed after 5 attempts");
+  });
+
+  test("removes the runtime warning affordance once health clears", async () => {
+    installTauriStub();
+    const { ShellContextBar } = await import("./ShellContextBar");
+    const degraded = renderToStaticMarkup(
+      <ShellContextBar
+        activeItem={null}
+        messageCount={0}
+        runtimeHealth={{
+          level: "warning",
+          source: "claude_sdk",
+          message: "Claude reconnecting (1/5)",
+        }}
+        themeMode="auto"
+        radiusMode="rounded"
+        onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
+      />,
+    );
+    const recovered = renderToStaticMarkup(
+      <ShellContextBar
+        activeItem={null}
+        messageCount={0}
+        runtimeHealth={null}
+        themeMode="auto"
+        radiusMode="rounded"
+        onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
+      />,
+    );
+
+    expect(degraded).toContain("Runtime degraded");
+    expect(recovered).not.toContain("Runtime degraded");
   });
 });
