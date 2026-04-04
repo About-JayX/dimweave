@@ -15,6 +15,22 @@ pub(super) struct TaskGraphSnapshot {
 }
 
 impl TaskGraphStore {
+    pub(crate) fn persist_path(&self) -> Option<&Path> {
+        self.persist_path.as_deref()
+    }
+
+    pub(crate) fn to_snapshot_json(&self) -> anyhow::Result<serde_json::Value> {
+        Ok(serde_json::to_value(self.to_snapshot())?)
+    }
+
+    pub(crate) fn from_snapshot_json(
+        value: serde_json::Value,
+        persist_path: Option<std::path::PathBuf>,
+    ) -> anyhow::Result<Self> {
+        let snap: TaskGraphSnapshot = serde_json::from_value(value)?;
+        Ok(Self::from_snapshot(snap, persist_path))
+    }
+
     /// Convert the live store into a serializable snapshot.
     pub(super) fn to_snapshot(&self) -> TaskGraphSnapshot {
         TaskGraphSnapshot {
@@ -65,7 +81,12 @@ impl TaskGraphStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(path, json)?;
+        let tmp_path = path.with_extension("tmp");
+        std::fs::write(&tmp_path, json)?;
+        if let Err(err) = std::fs::rename(&tmp_path, path) {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(err.into());
+        }
         Ok(())
     }
 

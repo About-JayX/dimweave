@@ -1,11 +1,18 @@
 use crate::daemon::task_graph::types::ReviewStatus;
 use crate::daemon::types::BridgeMessage;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Manages the review gate: blocks lead→coder messages during
 /// active review and releases them only on explicit lead approval.
 pub struct ReviewGate {
     blocked: HashMap<String, Vec<BridgeMessage>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReviewGateSnapshot {
+    #[serde(default)]
+    pub blocked: HashMap<String, Vec<BridgeMessage>>,
 }
 
 impl ReviewGate {
@@ -38,6 +45,16 @@ impl ReviewGate {
     /// Drain blocked messages for a task (e.g. on task completion).
     pub fn drain(&mut self, task_id: &str) {
         self.blocked.remove(task_id);
+    }
+
+    pub fn snapshot(&self) -> ReviewGateSnapshot {
+        ReviewGateSnapshot {
+            blocked: self.blocked.clone(),
+        }
+    }
+
+    pub fn restore(&mut self, snapshot: ReviewGateSnapshot) {
+        self.blocked = snapshot.blocked;
     }
 }
 

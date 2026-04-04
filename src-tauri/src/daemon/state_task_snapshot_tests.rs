@@ -172,3 +172,42 @@ fn resume_session_returns_error_for_missing() {
     let mut s = DaemonState::new();
     assert!(s.resume_session("no-such").is_err());
 }
+
+#[test]
+fn task_snapshot_after_reload_preserves_pending_lead_approval_status() {
+    let path = std::env::temp_dir().join(format!(
+        "dimweave_task_snapshot_review_{}_{}.json",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis(),
+    ));
+    let _ = std::fs::remove_file(&path);
+
+    let mut s = DaemonState::with_task_graph_path(path.clone()).expect("create with path");
+    let task = s.create_and_select_task("/ws", "Persisted Review");
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing,
+    );
+    s.task_graph.update_task_review_status(
+        &task.task_id,
+        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
+    );
+    s.save_task_graph().expect("save should succeed");
+
+    let mut restored = DaemonState::with_task_graph_path(path.clone()).expect("reload should work");
+    restored
+        .select_task(&task.task_id)
+        .expect("task should still be selectable");
+
+    let snapshot = restored.task_snapshot().expect("snapshot exists");
+    assert_eq!(
+        snapshot.task.review_status,
+        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval)
+    );
+    assert_eq!(
+        snapshot.task.status,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing
+    );
+
+    let _ = std::fs::remove_file(&path);
+}

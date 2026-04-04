@@ -1,5 +1,14 @@
 use super::*;
 
+fn temp_state_path(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "dimweave_state_{}_{}_{}.json",
+        name,
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis(),
+    ))
+}
+
 #[test]
 fn flush_clears_buffer() {
     let mut s = DaemonState::new();
@@ -576,6 +585,103 @@ fn lead_approve_review_effects_reports_task_ui_events() {
         crate::daemon::gui_task::TaskUiEvent::ReviewGateChanged { task_id, review_status }
             if task_id == &task.task_id && review_status.is_none()
     ));
+}
+
+#[test]
+fn daemon_state_persist_round_trip_restores_buffered_messages_per_task() {
+    use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
+
+    let path = temp_state_path("buffered_messages_round_trip");
+    let _ = std::fs::remove_file(&path);
+
+    let mut s = DaemonState::with_task_graph_path(path.clone()).expect("create with path");
+    let task_a = s.task_graph.create_task("/ws/a", "Task A");
+    let task_b = s.task_graph.create_task("/ws/b", "Task B");
+    let session_a = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task_a.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws/a",
+        title: "Coder A",
+    });
+    let session_b = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task_b.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws/b",
+        title: "Coder B",
+    });
+
+    let mut buffered_a = BridgeMessage::system("resume task a", "coder");
+    buffered_a.task_id = Some(task_a.task_id.clone());
+    buffered_a.session_id = Some(session_a.session_id.clone());
+    let mut buffered_b = BridgeMessage::system("resume task b", "coder");
+    buffered_b.task_id = Some(task_b.task_id.clone());
+    buffered_b.session_id = Some(session_b.session_id.clone());
+    s.buffer_message(buffered_a.clone());
+    s.buffer_message(buffered_b.clone());
+    s.save_task_graph().expect("save should succeed");
+
+    let mut restored = DaemonState::with_task_graph_path(path.clone()).expect("reload should work");
+    let released_a = restored.take_buffered_for_task("coder", Some(&task_a.task_id));
+    assert_eq!(released_a.len(), 1);
+    assert_eq!(released_a[0].id, buffered_a.id);
+    assert_eq!(released_a[0].task_id.as_deref(), Some(task_a.task_id.as_str()));
+
+    let released_b = restored.take_buffered_for_task("coder", Some(&task_b.task_id));
+    assert_eq!(released_b.len(), 1);
+    assert_eq!(released_b[0].id, buffered_b.id);
+    assert_eq!(released_b[0].task_id.as_deref(), Some(task_b.task_id.as_str()));
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn lead_approve_review_after_reload_releases_review_gate_buffered_messages() {
+    let path = temp_state_path("review_gate_round_trip");
+    let _ = std::fs::remove_file(&path);
+
+    let mut s = DaemonState::with_task_graph_path(path.clone()).expect("create with path");
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.set_active_task(Some(task.task_id.clone()));
+    s.task_graph.update_task_status(
+        &task.task_id,
+        crate::daemon::task_graph::types::TaskStatus::Reviewing,
+    );
+    s.task_graph.update_task_review_status(
+        &task.task_id,
+        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
+    );
+
+    let blocked = BridgeMessage {
+        id: "lead_next_after_restart".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "coder".into(),
+        content: "resume after approval".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: Some(task.task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+        attachments: None,
+    };
+    s.review_gate.buffer_message(&task.task_id, blocked.clone());
+    s.save_task_graph().expect("save should succeed");
+
+    let mut restored = DaemonState::with_task_graph_path(path.clone()).expect("reload should work");
+    restored.set_active_task(Some(task.task_id.clone()));
+
+    let released = restored.lead_approve_review();
+    assert_eq!(released.len(), 1);
+    assert_eq!(released[0].id, blocked.id);
+    assert_eq!(released[0].task_id.as_deref(), Some(task.task_id.as_str()));
+
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]

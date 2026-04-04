@@ -73,6 +73,20 @@ fn gate_approve_with_no_buffered_returns_empty() {
     assert!(gate.approve("no-such-task").is_empty());
 }
 
+#[test]
+fn gate_snapshot_restore_round_trip_preserves_buffered_messages() {
+    let mut gate = ReviewGate::new();
+    gate.buffer_message("task-1", msg("lead", "coder", MessageStatus::Done));
+
+    let snapshot = gate.snapshot();
+
+    let mut restored = ReviewGate::new();
+    restored.restore(snapshot);
+
+    let released = restored.approve("task-1");
+    assert_eq!(released.len(), 1);
+}
+
 // ── Task flow: reviewer done sets PendingLeadApproval ──────
 
 #[test]

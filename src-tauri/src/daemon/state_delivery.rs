@@ -116,4 +116,95 @@ impl DaemonState {
         });
         ready
     }
+
+    fn buffered_message_matches_task_scope(
+        &self,
+        message: &BridgeMessage,
+        expected_task_id: Option<&str>,
+    ) -> bool {
+        // Phase 1: validate the task boundary itself. When we know which task a
+        // message should belong to, reject mismatched task ids early.
+        if let Some(task_id) = expected_task_id {
+            if self.task_graph.get_task(task_id).is_none() {
+                return false;
+            }
+            if let Some(message_task_id) = message.task_id.as_deref() {
+                if message_task_id != task_id {
+                    return false;
+                }
+            }
+        }
+
+        if let Some(task_id) = message.task_id.as_deref() {
+            if self.task_graph.get_task(task_id).is_none() {
+                return false;
+            }
+        }
+
+        // Phase 2: if the message carries a session id, that session must still
+        // exist and remain attached to the same task after hydration.
+        if let Some(session_id) = message.session_id.as_deref() {
+            let Some(session) = self.task_graph.get_session(session_id) else {
+                return false;
+            };
+            if let Some(task_id) = message.task_id.as_deref() {
+                if session.task_id != task_id {
+                    return false;
+                }
+            }
+            if let Some(expected) = expected_task_id {
+                if session.task_id != expected {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    pub(crate) fn persisted_buffered_messages(&self) -> Vec<BridgeMessage> {
+        self.buffered_messages.clone()
+    }
+
+    pub(crate) fn restore_persisted_buffered_messages(&mut self, messages: Vec<BridgeMessage>) {
+        let original_len = messages.len();
+        self.buffered_messages = messages
+            .into_iter()
+            .filter(|message| self.buffered_message_matches_task_scope(message, None))
+            .collect();
+        let dropped = original_len.saturating_sub(self.buffered_messages.len());
+        if dropped > 0 {
+            eprintln!(
+                "[Daemon] dropped {dropped} persisted buffered messages with invalid task/session bindings"
+            );
+        }
+    }
+
+    pub(crate) fn restore_review_gate_snapshot(
+        &mut self,
+        mut snapshot: crate::daemon::orchestrator::review_gate::ReviewGateSnapshot,
+    ) {
+        let original_tasks = snapshot.blocked.len();
+        let original_messages: usize = snapshot.blocked.values().map(|messages| messages.len()).sum();
+        snapshot.blocked.retain(|task_id, messages| {
+            if self.task_graph.get_task(task_id).is_none() {
+                return false;
+            }
+            // Inner retain prunes invalid persisted messages before deciding
+            // whether the task-level review gate entry should survive restore.
+            messages.retain(|message| {
+                self.buffered_message_matches_task_scope(message, Some(task_id.as_str()))
+            });
+            !messages.is_empty()
+        });
+        let restored_messages: usize = snapshot.blocked.values().map(|messages| messages.len()).sum();
+        let dropped_messages = original_messages.saturating_sub(restored_messages);
+        let dropped_tasks = original_tasks.saturating_sub(snapshot.blocked.len());
+        if dropped_messages > 0 || dropped_tasks > 0 {
+            eprintln!(
+                "[Daemon] dropped {dropped_messages} persisted review-gate messages across {dropped_tasks} invalid task buckets"
+            );
+        }
+        self.review_gate.restore(snapshot);
+    }
 }

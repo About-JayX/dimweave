@@ -8,7 +8,7 @@ use crate::daemon::{
         RuntimeHealthStatus, ToAgent,
     },
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
 pub const PERMISSION_TTL_MS: u64 = 10 * 60 * 1000;
@@ -111,30 +111,12 @@ impl DaemonState {
     pub fn new() -> Self {
         Self::default()
     }
-
-    /// Create with task graph loaded from the given path.
-    pub fn with_task_graph_path(path: PathBuf) -> anyhow::Result<Self> {
-        Ok(Self {
-            task_graph: TaskGraphStore::load(&path)?,
-            ..Self::default()
-        })
-    }
-
-    /// Persist task graph to disk (no-op if no path configured).
-    pub fn save_task_graph(&self) -> anyhow::Result<()> {
-        self.task_graph.save()
-    }
-
-    /// Best-effort auto-save after mutations.
-    pub(crate) fn auto_save_task_graph(&self) {
-        if let Err(e) = self.task_graph.save() {
-            eprintln!("[Daemon] task graph auto-save failed: {e}");
-        }
-    }
 }
 
 #[path = "state_delivery.rs"]
 mod state_delivery;
+#[path = "state_persistence.rs"]
+mod state_persistence;
 #[path = "state_permission.rs"]
 mod state_permission;
 #[path = "state_runtime.rs"]
