@@ -73,11 +73,11 @@
 - `src/components/ClaudePanel/index.tsx`
   - Remove local `cwd` ownership and folder picker usage
 - `src/components/ClaudePanel/ClaudeConfigRows.tsx`
-  - Convert project row to read-only display
+  - Remove duplicate project-path display from the advanced panel once workspace ownership is unified at the shell level
 - `src/components/AgentStatus/CodexPanel.tsx`
   - Remove local `cwd` ownership and folder picker usage
 - `src/components/AgentStatus/CodexConfigRows.tsx`
-  - Convert project row to read-only display
+  - Remove duplicate project-path display from the advanced panel once workspace ownership is unified at the shell level
 - `src/components/AgentStatus/provider-session-view-model.ts`
   - Remove provider-session `cwd` fallback from workspace ownership and history scoping
 - `tests/provider-session-view-model.test.ts`
@@ -91,6 +91,14 @@
 | Task 2 | `44e0cd29` | Done | Blocking entry overlay MVP |
 | Task 3 | `6c197d52` | Done | Top-right switcher + task start flow |
 | Task 4 | `619162ce` | Done | Agent panel cleanup + regressions |
+
+## Follow-Up Log
+
+| Date | Commit | Scope | Notes |
+|------|--------|-------|-------|
+| 2026-04-04 | `9bf22390` | Verification polish | Added overlay branding, explicit `Continue` enablement coverage, fresh-task regression coverage, and synced the plan's final verification state. |
+| 2026-04-04 | `a5fd9b5a` | Agent panel UI cleanup | Removed duplicate project-path rows from Claude/Codex advanced panels now that workspace ownership is shell-level. |
+| 2026-04-04 | `e65832bb` | Recent selection styling | Restored visible selected-state styling for recent workspace entries in the startup overlay and top-right switcher. |
 
 ### Task 1: Workspace Selection State Helpers
 
@@ -591,4 +599,12 @@ Update `## Commit Log` with the real commit hash and mark Task 4 as done.
 - [ ] Confirm the entry overlay appears when there is no active task.
 - [x] Confirm selecting either a picked folder or a recent workspace enables `Continue`.
 - [x] Confirm top-right workspace switching creates a fresh task context.
-- [x] Confirm Claude/Codex advanced panels no longer expose independent project pickers.
+- [x] Confirm Claude/Codex advanced panels no longer expose independent project pickers or duplicate project paths.
+- [x] Confirm recent workspace entries render a visible selected state in both the startup overlay and the top-right switcher.
+
+## Runtime Notes
+
+- `npm run tauri dev` was re-run after the follow-up fixes; Vite served at `http://localhost:1420/` and the daemon control server reported `ws://127.0.0.1:4502/ws`.
+- Workspace switching remains available from the top-right switcher even after Claude or Codex connects.
+- Switching workspaces creates a fresh task context and re-scopes future history/loading to the new active task workspace.
+- Existing live Claude/Codex provider connections do not auto-migrate to the new workspace; switching is task-scoped, not session hot-swap.
