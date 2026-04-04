@@ -18,6 +18,7 @@ import type { RadiusMode } from "./use-border-radius";
 
 interface ShellContextBarProps {
   activeItem: ShellNavItem | null;
+  approvalCount: number;
   messageCount: number;
   runtimeHealth: RuntimeHealthInfo | null;
   themeMode: ThemeMode;
@@ -50,6 +51,7 @@ const THEME_OPTIONS: Array<{
 
 export function ShellContextBar({
   activeItem,
+  approvalCount,
   messageCount,
   runtimeHealth,
   themeMode,
@@ -87,6 +89,11 @@ export function ShellContextBar({
           >
             <span className="sr-only">{label}</span>
             <Icon className="size-4" />
+            {id === "approvals" && approvalCount > 0 ? (
+              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-500 px-1 text-[9px] font-semibold leading-4 text-background">
+                {approvalCount > 9 ? "9+" : approvalCount}
+              </span>
+            ) : null}
             {activeItem === id && (
               <span className="absolute -left-2 h-5 w-0.5 rounded-full radius-keep bg-primary" />
             )}

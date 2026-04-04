@@ -5,6 +5,11 @@ import type {
   SessionInfo,
   TaskInfo,
 } from "@/stores/task-store/types";
+export {
+  buildArtifactDetailModel,
+  type ArtifactDetailModel,
+  type ArtifactDetailPayload,
+} from "./artifact-detail";
 
 export type BadgeTone = "warning" | "progress" | "neutral";
 

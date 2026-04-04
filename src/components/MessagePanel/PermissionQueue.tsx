@@ -1,16 +1,37 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { PermissionBehavior, PermissionPrompt } from "@/types";
+import { useBridgeStore } from "@/stores/bridge-store";
+import type {
+  PermissionBehavior,
+  PermissionPrompt,
+  PermissionResolutionError,
+} from "@/types";
 
 interface PermissionQueueProps {
   prompts: PermissionPrompt[];
   onResolve: (requestId: string, behavior: PermissionBehavior) => Promise<void>;
 }
 
-export function PermissionQueue({
+interface PermissionQueueViewProps extends PermissionQueueProps {
+  error: PermissionResolutionError | null;
+}
+
+export function PermissionQueue({ prompts, onResolve }: PermissionQueueProps) {
+  const permissionError = useBridgeStore((s) => s.permissionError);
+  return (
+    <PermissionQueueView
+      prompts={prompts}
+      error={permissionError}
+      onResolve={onResolve}
+    />
+  );
+}
+
+export function PermissionQueueView({
   prompts,
+  error,
   onResolve,
-}: PermissionQueueProps) {
+}: PermissionQueueViewProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const handleResolve = async (
@@ -35,6 +56,12 @@ export function PermissionQueue({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      {error ? (
+        <div className="rounded-xl border border-destructive/35 bg-destructive/8 px-3 py-2 text-[12px] text-destructive">
+          <div className="font-medium">Last action failed</div>
+          <div className="mt-1 text-[11px] text-destructive/85">{error.message}</div>
+        </div>
+      ) : null}
       {prompts.map((prompt) => {
         const busy = busyId === prompt.requestId;
         return (

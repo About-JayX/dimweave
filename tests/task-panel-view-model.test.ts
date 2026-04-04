@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildArtifactDetailModel,
   buildArtifactTimeline,
   buildHistoryPickerModel,
   buildSessionTreeRows,
@@ -172,6 +173,66 @@ describe("buildArtifactTimeline", () => {
       "art_plan",
     ]);
     expect(timeline[0]?.sessionTitle).toBe("Coder implementation");
+  });
+});
+
+describe("buildArtifactDetailModel", () => {
+  test("prefers readable local preview content when available", () => {
+    const item = buildArtifactTimeline(
+      [
+        {
+          artifactId: "art_diff",
+          taskId: "task_1",
+          sessionId: "sess_coder_b",
+          kind: "diff",
+          title: "Patch v2",
+          contentRef: "/tmp/patch.diff",
+          createdAt: 200,
+        },
+      ],
+      [makeSession("sess_coder_b", "coder", { title: "Coder implementation" })],
+    )[0];
+
+    const model = buildArtifactDetailModel(item!, {
+      reference: "/tmp/patch.diff",
+      fileName: "patch.diff",
+      exists: true,
+      preview: "diff --git a/file b/file",
+      truncated: true,
+    });
+
+    expect(model?.previewAvailable).toBe(true);
+    expect(model?.body).toContain("diff --git");
+    expect(model?.meta).toContain("Preview truncated");
+  });
+
+  test("falls back to reference metadata when preview is unavailable", () => {
+    const item = buildArtifactTimeline(
+      [
+        {
+          artifactId: "art_plan",
+          taskId: "task_1",
+          sessionId: "sess_lead",
+          kind: "plan",
+          title: "Execution plan",
+          contentRef: "artifact://plan",
+          createdAt: 100,
+        },
+      ],
+      [makeSession("sess_lead", "lead", { title: "Lead planning" })],
+    )[0];
+
+    const model = buildArtifactDetailModel(item!, {
+      reference: "artifact://plan",
+      fileName: null,
+      exists: false,
+      preview: null,
+      truncated: false,
+    });
+
+    expect(model?.previewAvailable).toBe(false);
+    expect(model?.body).toContain("Preview unavailable");
+    expect(model?.meta).toContain("artifact://plan");
   });
 });
 

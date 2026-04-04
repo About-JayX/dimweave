@@ -48,6 +48,11 @@ export interface PermissionPrompt {
   createdAt: number;
 }
 
+export interface PermissionResolutionError {
+  requestId: string;
+  message: string;
+}
+
 export type AgentStatus = "disconnected" | "connecting" | "connected" | "error";
 
 export interface AgentInfo {

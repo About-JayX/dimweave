@@ -29,6 +29,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     },
     terminalLines: [],
     permissionPrompts: [],
+    permissionError: null,
     runtimeHealth: null,
     claudeNeedsAttention: false,
     claudeRole: "lead",
@@ -66,13 +67,17 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
 
     respondToPermission: async (requestId, behavior) => {
       try {
+        set({ permissionError: null });
         await invoke("daemon_respond_permission", { requestId, behavior });
         set((s) => ({
           permissionPrompts: s.permissionPrompts.filter(
             (prompt) => prompt.requestId !== requestId,
           ),
+          permissionError:
+            s.permissionError?.requestId === requestId ? null : s.permissionError,
         }));
       } catch (error) {
+        const message = String(error);
         set((s) => ({
           terminalLines: [
             ...s.terminalLines.slice(-200),
@@ -80,10 +85,14 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
               id: nextLogId(),
               agent: "system",
               kind: "error",
-              line: `[Permission] ${String(error)}`,
+              line: `[Permission] ${message}`,
               timestamp: Date.now(),
             },
           ],
+          permissionError: {
+            requestId,
+            message,
+          },
         }));
         throw error;
       }

@@ -30,6 +30,7 @@ describe("ShellContextBar", () => {
     const html = renderToStaticMarkup(
       <ShellContextBar
         activeItem={null}
+        approvalCount={0}
         messageCount={0}
         runtimeHealth={null}
         themeMode="auto"
@@ -54,6 +55,7 @@ describe("ShellContextBar", () => {
     const html = renderToStaticMarkup(
       <ShellContextBar
         activeItem={null}
+        approvalCount={0}
         messageCount={0}
         runtimeHealth={{
           level: "error",
@@ -78,6 +80,7 @@ describe("ShellContextBar", () => {
     const degraded = renderToStaticMarkup(
       <ShellContextBar
         activeItem={null}
+        approvalCount={0}
         messageCount={0}
         runtimeHealth={{
           level: "warning",
@@ -94,6 +97,7 @@ describe("ShellContextBar", () => {
     const recovered = renderToStaticMarkup(
       <ShellContextBar
         activeItem={null}
+        approvalCount={0}
         messageCount={0}
         runtimeHealth={null}
         themeMode="auto"
@@ -106,5 +110,26 @@ describe("ShellContextBar", () => {
 
     expect(degraded).toContain("Runtime degraded");
     expect(recovered).not.toContain("Runtime degraded");
+  });
+
+  test("shows a pending approval badge on the approvals rail item", async () => {
+    installTauriStub();
+    const { ShellContextBar } = await import("./ShellContextBar");
+    const html = renderToStaticMarkup(
+      <ShellContextBar
+        activeItem={null}
+        approvalCount={3}
+        messageCount={0}
+        runtimeHealth={null}
+        themeMode="auto"
+        radiusMode="rounded"
+        onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
+      />,
+    );
+
+    expect(html).toContain("3");
+    expect(html).toContain("Open approvals");
   });
 });

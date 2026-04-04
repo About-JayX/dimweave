@@ -28,6 +28,21 @@ type BridgeSetter = (fn: (state: BridgeState) => Partial<BridgeState>) => void;
 
 type NextLogId = () => number;
 
+export function reducePermissionPrompt(
+  state: BridgeState,
+  payload: PermissionPromptPayload,
+): Partial<BridgeState> {
+  return {
+    permissionPrompts: [
+      ...state.permissionPrompts.filter(
+        (prompt) => prompt.requestId !== payload.requestId,
+      ),
+      payload,
+    ],
+    permissionError: null,
+  };
+}
+
 export function createBridgeListeners(
   set: BridgeSetter,
   nextLogId: NextLogId,
@@ -131,14 +146,7 @@ export function createBridgeListeners(
       set((s) => handleCodexStreamEvent(s, e.payload));
     }),
     listen<PermissionPromptPayload>("permission_prompt", (e) => {
-      set((s) => ({
-        permissionPrompts: [
-          ...s.permissionPrompts.filter(
-            (prompt) => prompt.requestId !== e.payload.requestId,
-          ),
-          e.payload,
-        ],
-      }));
+      set((s) => reducePermissionPrompt(s, e.payload));
     }),
     listen<RuntimeHealthPayload>("runtime_health", (e) => {
       set(() => ({

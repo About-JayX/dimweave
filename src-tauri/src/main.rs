@@ -2,6 +2,8 @@
 
 mod claude_cli;
 mod codex;
+mod commands_artifact;
+mod commands_history;
 mod commands;
 mod commands_task;
 mod daemon;
@@ -115,6 +117,7 @@ fn main() {
             pick_files,
             mcp::register_mcp,
             mcp::check_mcp_registered,
+            commands_artifact::daemon_get_artifact_detail,
             commands::oauth::codex_login,
             commands::oauth::codex_cancel_login,
             commands::oauth::codex_logout,
@@ -132,10 +135,10 @@ fn main() {
             commands_task::daemon_get_task_snapshot,
             commands_task::daemon_approve_review,
             commands_task::daemon_list_session_tree,
-            commands_task::daemon_list_history,
-            commands_task::daemon_list_provider_history,
-            commands_task::daemon_resume_session,
-            commands_task::daemon_attach_provider_history,
+            commands_history::daemon_list_history,
+            commands_history::daemon_list_provider_history,
+            commands_history::daemon_resume_session,
+            commands_history::daemon_attach_provider_history,
             commands::stop_claude,
             commands::daemon_launch_claude_sdk,
             commands::daemon_stop_claude_sdk,

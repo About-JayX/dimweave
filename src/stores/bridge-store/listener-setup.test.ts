@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
+import { reducePermissionPrompt } from "./listener-setup";
 import { handleCodexStreamEvent } from "./stream-reducers";
 import type { CodexStreamPayload } from "./listener-payloads";
 
@@ -10,6 +11,8 @@ function baseState(): BridgeState {
     agents: {},
     terminalLines: [],
     permissionPrompts: [],
+    permissionError: null,
+    runtimeHealth: null,
     claudeNeedsAttention: false,
     claudeRole: "lead",
     codexRole: "coder",
@@ -53,6 +56,35 @@ function applyCodexEvent(
 }
 
 describe("handleCodexStreamEvent", () => {
+  test("clears stale permission errors when a new prompt arrives", () => {
+    const state = baseState();
+    state.permissionError = {
+      requestId: "req_old",
+      message: "Previous approval failed",
+    };
+
+    const next = reducePermissionPrompt(state, {
+      requestId: "req_new",
+      toolName: "shell",
+      description: "Allow command",
+      inputPreview: "ls -la",
+      agent: "claude",
+      createdAt: 123,
+    });
+
+    expect(next.permissionError).toBeNull();
+    expect(next.permissionPrompts).toEqual([
+      {
+        requestId: "req_new",
+        toolName: "shell",
+        description: "Allow command",
+        inputPreview: "ls -la",
+        agent: "claude",
+        createdAt: 123,
+      },
+    ]);
+  });
+
   test("stores activity labels and clears stale command output", () => {
     const state = baseState();
     state.codexStream.commandOutput = "old output";
