@@ -67,6 +67,13 @@ describe("prepareMessageContent", () => {
     });
   });
 
+  test("keeps inline strong markdown on the markdown path for Claude role intros", () => {
+    expect(prepareMessageContent("你好！我是 **lead**（协调者），目前在线。")).toEqual({
+      cleaned: "你好！我是 **lead**（协调者），目前在线。",
+      renderMode: "markdown",
+    });
+  });
+
   test("strips escapes before deciding the render path", () => {
     expect(prepareMessageContent("\u001b[31mHello\u001b[0m")).toEqual({
       cleaned: "Hello",

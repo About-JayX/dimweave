@@ -2,7 +2,7 @@ import { Suspense, lazy, useMemo } from "react";
 import { stripEscapes } from "@/lib/strip-escapes";
 
 const MARKDOWN_SYNTAX_PATTERN =
-  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|>\s|\d+\.\s|```)|`[^`]+`|\[[^\]]+\]\([^)]+\)|^\|.+\|$/m;
+  /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|>\s|\d+\.\s|```)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|~~[^~\n]+?~~|^\|.+\|$/m;
 const LazyMessageMarkdownRenderer = lazy(async () => {
   const module = await import("./MessageMarkdownRenderer");
   return { default: module.MessageMarkdownRenderer };
