@@ -1,7 +1,7 @@
 use super::*;
 use crate::daemon::gui_task::{build_task_change_events, TaskUiEvent};
 use crate::daemon::orchestrator::task_flow;
-use crate::daemon::task_graph::types::ReviewStatus;
+use crate::daemon::task_graph::types::{Provider, ReviewStatus, SessionHandle};
 use crate::daemon::types::BridgeMessage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +23,87 @@ pub struct TaskFlowEffect {
 }
 
 impl DaemonState {
+    fn task_session_for_role<'a>(&'a self, task_id: &str, role: &str) -> Option<&'a SessionHandle> {
+        let task = self.task_graph.get_task(task_id)?;
+        let session_id = match role {
+            "lead" => task.lead_session_id.as_deref()?,
+            "coder" => task.current_coder_session_id.as_deref()?,
+            _ => return None,
+        };
+        self.task_graph.get_session(session_id)
+    }
+
+    fn bound_session_for_message<'a>(
+        &'a self,
+        message: &BridgeMessage,
+    ) -> Option<&'a SessionHandle> {
+        if let Some(session_id) = message.session_id.as_deref() {
+            return self.task_graph.get_session(session_id);
+        }
+
+        let task_id = message.task_id.as_deref()?;
+        self.task_session_for_role(task_id, &message.to)
+    }
+
+    fn agent_matches_bound_session(&self, agent: &str, session: &SessionHandle) -> bool {
+        let expected_provider = match agent {
+            "claude" => Provider::Claude,
+            "codex" => Provider::Codex,
+            _ => return false,
+        };
+        if session.provider != expected_provider {
+            return false;
+        }
+
+        match self.provider_connection(agent) {
+            Some(connection) => {
+                session.external_session_id.as_deref()
+                    == Some(connection.external_session_id.as_str())
+            }
+            None => session.external_session_id.is_none(),
+        }
+    }
+
+    pub fn role_has_compatible_online_agent(&self, role: &str) -> bool {
+        if role != "lead" && role != "coder" {
+            return (self.is_agent_online("claude") && self.claude_role == role)
+                || (self.is_agent_online("codex") && self.codex_role == role);
+        }
+
+        let Some(task_id) = self.active_task_id.as_deref() else {
+            return (self.is_agent_online("claude") && self.claude_role == role)
+                || (self.is_agent_online("codex") && self.codex_role == role);
+        };
+        let Some(session) = self.task_session_for_role(task_id, role) else {
+            return false;
+        };
+
+        (self.is_agent_online("claude")
+            && self.claude_role == role
+            && self.agent_matches_bound_session("claude", session))
+            || (self.is_agent_online("codex")
+                && self.codex_role == role
+                && self.agent_matches_bound_session("codex", session))
+    }
+
+    pub fn agent_matches_task_message(&self, agent: &str, message: &BridgeMessage) -> bool {
+        if message.to != "lead" && message.to != "coder" {
+            return true;
+        }
+
+        // Legacy/system messages without stamped task context still rely on
+        // plain role routing until every caller carries task/session ownership.
+        if message.session_id.is_none() && message.task_id.is_none() {
+            return true;
+        }
+
+        let Some(session) = self.bound_session_for_message(message) else {
+            return false;
+        };
+
+        self.agent_matches_bound_session(agent, session)
+    }
+
     pub fn set_active_task(&mut self, task_id: Option<String>) {
         self.active_task_id = task_id;
     }

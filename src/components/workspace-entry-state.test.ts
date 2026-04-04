@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  continueIntoSelectedWorkspace,
   loadRecentWorkspaces,
   pushRecentWorkspace,
   selectWorkspaceCandidate,
@@ -40,5 +41,22 @@ describe("loadRecentWorkspaces", () => {
   test("normalizes corrupted storage payloads safely", () => {
     expect(loadRecentWorkspaces("not-json")).toEqual([]);
     expect(loadRecentWorkspaces("{\"bad\":true}")).toEqual([]);
+  });
+});
+
+describe("continueIntoSelectedWorkspace", () => {
+  test("still starts a fresh task when the selected workspace matches the current one", async () => {
+    const started: string[] = [];
+
+    const nextRecent = await continueIntoSelectedWorkspace({
+      selected: recent("/repo-a"),
+      recentWorkspaces: ["/repo-b"],
+      startWorkspaceTask: async (workspace) => {
+        started.push(workspace);
+      },
+    });
+
+    expect(started).toEqual(["/repo-a"]);
+    expect(nextRecent).toEqual(["/repo-a", "/repo-b"]);
   });
 });

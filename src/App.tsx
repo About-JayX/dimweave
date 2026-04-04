@@ -21,8 +21,8 @@ import { useTheme } from "./components/use-theme";
 import { useBorderRadius } from "./components/use-border-radius";
 import { useCodexAccountStore } from "./stores/codex-account-store";
 import {
+  continueIntoSelectedWorkspace,
   loadRecentWorkspaces,
-  pushRecentWorkspace,
   selectWorkspaceCandidate,
   type WorkspaceCandidate,
 } from "./components/workspace-entry-state";
@@ -103,23 +103,16 @@ export default function App() {
   );
 
   const handleContinueIntoWorkspace = useCallback(async () => {
-    if (!selectedWorkspace) {
-      return;
-    }
-
-    if (selectedWorkspace.path === activeTask?.workspaceRoot) {
-      setSelectedWorkspace(null);
-      setWorkspaceActionError(null);
-      return;
-    }
-
     try {
       setWorkspaceActionError(null);
-      await startWorkspaceTask(selectedWorkspace.path);
-      const nextRecent = pushRecentWorkspace(
+      const nextRecent = await continueIntoSelectedWorkspace({
+        selected: selectedWorkspace,
         recentWorkspaces,
-        selectedWorkspace.path,
-      );
+        startWorkspaceTask,
+      });
+      if (!nextRecent) {
+        return;
+      }
       setRecentWorkspaces(nextRecent);
       try {
         localStorage.setItem(
@@ -132,7 +125,7 @@ export default function App() {
         error instanceof Error ? error.message : String(error),
       );
     }
-  }, [activeTask?.workspaceRoot, recentWorkspaces, selectedWorkspace, startWorkspaceTask]);
+  }, [recentWorkspaces, selectedWorkspace, startWorkspaceTask]);
 
   if (bootstrapError) {
     return <AppBootstrapGate status="error" message={bootstrapError} />;

@@ -79,17 +79,20 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
             }
             // Collect online candidates for the target role.
             // Prefer Claude SDK WS over bridge for Claude delivery.
-            let claude_sdk_tx = if claude_matches {
+            let claude_sdk_tx = if claude_matches && s.agent_matches_task_message("claude", &msg) {
                 s.claude_sdk_ws_tx.clone()
             } else {
                 None
             };
-            let claude_tx = if claude_matches && claude_sdk_tx.is_none() {
+            let claude_tx = if claude_matches
+                && claude_sdk_tx.is_none()
+                && s.agent_matches_task_message("claude", &msg)
+            {
                 s.attached_agents.get("claude").map(|a| a.tx.clone())
             } else {
                 None
             };
-            let codex_tx = if codex_matches {
+            let codex_tx = if codex_matches && s.agent_matches_task_message("codex", &msg) {
                 s.codex_inject_tx.clone()
             } else {
                 None

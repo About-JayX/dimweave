@@ -1,39 +1,29 @@
-import { useCallback, useRef, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { selectAnyAgentConnected } from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
-import { selectActiveTask } from "@/stores/task-store/selectors";
-import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
+import {
+  selectActiveTask,
+  selectActiveTaskSessions,
+} from "@/stores/task-store/selectors";
 import { getReviewBadge } from "@/components/TaskPanel/view-model";
-import { Send, Paperclip } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { hasMessagePayload } from "@/lib/message-payload";
-import { TargetPicker, type Target } from "./TargetPicker";
+import type { Target } from "./TargetPicker";
 import { AttachmentStrip } from "./AttachmentStrip";
 import { createAsyncUnlistenCleanup } from "./async-unlisten";
-import {
-  REPLY_INPUT_HEIGHT_STORAGE_KEY,
-  REPLY_INPUT_MIN_ROWS,
-  getReplyInputHeightBounds,
-  normalizeReplyInputMinHeight,
-  resolveDraggedReplyInputMinHeight,
-  resolveReplyInputHeight,
-  type ReplyInputHeightBounds,
-} from "./height";
+import { REPLY_INPUT_MIN_ROWS } from "./height";
+import { ReplyInputFooter } from "./Footer";
+import { getTaskSessionWarning } from "./task-session-guard";
+import { useReplyInputResizer } from "./use-reply-input-resizer";
 import { useAttachments } from "./use-attachments";
-
-function measureBaseTextareaHeight(el: HTMLTextAreaElement): number {
-  const style = getComputedStyle(el);
-  const lineHeight = parseFloat(style.lineHeight) || 20;
-  const paddingTop = parseFloat(style.paddingTop) || 0;
-  const paddingBottom = parseFloat(style.paddingBottom) || 0;
-  return REPLY_INPUT_MIN_ROWS * lineHeight + paddingTop + paddingBottom;
-}
 
 export function ReplyInput() {
   const connected = useBridgeStore(selectAnyAgentConnected);
+  const agents = useBridgeStore((s) => s.agents);
+  const claudeRole = useBridgeStore((s) => s.claudeRole);
+  const codexRole = useBridgeStore((s) => s.codexRole);
   const draft = useBridgeStore((s) => s.draft);
   const setDraft = useBridgeStore((s) => s.setDraft);
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
@@ -41,17 +31,25 @@ export function ReplyInput() {
   const [sendOnEnter, setSendOnEnter] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const composingRef = useRef(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const minHeightRef = useRef<number | null>(null);
-  const baseMinHeightRef = useRef<number | null>(null);
-  const dragFrameRef = useRef(0);
+  const { textareaRef, handleResizePointerDown } = useReplyInputResizer(draft);
   const activeTask = useTaskStore(selectActiveTask);
+  const activeTaskSessions = useTaskStore(selectActiveTaskSessions);
   const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
   const { attachments, addFiles, removeAt, clear } = useAttachments();
+  const taskSessionWarning = getTaskSessionWarning({
+    target,
+    activeTask,
+    sessions: activeTaskSessions,
+    agents,
+    claudeRole,
+    codexRole,
+  });
+  const canSend =
+    connected && !taskSessionWarning && hasMessagePayload(draft, attachments);
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
-    if (!hasMessagePayload(trimmed, attachments) || !connected) return;
+    if (!hasMessagePayload(trimmed, attachments) || !canSend) return;
     sendToCodex(
       trimmed,
       target,
@@ -59,7 +57,7 @@ export function ReplyInput() {
     );
     setDraft("");
     clear();
-  }, [draft, connected, sendToCodex, setDraft, target, attachments, clear]);
+  }, [attachments, canSend, clear, draft, sendToCodex, setDraft, target]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -83,86 +81,6 @@ export function ReplyInput() {
     [handleSend, sendOnEnter],
   );
 
-  const getHeightBounds = useCallback((): ReplyInputHeightBounds | null => {
-    const el = textareaRef.current;
-    if (!el) return null;
-    if (baseMinHeightRef.current == null) {
-      baseMinHeightRef.current = measureBaseTextareaHeight(el);
-    }
-    return getReplyInputHeightBounds(baseMinHeightRef.current, window.innerHeight);
-  }, []);
-
-  const persistMinHeight = useCallback((nextMinHeight: number) => {
-    minHeightRef.current = nextMinHeight;
-    try {
-      localStorage.setItem(REPLY_INPUT_HEIGHT_STORAGE_KEY, String(nextMinHeight));
-    } catch {}
-  }, []);
-
-  const syncTextareaHeight = useCallback(
-    (requestedMinHeight?: number) => {
-      const el = textareaRef.current;
-      const bounds = getHeightBounds();
-      if (!el || !bounds) return null;
-      const nextMinHeight = Math.min(
-        Math.max(requestedMinHeight ?? minHeightRef.current ?? bounds.min, bounds.min),
-        bounds.max,
-      );
-      el.style.height = "auto";
-      const { height, overflowY } = resolveReplyInputHeight(
-        el.scrollHeight,
-        nextMinHeight,
-        bounds,
-      );
-      el.style.minHeight = `${bounds.min}px`;
-      el.style.height = `${height}px`;
-      el.style.overflowY = overflowY;
-      return { bounds, nextMinHeight };
-    },
-    [getHeightBounds],
-  );
-
-  useEffect(() => {
-    const bounds = getHeightBounds();
-    if (!bounds) return;
-    const persistedMinHeight = normalizeReplyInputMinHeight(
-      (() => {
-        try {
-          return localStorage.getItem(REPLY_INPUT_HEIGHT_STORAGE_KEY);
-        } catch {
-          return null;
-        }
-      })(),
-      bounds,
-    );
-    minHeightRef.current = persistedMinHeight;
-    syncTextareaHeight(persistedMinHeight);
-  }, [getHeightBounds, syncTextareaHeight]);
-
-  useEffect(() => {
-    syncTextareaHeight();
-  }, [draft, syncTextareaHeight]);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const debounced = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        baseMinHeightRef.current = null;
-        const next = syncTextareaHeight();
-        if (!next) return;
-        if (next.nextMinHeight !== minHeightRef.current) {
-          persistMinHeight(next.nextMinHeight);
-        }
-      }, 100);
-    };
-    window.addEventListener("resize", debounced);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", debounced);
-    };
-  }, [persistMinHeight, syncTextareaHeight]);
-
   const handlePickFiles = useCallback(async () => {
     const paths = await invoke<string[] | null>("pick_files");
     if (paths) addFiles(paths);
@@ -182,73 +100,6 @@ export function ReplyInput() {
       }),
     );
   }, []);
-
-  const handleResizePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      const bounds = getHeightBounds();
-      if (!bounds) return;
-      const startMinHeight = minHeightRef.current ?? bounds.min;
-      const startY = event.clientY;
-
-      const flushDragHeight = (nextMinHeight: number) => {
-        if (dragFrameRef.current) return;
-        dragFrameRef.current = requestAnimationFrame(() => {
-          dragFrameRef.current = 0;
-          syncTextareaHeight(nextMinHeight);
-        });
-      };
-
-      const finish = (nextMinHeight: number) => {
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-        document.removeEventListener("pointercancel", onCancel);
-        document.body.style.userSelect = "";
-        if (dragFrameRef.current) {
-          cancelAnimationFrame(dragFrameRef.current);
-          dragFrameRef.current = 0;
-        }
-        const next = syncTextareaHeight(nextMinHeight);
-        if (!next) return;
-        persistMinHeight(next.nextMinHeight);
-      };
-
-      const onMove = (nextEvent: PointerEvent) => {
-        const nextBounds = getHeightBounds();
-        if (!nextBounds) return;
-        const nextMinHeight = resolveDraggedReplyInputMinHeight(
-          startMinHeight,
-          startY,
-          nextEvent.clientY,
-          nextBounds,
-        );
-        flushDragHeight(nextMinHeight);
-      };
-
-      const onUp = (nextEvent: PointerEvent) => {
-        const nextBounds = getHeightBounds();
-        if (!nextBounds) return finish(startMinHeight);
-        finish(
-          resolveDraggedReplyInputMinHeight(
-            startMinHeight,
-            startY,
-            nextEvent.clientY,
-            nextBounds,
-          ),
-        );
-      };
-
-      const onCancel = () => {
-        finish(startMinHeight);
-      };
-
-      document.body.style.userSelect = "none";
-      document.addEventListener("pointermove", onMove);
-      document.addEventListener("pointerup", onUp);
-      document.addEventListener("pointercancel", onCancel);
-    },
-    [getHeightBounds, persistMinHeight, syncTextareaHeight],
-  );
 
   const isMac =
     typeof navigator !== "undefined" &&
@@ -289,57 +140,20 @@ export function ReplyInput() {
 
         <AttachmentStrip attachments={attachments} onRemove={removeAt} />
 
-        <div className="flex items-center justify-between gap-2 border-t border-border/35 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <TargetPicker target={target} setTarget={setTarget} />
-            <button
-              onClick={handlePickFiles}
-              className="flex size-7 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-              title="Attach files"
-            >
-              <Paperclip className="size-3.5" />
-            </button>
-            {activeTask ? (
-              <span className="truncate text-[10px] text-foreground/80">
-                {activeTask.title}
-              </span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/55">
-                No active task
-              </span>
-            )}
-            {activeTask && reviewBadge && (
-              <ReviewGateBadge badge={reviewBadge} />
-            )}
-            {!connected && (
-              <span className="rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
-                Disconnected
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setSendOnEnter((v) => !v)}
-              className="rounded-full border border-border/35 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title={
-                sendOnEnter
-                  ? "Click to switch: ⌘+Enter to send"
-                  : "Click to switch: Enter to send"
-              }
-            >
-              {sendOnEnter ? "Enter ↵" : `${isMac ? "⌘" : "Ctrl"}+Enter`}
-            </button>
-            <Button
-              size="sm"
-              disabled={!connected || !hasMessagePayload(draft, attachments)}
-              onClick={handleSend}
-              className="h-7 gap-1.5 rounded-full px-3 text-[11px]"
-            >
-              <Send className="size-3" />
-              Send
-            </Button>
-          </div>
-        </div>
+        <ReplyInputFooter
+          target={target}
+          setTarget={setTarget}
+          onPickFiles={handlePickFiles}
+          activeTaskTitle={activeTask?.title ?? null}
+          reviewBadge={reviewBadge}
+          taskSessionWarning={taskSessionWarning}
+          connected={connected}
+          sendOnEnter={sendOnEnter}
+          onToggleSendOnEnter={() => setSendOnEnter((value) => !value)}
+          isMac={isMac}
+          canSend={canSend}
+          onSend={handleSend}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,9 @@
 use super::*;
-use crate::daemon::{state::DaemonState, types::BridgeMessage};
+use crate::daemon::{
+    state::DaemonState,
+    task_graph::types::{CreateSessionParams, Provider, SessionRole},
+    types::{BridgeMessage, ProviderConnectionMode, ProviderConnectionState},
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -124,4 +128,63 @@ async fn route_to_live_claude_when_offline_codex_shares_role() {
     );
     assert!(claude_rx.try_recv().is_ok());
     assert!(state.read().await.buffered_messages.is_empty());
+}
+
+#[tokio::test]
+async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not_match() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (claude_tx, mut claude_rx) = tokio::sync::mpsc::channel(8);
+    let (task_id, lead_session_id) = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/repo-b", "repo-b");
+        s.active_task_id = Some(task.task_id.clone());
+        let lead = s.task_graph.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            cwd: "/repo-b",
+            title: "Lead",
+        });
+        s.task_graph
+            .set_lead_session(&task.task_id, &lead.session_id);
+        s.task_graph
+            .set_external_session_id(&lead.session_id, "claude_current");
+        s.claude_role = "lead".into();
+        s.attached_agents.insert(
+            "claude".into(),
+            crate::daemon::state::AgentSender::new(claude_tx, 0),
+        );
+        s.set_provider_connection(
+            "claude",
+            ProviderConnectionState {
+                provider: Provider::Claude,
+                external_session_id: "claude_stale".into(),
+                cwd: "/repo-a".into(),
+                connection_mode: ProviderConnectionMode::Resumed,
+            },
+        );
+        (task.task_id, lead.session_id)
+    };
+
+    let msg = BridgeMessage {
+        id: "stale-session-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "lead".into(),
+        content: "route only to the current task".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: Some(lead_session_id),
+        sender_agent_id: None,
+        attachments: None,
+    };
+
+    let result = route_message_inner(&state, msg).await;
+    assert!(matches!(result, RouteResult::Buffered));
+    assert!(claude_rx.try_recv().is_err());
+    assert_eq!(state.read().await.buffered_messages.len(), 1);
 }

@@ -64,18 +64,24 @@ pub fn resolve_user_targets(state: &DaemonState, target: &str) -> Vec<String> {
     let mut targets = Vec::with_capacity(2);
     let claude_online = state.is_agent_online("claude");
     let codex_online = state.is_agent_online("codex");
-    if claude_online && state.claude_role != "user" {
+    if claude_online
+        && state.claude_role != "user"
+        && state.role_has_compatible_online_agent(&state.claude_role)
+    {
         targets.push(state.claude_role.clone());
     }
-    if codex_online && state.codex_role != "user" && !targets.contains(&state.codex_role) {
+    if codex_online
+        && state.codex_role != "user"
+        && state.role_has_compatible_online_agent(&state.codex_role)
+        && !targets.contains(&state.codex_role)
+    {
         targets.push(state.codex_role.clone());
     }
     targets
 }
 
 fn role_is_online(state: &DaemonState, role: &str) -> bool {
-    (state.is_agent_online("claude") && state.claude_role == role)
-        || (state.is_agent_online("codex") && state.codex_role == role)
+    state.role_has_compatible_online_agent(role)
 }
 
 fn build_user_message(
@@ -109,6 +115,9 @@ fn build_user_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::daemon::state::AgentSender;
+    use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
+    use crate::daemon::types::{ProviderConnectionMode, ProviderConnectionState, ToAgent};
 
     fn file_attachment() -> Attachment {
         Attachment {
@@ -121,8 +130,49 @@ mod tests {
 
     #[test]
     fn attachments_only_user_input_counts_as_payload() {
-        assert!(has_user_input_payload("   \n\t", &Some(vec![file_attachment()])));
+        assert!(has_user_input_payload(
+            "   \n\t",
+            &Some(vec![file_attachment()])
+        ));
         assert!(!has_user_input_payload("   \n\t", &None));
         assert!(!has_user_input_payload("   \n\t", &Some(vec![])));
+    }
+
+    #[test]
+    fn auto_target_ignores_online_agent_bound_to_another_task_session() {
+        let mut state = DaemonState::new();
+        let task = state.task_graph.create_task("/repo-b", "repo-b");
+        state.active_task_id = Some(task.task_id.clone());
+        let lead = state.task_graph.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            cwd: "/repo-b",
+            title: "Lead",
+        });
+        state
+            .task_graph
+            .set_lead_session(&task.task_id, &lead.session_id);
+        state
+            .task_graph
+            .set_external_session_id(&lead.session_id, "claude_current");
+
+        let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+        state
+            .attached_agents
+            .insert("claude".into(), AgentSender::new(claude_tx, 0));
+        state.claude_role = "lead".into();
+        state.set_provider_connection(
+            "claude",
+            ProviderConnectionState {
+                provider: Provider::Claude,
+                external_session_id: "claude_stale".into(),
+                cwd: "/repo-a".into(),
+                connection_mode: ProviderConnectionMode::Resumed,
+            },
+        );
+
+        assert!(resolve_user_targets(&state, "auto").is_empty());
     }
 }
