@@ -430,4 +430,28 @@ describe("createStartWorkspaceTaskAction", () => {
     expect(state.activeTaskId).toBe("t2");
     expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
   });
+
+  test("creates a fresh task context instead of overwriting the current task", async () => {
+    const currentTask = makeTask("t1", "repo-a");
+    const nextTask = { ...makeTask("t2", "repo-b"), workspaceRoot: "/repo-b" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      activeTaskId: currentTask.taskId,
+      tasks: { [currentTask.taskId]: currentTask },
+    };
+    const set = (fn: (current: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+
+    const startWorkspaceTask = createStartWorkspaceTaskAction(
+      set,
+      async () => nextTask,
+    );
+
+    await startWorkspaceTask("/repo-b");
+
+    expect(state.activeTaskId).toBe("t2");
+    expect(state.tasks.t1?.workspaceRoot).toBe("/ws");
+    expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
+  });
 });

@@ -7,6 +7,10 @@ function recent(path: string): WorkspaceCandidate {
   return { type: "recent", path };
 }
 
+function picked(path: string): WorkspaceCandidate {
+  return { type: "picked", path };
+}
+
 describe("WorkspaceEntryOverlay", () => {
   test("renders title, chooser, and disabled continue state", () => {
     const html = renderToStaticMarkup(
@@ -26,7 +30,7 @@ describe("WorkspaceEntryOverlay", () => {
     expect(html).toContain("disabled");
   });
 
-  test("renders the selected candidate state", () => {
+  test("renders the product name and selected candidate state", () => {
     const html = renderToStaticMarkup(
       <WorkspaceEntryOverlay
         selected={recent("/repo-a")}
@@ -38,7 +42,26 @@ describe("WorkspaceEntryOverlay", () => {
       />,
     );
 
+    expect(html).toContain(">Dimweave<");
     expect(html).toContain("/repo-a");
     expect(html).toContain("data-workspace-selected=\"true\"");
+    expect(html).not.toContain("disabled=\"\"");
+  });
+
+  test("enables continue when a folder was picked manually", () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceEntryOverlay
+        selected={picked("/repo-b")}
+        recentWorkspaces={[]}
+        actionError={null}
+        onChooseFolder={() => {}}
+        onSelectRecent={() => {}}
+        onContinue={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Selected workspace");
+    expect(html).toContain("/repo-b");
+    expect(html).not.toContain("disabled=\"\"");
   });
 });

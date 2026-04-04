@@ -90,7 +90,7 @@
 | Task 1 | `a415e5f6` | Done | Workspace selection helper + recent history model |
 | Task 2 | `44e0cd29` | Done | Blocking entry overlay MVP |
 | Task 3 | `6c197d52` | Done | Top-right switcher + task start flow |
-| Task 4 | _pending_ | Not started | Agent panel cleanup + regressions |
+| Task 4 | `619162ce` | Done | Agent panel cleanup + regressions |
 
 ### Task 1: Workspace Selection State Helpers
 
@@ -586,9 +586,9 @@ Update `## Commit Log` with the real commit hash and mark Task 4 as done.
 
 ## Final Verification
 
-- [ ] Run: `bun test`
-- [ ] Run: `npm run build`
+- [x] Run: `bun test`
+- [x] Run: `npm run build`
 - [ ] Confirm the entry overlay appears when there is no active task.
-- [ ] Confirm selecting either a picked folder or a recent workspace enables `Continue`.
-- [ ] Confirm top-right workspace switching creates a fresh task context.
-- [ ] Confirm Claude/Codex advanced panels no longer expose independent project pickers.
+- [x] Confirm selecting either a picked folder or a recent workspace enables `Continue`.
+- [x] Confirm top-right workspace switching creates a fresh task context.
+- [x] Confirm Claude/Codex advanced panels no longer expose independent project pickers.

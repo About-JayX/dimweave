@@ -29,6 +29,9 @@ export function WorkspaceEntryOverlay({
           alt="Dimweave logo"
           className="mx-auto h-14 w-14 object-contain"
         />
+        <div className="mt-5 text-center text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+          Dimweave
+        </div>
         <h1 className="mt-5 text-center text-3xl font-semibold">
           Choose your workspace
         </h1>
