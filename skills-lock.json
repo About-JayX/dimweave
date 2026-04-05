@@ -24,7 +24,7 @@
     "superpowers": {
       "source": "obra/superpowers",
       "sourceType": "github",
-      "computedHash": "94d036e1a2830bd892fc1de5c813ec2d3825fbcc8df75b056988adc5dba11b6b"
+      "computedHash": "f2693bfa7cbd4299ba19308c2ff29f2a72f83bb43ba9ea499383ac76dfe5759e"
     },
     "tailwind-css-patterns": {
       "source": "giuseppe-trisciuoglio/developer-kit",
