@@ -76,6 +76,12 @@ export function buildSessionTreeRows(
   sessions: SessionInfo[],
   task?: TaskInfo | null,
 ): SessionTreeRow[] {
+  const currentRootIds = task
+    ? [task.leadSessionId ?? null, task.currentCoderSessionId ?? null].filter(
+        (value, index, items): value is string =>
+          Boolean(value) && items.indexOf(value) === index,
+      )
+    : [];
   const children = new Map<string | null, SessionInfo[]>();
   for (const session of sessions) {
     const key = session.parentSessionId ?? null;
@@ -92,19 +98,38 @@ export function buildSessionTreeRows(
   }
 
   const rows: SessionTreeRow[] = [];
-  const visit = (parentId: string | null, depth: number) => {
-    for (const session of children.get(parentId) ?? []) {
+  const sessionsById = new Map(sessions.map((session) => [session.sessionId, session]));
+  const visited = new Set<string>();
+  const visit = (sessionId: string, depth: number) => {
+    if (visited.has(sessionId)) {
+      return;
+    }
+    const session = sessionsById.get(sessionId);
+    if (!session) {
+      return;
+    }
+    visited.add(sessionId);
       const reviewBadge =
         task?.currentCoderSessionId === session.sessionId &&
         session.role === "coder"
           ? getReviewBadge(task.reviewStatus)
           : null;
-      rows.push({ sessionId: session.sessionId, depth, session, reviewBadge });
-      visit(session.sessionId, depth + 1);
+    rows.push({ sessionId: session.sessionId, depth, session, reviewBadge });
+    for (const child of children.get(session.sessionId) ?? []) {
+      visit(child.sessionId, depth + 1);
     }
   };
 
-  visit(null, 0);
+  if (task) {
+    for (const rootId of currentRootIds) {
+      visit(rootId, 0);
+    }
+    return rows;
+  }
+
+  for (const session of children.get(null) ?? []) {
+    visit(session.sessionId, 0);
+  }
   return rows;
 }
 

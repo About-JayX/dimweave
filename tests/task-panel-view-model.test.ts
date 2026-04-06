@@ -97,6 +97,34 @@ describe("buildSessionTreeRows", () => {
     expect(rows[1]?.reviewBadge?.label).toBe("Pending Approval");
     expect(rows[1]?.reviewBadge?.tone).toBe("warning");
   });
+
+  test("shows only the sessions currently bound to the active task", () => {
+    const rows = buildSessionTreeRows(
+      [
+        makeSession("sess_lead", "lead"),
+        makeSession("sess_coder_b", "coder"),
+        makeSession("sess_old", "coder", {
+          parentSessionId: "sess_old_lead",
+          status: "paused",
+        }),
+      ],
+      makeTask(),
+    );
+
+    expect(rows.map((row) => row.sessionId)).toEqual([
+      "sess_lead",
+      "sess_coder_b",
+    ]);
+  });
+
+  test("returns no rows when the active task has no bound sessions", () => {
+    const rows = buildSessionTreeRows(
+      [makeSession("sess_lead", "lead"), makeSession("sess_coder_b", "coder")],
+      makeTask({ leadSessionId: null, currentCoderSessionId: null }),
+    );
+
+    expect(rows).toEqual([]);
+  });
 });
 
 describe("buildHistoryPickerModel", () => {

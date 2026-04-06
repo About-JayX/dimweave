@@ -1,6 +1,32 @@
 use super::*;
+use crate::daemon::task_graph::types::SessionStatus;
 
 impl DaemonState {
+    fn detach_provider_binding(&mut self, agent: &str) {
+        let connection = self.provider_connection(agent);
+        let Some(connection) = connection else {
+            return;
+        };
+        let Some(session) = self
+            .task_graph
+            .find_session_by_external_id(connection.provider, &connection.external_session_id)
+            .cloned()
+        else {
+            return;
+        };
+
+        let _ = self
+            .task_graph
+            .update_session_status(&session.session_id, SessionStatus::Paused);
+        let _ = self
+            .task_graph
+            .clear_lead_session_if_matches(&session.task_id, &session.session_id);
+        let _ = self
+            .task_graph
+            .clear_coder_session_if_matches(&session.task_id, &session.session_id);
+        self.auto_save_task_graph();
+    }
+
     pub fn begin_codex_launch(&mut self) -> u64 {
         self.codex_session_epoch = self.codex_session_epoch.wrapping_add(1);
         self.codex_session_epoch
@@ -9,7 +35,7 @@ impl DaemonState {
     pub fn invalidate_codex_session(&mut self) {
         self.begin_codex_launch();
         self.codex_inject_tx = None;
-        self.codex_connection = None;
+        self.clear_provider_connection("codex");
     }
 
     pub fn attach_codex_session_if_current(
@@ -29,7 +55,7 @@ impl DaemonState {
             return false;
         }
         self.codex_inject_tx = None;
-        self.codex_connection = None;
+        self.clear_provider_connection("codex");
         true
     }
 
@@ -104,7 +130,7 @@ impl DaemonState {
         self.claude_sdk_active_nonce = None;
         self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::Inactive;
         self.clear_claude_preview_batch();
-        self.claude_connection = None;
+        self.clear_provider_connection("claude");
     }
 
     pub fn invalidate_claude_sdk_session_if_current(&mut self, epoch: u64) -> bool {
@@ -182,6 +208,7 @@ impl DaemonState {
     }
 
     pub fn clear_provider_connection(&mut self, agent: &str) {
+        self.detach_provider_binding(agent);
         match agent {
             "claude" => self.claude_connection = None,
             "codex" => self.codex_connection = None,

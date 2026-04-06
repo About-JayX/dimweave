@@ -86,7 +86,7 @@ fn auto_excludes_user_role() {
 }
 
 #[test]
-fn auto_prefers_active_task_role_over_fanout() {
+fn auto_keeps_preferred_task_role_first_but_still_fanouts() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     s.set_active_task(Some(task.task_id.clone()));
@@ -141,11 +141,11 @@ fn auto_prefers_active_task_role_over_fanout() {
         },
     );
 
-    assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead"]);
+    assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead", "coder"]);
 
     s.task_graph
         .update_task_status(&task.task_id, TaskStatus::Implementing);
-    assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder"]);
+    assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder", "lead"]);
 }
 
 #[test]
@@ -206,5 +206,5 @@ fn auto_prefers_bound_claude_coder_for_active_task() {
         },
     );
 
-    assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder"]);
+    assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder", "lead"]);
 }

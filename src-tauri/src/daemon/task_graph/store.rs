@@ -93,6 +93,28 @@ impl TaskGraphStore {
         }
     }
 
+    pub fn clear_lead_session_if_matches(&mut self, task_id: &str, session_id: &str) -> bool {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            if task.lead_session_id.as_deref() == Some(session_id) {
+                task.lead_session_id = None;
+                task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn clear_coder_session_if_matches(&mut self, task_id: &str, session_id: &str) -> bool {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            if task.current_coder_session_id.as_deref() == Some(session_id) {
+                task.current_coder_session_id = None;
+                task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn update_task_review_status(
         &mut self,
         task_id: &str,

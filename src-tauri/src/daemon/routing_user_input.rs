@@ -56,17 +56,18 @@ pub fn resolve_user_targets(state: &DaemonState, target: &str) -> Vec<String> {
     if target != "auto" {
         return vec![target.to_string()];
     }
+    let mut targets = Vec::with_capacity(2);
     if let Some(preferred) = state.preferred_auto_target() {
         if role_is_online(state, &preferred) {
-            return vec![preferred];
+            targets.push(preferred);
         }
     }
-    let mut targets = Vec::with_capacity(2);
     let claude_online = state.is_agent_online("claude");
     let codex_online = state.is_agent_online("codex");
     if claude_online
         && state.claude_role != "user"
         && state.role_has_compatible_online_agent(&state.claude_role)
+        && !targets.contains(&state.claude_role)
     {
         targets.push(state.claude_role.clone());
     }

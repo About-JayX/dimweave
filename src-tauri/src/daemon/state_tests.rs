@@ -1,4 +1,5 @@
 use super::*;
+use crate::daemon::task_graph::types::CreateSessionParams;
 
 fn temp_state_path(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -170,6 +171,43 @@ fn status_snapshot_includes_provider_session_metadata() {
             .as_ref()
             .map(|session| session.connection_mode.as_str()),
         Some("new")
+    );
+}
+
+#[test]
+fn clearing_provider_connection_pauses_and_unbinds_active_task_session() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.active_task_id = Some(task.task_id.clone());
+    let lead = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Claude,
+        role: crate::daemon::task_graph::types::SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    s.task_graph.set_lead_session(&task.task_id, &lead.session_id);
+    s.task_graph
+        .set_external_session_id(&lead.session_id, "claude_current");
+    s.set_provider_connection(
+        "claude",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Claude,
+            external_session_id: "claude_current".into(),
+            cwd: "/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::Resumed,
+        },
+    );
+
+    s.clear_provider_connection("claude");
+
+    let updated_task = s.task_graph.get_task(&task.task_id).unwrap();
+    let updated_session = s.task_graph.get_session(&lead.session_id).unwrap();
+    assert!(updated_task.lead_session_id.is_none());
+    assert_eq!(
+        updated_session.status,
+        crate::daemon::task_graph::types::SessionStatus::Paused
     );
 }
 
