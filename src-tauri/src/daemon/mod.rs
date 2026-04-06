@@ -274,25 +274,7 @@ async fn attach_provider_history(
 
 /// Emit a full task context sync for the selected task.
 async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id: &str) {
-    let s = state.read().await;
-    let sess: Vec<_> = s
-        .task_graph
-        .sessions_for_task(task_id)
-        .into_iter()
-        .cloned()
-        .collect();
-    let arts: Vec<_> = s
-        .task_graph
-        .artifacts_for_task(task_id)
-        .into_iter()
-        .cloned()
-        .collect();
-    let events =
-        gui_task::build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts);
-    drop(s);
-    for event in events {
-        event.emit(app);
-    }
+    gui_task::emit_task_context_events(state, app, task_id).await;
 }
 
 pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {

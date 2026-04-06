@@ -132,6 +132,35 @@ pub fn build_task_context_events(
     events
 }
 
+/// Emit a full task-context sync to the frontend for the given task.
+///
+/// This is the single entry point for notifying the UI about session/artifact
+/// changes. Accessible from submodules (codex/, claude_sdk/, control/).
+pub async fn emit_task_context_events(
+    state: &crate::daemon::SharedState,
+    app: &AppHandle,
+    task_id: &str,
+) {
+    let s = state.read().await;
+    let sess: Vec<_> = s
+        .task_graph
+        .sessions_for_task(task_id)
+        .into_iter()
+        .cloned()
+        .collect();
+    let arts: Vec<_> = s
+        .task_graph
+        .artifacts_for_task(task_id)
+        .into_iter()
+        .cloned()
+        .collect();
+    let events = build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts);
+    drop(s);
+    for event in events {
+        event.emit(app);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
