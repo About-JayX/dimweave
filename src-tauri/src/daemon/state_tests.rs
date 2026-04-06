@@ -441,10 +441,75 @@ fn stale_codex_session_cleanup_cannot_clear_new_session() {
     let (current_tx, _current_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
 
     assert!(s.attach_codex_session_if_current(current_epoch, current_tx));
-    assert!(!s.clear_codex_session_if_current(stale_epoch));
+    assert!(s.clear_codex_session_if_current(stale_epoch).is_none());
     assert!(s.codex_inject_tx.is_some());
-    assert!(s.clear_codex_session_if_current(current_epoch));
+    // current epoch passes guard; no provider connection → returns None but inject_tx is cleared
+    let _ = s.clear_codex_session_if_current(current_epoch);
     assert!(s.codex_inject_tx.is_none());
+}
+
+#[test]
+fn clear_codex_session_if_current_returns_task_id() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.active_task_id = Some(task.task_id.clone());
+    let session = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        role: crate::daemon::task_graph::types::SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
+    });
+    s.task_graph
+        .set_coder_session(&task.task_id, &session.session_id);
+    s.task_graph
+        .set_external_session_id(&session.session_id, "thread_1");
+    s.set_provider_connection(
+        "codex",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Codex,
+            external_session_id: "thread_1".into(),
+            cwd: "/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+        },
+    );
+    let epoch = s.begin_codex_launch();
+
+    let result = s.clear_codex_session_if_current(epoch);
+    assert_eq!(result, Some(task.task_id));
+}
+
+#[test]
+fn invalidate_claude_sdk_session_if_current_returns_task_id() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.active_task_id = Some(task.task_id.clone());
+    let session = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Claude,
+        role: crate::daemon::task_graph::types::SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    s.task_graph
+        .set_lead_session(&task.task_id, &session.session_id);
+    s.task_graph
+        .set_external_session_id(&session.session_id, "claude_sess_1");
+    s.set_provider_connection(
+        "claude",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Claude,
+            external_session_id: "claude_sess_1".into(),
+            cwd: "/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+        },
+    );
+    let epoch = s.begin_claude_sdk_launch("nonce".into());
+
+    let result = s.invalidate_claude_sdk_session_if_current(epoch);
+    assert_eq!(result, Some(task.task_id));
 }
 
 #[test]

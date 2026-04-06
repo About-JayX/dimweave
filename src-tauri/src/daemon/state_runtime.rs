@@ -45,13 +45,12 @@ impl DaemonState {
         true
     }
 
-    pub fn clear_codex_session_if_current(&mut self, epoch: u64) -> bool {
+    pub fn clear_codex_session_if_current(&mut self, epoch: u64) -> Option<String> {
         if self.codex_session_epoch != epoch {
-            return false;
+            return None;
         }
         self.codex_inject_tx = None;
-        self.clear_provider_connection("codex");
-        true
+        self.clear_provider_connection("codex")
     }
 
     fn advance_claude_sdk_epoch(&mut self) -> u64 {
@@ -128,12 +127,11 @@ impl DaemonState {
         self.clear_provider_connection("claude")
     }
 
-    pub fn invalidate_claude_sdk_session_if_current(&mut self, epoch: u64) -> bool {
+    pub fn invalidate_claude_sdk_session_if_current(&mut self, epoch: u64) -> Option<String> {
         if self.claude_sdk_session_epoch != epoch {
-            return false;
+            return None;
         }
-        self.invalidate_claude_sdk_session();
-        true
+        self.invalidate_claude_sdk_session()
     }
 
     pub fn append_claude_preview_delta(&mut self, text: &str) -> bool {
