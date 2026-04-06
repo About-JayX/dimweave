@@ -9,6 +9,7 @@ pub(crate) fn emit_route_side_effects(
     app: &AppHandle,
     msg: &BridgeMessage,
     result: &RouteResult,
+    buffer_reason: Option<&'static str>,
     emit_claude_thinking: bool,
     display_in_gui: bool,
 ) {
@@ -39,7 +40,7 @@ pub(crate) fn emit_route_side_effects(
             gui::emit_system_log(
                 app,
                 "warn",
-                &format!("[Route] {} offline, buffered", msg.to),
+                &buffered_route_message(&msg.to, buffer_reason),
             );
         }
         RouteResult::Dropped => {
@@ -54,6 +55,19 @@ pub(crate) fn emit_route_side_effects(
             gui::emit_system_log(app, "warn", &reason);
         }
         RouteResult::ToGui => {}
+    }
+}
+
+pub(crate) fn buffered_route_message(to: &str, buffer_reason: Option<&'static str>) -> String {
+    match buffer_reason {
+        Some("review_gate") => format!("[Route] {to} blocked by review gate"),
+        Some("target_session_missing") => {
+            format!("[Route] {to} has no bound session in the active task, buffered")
+        }
+        Some("task_session_mismatch") => {
+            format!("[Route] {to} does not match the active task session, buffered")
+        }
+        _ => format!("[Route] {to} offline, buffered"),
     }
 }
 

@@ -19,6 +19,7 @@ async fn route_message_with_display(
         app,
         &msg,
         &outcome.result,
+        outcome.buffer_reason,
         outcome.emit_claude_thinking,
         display_in_gui,
     );

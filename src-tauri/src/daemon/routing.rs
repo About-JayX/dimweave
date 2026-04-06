@@ -22,6 +22,7 @@ pub enum RouteResult {
 struct RouteOutcome {
     result: RouteResult,
     emit_claude_thinking: bool,
+    buffer_reason: Option<&'static str>,
 }
 
 async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) -> RouteOutcome {
@@ -33,6 +34,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         return RouteOutcome {
             result: RouteResult::Buffered,
             emit_claude_thinking: false,
+            buffer_reason: decision.buffer_reason,
         };
     }
 
@@ -40,6 +42,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         return RouteOutcome {
             result: RouteResult::ToGui,
             emit_claude_thinking: false,
+            buffer_reason: None,
         };
     }
 
@@ -67,6 +70,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 return RouteOutcome {
                     result: RouteResult::Dropped,
                     emit_claude_thinking: false,
+                    buffer_reason: None,
                 };
             }
         } else {
@@ -79,6 +83,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 return RouteOutcome {
                     result: RouteResult::Dropped,
                     emit_claude_thinking: false,
+                    buffer_reason: None,
                 };
             }
             // Collect online candidates for the target role.
@@ -131,12 +136,14 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 RouteOutcome {
                     result: RouteResult::Delivered,
                     emit_claude_thinking,
+                    buffer_reason: None,
                 }
             } else {
                 state.write().await.buffer_message(msg);
                 RouteOutcome {
                     result: RouteResult::Buffered,
                     emit_claude_thinking: false,
+                    buffer_reason: Some("target_agent_offline"),
                 }
             }
         }
@@ -147,12 +154,14 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 RouteOutcome {
                     result: RouteResult::Delivered,
                     emit_claude_thinking,
+                    buffer_reason: None,
                 }
             } else {
                 state.write().await.buffer_message(msg);
                 RouteOutcome {
                     result: RouteResult::Buffered,
                     emit_claude_thinking: false,
+                    buffer_reason: Some("target_agent_offline"),
                 }
             }
         }
@@ -161,20 +170,27 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 RouteOutcome {
                     result: RouteResult::Delivered,
                     emit_claude_thinking: false,
+                    buffer_reason: None,
                 }
             } else {
                 state.write().await.buffer_message(msg);
                 RouteOutcome {
                     result: RouteResult::Buffered,
                     emit_claude_thinking: false,
+                    buffer_reason: Some("target_agent_offline"),
                 }
             }
         }
         Target::NeedBuffer => {
+            let buffer_reason = {
+                let daemon = state.read().await;
+                daemon.route_buffer_reason(&msg)
+            };
             state.write().await.buffer_message(msg);
             RouteOutcome {
                 result: RouteResult::Buffered,
                 emit_claude_thinking: false,
+                buffer_reason,
             }
         }
     }

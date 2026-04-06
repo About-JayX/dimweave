@@ -5,6 +5,7 @@ use crate::daemon::provider::shared::{
 use crate::daemon::task_graph::store::TaskGraphStore;
 use crate::daemon::task_graph::types::*;
 use crate::daemon::DaemonState;
+use crate::daemon::launch_task_sync::sync_claude_launch_into_active_task;
 use std::fs;
 
 // ── register_session ───────────────────────────────────────
@@ -175,6 +176,23 @@ fn register_on_launch_captures_transcript_path() {
         sess.transcript_path.as_deref(),
         Some("/tmp/.claude/projects/-ws/claude_launch_123.jsonl")
     );
+}
+
+#[test]
+fn sync_claude_launch_sets_current_coder_session_for_active_task() {
+    let mut state = DaemonState::new();
+    let task = state.create_and_select_task("/ws", "Task");
+
+    sync_claude_launch_into_active_task(
+        &mut state,
+        "coder",
+        "/ws",
+        "claude_session_1",
+        "/tmp/.claude/projects/-ws/claude_session_1.jsonl",
+    );
+
+    let task = state.task_graph.get_task(&task.task_id).unwrap();
+    assert!(task.current_coder_session_id.is_some());
 }
 
 #[test]

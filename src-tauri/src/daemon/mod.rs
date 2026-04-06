@@ -5,6 +5,7 @@ pub mod control;
 pub mod gui;
 pub mod gui_task;
 pub mod image_compress;
+mod launch_task_sync;
 pub mod orchestrator;
 mod permission;
 pub mod provider;
@@ -12,6 +13,7 @@ pub mod role_config;
 pub mod routing;
 pub mod routing_display;
 pub mod routing_format;
+pub mod routing_target_session;
 pub mod routing_user_input;
 pub mod session_manager;
 pub mod state;
@@ -101,7 +103,7 @@ async fn launch_claude_sdk(
     resume_session_id: Option<String>,
     state: &SharedState,
     app: &AppHandle,
-) -> Result<claude_sdk::ClaudeSdkHandle, String> {
+) -> Result<(claude_sdk::ClaudeSdkHandle, String), String> {
     if let Some(conflict_agent) = {
         let daemon = state.read().await;
         daemon.online_role_conflict("claude", role_id)
@@ -113,6 +115,9 @@ async fn launch_claude_sdk(
     // Previous session is already stopped by the daemon loop caller.
     let claude_bin = crate::claude_cli::resolve_claude_bin()?;
     let session_id = uuid::Uuid::new_v4().to_string();
+    let external_session_id = resume_session_id
+        .clone()
+        .unwrap_or_else(|| session_id.clone());
     let launch_nonce = uuid::Uuid::new_v4().to_string();
     let mcp_config = crate::mcp::build_dimweave_mcp_config(cwd, role_id)?;
 
@@ -130,7 +135,7 @@ async fn launch_claude_sdk(
     };
 
     match claude_sdk::launch(opts, state.clone(), app.clone()).await {
-        Ok(handle) => Ok(handle),
+        Ok(handle) => Ok((handle, external_session_id)),
         Err(e) => {
             gui::emit_agent_status(app, "claude", false, None, None);
             gui::emit_system_log(
@@ -186,7 +191,7 @@ async fn attach_provider_history(
                 ));
             }
             stop_claude_sdk_session(claude_sdk_handle, state, app).await;
-            let handle = launch_claude_sdk(
+            let (handle, _external_session_id) = launch_claude_sdk(
                 role_id,
                 &cwd,
                 None,
@@ -425,8 +430,33 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 )
                 .await;
                 match result {
-                    Ok(handle) => {
+                    Ok((handle, external_session_id)) => {
+                        let transcript_path = match crate::daemon::provider::claude::default_transcript_path(
+                                &cwd,
+                                &external_session_id,
+                            ) {
+                            Ok(path) => path.to_string_lossy().to_string(),
+                            Err(err) => {
+                                let mut failed_handle = Some(handle);
+                                stop_claude_sdk_session(&mut failed_handle, &state, &app).await;
+                                let _ = reply.send(Err(err));
+                                continue;
+                            }
+                        };
+                        let task_id = {
+                            let mut daemon = state.write().await;
+                            launch_task_sync::sync_claude_launch_into_active_task(
+                                &mut daemon,
+                                &role_id,
+                                &cwd,
+                                &external_session_id,
+                                &transcript_path,
+                            )
+                        };
                         claude_sdk_handle = Some(handle);
+                        if let Some(task_id) = task_id {
+                            emit_task_context_events(&state, &app, &task_id).await;
+                        }
                         let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
@@ -629,7 +659,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     )
                                     .await
                                     {
-                                        Ok(handle) => {
+                                        Ok((handle, _external_session_id)) => {
                                             claude_sdk_handle = Some(handle);
                                             let mut daemon = state.write().await;
                                             if let Ok(path) =

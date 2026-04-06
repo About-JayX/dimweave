@@ -37,12 +37,10 @@ impl DaemonState {
         &'a self,
         message: &BridgeMessage,
     ) -> Option<&'a SessionHandle> {
-        if let Some(session_id) = message.session_id.as_deref() {
-            return self.task_graph.get_session(session_id);
-        }
-
-        let task_id = message.task_id.as_deref()?;
-        self.task_session_for_role(task_id, &message.to)
+        crate::daemon::routing_target_session::resolve_target_bound_session(
+            &self.task_graph,
+            message,
+        )
     }
 
     fn agent_matches_bound_session(&self, agent: &str, session: &SessionHandle) -> bool {
@@ -102,6 +100,31 @@ impl DaemonState {
         };
 
         self.agent_matches_bound_session(agent, session)
+    }
+
+    pub fn route_buffer_reason(&self, message: &BridgeMessage) -> Option<&'static str> {
+        if message.to != "lead" && message.to != "coder" {
+            return Some("target_agent_offline");
+        }
+
+        if self.bound_session_for_message(message).is_none() {
+            return Some("target_session_missing");
+        }
+
+        let claude_online_mismatch =
+            self.claude_role == message.to
+                && self.is_agent_online("claude")
+                && !self.agent_matches_task_message("claude", message);
+        let codex_online_mismatch =
+            self.codex_role == message.to
+                && self.is_agent_online("codex")
+                && !self.agent_matches_task_message("codex", message);
+
+        if claude_online_mismatch || codex_online_mismatch {
+            return Some("task_session_mismatch");
+        }
+
+        Some("target_agent_offline")
     }
 
     pub fn set_active_task(&mut self, task_id: Option<String>) {

@@ -1,5 +1,7 @@
 use super::*;
-use crate::daemon::routing_display::{is_renderable_message, should_emit_claude_thinking};
+use crate::daemon::routing_display::{
+    buffered_route_message, is_renderable_message, should_emit_claude_thinking,
+};
 use crate::daemon::{
     state::DaemonState,
     types::{Attachment, BridgeMessage},
@@ -239,4 +241,11 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
         &RouteResult::Delivered,
         "lead",
     ));
+}
+
+#[test]
+fn task_session_mismatch_buffer_message_is_not_reported_as_offline() {
+    let text = buffered_route_message("coder", Some("task_session_mismatch"));
+    assert!(text.contains("task session"));
+    assert!(!text.contains("offline"));
 }
