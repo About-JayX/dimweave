@@ -117,13 +117,25 @@ describe("buildSessionTreeRows", () => {
     ]);
   });
 
-  test("returns no rows when the active task has no bound sessions", () => {
+  test("falls back to all top-level sessions when task has no bound session pointers", () => {
     const rows = buildSessionTreeRows(
-      [makeSession("sess_lead", "lead"), makeSession("sess_coder_b", "coder")],
+      [
+        makeSession("sess_lead", "lead", {
+          status: "paused",
+          parentSessionId: null,
+        }),
+        makeSession("sess_coder_b", "coder", {
+          status: "paused",
+          parentSessionId: null,
+        }),
+      ],
       makeTask({ leadSessionId: null, currentCoderSessionId: null }),
     );
 
-    expect(rows).toEqual([]);
+    expect(rows.map((row) => row.sessionId)).toEqual([
+      "sess_lead",
+      "sess_coder_b",
+    ]);
   });
 });
 
@@ -131,7 +143,9 @@ describe("buildHistoryPickerModel", () => {
   test("splits attached, elsewhere, and external history entries", () => {
     const task = makeTask();
     const sessions = [
-      makeSession("sess_lead", "lead", { externalSessionId: "claude-attached" }),
+      makeSession("sess_lead", "lead", {
+        externalSessionId: "claude-attached",
+      }),
       makeSession("sess_coder_b", "coder", {
         externalSessionId: "codex-attached",
       }),
@@ -163,7 +177,10 @@ describe("buildHistoryPickerModel", () => {
       "claude-free",
       "codex-free",
     ]);
-    expect(model.available[0]?.actions).toEqual(["attach_lead", "attach_coder"]);
+    expect(model.available[0]?.actions).toEqual([
+      "attach_lead",
+      "attach_coder",
+    ]);
     expect(model.elsewhere[0]?.actions).toEqual(["resume_existing"]);
   });
 });

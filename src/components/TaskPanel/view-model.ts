@@ -98,7 +98,9 @@ export function buildSessionTreeRows(
   }
 
   const rows: SessionTreeRow[] = [];
-  const sessionsById = new Map(sessions.map((session) => [session.sessionId, session]));
+  const sessionsById = new Map(
+    sessions.map((session) => [session.sessionId, session]),
+  );
   const visited = new Set<string>();
   const visit = (sessionId: string, depth: number) => {
     if (visited.has(sessionId)) {
@@ -109,11 +111,11 @@ export function buildSessionTreeRows(
       return;
     }
     visited.add(sessionId);
-      const reviewBadge =
-        task?.currentCoderSessionId === session.sessionId &&
-        session.role === "coder"
-          ? getReviewBadge(task.reviewStatus)
-          : null;
+    const reviewBadge =
+      task?.currentCoderSessionId === session.sessionId &&
+      session.role === "coder"
+        ? getReviewBadge(task.reviewStatus)
+        : null;
     rows.push({ sessionId: session.sessionId, depth, session, reviewBadge });
     for (const child of children.get(session.sessionId) ?? []) {
       visit(child.sessionId, depth + 1);
@@ -124,7 +126,11 @@ export function buildSessionTreeRows(
     for (const rootId of currentRootIds) {
       visit(rootId, 0);
     }
-    return rows;
+    if (rows.length > 0) {
+      return rows;
+    }
+    // Task exists but lead/coder pointers are cleared (e.g. after disconnect).
+    // Fall through to show all top-level sessions so paused sessions remain visible.
   }
 
   for (const session of children.get(null) ?? []) {
