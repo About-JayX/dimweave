@@ -568,13 +568,31 @@ Runtime verification passed:
 
 Root cause confirmed at runtime: natural disconnect paths fire `agent_status(false)` but never `session_tree_changed`.
 
+## Implementation (2026-04-06)
+
+Commit trail:
+
+| Commit | Summary |
+|--------|---------|
+| `2ac2335c` | fix: return task_id from _if_current disconnect functions |
+| `1555fdf0` | refactor: extract emit_task_context_events into gui_task |
+| `2f2a1af4` | fix: emit session_tree_changed on codex natural disconnect |
+| `4d5ccf34` | fix: emit session_tree_changed on claude natural disconnect |
+| `961bc640` | fix: show paused sessions in TaskPanel after disconnect |
+| `6fafa0cd` | fix: decouple agent_status emission from task_id availability |
+
+Code review finding addressed: `emit_agent_status`/`emit_system_log` guards were narrowed from "epoch matched" to "epoch matched + task binding exists". Fixed by checking epoch via public accessors (`codex_session_epoch()`, `claude_sdk_epoch()`) separately from task_id.
+
+Test results: Rust 283 passed, Frontend 162 passed, 0 failures.
+
 ## Final Acceptance Criteria
 
-- `clear_codex_session_if_current` returns `Option<String>` containing the task_id when the epoch matches and a provider session exists.
-- `invalidate_claude_sdk_session_if_current` returns `Option<String>` containing the task_id when the epoch matches and a provider session exists.
-- Codex WS session loop exit (`codex/session.rs`) emits `session_tree_changed`.
-- Codex health monitor process exit (`codex/runtime.rs`) emits `session_tree_changed`.
-- Claude process exit monitor (`claude_sdk/mod.rs`) emits `session_tree_changed`.
-- Claude reconnect failure (`claude_sdk/reconnect.rs`) emits `session_tree_changed`.
-- `buildSessionTreeRows` shows paused sessions when task pointers are cleared.
-- All existing tests continue to pass.
+- [x] `clear_codex_session_if_current` returns `Option<String>` containing the task_id when the epoch matches and a provider session exists.
+- [x] `invalidate_claude_sdk_session_if_current` returns `Option<String>` containing the task_id when the epoch matches and a provider session exists.
+- [x] Codex WS session loop exit (`codex/session.rs`) emits `session_tree_changed`.
+- [x] Codex health monitor process exit (`codex/runtime.rs`) emits `session_tree_changed`.
+- [x] Claude process exit monitor (`claude_sdk/mod.rs`) emits `session_tree_changed`.
+- [x] Claude reconnect failure (`claude_sdk/reconnect.rs`) emits `session_tree_changed`.
+- [x] `buildSessionTreeRows` shows paused sessions when task pointers are cleared.
+- [x] All existing tests continue to pass.
+- [x] agent_status emission decoupled from task_id — fires on epoch match regardless of task binding.
