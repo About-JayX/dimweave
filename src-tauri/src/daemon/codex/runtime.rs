@@ -58,11 +58,13 @@ pub(super) fn spawn_health_monitor(
                     Ok(Some(status)) => {
                         eprintln!("[Codex] health_monitor: process exited with status={status}");
                         cancel.cancel();
-                        let task_id = {
+                        let (is_current, task_id) = {
                             let mut daemon = state.write().await;
-                            daemon.clear_codex_session_if_current(session_epoch)
+                            let is_current = daemon.codex_session_epoch() == session_epoch;
+                            let tid = daemon.clear_codex_session_if_current(session_epoch);
+                            (is_current, tid)
                         };
-                        if task_id.is_some() {
+                        if is_current {
                             gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,

@@ -78,11 +78,13 @@ pub async fn launch(
                     }
                 }
                 _ = poll_child_exit(&current_child, true) => {
-                    let task_id = monitor_state
-                        .write()
-                        .await
-                        .invalidate_claude_sdk_session_if_current(current_epoch);
-                    if task_id.is_none() {
+                    let (is_current, task_id) = {
+                        let mut s = monitor_state.write().await;
+                        let is_current = s.claude_sdk_epoch() == current_epoch;
+                        let tid = s.invalidate_claude_sdk_session_if_current(current_epoch);
+                        (is_current, tid)
+                    };
+                    if !is_current {
                         return;
                     }
                     emit_runtime_health(

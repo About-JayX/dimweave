@@ -149,15 +149,17 @@ async fn run_with_reconnect(
             }
         }
     }
-    let task_id = state
-        .write()
-        .await
-        .clear_codex_session_if_current(session_epoch);
-    if task_id.is_some() {
+    let task_id = {
+        let mut s = state.write().await;
+        let is_current = s.codex_session_epoch() == session_epoch;
+        let tid = s.clear_codex_session_if_current(session_epoch);
+        (is_current, tid)
+    };
+    if task_id.0 {
         gui::emit_agent_status(app, "codex", false, None, None);
         gui::emit_system_log(app, "info", "[Codex] session ended");
     }
-    if let Some(task_id) = task_id {
+    if let Some(task_id) = task_id.1 {
         crate::daemon::gui_task::emit_task_context_events(state, app, &task_id).await;
     }
 }

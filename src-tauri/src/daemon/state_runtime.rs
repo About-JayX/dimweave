@@ -22,6 +22,10 @@ impl DaemonState {
         Some(session.task_id)
     }
 
+    pub fn codex_session_epoch(&self) -> u64 {
+        self.codex_session_epoch
+    }
+
     pub fn begin_codex_launch(&mut self) -> u64 {
         self.codex_session_epoch = self.codex_session_epoch.wrapping_add(1);
         self.codex_session_epoch

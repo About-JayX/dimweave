@@ -81,11 +81,13 @@ pub async fn recover_ws_connection(
         ),
     )
     .await;
-    let task_id = state
-        .write()
-        .await
-        .invalidate_claude_sdk_session_if_current(*epoch);
-    if task_id.is_some() {
+    let (is_current, task_id) = {
+        let mut s = state.write().await;
+        let is_current = s.claude_sdk_epoch() == *epoch;
+        let tid = s.invalidate_claude_sdk_session_if_current(*epoch);
+        (is_current, tid)
+    };
+    if is_current {
         gui::emit_agent_status(app, "claude", false, None, None);
         gui::emit_claude_stream(app, gui::ClaudeStreamPayload::Reset);
     }
