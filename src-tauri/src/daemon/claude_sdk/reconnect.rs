@@ -81,13 +81,16 @@ pub async fn recover_ws_connection(
         ),
     )
     .await;
-    let cleared = state
+    let task_id = state
         .write()
         .await
         .invalidate_claude_sdk_session_if_current(*epoch);
-    if cleared {
+    if task_id.is_some() {
         gui::emit_agent_status(app, "claude", false, None, None);
         gui::emit_claude_stream(app, gui::ClaudeStreamPayload::Reset);
+    }
+    if let Some(task_id) = task_id {
+        crate::daemon::gui_task::emit_task_context_events(state, app, &task_id).await;
     }
     false
 }

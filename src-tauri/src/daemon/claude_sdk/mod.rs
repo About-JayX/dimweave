@@ -78,11 +78,11 @@ pub async fn launch(
                     }
                 }
                 _ = poll_child_exit(&current_child, true) => {
-                    let cleared = monitor_state
+                    let task_id = monitor_state
                         .write()
                         .await
                         .invalidate_claude_sdk_session_if_current(current_epoch);
-                    if !cleared {
+                    if task_id.is_none() {
                         return;
                     }
                     emit_runtime_health(
@@ -98,6 +98,11 @@ pub async fn launch(
                         "info",
                         &format!("[Claude SDK] process exited, role={monitor_role}"),
                     );
+                    if let Some(task_id) = task_id {
+                        crate::daemon::gui_task::emit_task_context_events(
+                            &monitor_state, &monitor_app, &task_id,
+                        ).await;
+                    }
                     return;
                 }
             }
