@@ -2,18 +2,12 @@ use super::*;
 use crate::daemon::task_graph::types::SessionStatus;
 
 impl DaemonState {
-    fn detach_provider_binding(&mut self, agent: &str) {
-        let connection = self.provider_connection(agent);
-        let Some(connection) = connection else {
-            return;
-        };
-        let Some(session) = self
+    fn detach_provider_binding(&mut self, agent: &str) -> Option<String> {
+        let connection = self.provider_connection(agent)?;
+        let session = self
             .task_graph
             .find_session_by_external_id(connection.provider, &connection.external_session_id)
-            .cloned()
-        else {
-            return;
-        };
+            .cloned()?;
 
         let _ = self
             .task_graph
@@ -25,6 +19,7 @@ impl DaemonState {
             .task_graph
             .clear_coder_session_if_matches(&session.task_id, &session.session_id);
         self.auto_save_task_graph();
+        Some(session.task_id)
     }
 
     pub fn begin_codex_launch(&mut self) -> u64 {
@@ -32,10 +27,10 @@ impl DaemonState {
         self.codex_session_epoch
     }
 
-    pub fn invalidate_codex_session(&mut self) {
+    pub fn invalidate_codex_session(&mut self) -> Option<String> {
         self.begin_codex_launch();
         self.codex_inject_tx = None;
-        self.clear_provider_connection("codex");
+        self.clear_provider_connection("codex")
     }
 
     pub fn attach_codex_session_if_current(
@@ -121,7 +116,7 @@ impl DaemonState {
         true
     }
 
-    pub fn invalidate_claude_sdk_session(&mut self) {
+    pub fn invalidate_claude_sdk_session(&mut self) -> Option<String> {
         self.advance_claude_sdk_epoch();
         self.claude_sdk_ws_tx = None;
         self.claude_sdk_event_tx = None;
@@ -130,7 +125,7 @@ impl DaemonState {
         self.claude_sdk_active_nonce = None;
         self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::Inactive;
         self.clear_claude_preview_batch();
-        self.clear_provider_connection("claude");
+        self.clear_provider_connection("claude")
     }
 
     pub fn invalidate_claude_sdk_session_if_current(&mut self, epoch: u64) -> bool {
@@ -207,13 +202,14 @@ impl DaemonState {
         }
     }
 
-    pub fn clear_provider_connection(&mut self, agent: &str) {
-        self.detach_provider_binding(agent);
+    pub fn clear_provider_connection(&mut self, agent: &str) -> Option<String> {
+        let task_id = self.detach_provider_binding(agent);
         match agent {
             "claude" => self.claude_connection = None,
             "codex" => self.codex_connection = None,
             _ => {}
         }
+        task_id
     }
 
     pub fn set_runtime_health(&mut self, health: RuntimeHealthStatus) {

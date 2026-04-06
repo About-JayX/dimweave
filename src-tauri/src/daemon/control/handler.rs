@@ -204,9 +204,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
         if is_ours {
             let claude_sdk_still_online = id == "claude" && daemon.is_claude_sdk_online();
             daemon.attached_agents.remove(id);
-            if !claude_sdk_still_online {
-                daemon.clear_provider_connection(id);
-            }
+            let task_id = if !claude_sdk_still_online {
+                daemon.clear_provider_connection(id)
+            } else {
+                None
+            };
             drop(daemon);
             if id == "claude" && !claude_sdk_still_online {
                 gui::emit_claude_stream(&app, ClaudeStreamPayload::Reset);
@@ -220,6 +222,31 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             } else {
                 gui::emit_agent_status(&app, id, false, None, None);
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} disconnected"));
+            }
+            if let Some(task_id) = task_id {
+                let daemon = state.read().await;
+                let sess: Vec<_> = daemon
+                    .task_graph
+                    .sessions_for_task(&task_id)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let arts: Vec<_> = daemon
+                    .task_graph
+                    .artifacts_for_task(&task_id)
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                let events = crate::daemon::gui_task::build_task_context_events(
+                    daemon.task_graph.get_task(&task_id),
+                    &task_id,
+                    &sess,
+                    &arts,
+                );
+                drop(daemon);
+                for event in events {
+                    event.emit(&app);
+                }
             }
         } else {
             drop(daemon);

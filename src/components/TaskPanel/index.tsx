@@ -34,6 +34,7 @@ export function TaskPanel() {
     () => buildSessionTreeRows(taskSessions, task),
     [task, taskSessions],
   );
+  const activeSessionCount = sessionRows.length;
   const artifactTimeline = useMemo(
     () => buildArtifactTimeline(taskArtifacts, taskSessions),
     [taskArtifacts, taskSessions],
@@ -138,7 +139,7 @@ export function TaskPanel() {
             </div>
           </div>
           <div className="text-[11px] text-muted-foreground/65">
-            {taskSessions.length} sessions · {taskArtifacts.length} artifacts
+            {activeSessionCount} sessions · {taskArtifacts.length} artifacts
           </div>
         </div>
         <TaskHeader task={task} reviewBadge={reviewBadge} />
@@ -148,7 +149,7 @@ export function TaskPanel() {
               Active sessions
             </div>
             <div className="mt-1 text-lg font-semibold text-foreground">
-              {taskSessions.length}
+              {activeSessionCount}
             </div>
           </div>
           <div className="rounded-xl border border-border/35 bg-background/30 px-3 py-2">

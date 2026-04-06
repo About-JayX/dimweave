@@ -78,8 +78,11 @@ async fn stop_codex_session(
     if let Some(h) = codex_handle.take() {
         h.stop().await;
     }
-    state.write().await.invalidate_codex_session();
+    let task_id = state.write().await.invalidate_codex_session();
     gui::emit_agent_status(app, "codex", false, None, None);
+    if let Some(task_id) = task_id {
+        emit_task_context_events(state, app, &task_id).await;
+    }
 }
 
 async fn stop_claude_sdk_session(
@@ -90,9 +93,12 @@ async fn stop_claude_sdk_session(
     if let Some(h) = handle.take() {
         h.stop().await;
     }
-    state.write().await.invalidate_claude_sdk_session();
+    let task_id = state.write().await.invalidate_claude_sdk_session();
     gui::emit_agent_status(app, "claude", false, None, None);
     gui::emit_system_log(app, "info", "[Daemon] Claude SDK session stopped");
+    if let Some(task_id) = task_id {
+        emit_task_context_events(state, app, &task_id).await;
+    }
 }
 
 async fn launch_claude_sdk(
@@ -494,18 +500,22 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 permission::handle_permission_verdict(&state, &app, request_id, behavior).await;
             }
             DaemonCmd::ForceDisconnectAgent { agent_id } => {
-                let removed = state
-                    .write()
-                    .await
+                    let removed = state
+                        .write()
+                        .await
                     .attached_agents
                     .remove(&agent_id)
                     .is_some();
                 if removed {
-                    if agent_id == "claude" {
-                        state.write().await.clear_provider_connection("claude");
-                        gui::emit_claude_stream(&app, gui::ClaudeStreamPayload::Reset);
+                    let task_id = if agent_id == "claude" {
+                        state.write().await.clear_provider_connection("claude")
                     } else if agent_id == "codex" {
-                        state.write().await.clear_provider_connection("codex");
+                        state.write().await.clear_provider_connection("codex")
+                    } else {
+                        None
+                    };
+                    if agent_id == "claude" {
+                        gui::emit_claude_stream(&app, gui::ClaudeStreamPayload::Reset);
                     }
                     gui::emit_agent_status(&app, &agent_id, false, None, None);
                     gui::emit_system_log(
@@ -513,6 +523,9 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         "info",
                         &format!("[Daemon] force-disconnected {agent_id}"),
                     );
+                    if let Some(task_id) = task_id {
+                        emit_task_context_events(&state, &app, &task_id).await;
+                    }
                 }
             }
             DaemonCmd::CreateTask {
