@@ -58,17 +58,23 @@ pub(super) fn spawn_health_monitor(
                     Ok(Some(status)) => {
                         eprintln!("[Codex] health_monitor: process exited with status={status}");
                         cancel.cancel();
-                        let cleared_current = {
+                        let task_id = {
                             let mut daemon = state.write().await;
                             daemon.clear_codex_session_if_current(session_epoch)
                         };
-                        if cleared_current {
+                        if task_id.is_some() {
                             gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,
                                 "warn",
                                 &format!("[Codex] exited: {status}"),
                             );
+                        }
+                        if let Some(task_id) = task_id {
+                            crate::daemon::gui_task::emit_task_context_events(
+                                &state, &app, &task_id,
+                            )
+                            .await;
                         }
                         return;
                     }
