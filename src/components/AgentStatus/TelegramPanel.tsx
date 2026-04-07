@@ -38,12 +38,12 @@ export function TelegramPanel() {
   }, [fetchState]);
 
   const handleSave = useCallback(() => {
-    const token =
-      tokenInput.trim() || tgState?.tokenLabel?.replace("***", "") || "";
+    const token = tokenInput.trim();
+    if (!token) return; // require explicit token input; masked label cannot reconstruct original
     void saveConfig(token, true, true);
     setShowTokenInput(false);
     setTokenInput("");
-  }, [tokenInput, tgState, saveConfig]);
+  }, [tokenInput, saveConfig]);
 
   const handleDisable = useCallback(() => {
     void saveConfig("", false, false);
