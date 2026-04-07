@@ -16,6 +16,14 @@ interface CyberSelectProps {
   variant?: "default" | "history";
 }
 
+export function getCyberSelectMenuPanelClassName(
+  variant: "default" | "history",
+): string {
+  return variant === "history"
+    ? "left-1/2 -translate-x-1/2 top-7 w-[22rem] max-w-[min(22rem,calc(100vw-2rem))] max-h-48 rounded-lg p-1"
+    : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
+}
+
 export function HistoryMenuOption({
   opt,
   isSelected,
@@ -36,9 +44,9 @@ export function HistoryMenuOption({
       )}
     >
       <div className="flex flex-col items-start w-full">
-        <span className="font-medium truncate w-full">{opt.label}</span>
+        <span className="font-medium w-full break-words">{opt.label}</span>
         {opt.description && (
-          <span className="text-[9px] text-muted-foreground/60 truncate w-full">
+          <span className="text-[9px] text-muted-foreground/60 w-full break-all">
             {opt.description}
           </span>
         )}
@@ -129,9 +137,7 @@ export function CyberSelect({
         <div
           className={cn(
             "absolute z-50 overflow-y-auto border border-border/60 bg-popover shadow-xl animate-in fade-in zoom-in-95 duration-150",
-            isHistory
-              ? "left-1/2 -translate-x-1/2 top-7 w-52 max-h-48 rounded-lg p-1"
-              : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1",
+            getCyberSelectMenuPanelClassName(variant),
           )}
         >
           {options.map((opt) =>

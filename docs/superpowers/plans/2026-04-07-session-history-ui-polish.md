@@ -40,6 +40,7 @@
 | Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
 | Task 8 | `48d128fb` | `manual review` | `bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 14 pass; `bun run build` ✅; `git diff --check` ✅ | Search ownership should stay explicit: the top bar owns the resting icon, while MessagePanel only owns the disclosed search row. |
 | Task 9 | `6b1f7790` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx` ✅ 9 pass; `bun run build` ✅; `git diff --check` ✅ | Search disclosure state must own filtering too; closing the UI should immediately clear hidden query effects. |
+| Task 10 | `TBD` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | History dropdown readability depends on menu width and wrapping; keep the trigger compact, but let menu rows breathe. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -698,7 +699,7 @@ Append the real Task 9 commit hash, review result, and verification evidence to 
 - Modify: `src/components/ui/cyber-select.tsx`
 - Modify: `src/components/ui/cyber-select.test.tsx`
 
-- [ ] **Step 1: Strengthen the failing history readability tests**
+- [x] **Step 1: Strengthen the failing history readability tests**
 
 Extend the history-select coverage so it fails unless the shared history menu stops clipping long text:
 
@@ -729,7 +730,7 @@ bun test src/components/ui/cyber-select.test.tsx
 
 Expected: FAIL because the current history rows still use truncation classes and the menu stays at the narrow `w-52` width.
 
-- [ ] **Step 2: Widen the history menu and let rows wrap**
+- [x] **Step 2: Widen the history menu and let rows wrap**
 
 Update `src/components/ui/cyber-select.tsx` so the history variant:
 
@@ -737,7 +738,7 @@ Update `src/components/ui/cyber-select.tsx` so the history variant:
 - uses a wider centered menu panel (`w-[22rem]` with the existing viewport guard)
 - removes one-line truncation from history menu rows in favor of multi-line wrapping/breaking that keeps long titles and ids readable
 
-- [ ] **Step 3: Re-run focused verification**
+- [x] **Step 3: Re-run focused verification**
 
 Run:
 
@@ -749,13 +750,13 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
 git commit -m "fix: restore history dropdown readability"
 ```
 
-- [ ] **Step 5: Update `## CM Memory`**
+- [x] **Step 5: Update `## CM Memory`**
 
 Append the real Task 10 commit hash, review result, and verification evidence to `## CM Memory`.
