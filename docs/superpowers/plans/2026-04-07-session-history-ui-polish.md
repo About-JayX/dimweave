@@ -35,6 +35,8 @@
 | Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `b442d510` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
+| Task 5 | `fix: unclip provider history dropdown content` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider history rows must favor readability over compact truncation; the real panel screenshot is the acceptance source, not just static markup tests. |
+| Task 6 | `fix: restore visible header search entrypoint` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Search affordance is not done until the real chat header shows a visible entrypoint in the intended state, not merely a renderable isolated component. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -409,3 +411,100 @@ git commit -m "style: make back-to-bottom chrome transparent"
 - [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 4 placeholder row with the real commit hash and verification evidence.
+
+### Task 5: Correct the provider-history dropdown clipping regression
+
+**Files:**
+- Modify: `src/components/ui/cyber-select.tsx`
+- Modify: `src/components/ui/cyber-select.test.tsx`
+
+- [ ] **Step 1: Add a failing readability regression test**
+
+Extend the history-variant tests so they fail unless dropdown items keep long history content readable instead of truncating both lines.
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+```
+
+Expected: FAIL before the regression fix.
+
+- [ ] **Step 2: Fix the history dropdown layout**
+
+Adjust the shared `history` variant so the real provider-history menu is not visually clipped:
+
+- remove unnecessary one-line truncation from history menu rows
+- allow long session labels/ids to wrap or clamp more gracefully
+- widen or rebalance the history menu so it matches the screenshot context instead of forcing a narrow compact menu
+- keep the collapsed trigger readable without making the menu ugly
+
+- [ ] **Step 3: Re-run verification**
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx
+git commit -m "fix: unclip provider history dropdown content"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Replace the Task 5 placeholder row with the real commit hash and verification evidence.
+
+### Task 6: Correct the missing header search entrypoint
+
+**Files:**
+- Modify: `src/components/MessagePanel/index.tsx`
+- Modify: `src/components/MessagePanel/search-chrome.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+- Modify: `src/components/MessagePanel/index.test.tsx`
+
+- [ ] **Step 1: Add a failing integration test for the visible search entrypoint**
+
+Add coverage that fails unless the intended chat-header search entrypoint is visible in the integrated message panel state that should expose it.
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+```
+
+Expected: FAIL before the fix.
+
+- [ ] **Step 2: Fix the integrated search entrypoint**
+
+Adjust the message-panel search chrome so the header actually shows the search icon in the intended runtime state, not only in isolated markup.
+
+- [ ] **Step 3: Re-run verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/index.tsx src/components/MessagePanel/search-chrome.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+git commit -m "fix: restore visible header search entrypoint"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Replace the Task 6 placeholder row with the real commit hash and verification evidence.
