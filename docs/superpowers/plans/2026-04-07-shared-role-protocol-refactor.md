@@ -28,8 +28,8 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `PENDING` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-shared-role-protocol-design.md docs/superpowers/plans/2026-04-07-shared-role-protocol-refactor.md` | Shared role-policy changes must be documented before prompt text starts drifting again. |
-| Task 2 | `PENDING` | `PENDING` | `PENDING` | Shared role fragments must keep provider-specific transport/tool instructions separate from role-policy text. |
+| Task 1 | `1916ddf2` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-shared-role-protocol-design.md docs/superpowers/plans/2026-04-07-shared-role-protocol-refactor.md` | Shared role-policy changes must be documented before prompt text starts drifting again. |
+| Task 2 | `refactor: share dimweave role prompt protocol` | `manual deep review` | `cargo test reviewer_prompt_requires_read_only_protocol --manifest-path src-tauri/Cargo.toml`; `cargo test factual_error_correction_still_respects_routing_policy --manifest-path src-tauri/Cargo.toml`; `cargo test claude_prompt --manifest-path src-tauri/Cargo.toml`; `cargo test role_config::roles::tests --manifest-path src-tauri/Cargo.toml`; `cargo test build_claude_command_sets_sdk_args_and_env --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Shared role fragments must own role-policy facts only; provider transport/output instructions stay in `claude_prompt.rs` and `roles.rs` so behavior stays aligned without coupling provider-specific protocol text. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -37,7 +37,7 @@
 - Create: `docs/superpowers/specs/2026-04-07-shared-role-protocol-design.md`
 - Create: `docs/superpowers/plans/2026-04-07-shared-role-protocol-refactor.md`
 
-- [ ] **Step 1: Write the approved design spec**
+- [x] **Step 1: Write the approved design spec**
 
 Document:
 
@@ -47,7 +47,7 @@ Document:
 - factual-error correction routing rule
 - explicit scope exclusions
 
-- [ ] **Step 2: Write the implementation plan with CM tracking**
+- [x] **Step 2: Write the implementation plan with CM tracking**
 
 The plan must include:
 
@@ -56,7 +56,7 @@ The plan must include:
 - `## CM Memory`
 - verification commands for each task
 
-- [ ] **Step 3: Verify doc formatting**
+- [x] **Step 3: Verify doc formatting**
 
 Run:
 
@@ -66,14 +66,14 @@ git diff --check -- docs/superpowers/specs/2026-04-07-shared-role-protocol-desig
 
 Expected: no whitespace or patch-format issues.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-04-07-shared-role-protocol-design.md docs/superpowers/plans/2026-04-07-shared-role-protocol-refactor.md
 git commit -m "docs: record shared role protocol refactor plan"
 ```
 
-- [ ] **Step 5: Update `## CM Memory`**
+- [x] **Step 5: Update `## CM Memory`**
 
 Replace Task 1 placeholders with the real commit hash and verification evidence before starting Task 2.
 
@@ -86,7 +86,7 @@ Replace Task 1 placeholders with the real commit hash and verification evidence 
 - Modify: `src-tauri/src/daemon/role_config/roles.rs`
 - Modify: `src-tauri/src/daemon/role_config/roles_tests.rs`
 
-- [ ] **Step 1: Write failing tests for the missing shared reviewer/correction invariants**
+- [x] **Step 1: Write failing tests for the missing shared reviewer/correction invariants**
 
 Add focused regressions that require:
 
@@ -104,7 +104,7 @@ cargo test factual_error_correction_still_respects_routing_policy --manifest-pat
 
 Expected: FAIL before the refactor because the current prompt builders do not share those invariants consistently.
 
-- [ ] **Step 2: Implement the shared role-protocol module**
+- [x] **Step 2: Implement the shared role-protocol module**
 
 Create `src-tauri/src/daemon/role_config/role_protocol.rs` with shared helpers for:
 
@@ -119,7 +119,7 @@ pub fn correction_routing_rule() -> &'static str
 
 Use it from both provider prompt builders instead of duplicating role-policy text.
 
-- [ ] **Step 3: Re-run the focused regression tests**
+- [x] **Step 3: Re-run the focused regression tests**
 
 Run:
 
@@ -130,7 +130,7 @@ cargo test factual_error_correction_still_respects_routing_policy --manifest-pat
 
 Expected: PASS.
 
-- [ ] **Step 4: Run the broader role/prompt verification**
+- [x] **Step 4: Run the broader role/prompt verification**
 
 Run:
 
@@ -143,13 +143,13 @@ git diff --check
 
 Expected: PASS with no diff-format issues.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/daemon/role_config/mod.rs src-tauri/src/daemon/role_config/role_protocol.rs src-tauri/src/daemon/role_config/claude_prompt.rs src-tauri/src/daemon/role_config/roles.rs src-tauri/src/daemon/role_config/roles_tests.rs
 git commit -m "refactor: share dimweave role prompt protocol"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace Task 2 placeholders with the real commit hash, verification commands, and learned prompt-maintenance rule before closing the work.
