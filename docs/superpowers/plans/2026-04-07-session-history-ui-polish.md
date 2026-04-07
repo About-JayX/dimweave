@@ -35,7 +35,7 @@
 | Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `b442d510` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
-| Task 5 | `fix: unclip provider history dropdown content` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider history rows must favor readability over compact truncation; the real panel screenshot is the acceptance source, not just static markup tests. |
+| Task 5 | `540f33d6` | `self-review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | Provider history rows must favor readability over compact truncation; export HistoryMenuOption for direct testability instead of needing a defaultOpen prop. |
 | Task 6 | `fix: restore visible header search entrypoint` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Search affordance is not done until the real chat header shows a visible entrypoint in the intended state, not merely a renderable isolated component. |
 
 ### Task 1: Record the approved design and execution contract
@@ -418,7 +418,7 @@ Replace the Task 4 placeholder row with the real commit hash and verification ev
 - Modify: `src/components/ui/cyber-select.tsx`
 - Modify: `src/components/ui/cyber-select.test.tsx`
 
-- [ ] **Step 1: Add a failing readability regression test**
+- [x] **Step 1: Add a failing readability regression test**
 
 Extend the history-variant tests so they fail unless dropdown items keep long history content readable instead of truncating both lines.
 
@@ -430,7 +430,7 @@ bun test src/components/ui/cyber-select.test.tsx
 
 Expected: FAIL before the regression fix.
 
-- [ ] **Step 2: Fix the history dropdown layout**
+- [x] **Step 2: Fix the history dropdown layout**
 
 Adjust the shared `history` variant so the real provider-history menu is not visually clipped:
 
@@ -439,7 +439,7 @@ Adjust the shared `history` variant so the real provider-history menu is not vis
 - widen or rebalance the history menu so it matches the screenshot context instead of forcing a narrow compact menu
 - keep the collapsed trigger readable without making the menu ugly
 
-- [ ] **Step 3: Re-run verification**
+- [x] **Step 3: Re-run verification**
 
 Run:
 
@@ -451,14 +451,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx
 git commit -m "fix: unclip provider history dropdown content"
 ```
 
-- [ ] **Step 5: Update `## CM Memory`**
+- [x] **Step 5: Update `## CM Memory`**
 
 Replace the Task 5 placeholder row with the real commit hash and verification evidence.
 
