@@ -35,6 +35,13 @@ export interface MessageListDisplayState {
   hasContent: boolean;
 }
 
+export function getSearchQueryForDisclosure(
+  searchOpen: boolean,
+  searchQuery: string,
+): string {
+  return searchOpen ? searchQuery : "";
+}
+
 export function shouldAutoScrollLogsOnSurfaceChange(
   previousSurface: ShellMainSurface | null,
   nextSurface: ShellMainSurface,

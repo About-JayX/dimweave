@@ -18,6 +18,7 @@ import {
   formatTerminalTimestamp,
   getLogsFollowOutputMode,
   getMessageSearchSummary,
+  getSearchQueryForDisclosure,
   shouldAutoScrollLogsOnSurfaceChange,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
@@ -34,12 +35,13 @@ export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: Message
   const [lightboxAttachment, setLightboxAttachment] =
     useState<Attachment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const effectiveSearchQuery = getSearchQueryForDisclosure(searchOpen, searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredSearchQuery = useDeferredValue(effectiveSearchQuery);
   const logsVirtuosoRef = useRef<VirtuosoHandle>(null);
   const previousSurfaceModeRef = useRef<ShellMainSurface | null>(surfaceMode);
   const [logsAtBottom, setLogsAtBottom] = useState(true);

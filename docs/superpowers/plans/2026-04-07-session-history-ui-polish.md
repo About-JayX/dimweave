@@ -39,6 +39,7 @@
 | Task 6 | `92641c8f` | `self-review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 10 pass; `bun run build` ✅; `git diff --check` ✅ | Product fix needed: remove chatMessages.length > 0 guard — Zustand v5 SSR uses api.getInitialState() which cannot be reliably patched from outside the store closure; removing the guard is the correct minimal fix. |
 | Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
 | Task 8 | `48d128fb` | `manual review` | `bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 14 pass; `bun run build` ✅; `git diff --check` ✅ | Search ownership should stay explicit: the top bar owns the resting icon, while MessagePanel only owns the disclosed search row. |
+| Task 9 | `TBD` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx` ✅ 9 pass; `bun run build` ✅; `git diff --check` ✅ | Search disclosure state must own filtering too; closing the UI should immediately clear hidden query effects. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -631,7 +632,7 @@ Append the real Task 8 commit hash, review result, and verification evidence to 
 - Modify: `src/components/MessagePanel/view-model.ts`
 - Modify: `src/components/MessagePanel/index.tsx`
 
-- [ ] **Step 1: Write the failing disclosure-state test**
+- [x] **Step 1: Write the failing disclosure-state test**
 
 Add focused coverage for a pure helper that reconciles the current query with disclosure visibility:
 
@@ -653,7 +654,7 @@ bun test src/components/MessagePanel/view-model.test.ts
 
 Expected: FAIL because the helper does not exist yet.
 
-- [ ] **Step 2: Implement the disclosure/query sync**
+- [x] **Step 2: Implement the disclosure/query sync**
 
 Update `src/components/MessagePanel/view-model.ts` to export a pure helper:
 
@@ -668,7 +669,7 @@ export function getSearchQueryForDisclosure(
 
 Then use it from `src/components/MessagePanel/index.tsx` so closing the disclosure — including closing it from the top-bar search button path — clears the hidden query before filtered results can linger.
 
-- [ ] **Step 3: Re-run focused verification**
+- [x] **Step 3: Re-run focused verification**
 
 Run:
 
@@ -680,14 +681,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/view-model.ts src/components/MessagePanel/index.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
 git commit -m "fix: clear hidden message search filters"
 ```
 
-- [ ] **Step 5: Update `## CM Memory`**
+- [x] **Step 5: Update `## CM Memory`**
 
 Append the real Task 9 commit hash, review result, and verification evidence to `## CM Memory`.
 
