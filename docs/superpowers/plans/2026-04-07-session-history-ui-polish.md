@@ -34,7 +34,7 @@
 | Task 1 | `441e8f4a` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md` | UI bugfix work should lock the approved interaction details in docs before any component code changes begin. |
 | Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `b442d510` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
-| Task 4 | `style: make back-to-bottom chrome transparent` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
+| Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -326,9 +326,10 @@ Replace the Task 3 placeholder row with the real commit hash and verification ev
 
 **Files:**
 - Modify: `src/components/MessagePanel/MessageList.tsx`
+- Modify: `src/components/MessagePanel/search-chrome.tsx`
 - Modify: `src/components/MessagePanel/presentational.test.tsx`
 
-- [ ] **Step 1: Extend the failing presentation test**
+- [x] **Step 1: Extend the failing presentation test**
 
 Add:
 
@@ -354,7 +355,7 @@ bun test src/components/MessagePanel/presentational.test.tsx
 
 Expected: FAIL because the exported transparent button does not exist yet.
 
-- [ ] **Step 2: Extract the transparent button and integrate it**
+- [x] **Step 2: Extract the transparent button and integrate it**
 
 In `src/components/MessagePanel/MessageList.tsx`, add:
 
@@ -377,7 +378,7 @@ export function BackToBottomButton({
 
 Replace the inline button with `<BackToBottomButton onClick={scrollToBottom} />`.
 
-- [ ] **Step 3: Re-run the focused tests**
+- [x] **Step 3: Re-run the focused tests**
 
 Run:
 
@@ -387,7 +388,7 @@ bun test src/components/MessagePanel/presentational.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 4: Run build and diff verification**
+- [x] **Step 4: Run build and diff verification**
 
 Run:
 
@@ -398,13 +399,13 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MessagePanel/MessageList.tsx src/components/MessagePanel/presentational.test.tsx
 git commit -m "style: make back-to-bottom chrome transparent"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 4 placeholder row with the real commit hash and verification evidence.
