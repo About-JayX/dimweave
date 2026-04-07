@@ -262,6 +262,14 @@ cargo test          # 运行 Rust 测试
 - 执行完任务后必须调用 superpowers 代码审计（`superpowers:requesting-code-review`）
 - Rust 改动后必须重新运行 Tauri / Cargo 校验，前端改动后至少跑一次 TS / build 校验
 
+**Plan-first 强制规范:**
+
+- **所有非 trivial 改动（涉及 3 个以上文件或跨模块）必须先生成 plan 文档**，路径 `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+- Plan 必须包含：目标、根因/动机、文件映射、分步任务、验收标准
+- **实施完成后必须把 commit 记录回填到 plan 文档**，包含 commit hash、摘要、code review 发现
+- 不允许跳过 plan 直接实施——即使"看起来很简单"
+- Trivial 单文件修复不受此限制，但仍需在 commit message 中说明根因
+
 **Agent 链路修复文档要求（强制）:**
 
 - **每次**修复或发现 agent 链路 bug，必须立即记录到 `docs/agents/<agent>-chain.md`
