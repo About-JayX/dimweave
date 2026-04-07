@@ -15,6 +15,7 @@
 ### New files
 
 - `src/components/MessagePanel/presentational.test.tsx`
+- `src/components/MessagePanel/search-chrome.tsx`
 
 ### Modified files
 
@@ -32,7 +33,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `441e8f4a` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md` | UI bugfix work should lock the approved interaction details in docs before any component code changes begin. |
 | Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
-| Task 3 | `fix: collapse message search behind header icon` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
+| Task 3 | `b442d510` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `style: make back-to-bottom chrome transparent` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
 
 ### Task 1: Record the approved design and execution contract
@@ -210,9 +211,10 @@ Replace the Task 2 placeholder row with the real commit hash and verification ev
 
 **Files:**
 - Create: `src/components/MessagePanel/presentational.test.tsx`
+- Create: `src/components/MessagePanel/search-chrome.tsx`
 - Modify: `src/components/MessagePanel/index.tsx`
 
-- [ ] **Step 1: Write the failing search-disclosure tests**
+- [x] **Step 1: Write the failing search-disclosure tests**
 
 Create `src/components/MessagePanel/presentational.test.tsx` with:
 
@@ -249,7 +251,7 @@ bun test src/components/MessagePanel/presentational.test.tsx
 
 Expected: FAIL because the dedicated presentational chrome does not exist yet.
 
-- [ ] **Step 2: Extract and integrate the search disclosure chrome**
+- [x] **Step 2: Extract and integrate the search disclosure chrome**
 
 In `src/components/MessagePanel/index.tsx`, add a small exported presentational component:
 
@@ -288,7 +290,7 @@ export function MessageSearchChrome({
 
 Use it from `MessagePanel` so the icon is always in the header and the input row only appears while `searchOpen` is true.
 
-- [ ] **Step 3: Re-run the focused tests**
+- [x] **Step 3: Re-run the focused tests**
 
 Run:
 
@@ -298,7 +300,7 @@ bun test src/components/MessagePanel/presentational.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 4: Run build and diff verification**
+- [x] **Step 4: Run build and diff verification**
 
 Run:
 
@@ -309,14 +311,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MessagePanel/index.tsx src/components/MessagePanel/presentational.test.tsx
 git commit -m "fix: collapse message search behind header icon"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 3 placeholder row with the real commit hash and verification evidence.
 
