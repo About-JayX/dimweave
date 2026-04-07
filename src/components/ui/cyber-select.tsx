@@ -52,7 +52,18 @@ export function CyberSelect({
               : "border-input bg-muted text-foreground hover:border-primary/40 hover:bg-muted/80 cursor-pointer",
         )}
       >
-        <span className="truncate max-w-28">{displayLabel}</span>
+        {selected?.description ? (
+          <div className="flex flex-col items-start min-w-0">
+            <span className="truncate max-w-28 leading-tight">
+              {displayLabel}
+            </span>
+            <span className="truncate max-w-28 text-[9px] text-muted-foreground/70 leading-tight">
+              {selected.description}
+            </span>
+          </div>
+        ) : (
+          <span className="truncate max-w-28">{displayLabel}</span>
+        )}
         <svg
           width="8"
           height="8"
@@ -88,7 +99,14 @@ export function CyberSelect({
                   : "text-foreground/80",
               )}
             >
-              <span className="font-medium truncate">{opt.label}</span>
+              <div className="flex flex-col items-start min-w-0 flex-1">
+                <span className="font-medium truncate">{opt.label}</span>
+                {opt.description && (
+                  <span className="text-[10px] text-muted-foreground/70 truncate w-full mt-0.5">
+                    {opt.description}
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>

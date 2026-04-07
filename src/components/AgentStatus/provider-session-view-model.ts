@@ -20,6 +20,7 @@ export function buildProviderHistoryOptions(
     ...providerItems.map((entry) => ({
       value: entry.externalId,
       label: entry.title?.trim() || `${provider} session`,
+      description: entry.normalizedTaskId?.trim() || entry.externalId,
     })),
   ];
 }
