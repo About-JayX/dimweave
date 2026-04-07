@@ -1,4 +1,12 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Search, X } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
@@ -18,10 +26,11 @@ interface MessagePanelProps {
 }
 
 export function MessagePanel({ surfaceMode }: MessagePanelProps) {
-  const [lightboxAttachment, setLightboxAttachment] = useState<Attachment | null>(
-    null,
-  );
+  const [lightboxAttachment, setLightboxAttachment] =
+    useState<Attachment | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
@@ -37,8 +46,7 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
     [chatMessages, deferredSearchQuery],
   );
   const searchSummary = useMemo(
-    () =>
-      getMessageSearchSummary(deferredSearchQuery, filteredMessages.length),
+    () => getMessageSearchSummary(deferredSearchQuery, filteredMessages.length),
     [deferredSearchQuery, filteredMessages.length],
   );
   const closeLightbox = useCallback(() => setLightboxAttachment(null), []);
@@ -54,30 +62,51 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
       {surfaceMode === "chat" && (
         <>
           {chatMessages.length > 0 && (
-            <div className="border-b border-border/35 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <input
-                  aria-label="Search messages"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search messages"
-                  className="flex-1 rounded-lg border border-border/45 bg-background/65 px-3 py-2 text-[13px] text-foreground outline-none transition-colors focus:border-primary/50"
-                />
-                {searchQuery.trim() ? (
+            <div className="flex items-center border-b border-border/35 px-4 py-1.5">
+              {searchOpen ? (
+                <div className="flex flex-1 items-center gap-2">
+                  <input
+                    ref={searchInputRef}
+                    aria-label="Search messages"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search messages"
+                    className="flex-1 rounded-lg border border-border/45 bg-background/65 px-3 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:border-primary/50"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                  />
                   <button
                     type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="rounded-lg border border-border/45 px-3 py-2 text-[11px] font-medium text-muted-foreground hover:border-border/70 hover:text-foreground"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSearchOpen(false);
+                    }}
+                    className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Close search"
                   >
-                    Clear
+                    <X className="size-4" />
                   </button>
-                ) : null}
-              </div>
-              {searchSummary ? (
-                <div className="mt-2 text-[11px] text-muted-foreground/70">
-                  {searchSummary}
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen(true);
+                    requestAnimationFrame(() =>
+                      searchInputRef.current?.focus(),
+                    );
+                  }}
+                  className="rounded-md p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
+                  aria-label="Search messages"
+                >
+                  <Search className="size-4" />
+                </button>
+              )}
+              {searchOpen && searchSummary ? (
+                <span className="ml-2 shrink-0 text-[11px] text-muted-foreground/70">
+                  {searchSummary}
+                </span>
               ) : null}
             </div>
           )}

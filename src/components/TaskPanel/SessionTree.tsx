@@ -38,14 +38,18 @@ export function SessionTree({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">
+                    <span
+                      className="min-w-0 truncate text-sm font-medium text-foreground"
+                      title={row.session.title}
+                    >
                       {row.session.title}
                     </span>
-                    <span className="rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="shrink-0 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                       {row.session.role}
                     </span>
-                    <span className="rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      {PROVIDER_LABELS[row.session.provider] ?? row.session.provider}
+                    <span className="shrink-0 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {PROVIDER_LABELS[row.session.provider] ??
+                        row.session.provider}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

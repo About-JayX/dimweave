@@ -22,7 +22,10 @@ export function areMessageBubblePropsEqual(
 }
 
 function resolveAttachmentSrc(filePath: string) {
-  if (typeof window === "undefined" || !window.__TAURI_INTERNALS__?.convertFileSrc) {
+  if (
+    typeof window === "undefined" ||
+    !window.__TAURI_INTERNALS__?.convertFileSrc
+  ) {
     return filePath;
   }
   return window.__TAURI_INTERNALS__.convertFileSrc(filePath, "asset");
@@ -116,7 +119,9 @@ export function MessageBubbleView({
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
         </div>
-        <MessageMarkdown content={msg.content} />
+        <div className="max-h-[60vh] overflow-y-auto">
+          <MessageMarkdown content={msg.content} />
+        </div>
         {msg.attachments && msg.attachments.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {msg.attachments.map((att, i) =>
@@ -154,8 +159,14 @@ export function MessageBubbleView({
 export const MessageBubble = memo(
   MessageBubbleView,
   (
-    prev: { msg: BridgeMessage; onOpenImage?: (attachment: Attachment) => void },
-    next: { msg: BridgeMessage; onOpenImage?: (attachment: Attachment) => void },
+    prev: {
+      msg: BridgeMessage;
+      onOpenImage?: (attachment: Attachment) => void;
+    },
+    next: {
+      msg: BridgeMessage;
+      onOpenImage?: (attachment: Attachment) => void;
+    },
   ) =>
     areMessageBubblePropsEqual(prev, next) &&
     prev.onOpenImage === next.onOpenImage,

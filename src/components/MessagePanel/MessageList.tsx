@@ -92,6 +92,16 @@ export function MessageList({
           )}
         />
       </div>
+      {!atBottom && (
+        <div className="flex justify-center py-1.5">
+          <button
+            onClick={scrollToBottom}
+            className="z-10 px-3 py-1.5 rounded-full text-[11px] bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-colors"
+          >
+            ↓ Back to bottom
+          </button>
+        </div>
+      )}
       {displayState.streamRailIndicators.length > 0 && (
         <div className="px-4 pb-2">
           {displayState.streamRailIndicators.map((indicator) =>
@@ -102,14 +112,6 @@ export function MessageList({
             ),
           )}
         </div>
-      )}
-      {!atBottom && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 rounded-full text-[11px] bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-colors"
-        >
-          ↓ Back to bottom
-        </button>
       )}
     </div>
   );
