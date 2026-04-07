@@ -1,19 +1,13 @@
 use super::*;
 use crate::daemon::gui_task::{build_task_change_events, TaskUiEvent};
 use crate::daemon::orchestrator::task_flow;
-use crate::daemon::task_graph::types::{Provider, ReviewStatus, SessionHandle};
+use crate::daemon::task_graph::types::{Provider, SessionHandle};
 use crate::daemon::types::BridgeMessage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRoutingDecision {
     pub is_allowed: bool,
     pub buffer_reason: Option<&'static str>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActiveReviewGate {
-    pub task_id: String,
-    pub review_status: ReviewStatus,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -131,16 +125,6 @@ impl DaemonState {
         self.active_task_id = task_id;
     }
 
-    pub fn active_review_gate(&self) -> Option<ActiveReviewGate> {
-        let task_id = self.active_task_id.as_ref()?;
-        let task = self.task_graph.get_task(task_id)?;
-        let review_status = task.review_status?;
-        Some(ActiveReviewGate {
-            task_id: task.task_id.clone(),
-            review_status,
-        })
-    }
-
     pub fn preferred_auto_target(&self) -> Option<String> {
         let task = self
             .active_task_id
@@ -165,25 +149,7 @@ impl DaemonState {
     }
 
     pub fn prepare_task_routing(&mut self, msg: &BridgeMessage) -> TaskRoutingDecision {
-        let Some(task_id) = self.active_task_id.clone() else {
-            return TaskRoutingDecision {
-                is_allowed: true,
-                buffer_reason: None,
-            };
-        };
-        let Some(task) = self.task_graph.get_task(&task_id) else {
-            return TaskRoutingDecision {
-                is_allowed: true,
-                buffer_reason: None,
-            };
-        };
-        if self.review_gate.should_block(task.review_status, msg) {
-            self.review_gate.buffer_message(&task_id, msg.clone());
-            return TaskRoutingDecision {
-                is_allowed: false,
-                buffer_reason: Some("review_gate"),
-            };
-        }
+        let _ = msg;
         TaskRoutingDecision {
             is_allowed: true,
             buffer_reason: None,
@@ -199,29 +165,7 @@ impl DaemonState {
             return TaskFlowEffect::default();
         };
         let before = self.task_graph.get_task(&task_id).cloned();
-        let released =
-            task_flow::process_message(&mut self.task_graph, &mut self.review_gate, &task_id, msg);
-        self.auto_save_task_graph();
-        let after = self.task_graph.get_task(&task_id).cloned();
-        TaskFlowEffect {
-            released,
-            ui_events: build_task_change_events(before.as_ref(), after.as_ref()),
-        }
-    }
-
-    /// Lead explicitly approves the current review round.
-    /// Only effective when review_status == PendingLeadApproval.
-    pub fn lead_approve_review(&mut self) -> Vec<BridgeMessage> {
-        self.lead_approve_review_effects().released
-    }
-
-    pub fn lead_approve_review_effects(&mut self) -> TaskFlowEffect {
-        let Some(task_id) = self.active_task_id.clone() else {
-            return TaskFlowEffect::default();
-        };
-        let before = self.task_graph.get_task(&task_id).cloned();
-        let released =
-            task_flow::lead_approve(&mut self.task_graph, &mut self.review_gate, &task_id);
+        let released = task_flow::process_message(&mut self.task_graph, &task_id, msg);
         self.auto_save_task_graph();
         let after = self.task_graph.get_task(&task_id).cloned();
         TaskFlowEffect {

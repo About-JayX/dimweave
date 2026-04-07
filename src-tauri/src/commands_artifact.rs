@@ -120,7 +120,6 @@ mod tests {
                 workspace_root: "/workspace".to_string(),
                 title: "Task".to_string(),
                 status: TaskStatus::Draft,
-                review_status: None,
                 lead_session_id: None,
                 current_coder_session_id: None,
                 created_at: 1,

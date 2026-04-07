@@ -1,4 +1,4 @@
-use crate::daemon::task_graph::types::{Artifact, ReviewStatus, SessionHandle, Task};
+use crate::daemon::task_graph::types::{Artifact, SessionHandle, Task};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -7,10 +7,6 @@ pub enum TaskUiEvent {
     TaskUpdated(Task),
     ActiveTaskChanged {
         task_id: Option<String>,
-    },
-    ReviewGateChanged {
-        task_id: String,
-        review_status: Option<ReviewStatus>,
     },
     SessionTreeChanged {
         task_id: String,
@@ -38,24 +34,6 @@ impl TaskUiEvent {
                     "active_task_changed",
                     Payload {
                         task_id: task_id.clone(),
-                    },
-                );
-            }
-            TaskUiEvent::ReviewGateChanged {
-                task_id,
-                review_status,
-            } => {
-                #[derive(Serialize, Clone)]
-                #[serde(rename_all = "camelCase")]
-                struct Payload {
-                    task_id: String,
-                    review_status: Option<ReviewStatus>,
-                }
-                let _ = app.emit(
-                    "review_gate_changed",
-                    Payload {
-                        task_id: task_id.clone(),
-                        review_status: *review_status,
                     },
                 );
             }
@@ -94,13 +72,7 @@ impl TaskUiEvent {
 }
 
 pub fn build_task_state_events(task: &Task) -> Vec<TaskUiEvent> {
-    vec![
-        TaskUiEvent::TaskUpdated(task.clone()),
-        TaskUiEvent::ReviewGateChanged {
-            task_id: task.task_id.clone(),
-            review_status: task.review_status,
-        },
-    ]
+    vec![TaskUiEvent::TaskUpdated(task.clone())]
 }
 
 pub fn build_task_change_events(before: Option<&Task>, after: Option<&Task>) -> Vec<TaskUiEvent> {
@@ -192,23 +164,6 @@ mod tests {
     }
 
     #[test]
-    fn review_gate_payload_serializes_correctly() {
-        #[derive(Serialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Payload {
-            task_id: String,
-            review_status: Option<ReviewStatus>,
-        }
-        let json = serde_json::to_value(Payload {
-            task_id: "t1".into(),
-            review_status: Some(ReviewStatus::PendingLeadApproval),
-        })
-        .unwrap();
-        assert_eq!(json["taskId"], "t1");
-        assert_eq!(json["reviewStatus"], "pending_lead_approval");
-    }
-
-    #[test]
     fn session_tree_payload_serializes_correctly() {
         use crate::daemon::task_graph::types::*;
         #[derive(Serialize)]
@@ -273,7 +228,6 @@ mod tests {
             workspace_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Planning,
-            review_status: None,
             lead_session_id: None,
             current_coder_session_id: None,
             created_at: 100,
@@ -282,7 +236,6 @@ mod tests {
         let json = serde_json::to_value(&task).unwrap();
         assert_eq!(json["taskId"], "task_1");
         assert_eq!(json["status"], "planning");
-        assert!(json["reviewStatus"].is_null());
     }
 
     #[test]
@@ -292,7 +245,6 @@ mod tests {
             workspace_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Implementing,
-            review_status: None,
             lead_session_id: None,
             current_coder_session_id: None,
             created_at: 100,
@@ -300,20 +252,12 @@ mod tests {
         };
         let after = Task {
             status: TaskStatus::Reviewing,
-            review_status: Some(ReviewStatus::PendingLeadReview),
             ..before.clone()
         };
 
         let events = build_task_change_events(Some(&before), Some(&after));
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 1);
         assert_eq!(events[0], TaskUiEvent::TaskUpdated(after.clone()));
-        assert_eq!(
-            events[1],
-            TaskUiEvent::ReviewGateChanged {
-                task_id: "task_1".into(),
-                review_status: Some(ReviewStatus::PendingLeadReview),
-            }
-        );
     }
 
     fn make_test_task(task_id: &str) -> Task {
@@ -323,7 +267,6 @@ mod tests {
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Reviewing,
-            review_status: Some(ReviewStatus::PendingLeadApproval),
             lead_session_id: Some("sess_1".into()),
             current_coder_session_id: None,
             created_at: 100,
@@ -371,30 +314,23 @@ mod tests {
         let events =
             build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, Some("task_1"));
 
-        assert_eq!(events.len(), 5);
+        assert_eq!(events.len(), 4);
         assert_eq!(events[0], TaskUiEvent::TaskUpdated(task.clone()));
         assert_eq!(
             events[1],
-            TaskUiEvent::ReviewGateChanged {
-                task_id: "task_1".into(),
-                review_status: Some(ReviewStatus::PendingLeadApproval),
-            }
-        );
-        assert_eq!(
-            events[2],
             TaskUiEvent::ActiveTaskChanged {
                 task_id: Some("task_1".into()),
             }
         );
         assert_eq!(
-            events[3],
+            events[2],
             TaskUiEvent::SessionTreeChanged {
                 task_id: "task_1".into(),
                 sessions,
             }
         );
         assert_eq!(
-            events[4],
+            events[3],
             TaskUiEvent::ArtifactsChanged {
                 task_id: "task_1".into(),
                 artifacts,

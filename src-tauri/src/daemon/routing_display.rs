@@ -60,7 +60,6 @@ pub(crate) fn emit_route_side_effects(
 
 pub(crate) fn buffered_route_message(to: &str, buffer_reason: Option<&'static str>) -> String {
     match buffer_reason {
-        Some("review_gate") => format!("[Route] {to} blocked by review gate"),
         Some("target_session_missing") => {
             format!("[Route] {to} has no bound session in the active task, buffered")
         }
@@ -87,4 +86,15 @@ pub(crate) fn should_emit_claude_thinking(
     claude_role: &str,
 ) -> bool {
     matches!(result, RouteResult::Delivered) && should_emit_claude_thinking_pre(msg, claude_role)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::buffered_route_message;
+
+    #[test]
+    fn buffered_route_message_no_longer_mentions_review_gate() {
+        let msg = buffered_route_message("coder", Some("review_gate"));
+        assert_eq!(msg, "[Route] coder offline, buffered");
+    }
 }

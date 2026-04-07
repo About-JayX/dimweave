@@ -40,7 +40,6 @@ impl TaskGraphStore {
             workspace_root: workspace_root.to_string(),
             title: title.to_string(),
             status: TaskStatus::Draft,
-            review_status: None,
             lead_session_id: None,
             current_coder_session_id: None,
             created_at: now,
@@ -113,20 +112,6 @@ impl TaskGraphStore {
             }
         }
         false
-    }
-
-    pub fn update_task_review_status(
-        &mut self,
-        task_id: &str,
-        review_status: Option<ReviewStatus>,
-    ) -> bool {
-        if let Some(task) = self.tasks.get_mut(task_id) {
-            task.review_status = review_status;
-            task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
-            true
-        } else {
-            false
-        }
     }
 
     /// Create a new session linked to a task.

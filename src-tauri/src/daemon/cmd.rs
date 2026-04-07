@@ -73,9 +73,6 @@ pub enum DaemonCmd {
     GetTaskSnapshot {
         reply: oneshot::Sender<Option<TaskSnapshot>>,
     },
-    ApproveReview {
-        reply: oneshot::Sender<Result<(), String>>,
-    },
     ListSessionTree {
         task_id: String,
         reply: oneshot::Sender<Option<SessionTreeSnapshot>>,

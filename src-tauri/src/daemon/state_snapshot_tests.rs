@@ -74,12 +74,12 @@ fn online_agents_snapshot_role_reflects_current_state() {
         crate::daemon::state::AgentSender::new(claude_tx, 0),
     );
     s.codex_inject_tx = Some(codex_tx);
-    s.claude_role = "reviewer".into();
-    s.codex_role = "tester".into();
+    s.claude_role = "coder".into();
+    s.codex_role = "lead".into();
 
     let snapshot = s.online_agents_snapshot();
-    assert_eq!(snapshot[0].role, "reviewer");
-    assert_eq!(snapshot[1].role, "tester");
+    assert_eq!(snapshot[0].role, "coder");
+    assert_eq!(snapshot[1].role, "lead");
 }
 
 #[test]

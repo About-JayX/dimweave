@@ -94,19 +94,6 @@ pub async fn daemon_get_task_snapshot(
 }
 
 #[tauri::command]
-pub async fn daemon_approve_review(sender: State<'_, DaemonSender>) -> Result<(), String> {
-    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    sender
-        .0
-        .send(DaemonCmd::ApproveReview { reply: reply_tx })
-        .await
-        .map_err(|e| e.to_string())?;
-    reply_rx
-        .await
-        .map_err(|_| "daemon dropped approve_review reply".to_string())?
-}
-
-#[tauri::command]
 pub async fn daemon_list_session_tree(
     task_id: String,
     sender: State<'_, DaemonSender>,

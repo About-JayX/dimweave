@@ -536,7 +536,7 @@ fn codex_register_on_launch_binds_resumed_thread_to_active_task() {
 }
 
 #[test]
-fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
+fn observe_task_message_moves_task_to_reviewing_without_gate() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     s.set_active_task(Some(task.task_id.clone()));
@@ -563,79 +563,9 @@ fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
     assert!(s.prepare_task_routing(&coder_done).is_allowed);
     let released = s.observe_task_message(&coder_done);
     assert!(released.is_empty());
-    assert!(s.active_review_gate().is_some());
-
-    let blocked = BridgeMessage {
-        id: "lead_next".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: "coder".into(),
-        content: "start next todo".into(),
-        timestamp: 2,
-        reply_to: None,
-        priority: None,
-        status: Some(crate::daemon::types::MessageStatus::Done),
-        task_id: None,
-        session_id: None,
-        sender_agent_id: Some("claude".into()),
-        attachments: None,
-    };
-    let decision = s.prepare_task_routing(&blocked);
-    assert!(!decision.is_allowed);
-    assert_eq!(decision.buffer_reason.as_deref(), Some("review_gate"));
-
-    let lead_to_reviewer = BridgeMessage {
-        id: "lead_review".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: "reviewer".into(),
-        content: "please review".into(),
-        timestamp: 3,
-        reply_to: None,
-        priority: None,
-        status: Some(crate::daemon::types::MessageStatus::Done),
-        task_id: None,
-        session_id: None,
-        sender_agent_id: Some("claude".into()),
-        attachments: None,
-    };
-    assert!(s.prepare_task_routing(&lead_to_reviewer).is_allowed);
-    let released = s.observe_task_message(&lead_to_reviewer);
-    assert!(released.is_empty());
-
-    let reviewer_done = BridgeMessage {
-        id: "review_done".into(),
-        from: "reviewer".into(),
-        display_source: Some("claude".into()),
-        to: "lead".into(),
-        content: "approved".into(),
-        timestamp: 4,
-        reply_to: None,
-        priority: None,
-        status: Some(crate::daemon::types::MessageStatus::Done),
-        task_id: None,
-        session_id: None,
-        sender_agent_id: Some("claude".into()),
-        attachments: None,
-    };
-    assert!(s.prepare_task_routing(&reviewer_done).is_allowed);
-    let released = s.observe_task_message(&reviewer_done);
-    // reviewer→lead done does NOT release; sets PendingLeadApproval
-    assert!(released.is_empty());
-    let gate = s.active_review_gate().expect("gate still active");
-    assert_eq!(
-        gate.review_status,
-        crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval
-    );
-
-    // lead explicitly approves → releases blocked messages
-    let released = s.lead_approve_review();
-    assert_eq!(released.len(), 1);
-    assert_eq!(released[0].id, "lead_next");
-    assert!(s.active_review_gate().is_none());
     assert_eq!(
         s.task_graph.get_task(&task.task_id).unwrap().status,
-        crate::daemon::task_graph::types::TaskStatus::Implementing
+        crate::daemon::task_graph::types::TaskStatus::Reviewing
     );
 }
 
@@ -668,49 +598,38 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
     let effects = s.observe_task_message_effects(&coder_done);
 
     assert!(effects.released.is_empty());
-    assert_eq!(effects.ui_events.len(), 2);
+    assert_eq!(effects.ui_events.len(), 1);
     assert!(matches!(
         &effects.ui_events[0],
         crate::daemon::gui_task::TaskUiEvent::TaskUpdated(task)
             if task.status == crate::daemon::task_graph::types::TaskStatus::Reviewing
-                && task.review_status == Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadReview)
-    ));
-    assert!(matches!(
-        &effects.ui_events[1],
-        crate::daemon::gui_task::TaskUiEvent::ReviewGateChanged { task_id, review_status }
-            if task_id == &task.task_id
-                && *review_status == Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadReview)
+                && task.task_id == task.task_id
     ));
 }
 
 #[test]
-fn lead_approve_review_effects_reports_task_ui_events() {
+fn prepare_task_routing_never_returns_review_gate_reason() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     s.set_active_task(Some(task.task_id.clone()));
-    s.task_graph.update_task_status(
-        &task.task_id,
-        crate::daemon::task_graph::types::TaskStatus::Reviewing,
-    );
-    s.task_graph.update_task_review_status(
-        &task.task_id,
-        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
-    );
+    let decision = s.prepare_task_routing(&BridgeMessage {
+        id: "user_to_coder".into(),
+        from: "user".into(),
+        display_source: None,
+        to: "coder".into(),
+        content: "resume".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    });
 
-    let effects = s.lead_approve_review_effects();
-
-    assert_eq!(effects.ui_events.len(), 2);
-    assert!(matches!(
-        &effects.ui_events[0],
-        crate::daemon::gui_task::TaskUiEvent::TaskUpdated(task)
-            if task.status == crate::daemon::task_graph::types::TaskStatus::Implementing
-                && task.review_status.is_none()
-    ));
-    assert!(matches!(
-        &effects.ui_events[1],
-        crate::daemon::gui_task::TaskUiEvent::ReviewGateChanged { task_id, review_status }
-            if task_id == &task.task_id && review_status.is_none()
-    ));
+    assert!(decision.is_allowed);
+    assert!(decision.buffer_reason.is_none());
 }
 
 #[test]
@@ -760,52 +679,6 @@ fn daemon_state_persist_round_trip_restores_buffered_messages_per_task() {
     assert_eq!(released_b.len(), 1);
     assert_eq!(released_b[0].id, buffered_b.id);
     assert_eq!(released_b[0].task_id.as_deref(), Some(task_b.task_id.as_str()));
-
-    let _ = std::fs::remove_file(&path);
-}
-
-#[test]
-fn lead_approve_review_after_reload_releases_review_gate_buffered_messages() {
-    let path = temp_state_path("review_gate_round_trip");
-    let _ = std::fs::remove_file(&path);
-
-    let mut s = DaemonState::with_task_graph_path(path.clone()).expect("create with path");
-    let task = s.task_graph.create_task("/ws", "Task");
-    s.set_active_task(Some(task.task_id.clone()));
-    s.task_graph.update_task_status(
-        &task.task_id,
-        crate::daemon::task_graph::types::TaskStatus::Reviewing,
-    );
-    s.task_graph.update_task_review_status(
-        &task.task_id,
-        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
-    );
-
-    let blocked = BridgeMessage {
-        id: "lead_next_after_restart".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: "coder".into(),
-        content: "resume after approval".into(),
-        timestamp: 1,
-        reply_to: None,
-        priority: None,
-        status: Some(crate::daemon::types::MessageStatus::Done),
-        task_id: Some(task.task_id.clone()),
-        session_id: None,
-        sender_agent_id: Some("claude".into()),
-        attachments: None,
-    };
-    s.review_gate.buffer_message(&task.task_id, blocked.clone());
-    s.save_task_graph().expect("save should succeed");
-
-    let mut restored = DaemonState::with_task_graph_path(path.clone()).expect("reload should work");
-    restored.set_active_task(Some(task.task_id.clone()));
-
-    let released = restored.lead_approve_review();
-    assert_eq!(released.len(), 1);
-    assert_eq!(released[0].id, blocked.id);
-    assert_eq!(released[0].task_id.as_deref(), Some(task.task_id.as_str()));
 
     let _ = std::fs::remove_file(&path);
 }
@@ -874,7 +747,6 @@ fn observe_task_message_auto_saves_without_explicit_call() {
         t.status,
         crate::daemon::task_graph::types::TaskStatus::Reviewing
     );
-    assert!(t.review_status.is_some());
 
     let _ = std::fs::remove_file(&path);
 }

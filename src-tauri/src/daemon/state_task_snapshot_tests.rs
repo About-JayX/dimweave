@@ -174,7 +174,7 @@ fn resume_session_returns_error_for_missing() {
 }
 
 #[test]
-fn task_snapshot_after_reload_preserves_pending_lead_approval_status() {
+fn task_snapshot_after_reload_omits_review_status() {
     let path = std::env::temp_dir().join(format!(
         "dimweave_task_snapshot_review_{}_{}.json",
         std::process::id(),
@@ -188,10 +188,6 @@ fn task_snapshot_after_reload_preserves_pending_lead_approval_status() {
         &task.task_id,
         crate::daemon::task_graph::types::TaskStatus::Reviewing,
     );
-    s.task_graph.update_task_review_status(
-        &task.task_id,
-        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval),
-    );
     s.save_task_graph().expect("save should succeed");
 
     let mut restored = DaemonState::with_task_graph_path(path.clone()).expect("reload should work");
@@ -200,10 +196,6 @@ fn task_snapshot_after_reload_preserves_pending_lead_approval_status() {
         .expect("task should still be selectable");
 
     let snapshot = restored.task_snapshot().expect("snapshot exists");
-    assert_eq!(
-        snapshot.task.review_status,
-        Some(crate::daemon::task_graph::types::ReviewStatus::PendingLeadApproval)
-    );
     assert_eq!(
         snapshot.task.status,
         crate::daemon::task_graph::types::TaskStatus::Reviewing

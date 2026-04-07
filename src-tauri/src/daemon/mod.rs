@@ -549,16 +549,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             DaemonCmd::GetTaskSnapshot { reply } => {
                 let _ = reply.send(state.read().await.task_snapshot());
             }
-            DaemonCmd::ApproveReview { reply } => {
-                let effects = state.write().await.lead_approve_review_effects();
-                for event in effects.ui_events {
-                    event.emit(&app);
-                }
-                for msg in effects.released {
-                    routing::route_message(&state, &app, msg).await;
-                }
-                let _ = reply.send(Ok(()));
-            }
             DaemonCmd::ListSessionTree { task_id, reply } => {
                 let _ = reply.send(state.read().await.session_tree(&task_id));
             }
@@ -750,4 +740,3 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         }
     }
 }
-

@@ -1,5 +1,4 @@
 use super::*;
-use crate::daemon::orchestrator::review_gate::ReviewGateSnapshot;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -8,8 +7,6 @@ struct DaemonPersistedSnapshot {
     task_graph: serde_json::Value,
     #[serde(default)]
     buffered_messages: Vec<BridgeMessage>,
-    #[serde(default)]
-    review_gate: ReviewGateSnapshot,
 }
 
 impl DaemonState {
@@ -33,7 +30,6 @@ impl DaemonState {
         let snapshot = DaemonPersistedSnapshot {
             task_graph: self.task_graph.to_snapshot_json()?,
             buffered_messages: self.persisted_buffered_messages(),
-            review_gate: self.review_gate.snapshot(),
         };
         let json = serde_json::to_string_pretty(&snapshot)?;
         if let Some(parent) = path.parent() {
@@ -73,7 +69,6 @@ impl DaemonState {
                 ..Self::default()
             };
             state.restore_persisted_buffered_messages(snapshot.buffered_messages);
-            state.restore_review_gate_snapshot(snapshot.review_gate);
             return Ok(state);
         }
 

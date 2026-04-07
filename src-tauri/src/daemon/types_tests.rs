@@ -65,7 +65,6 @@ fn task_snapshot_serializes_camel_case() {
             workspace_root: "/ws".into(),
             title: "Test".into(),
             status: TaskStatus::Implementing,
-            review_status: Some(ReviewStatus::InReview),
             lead_session_id: Some("s1".into()),
             current_coder_session_id: Some("s2".into()),
             created_at: 1000,
@@ -90,7 +89,7 @@ fn task_snapshot_serializes_camel_case() {
     let json = serde_json::to_value(&snap).unwrap();
     assert_eq!(json["task"]["taskId"], "task_1");
     assert_eq!(json["task"]["status"], "implementing");
-    assert_eq!(json["task"]["reviewStatus"], "in_review");
+    assert!(json["task"]["reviewStatus"].is_null());
     assert_eq!(json["sessions"][0]["sessionId"], "s1");
     assert_eq!(json["sessions"][0]["provider"], "claude");
     assert!(json["artifacts"].as_array().unwrap().is_empty());
@@ -105,7 +104,6 @@ fn task_snapshot_roundtrip() {
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Draft,
-            review_status: None,
             lead_session_id: None,
             current_coder_session_id: None,
             created_at: 100,
@@ -155,7 +153,6 @@ fn history_entry_serializes_camel_case() {
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Done,
-            review_status: None,
             lead_session_id: None,
             current_coder_session_id: None,
             created_at: 100,

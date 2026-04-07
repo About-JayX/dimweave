@@ -147,7 +147,6 @@ fn main() {
             commands_task::daemon_select_task,
             commands_task::daemon_clear_active_task,
             commands_task::daemon_get_task_snapshot,
-            commands_task::daemon_approve_review,
             commands_task::daemon_list_session_tree,
             commands_history::daemon_list_history,
             commands_history::daemon_list_provider_history,
