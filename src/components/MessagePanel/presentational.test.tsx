@@ -26,19 +26,18 @@ describe("BackToBottomButton", () => {
 });
 
 describe("MessageSearchChrome", () => {
-  test("closed state renders only the header search button", () => {
+  test("closed state renders nothing — search row not disclosed", () => {
     const html = renderToStaticMarkup(
       createElement(MessageSearchChrome, {
         searchOpen: false,
         searchQuery: "",
         searchSummary: null,
         inputRef: { current: null },
-        onOpen: () => {},
         onQueryChange: () => {},
         onClose: () => {},
       }),
     );
-    expect(html).toContain("Search messages");
+    expect(html).toBe("");
     expect(html).not.toContain('type="search"');
   });
 

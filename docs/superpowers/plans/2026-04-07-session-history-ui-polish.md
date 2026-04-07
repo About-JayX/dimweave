@@ -38,6 +38,7 @@
 | Task 5 | `540f33d6` | `self-review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | Provider history rows must favor readability over compact truncation; export HistoryMenuOption for direct testability instead of needing a defaultOpen prop. |
 | Task 6 | `92641c8f` | `self-review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 10 pass; `bun run build` ✅; `git diff --check` ✅ | Product fix needed: remove chatMessages.length > 0 guard — Zustand v5 SSR uses api.getInitialState() which cannot be reliably patched from outside the store closure; removing the guard is the correct minimal fix. |
 | Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
+| Task 8 | `TBD` | `manual review` | `bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 14 pass; `bun run build` ✅; `git diff --check` ✅ | Search ownership should stay explicit: the top bar owns the resting icon, while MessagePanel only owns the disclosed search row. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -568,3 +569,192 @@ git commit -m "style: restore back-to-bottom chrome"
 - [x] **Step 5: Update `## CM Memory`**
 
 Append the real Task 7 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 8: Realign search ownership tests with the top bar entrypoint
+
+**Files:**
+- Modify: `src/components/ShellTopBar.test.tsx`
+- Modify: `src/components/MessagePanel/index.test.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+
+- [x] **Step 1: Add the failing ownership assertions**
+
+Add focused assertions for the current search contract:
+
+- `ShellTopBar` renders the search icon in chat mode when `onSearchToggle` is provided
+- `MessageSearchChrome` renders nothing while `searchOpen` is `false`
+- `MessagePanel` tests pass explicit `searchOpen` / `onSearchClose` props instead of asserting that the panel owns the header icon
+
+Run:
+
+```bash
+bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+```
+
+Expected: FAIL because the current message-panel tests still assert the old in-panel search ownership.
+
+- [x] **Step 2: Update the stale search ownership tests**
+
+Adjust the search tests so they match the shipped architecture:
+
+- the top bar owns the resting-state search button
+- `MessageSearchChrome` owns only the disclosed search row
+- `MessagePanel` only asserts disclosure-row behavior, not the header icon
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "test: realign search ownership coverage"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Append the real Task 8 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 9: Clear hidden search filters when the disclosure closes
+
+**Files:**
+- Create: `src/components/MessagePanel/view-model.test.ts`
+- Modify: `src/components/MessagePanel/view-model.ts`
+- Modify: `src/components/MessagePanel/index.tsx`
+
+- [ ] **Step 1: Write the failing disclosure-state test**
+
+Add focused coverage for a pure helper that reconciles the current query with disclosure visibility:
+
+```ts
+test("closing the disclosure clears any hidden search query", () => {
+  expect(getSearchQueryForDisclosure(false, "error")).toBe("");
+});
+
+test("open disclosure preserves the active query", () => {
+  expect(getSearchQueryForDisclosure(true, "error")).toBe("error");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/view-model.test.ts
+```
+
+Expected: FAIL because the helper does not exist yet.
+
+- [ ] **Step 2: Implement the disclosure/query sync**
+
+Update `src/components/MessagePanel/view-model.ts` to export a pure helper:
+
+```ts
+export function getSearchQueryForDisclosure(
+  searchOpen: boolean,
+  searchQuery: string,
+): string {
+  return searchOpen ? searchQuery : "";
+}
+```
+
+Then use it from `src/components/MessagePanel/index.tsx` so closing the disclosure — including closing it from the top-bar search button path — clears the hidden query before filtered results can linger.
+
+- [ ] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/view-model.ts src/components/MessagePanel/index.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "fix: clear hidden message search filters"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Append the real Task 9 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 10: Restore readable history dropdown rows
+
+**Files:**
+- Modify: `src/components/ui/cyber-select.tsx`
+- Modify: `src/components/ui/cyber-select.test.tsx`
+
+- [ ] **Step 1: Strengthen the failing history readability tests**
+
+Extend the history-select coverage so it fails unless the shared history menu stops clipping long text:
+
+```tsx
+test("history menu option avoids truncation classes", async () => {
+  const { HistoryMenuOption, getCyberSelectMenuPanelClassName } = await import("./cyber-select");
+  const html = renderToStaticMarkup(
+    createElement(HistoryMenuOption, {
+      opt: {
+        value: "h1",
+        label: "A very long session title that would be clipped in a narrow container",
+        description: "sess_abc123456789_very_long_external_id_overflow",
+      },
+      isSelected: false,
+      onClick: () => {},
+    }),
+  );
+  expect(html).not.toContain("truncate");
+  expect(getCyberSelectMenuPanelClassName("history")).toContain("w-[22rem]");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+```
+
+Expected: FAIL because the current history rows still use truncation classes and the menu stays at the narrow `w-52` width.
+
+- [ ] **Step 2: Widen the history menu and let rows wrap**
+
+Update `src/components/ui/cyber-select.tsx` so the history variant:
+
+- keeps the collapsed trigger compact
+- uses a wider centered menu panel (`w-[22rem]` with the existing viewport guard)
+- removes one-line truncation from history menu rows in favor of multi-line wrapping/breaking that keeps long titles and ids readable
+
+- [ ] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "fix: restore history dropdown readability"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Append the real Task 10 commit hash, review result, and verification evidence to `## CM Memory`.
