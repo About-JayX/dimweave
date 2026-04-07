@@ -184,9 +184,6 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 | `user` | 管理员直控 | `workspace-write` / `never` |
 | `lead` | 决策与汇总 | `workspace-write` / `never` |
 | `coder` | 代码实现 | `workspace-write` / `never` |
-| `reviewer` | 审查 | `read-only` / `never` |
-| `tester` | 测试 | `read-only` / `never` |
-
 注意当前实现的真实边界：
 
 - Codex 角色约束已经接到启动链路中。

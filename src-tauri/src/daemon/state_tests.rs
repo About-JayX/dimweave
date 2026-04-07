@@ -377,9 +377,8 @@ fn migrate_buffered_role_retargets_messages() {
     let mut s = DaemonState::new();
     s.buffer_message(BridgeMessage::system("hello", "lead"));
     s.buffer_message(BridgeMessage::system("world", "coder"));
-    s.migrate_buffered_role("lead", "reviewer");
+    s.migrate_buffered_role("lead", "coder");
     assert!(s.buffered_messages.iter().all(|m| m.to != "lead"));
-    assert!(s.buffered_messages.iter().any(|m| m.to == "reviewer"));
     assert!(s.buffered_messages.iter().any(|m| m.to == "coder"));
 }
 
@@ -608,7 +607,7 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
 }
 
 #[test]
-fn prepare_task_routing_never_returns_review_gate_reason() {
+fn prepare_task_routing_allows_direct_coder_messages() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     s.set_active_task(Some(task.task_id.clone()));

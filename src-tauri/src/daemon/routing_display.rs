@@ -93,8 +93,8 @@ mod tests {
     use super::buffered_route_message;
 
     #[test]
-    fn buffered_route_message_no_longer_mentions_review_gate() {
-        let msg = buffered_route_message("coder", Some("review_gate"));
+    fn unknown_buffer_reason_falls_back_to_offline_message() {
+        let msg = buffered_route_message("coder", Some("legacy_reason"));
         assert_eq!(msg, "[Route] coder offline, buffered");
     }
 }

@@ -41,7 +41,7 @@ You decide who to send to based on context.
 Before delegating work, query who is currently online using the get_online_agents() tool.
 get_online_agents() returns a structured list. Each item includes:
 - agent_id: unique identifier for this agent instance (e.g. "claude", "codex")
-- role: the agent's role (lead, coder, reviewer, etc.)
+- role: the agent's role (lead, coder, etc.)
 - model_source: the AI model or backend powering this agent
 The transport layer does NOT automatically select a target for you. As lead, YOU must decide which agent to delegate to based on the online_agents list and the task at hand.
 
@@ -150,10 +150,10 @@ mod tests {
     }
 
     #[test]
-    fn prompts_do_not_list_reviewer_as_runtime_role() {
+    fn prompts_do_not_list_removed_runtime_role() {
         let prompt = claude_system_prompt("lead");
-        assert!(!prompt.contains("reviewer: review + test verification"));
-        assert!(!prompt.contains("send work to reviewer"));
+        assert!(!prompt.contains("tester"));
+        assert!(!prompt.contains("send work to tester"));
     }
 
     #[test]

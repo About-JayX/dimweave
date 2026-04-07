@@ -130,8 +130,8 @@ mod tests {
     }
 
     #[test]
-    fn reviewer_sender_is_dropped() {
+    fn removed_role_sender_is_dropped() {
         let state = ChannelState::new();
-        assert!(state.prepare_channel_message(&msg("reviewer")).is_none());
+        assert!(state.prepare_channel_message(&msg("tester")).is_none());
     }
 }

@@ -39,7 +39,7 @@ fn user_role_rejected() {
 fn unknown_role_rejected() {
     assert!(!crate::daemon::is_valid_agent_role("admin"));
     assert!(!crate::daemon::is_valid_agent_role(""));
-    assert!(!crate::daemon::is_valid_agent_role("reviewer"));
+    assert!(!crate::daemon::is_valid_agent_role("tester"));
 }
 
 // ── fan-out behavior tests (route_message_inner level) ────────────
@@ -155,14 +155,14 @@ async fn valid_role_offline_is_buffered() {
 }
 
 #[tokio::test]
-async fn reviewer_target_is_dropped_not_buffered() {
+async fn removed_role_target_is_dropped_not_buffered() {
     let state = Arc::new(RwLock::new(DaemonState::new()));
     let msg = BridgeMessage {
-        id: "bad-reviewer-1".into(),
+        id: "bad-tester-1".into(),
         from: "user".into(),
         display_source: Some("user".into()),
-        to: "reviewer".into(),
-        content: "review this".into(),
+        to: "tester".into(),
+        content: "test this".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,

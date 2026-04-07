@@ -66,8 +66,8 @@ fn coder_prompt_requires_plan_only_execution_and_self_review() {
 }
 
 #[test]
-fn reviewer_role_is_removed_from_role_config() {
-    assert!(get_role("reviewer").is_none());
+fn removed_runtime_role_is_rejected_by_role_config() {
+    assert!(get_role("tester").is_none());
 }
 
 #[test]

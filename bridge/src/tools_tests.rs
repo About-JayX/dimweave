@@ -91,10 +91,7 @@ fn reply_schema_has_enum_constraint() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert!(targets.contains(&"user"));
-    assert!(targets.contains(&"lead"));
-    assert!(targets.contains(&"coder"));
-    assert!(!targets.contains(&"reviewer"));
+    assert_eq!(targets, vec!["user", "lead", "coder"]);
     assert!(!targets.contains(&"tester"));
     assert!(!targets.contains(&"admin"));
 }
