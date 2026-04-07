@@ -106,6 +106,17 @@ describe("MessagePanel", () => {
     expect(withoutSummary).toContain('aria-label="Close search"');
   });
 
+  test("chat surface always shows header search icon in chat mode", async () => {
+    installTauriStub();
+    const { MessagePanel } = await import("./index");
+
+    // Zustand v5 SSR uses api.getInitialState() (messages=[]) — not getState().
+    // The search chrome must render unconditionally in chat mode so it is
+    // verifiable in the SSR snapshot regardless of message count.
+    const html = renderToStaticMarkup(<MessagePanel surfaceMode="chat" />);
+    expect(html).toContain('aria-label="Search messages"');
+  });
+
   test("renders the log surface body without duplicating the top bar title", async () => {
     installTauriStub();
     const { MessagePanel } = await import("./index");

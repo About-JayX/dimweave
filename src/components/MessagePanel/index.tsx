@@ -94,20 +94,18 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
     <div className="relative flex min-h-0 flex-1 flex-col">
       {surfaceMode === "chat" && (
         <>
-          {chatMessages.length > 0 && (
-            <MessageSearchChrome
-              searchOpen={searchOpen}
-              searchQuery={searchQuery}
-              searchSummary={searchSummary}
-              inputRef={searchInputRef}
-              onOpen={() => {
-                setSearchOpen(true);
-                requestAnimationFrame(() => searchInputRef.current?.focus());
-              }}
-              onQueryChange={setSearchQuery}
-              onClose={handleCloseSearch}
-            />
-          )}
+          <MessageSearchChrome
+            searchOpen={searchOpen}
+            searchQuery={searchQuery}
+            searchSummary={searchSummary}
+            inputRef={searchInputRef}
+            onOpen={() => {
+              setSearchOpen(true);
+              requestAnimationFrame(() => searchInputRef.current?.focus());
+            }}
+            onQueryChange={setSearchQuery}
+            onClose={handleCloseSearch}
+          />
           <MessageList
             messages={filteredMessages}
             emptyStateMessage={searchSummary ?? undefined}
