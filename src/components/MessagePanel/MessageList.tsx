@@ -8,6 +8,7 @@ import { ClaudeStreamIndicator } from "./ClaudeStreamIndicator";
 import {
   getCodexStreamIndicatorViewModel,
   getMessageListDisplayState,
+  type StreamIndicatorId,
 } from "./view-model";
 
 interface Props {
@@ -16,12 +17,31 @@ interface Props {
   onOpenImage?: (attachment: Attachment) => void;
 }
 
+type FooterContext = { indicators: StreamIndicatorId[] };
+
+export function StreamTailFooter({ context }: { context?: FooterContext }) {
+  const indicators = context?.indicators ?? [];
+  if (indicators.length === 0) return null;
+  return (
+    <div className="px-4 pb-2">
+      {indicators.map((indicator) =>
+        indicator === "claude" ? (
+          <ClaudeStreamIndicator key={indicator} />
+        ) : (
+          <CodexStreamIndicator key={indicator} />
+        ),
+      )}
+    </div>
+  );
+}
+
 export function MessageList({
   emptyStateMessage,
   messages,
   onOpenImage,
 }: Props) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const scrollerRef = useRef<HTMLElement | null>(null);
   const didInitialScrollRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
   const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
@@ -42,12 +62,24 @@ export function MessageList({
   );
   const totalCount = displayState.timelineCount;
 
+  const footerContext = useMemo<FooterContext>(
+    () => ({ indicators: streamRailIndicators }),
+    [streamRailIndicators],
+  );
+
   const handleAtBottomChange = useCallback((bottom: boolean) => {
     setAtBottom(bottom);
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
+    if (scrollerRef.current) {
+      scrollerRef.current.scrollTo({
+        top: scrollerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    } else {
+      virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
+    }
   }, []);
 
   useEffect(() => {
@@ -79,12 +111,17 @@ export function MessageList({
       <div className="flex-1 min-h-0">
         <Virtuoso
           ref={virtuosoRef}
+          scrollerRef={(el) => {
+            scrollerRef.current = el as HTMLElement | null;
+          }}
           totalCount={totalCount}
           atBottomStateChange={handleAtBottomChange}
           atBottomThreshold={80}
           followOutput="smooth"
           className="h-full"
           increaseViewportBy={200}
+          context={footerContext}
+          components={{ Footer: StreamTailFooter }}
           itemContent={(index) => (
             <div className="px-4">
               <MessageBubble msg={messages[index]} onOpenImage={onOpenImage} />
@@ -100,17 +137,6 @@ export function MessageList({
           >
             ↓ Back to bottom
           </button>
-        </div>
-      )}
-      {displayState.streamRailIndicators.length > 0 && (
-        <div className="px-4 pb-2">
-          {displayState.streamRailIndicators.map((indicator) =>
-            indicator === "claude" ? (
-              <ClaudeStreamIndicator key={indicator} />
-            ) : (
-              <CodexStreamIndicator key={indicator} />
-            ),
-          )}
         </div>
       )}
     </div>

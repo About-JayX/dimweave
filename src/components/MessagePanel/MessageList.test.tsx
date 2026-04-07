@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   filterMessagesByQuery,
   getMessageSearchSummary,
+  getMessageListDisplayState,
 } from "./view-model";
 
 function installTauriStub() {
@@ -65,6 +67,32 @@ describe("MessageList", () => {
     expect(getMessageSearchSummary("review.png", filtered.length)).toBe(
       "1 result for review.png.",
     );
+  });
+
+  test("stream indicators do not inflate timelineCount", () => {
+    const state = getMessageListDisplayState(3, ["claude", "codex"]);
+    expect(state.timelineCount).toBe(3);
+  });
+
+  test("hasContent is true when only stream indicators are active", () => {
+    const state = getMessageListDisplayState(0, ["claude"]);
+    expect(state.hasContent).toBe(true);
+    expect(state.timelineCount).toBe(0);
+  });
+
+  test("StreamTailFooter renders container when indicators present and nothing when empty", async () => {
+    installTauriStub();
+    const { StreamTailFooter } = await import("./MessageList");
+
+    const withIndicator = renderToStaticMarkup(
+      createElement(StreamTailFooter, { context: { indicators: ["claude"] } }),
+    );
+    const withoutIndicator = renderToStaticMarkup(
+      createElement(StreamTailFooter, { context: { indicators: [] } }),
+    );
+
+    expect(withIndicator).not.toBe(""); // tail container renders when active
+    expect(withoutIndicator).toBe(""); // nothing when no indicators
   });
 
   test("renders a search-specific empty state when no filtered messages remain", async () => {
