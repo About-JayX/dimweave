@@ -5,6 +5,7 @@ import type { Attachment, BridgeMessage } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 import { CodexStreamIndicator } from "./CodexStreamIndicator";
 import { ClaudeStreamIndicator } from "./ClaudeStreamIndicator";
+import { BackToBottomButton } from "./search-chrome";
 import {
   getCodexStreamIndicatorViewModel,
   getMessageListDisplayState,
@@ -131,12 +132,7 @@ export function MessageList({
       </div>
       {!atBottom && (
         <div className="flex justify-center py-1.5">
-          <button
-            onClick={scrollToBottom}
-            className="z-10 px-3 py-1.5 rounded-full text-[11px] bg-primary/90 text-primary-foreground shadow-lg hover:bg-primary transition-colors"
-          >
-            ↓ Back to bottom
-          </button>
+          <BackToBottomButton onClick={scrollToBottom} />
         </div>
       )}
     </div>

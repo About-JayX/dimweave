@@ -13,6 +13,7 @@ interface CyberSelectProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  variant?: "default" | "history";
 }
 
 export function CyberSelect({
@@ -21,9 +22,11 @@ export function CyberSelect({
   onChange,
   disabled = false,
   placeholder,
+  variant = "default",
 }: CyberSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const isHistory = variant === "history";
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +47,10 @@ export function CyberSelect({
         type="button"
         onClick={() => !disabled && setOpen(!open)}
         className={cn(
-          "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium border outline-none transition-colors duration-200",
+          "inline-flex items-center gap-1 border outline-none transition-colors duration-200 font-medium",
+          isHistory
+            ? "min-w-[11rem] max-w-[15rem] justify-between rounded-full px-3 py-1 text-[11px]"
+            : "rounded px-1.5 py-0.5 text-[10px]",
           disabled
             ? "opacity-50 cursor-not-allowed border-input bg-muted text-foreground/60"
             : open
@@ -52,7 +58,7 @@ export function CyberSelect({
               : "border-input bg-muted text-foreground hover:border-primary/40 hover:bg-muted/80 cursor-pointer",
         )}
       >
-        {selected?.description ? (
+        {!isHistory && selected?.description ? (
           <div className="flex flex-col items-start min-w-0">
             <span className="truncate max-w-28 leading-tight">
               {displayLabel}
@@ -62,7 +68,14 @@ export function CyberSelect({
             </span>
           </div>
         ) : (
-          <span className="truncate max-w-28">{displayLabel}</span>
+          <span
+            className={cn(
+              "min-w-0 truncate text-left",
+              isHistory ? "flex-1" : "max-w-28",
+            )}
+          >
+            {displayLabel}
+          </span>
         )}
         <svg
           width="8"
@@ -82,7 +95,14 @@ export function CyberSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-50 min-w-36 max-w-64 max-h-52 overflow-y-auto rounded-lg border border-border/60 bg-popover p-1 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+        <div
+          className={cn(
+            "absolute right-0 z-50 overflow-y-auto border border-border/60 bg-popover shadow-xl animate-in fade-in zoom-in-95 duration-150",
+            isHistory
+              ? "top-8 w-[22rem] max-w-[min(22rem,calc(100vw-2rem))] max-h-64 rounded-2xl p-2"
+              : "top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1",
+          )}
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -92,7 +112,8 @@ export function CyberSelect({
                 setOpen(false);
               }}
               className={cn(
-                "flex w-full items-start rounded-md px-2.5 py-1.5 text-left text-[11px] transition-colors duration-150",
+                "flex w-full items-start rounded-md text-left transition-colors duration-150",
+                isHistory ? "px-3 py-2 text-[12px]" : "px-2.5 py-1.5 text-[11px]",
                 "hover:bg-primary/10 hover:text-foreground",
                 opt.value === value
                   ? "bg-primary/15 text-foreground"
@@ -100,9 +121,14 @@ export function CyberSelect({
               )}
             >
               <div className="flex flex-col items-start min-w-0 flex-1">
-                <span className="font-medium truncate">{opt.label}</span>
+                <span className="font-medium truncate w-full">{opt.label}</span>
                 {opt.description && (
-                  <span className="text-[10px] text-muted-foreground/70 truncate w-full mt-0.5">
+                  <span
+                    className={cn(
+                      "text-muted-foreground/70 truncate w-full mt-0.5",
+                      isHistory ? "text-[11px]" : "text-[10px]",
+                    )}
+                  >
                     {opt.description}
                   </span>
                 )}

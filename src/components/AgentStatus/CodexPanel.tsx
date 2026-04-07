@@ -348,6 +348,7 @@ export function CodexPanel({
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">History</span>
             <CyberSelect
+              variant="history"
               value={selectedHistoryId}
               options={historyOptions}
               onChange={setSelectedHistoryId}

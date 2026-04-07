@@ -82,3 +82,25 @@ describe("CyberSelect rendering", () => {
     expect(html).not.toContain("null");
   });
 });
+
+describe("CyberSelect history variant", () => {
+  test("history variant keeps collapsed trigger compact", async () => {
+    const { CyberSelect } = await import("./cyber-select");
+    const html = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "hist_1",
+        variant: "history",
+        options: [
+          {
+            value: "hist_1",
+            label: "A very long session title that should stay readable",
+            description: "sess_abc123456789",
+          },
+        ],
+        onChange: () => {},
+      }),
+    );
+    expect(html).toContain("A very long session title");
+    expect(html).not.toContain("sess_abc123456789");
+  });
+});
