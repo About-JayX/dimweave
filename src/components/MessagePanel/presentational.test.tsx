@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MessageSearchChrome } from "./search-chrome";
+import { BackToBottomButton, MessageSearchChrome } from "./search-chrome";
+
+describe("BackToBottomButton", () => {
+  test("back-to-bottom button uses transparent chrome", () => {
+    const html = renderToStaticMarkup(
+      createElement(BackToBottomButton, { onClick: () => {} }),
+    );
+    expect(html).toContain("Back to bottom");
+    expect(html).toContain("bg-transparent");
+  });
+});
 
 describe("MessageSearchChrome", () => {
   test("closed state renders only the header search button", () => {

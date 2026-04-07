@@ -1,5 +1,16 @@
 import { Search, X } from "lucide-react";
 
+export function BackToBottomButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="z-10 rounded-full bg-transparent px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+    >
+      ↓ Back to bottom
+    </button>
+  );
+}
+
 export function SearchRow({
   searchQuery,
   searchSummary,
