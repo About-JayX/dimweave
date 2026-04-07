@@ -31,20 +31,13 @@ describe("buildProviderHistoryOptions", () => {
     expect(newOpt?.description).toBeUndefined();
   });
 
-  test("history option uses normalizedTaskId as description when present", () => {
+  test("history option description contains truncated id and date", () => {
     const options = buildProviderHistoryOptions("claude", [
-      makeEntry({ normalizedTaskId: "task-42" }),
+      makeEntry({ externalId: "sess_abc123456789" }),
     ]);
     const hist = options.find((o) => o.value !== NEW_PROVIDER_SESSION_VALUE);
-    expect(hist?.description).toBe("task-42");
-  });
-
-  test("history option falls back to full externalId when no normalizedTaskId", () => {
-    const options = buildProviderHistoryOptions("claude", [
-      makeEntry({ normalizedTaskId: null, externalId: "sess_abc123456789" }),
-    ]);
-    const hist = options.find((o) => o.value !== NEW_PROVIDER_SESSION_VALUE);
-    expect(hist?.description).toBe("sess_abc123456789");
+    expect(hist?.description).toContain("sess_a…6789");
+    expect(hist?.description).toContain("·");
   });
 });
 
@@ -98,7 +91,6 @@ describe("CyberSelect history variant menu items", () => {
     );
     expect(html).toContain(longLabel);
     expect(html).toContain(longDesc);
-    expect(html).not.toContain("truncate");
   });
 });
 

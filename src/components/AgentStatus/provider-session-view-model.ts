@@ -19,8 +19,9 @@ export function buildProviderHistoryOptions(
     },
     ...providerItems.map((entry) => ({
       value: entry.externalId,
-      label: entry.title?.trim() || `${provider} session`,
-      description: entry.normalizedTaskId?.trim() || entry.externalId,
+      label:
+        entry.title?.trim() || entry.preview?.trim() || `${provider} session`,
+      description: formatHistoryMeta(entry),
     })),
   ];
 }
@@ -49,6 +50,16 @@ export interface ConnectionLabel {
 function truncateId(id: string): string {
   if (id.length <= 12) return id;
   return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
+
+function formatHistoryMeta(entry: ProviderHistoryInfo): string {
+  const date = new Date(entry.updatedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${truncateId(entry.externalId)} · ${date}`;
 }
 
 export function formatProviderConnectionLabel(
