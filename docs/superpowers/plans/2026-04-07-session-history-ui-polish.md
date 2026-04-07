@@ -40,7 +40,7 @@
 | Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
 | Task 8 | `48d128fb` | `manual review` | `bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 14 pass; `bun run build` ✅; `git diff --check` ✅ | Search ownership should stay explicit: the top bar owns the resting icon, while MessagePanel only owns the disclosed search row. |
 | Task 9 | `6b1f7790` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx` ✅ 9 pass; `bun run build` ✅; `git diff --check` ✅ | Search disclosure state must own filtering too; closing the UI should immediately clear hidden query effects. |
-| Task 10 | `TBD` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | History dropdown readability depends on menu width and wrapping; keep the trigger compact, but let menu rows breathe. |
+| Task 10 | `63dc959d` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | History dropdown readability depends on menu width and wrapping; keep the trigger compact, but let menu rows breathe. |
 
 ### Task 1: Record the approved design and execution contract
 
