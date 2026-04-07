@@ -11,22 +11,33 @@ describe("BackToBottomButton", () => {
     expect(html).toContain("Back to bottom");
     expect(html).toContain("bg-transparent");
   });
+
+  test("back-to-bottom button keeps the original chrome with a transparent background", () => {
+    const html = renderToStaticMarkup(
+      createElement(BackToBottomButton, { onClick: () => {} }),
+    );
+    expect(html).toContain("Back to bottom");
+    expect(html).toContain("rounded-full");
+    expect(html).toContain("text-primary-foreground");
+    expect(html).toContain("shadow-lg");
+    expect(html).toContain("bg-transparent");
+    expect(html).not.toContain("bg-primary/90");
+  });
 });
 
 describe("MessageSearchChrome", () => {
-  test("closed state renders only the header search button", () => {
+  test("closed state renders nothing — search row not disclosed", () => {
     const html = renderToStaticMarkup(
       createElement(MessageSearchChrome, {
         searchOpen: false,
         searchQuery: "",
         searchSummary: null,
         inputRef: { current: null },
-        onOpen: () => {},
         onQueryChange: () => {},
         onClose: () => {},
       }),
     );
-    expect(html).toContain("Search messages");
+    expect(html).toBe("");
     expect(html).not.toContain('type="search"');
   });
 

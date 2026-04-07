@@ -35,6 +35,12 @@
 | Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `b442d510` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
+| Task 5 | `540f33d6` | `self-review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | Provider history rows must favor readability over compact truncation; export HistoryMenuOption for direct testability instead of needing a defaultOpen prop. |
+| Task 6 | `92641c8f` | `self-review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 10 pass; `bun run build` ✅; `git diff --check` ✅ | Product fix needed: remove chatMessages.length > 0 guard — Zustand v5 SSR uses api.getInitialState() which cannot be reliably patched from outside the store closure; removing the guard is the correct minimal fix. |
+| Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
+| Task 8 | `48d128fb` | `manual review` | `bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 14 pass; `bun run build` ✅; `git diff --check` ✅ | Search ownership should stay explicit: the top bar owns the resting icon, while MessagePanel only owns the disclosed search row. |
+| Task 9 | `6b1f7790` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx` ✅ 9 pass; `bun run build` ✅; `git diff --check` ✅ | Search disclosure state must own filtering too; closing the UI should immediately clear hidden query effects. |
+| Task 10 | `63dc959d` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | History dropdown readability depends on menu width and wrapping; keep the trigger compact, but let menu rows breathe. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -409,3 +415,348 @@ git commit -m "style: make back-to-bottom chrome transparent"
 - [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 4 placeholder row with the real commit hash and verification evidence.
+
+### Task 5: Correct the provider-history dropdown clipping regression
+
+**Files:**
+- Modify: `src/components/ui/cyber-select.tsx`
+- Modify: `src/components/ui/cyber-select.test.tsx`
+
+- [x] **Step 1: Add a failing readability regression test**
+
+Extend the history-variant tests so they fail unless dropdown items keep long history content readable instead of truncating both lines.
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+```
+
+Expected: FAIL before the regression fix.
+
+- [x] **Step 2: Fix the history dropdown layout**
+
+Adjust the shared `history` variant so the real provider-history menu is not visually clipped:
+
+- remove unnecessary one-line truncation from history menu rows
+- allow long session labels/ids to wrap or clamp more gracefully
+- widen or rebalance the history menu so it matches the screenshot context instead of forcing a narrow compact menu
+- keep the collapsed trigger readable without making the menu ugly
+
+- [x] **Step 3: Re-run verification**
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx
+git commit -m "fix: unclip provider history dropdown content"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Replace the Task 5 placeholder row with the real commit hash and verification evidence.
+
+### Task 6: Correct the missing header search entrypoint
+
+**Files:**
+- Modify: `src/components/MessagePanel/index.tsx`
+- Modify: `src/components/MessagePanel/search-chrome.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+- Modify: `src/components/MessagePanel/index.test.tsx`
+
+- [x] **Step 1: Add a failing integration test for the visible search entrypoint**
+
+Add coverage that fails unless the intended chat-header search entrypoint is visible in the integrated message panel state that should expose it.
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+```
+
+Expected: FAIL before the fix.
+
+- [x] **Step 2: Fix the integrated search entrypoint**
+
+Removed the `chatMessages.length > 0 &&` guard around `MessageSearchChrome` in `index.tsx`. Root cause: Zustand v5 SSR always calls `api.getInitialState()` for the server snapshot — this returns the original empty state and cannot be patched from outside the store closure. Removing the guard is the correct minimal fix: the search icon is now always present in chat mode.
+
+- [x] **Step 3: Re-run verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/index.tsx src/components/MessagePanel/index.test.tsx
+git commit -m "fix: restore visible header search entrypoint"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Replace the Task 6 placeholder row with the real commit hash and verification evidence.
+
+### Task 7: Restore the back-to-bottom chrome while keeping the background transparent
+
+**Files:**
+- Modify: `src/components/MessagePanel/search-chrome.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+
+- [x] **Step 1: Write the failing presentation test**
+
+Extend the button presentation test so it fails unless the back-to-bottom control keeps the pre-polish chrome while only changing the background fill:
+
+```tsx
+test("back-to-bottom button keeps the original chrome with a transparent background", () => {
+  const html = renderToStaticMarkup(
+    createElement(BackToBottomButton, { onClick: () => {} }),
+  );
+  expect(html).toContain("Back to bottom");
+  expect(html).toContain("rounded-full");
+  expect(html).toContain("text-primary-foreground");
+  expect(html).toContain("shadow-lg");
+  expect(html).toContain("bg-transparent");
+  expect(html).not.toContain("bg-primary/90");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx
+```
+
+Expected: FAIL because the current transparent button dropped the original chrome classes instead of only changing the background treatment.
+
+- [x] **Step 2: Restore the original chrome classes and only swap the fill**
+
+Update `src/components/MessagePanel/search-chrome.tsx` so `BackToBottomButton` keeps the original sizing, rounding, foreground color, shadow, and transition classes from the pre-polish button, but uses a transparent background in both resting and hover states.
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/search-chrome.tsx src/components/MessagePanel/presentational.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "style: restore back-to-bottom chrome"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Append the real Task 7 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 8: Realign search ownership tests with the top bar entrypoint
+
+**Files:**
+- Modify: `src/components/ShellTopBar.test.tsx`
+- Modify: `src/components/MessagePanel/index.test.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+
+- [x] **Step 1: Add the failing ownership assertions**
+
+Add focused assertions for the current search contract:
+
+- `ShellTopBar` renders the search icon in chat mode when `onSearchToggle` is provided
+- `MessageSearchChrome` renders nothing while `searchOpen` is `false`
+- `MessagePanel` tests pass explicit `searchOpen` / `onSearchClose` props instead of asserting that the panel owns the header icon
+
+Run:
+
+```bash
+bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+```
+
+Expected: FAIL because the current message-panel tests still assert the old in-panel search ownership.
+
+- [x] **Step 2: Update the stale search ownership tests**
+
+Adjust the search tests so they match the shipped architecture:
+
+- the top bar owns the resting-state search button
+- `MessageSearchChrome` owns only the disclosed search row
+- `MessagePanel` only asserts disclosure-row behavior, not the header icon
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/ShellTopBar.test.tsx src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "test: realign search ownership coverage"
+```
+
+- [ ] **Step 5: Update `## CM Memory`**
+
+Append the real Task 8 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 9: Clear hidden search filters when the disclosure closes
+
+**Files:**
+- Create: `src/components/MessagePanel/view-model.test.ts`
+- Modify: `src/components/MessagePanel/view-model.ts`
+- Modify: `src/components/MessagePanel/index.tsx`
+
+- [x] **Step 1: Write the failing disclosure-state test**
+
+Add focused coverage for a pure helper that reconciles the current query with disclosure visibility:
+
+```ts
+test("closing the disclosure clears any hidden search query", () => {
+  expect(getSearchQueryForDisclosure(false, "error")).toBe("");
+});
+
+test("open disclosure preserves the active query", () => {
+  expect(getSearchQueryForDisclosure(true, "error")).toBe("error");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/view-model.test.ts
+```
+
+Expected: FAIL because the helper does not exist yet.
+
+- [x] **Step 2: Implement the disclosure/query sync**
+
+Update `src/components/MessagePanel/view-model.ts` to export a pure helper:
+
+```ts
+export function getSearchQueryForDisclosure(
+  searchOpen: boolean,
+  searchQuery: string,
+): string {
+  return searchOpen ? searchQuery : "";
+}
+```
+
+Then use it from `src/components/MessagePanel/index.tsx` so closing the disclosure — including closing it from the top-bar search button path — clears the hidden query before filtered results can linger.
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/index.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/view-model.ts src/components/MessagePanel/index.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "fix: clear hidden message search filters"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Append the real Task 9 commit hash, review result, and verification evidence to `## CM Memory`.
+
+### Task 10: Restore readable history dropdown rows
+
+**Files:**
+- Modify: `src/components/ui/cyber-select.tsx`
+- Modify: `src/components/ui/cyber-select.test.tsx`
+
+- [x] **Step 1: Strengthen the failing history readability tests**
+
+Extend the history-select coverage so it fails unless the shared history menu stops clipping long text:
+
+```tsx
+test("history menu option avoids truncation classes", async () => {
+  const { HistoryMenuOption, getCyberSelectMenuPanelClassName } = await import("./cyber-select");
+  const html = renderToStaticMarkup(
+    createElement(HistoryMenuOption, {
+      opt: {
+        value: "h1",
+        label: "A very long session title that would be clipped in a narrow container",
+        description: "sess_abc123456789_very_long_external_id_overflow",
+      },
+      isSelected: false,
+      onClick: () => {},
+    }),
+  );
+  expect(html).not.toContain("truncate");
+  expect(getCyberSelectMenuPanelClassName("history")).toContain("w-[22rem]");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+```
+
+Expected: FAIL because the current history rows still use truncation classes and the menu stays at the narrow `w-52` width.
+
+- [x] **Step 2: Widen the history menu and let rows wrap**
+
+Update `src/components/ui/cyber-select.tsx` so the history variant:
+
+- keeps the collapsed trigger compact
+- uses a wider centered menu panel (`w-[22rem]` with the existing viewport guard)
+- removes one-line truncation from history menu rows in favor of multi-line wrapping/breaking that keeps long titles and ids readable
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/ui/cyber-select.test.tsx
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "fix: restore history dropdown readability"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Append the real Task 10 commit hash, review result, and verification evidence to `## CM Memory`.

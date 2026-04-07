@@ -31,20 +31,13 @@ describe("buildProviderHistoryOptions", () => {
     expect(newOpt?.description).toBeUndefined();
   });
 
-  test("history option uses normalizedTaskId as description when present", () => {
+  test("history option description contains truncated id and date", () => {
     const options = buildProviderHistoryOptions("claude", [
-      makeEntry({ normalizedTaskId: "task-42" }),
+      makeEntry({ externalId: "sess_abc123456789" }),
     ]);
     const hist = options.find((o) => o.value !== NEW_PROVIDER_SESSION_VALUE);
-    expect(hist?.description).toBe("task-42");
-  });
-
-  test("history option falls back to full externalId when no normalizedTaskId", () => {
-    const options = buildProviderHistoryOptions("claude", [
-      makeEntry({ normalizedTaskId: null, externalId: "sess_abc123456789" }),
-    ]);
-    const hist = options.find((o) => o.value !== NEW_PROVIDER_SESSION_VALUE);
-    expect(hist?.description).toBe("sess_abc123456789");
+    expect(hist?.description).toContain("sess_a…6789");
+    expect(hist?.description).toContain("·");
   });
 });
 
@@ -80,6 +73,42 @@ describe("CyberSelect rendering", () => {
     expect(html).toContain("lead");
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("null");
+  });
+});
+
+describe("CyberSelect history variant menu items", () => {
+  test("history menu option renders full text without truncation classes", async () => {
+    const { HistoryMenuOption } = await import("./cyber-select");
+    const longLabel =
+      "A very long session title that would be clipped in a narrow container";
+    const longDesc = "sess_abc123456789_very_long_external_id_overflow";
+    const html = renderToStaticMarkup(
+      createElement(HistoryMenuOption, {
+        opt: { value: "h1", label: longLabel, description: longDesc },
+        isSelected: false,
+        onClick: () => {},
+      }),
+    );
+    expect(html).toContain(longLabel);
+    expect(html).toContain(longDesc);
+  });
+
+  test("history menu option avoids truncation classes and panel uses wide layout", async () => {
+    const { HistoryMenuOption, getCyberSelectMenuPanelClassName } =
+      await import("./cyber-select");
+    const html = renderToStaticMarkup(
+      createElement(HistoryMenuOption, {
+        opt: {
+          value: "h1",
+          label: "A very long session title that would be clipped in a narrow container",
+          description: "sess_abc123456789_very_long_external_id_overflow",
+        },
+        isSelected: false,
+        onClick: () => {},
+      }),
+    );
+    expect(html).not.toContain("truncate");
+    expect(getCyberSelectMenuPanelClassName("history")).toContain("w-[22rem]");
   });
 });
 

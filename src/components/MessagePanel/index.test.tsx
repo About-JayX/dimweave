@@ -55,7 +55,9 @@ describe("MessagePanel", () => {
       permissionPrompts: [],
     }));
 
-    const html = renderToStaticMarkup(<MessagePanel surfaceMode="chat" />);
+    const html = renderToStaticMarkup(
+      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+    );
 
     expect(html).toContain(
       "No messages yet. Connect Claude and Codex to start bridging.",
@@ -71,7 +73,9 @@ describe("MessagePanel", () => {
 
     // Zustand v5 SSR uses getInitialState() (messages=[]).
     // Either way, search input must not appear by default (searchOpen starts false).
-    const html = renderToStaticMarkup(<MessagePanel surfaceMode="chat" />);
+    const html = renderToStaticMarkup(
+      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+    );
 
     expect(html).not.toContain('type="search"');
   });
@@ -104,6 +108,24 @@ describe("MessagePanel", () => {
     expect(withSummary).toContain('aria-label="Close search"');
     expect(withoutSummary).not.toContain("result");
     expect(withoutSummary).toContain('aria-label="Close search"');
+  });
+
+  test("search disclosure row appears only when searchOpen is true", async () => {
+    installTauriStub();
+    const { MessagePanel } = await import("./index");
+
+    // Resting state: MessagePanel does not own the search icon — that lives in ShellTopBar.
+    const closedHtml = renderToStaticMarkup(
+      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+    );
+    expect(closedHtml).not.toContain('aria-label="Search messages"');
+    expect(closedHtml).not.toContain('type="search"');
+
+    // Disclosed state: the search input row appears.
+    const openHtml = renderToStaticMarkup(
+      <MessagePanel surfaceMode="chat" searchOpen={true} onSearchClose={() => {}} />,
+    );
+    expect(openHtml).toContain('type="search"');
   });
 
   test("renders the log surface body without duplicating the top bar title", async () => {

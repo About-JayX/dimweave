@@ -18,6 +18,7 @@ import {
   formatTerminalTimestamp,
   getLogsFollowOutputMode,
   getMessageSearchSummary,
+  getSearchQueryForDisclosure,
   shouldAutoScrollLogsOnSurfaceChange,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
@@ -26,19 +27,21 @@ export { MessageSearchChrome, SearchRow } from "./search-chrome";
 
 interface MessagePanelProps {
   surfaceMode: ShellMainSurface;
+  searchOpen: boolean;
+  onSearchClose: () => void;
 }
 
-export function MessagePanel({ surfaceMode }: MessagePanelProps) {
+export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: MessagePanelProps) {
   const [lightboxAttachment, setLightboxAttachment] =
     useState<Attachment | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const effectiveSearchQuery = getSearchQueryForDisclosure(searchOpen, searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const messages = useBridgeStore(selectMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredSearchQuery = useDeferredValue(effectiveSearchQuery);
   const logsVirtuosoRef = useRef<VirtuosoHandle>(null);
   const previousSurfaceModeRef = useRef<ShellMainSurface | null>(surfaceMode);
   const [logsAtBottom, setLogsAtBottom] = useState(true);
@@ -59,8 +62,14 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
 
   const handleCloseSearch = useCallback(() => {
     setSearchQuery("");
-    setSearchOpen(false);
-  }, []);
+    onSearchClose();
+  }, [onSearchClose]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  }, [searchOpen]);
 
   useEffect(() => {
     if (claudeNeedsAttention) {
@@ -94,20 +103,14 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
     <div className="relative flex min-h-0 flex-1 flex-col">
       {surfaceMode === "chat" && (
         <>
-          {chatMessages.length > 0 && (
-            <MessageSearchChrome
-              searchOpen={searchOpen}
-              searchQuery={searchQuery}
-              searchSummary={searchSummary}
-              inputRef={searchInputRef}
-              onOpen={() => {
-                setSearchOpen(true);
-                requestAnimationFrame(() => searchInputRef.current?.focus());
-              }}
-              onQueryChange={setSearchQuery}
-              onClose={handleCloseSearch}
-            />
-          )}
+          <MessageSearchChrome
+            searchOpen={searchOpen}
+            searchQuery={searchQuery}
+            searchSummary={searchSummary}
+            inputRef={searchInputRef}
+            onQueryChange={setSearchQuery}
+            onClose={handleCloseSearch}
+          />
           <MessageList
             messages={filteredMessages}
             emptyStateMessage={searchSummary ?? undefined}
