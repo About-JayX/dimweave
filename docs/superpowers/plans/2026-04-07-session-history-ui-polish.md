@@ -30,7 +30,7 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `TBD: replace with real commit hash after docs commit` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md` | UI bugfix work should lock the approved interaction details in docs before any component code changes begin. |
+| Task 1 | `441e8f4a` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md` | UI bugfix work should lock the approved interaction details in docs before any component code changes begin. |
 | Task 2 | `fix: polish shared provider history select` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `fix: collapse message search behind header icon` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `style: make back-to-bottom chrome transparent` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
@@ -41,7 +41,7 @@
 - Create: `docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md`
 - Create: `docs/superpowers/plans/2026-04-07-session-history-ui-polish.md`
 
-- [ ] **Step 1: Write the approved design spec**
+- [x] **Step 1: Write the approved design spec**
 
 Document:
 
@@ -50,7 +50,7 @@ Document:
 - the search disclosure interaction
 - the transparent back-to-bottom treatment
 
-- [ ] **Step 2: Write the implementation plan with CM tracking**
+- [x] **Step 2: Write the implementation plan with CM tracking**
 
 The plan must include:
 
@@ -59,7 +59,7 @@ The plan must include:
 - explicit verification commands
 - `## CM Memory`
 
-- [ ] **Step 3: Verify doc formatting**
+- [x] **Step 3: Verify doc formatting**
 
 Run:
 
@@ -69,14 +69,14 @@ git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-
 
 Expected: no whitespace or patch-format issues.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
 git commit -m "docs: record session history ui polish plan"
 ```
 
-- [ ] **Step 5: Update `## CM Memory`**
+- [x] **Step 5: Update `## CM Memory`**
 
 Replace Task 1 placeholders with the real commit hash and verification evidence before implementation starts.
 
