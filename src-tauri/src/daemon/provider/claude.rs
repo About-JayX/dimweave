@@ -168,7 +168,7 @@ pub fn workspace_history_dir(workspace_root: &str, claude_projects_root: &Path) 
     let mut slug = String::with_capacity(normalized.len());
     for ch in normalized.chars() {
         match ch {
-            '/' | '\\' | ':' => slug.push('-'),
+            '/' | '\\' | ':' | '_' => slug.push('-'),
             _ => slug.push(ch),
         }
     }
