@@ -31,7 +31,7 @@
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
 | Task 1 | `441e8f4a` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-07-session-history-ui-polish-design.md docs/superpowers/plans/2026-04-07-session-history-ui-polish.md` | UI bugfix work should lock the approved interaction details in docs before any component code changes begin. |
-| Task 2 | `fix: polish shared provider history select` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
+| Task 2 | `07b1da49` | `manual review` | `bun test src/components/ui/cyber-select.test.tsx`; `bun run build`; `git diff --check` | Provider-history selectors should stay shared; styling differences belong in a variant, not duplicated Claude/Codex components. |
 | Task 3 | `fix: collapse message search behind header icon` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Search should not permanently consume header space when the user is not actively filtering chat. |
 | Task 4 | `style: make back-to-bottom chrome transparent` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
 
@@ -88,7 +88,7 @@ Replace Task 1 placeholders with the real commit hash and verification evidence 
 - Modify: `src/components/ClaudePanel/index.tsx`
 - Modify: `src/components/AgentStatus/CodexPanel.tsx`
 
-- [ ] **Step 1: Write the failing history-select tests**
+- [x] **Step 1: Write the failing history-select tests**
 
 Add focused coverage for a `variant="history"` rendering mode:
 
@@ -122,7 +122,7 @@ bun test src/components/ui/cyber-select.test.tsx
 
 Expected: FAIL because `CyberSelect` does not yet support a dedicated history variant.
 
-- [ ] **Step 2: Implement the shared history-select variant**
+- [x] **Step 2: Implement the shared history-select variant**
 
 Update `src/components/ui/cyber-select.tsx` so it supports:
 
@@ -174,7 +174,7 @@ Opt both history pickers into it:
 />
 ```
 
-- [ ] **Step 3: Re-run the focused tests**
+- [x] **Step 3: Re-run the focused tests**
 
 Run:
 
@@ -184,7 +184,7 @@ bun test src/components/ui/cyber-select.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 4: Run build and diff verification**
+- [x] **Step 4: Run build and diff verification**
 
 Run:
 
@@ -195,14 +195,14 @@ git diff --check
 
 Expected: PASS with no diff-format issues.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/ui/cyber-select.tsx src/components/ui/cyber-select.test.tsx src/components/ClaudePanel/index.tsx src/components/AgentStatus/CodexPanel.tsx
 git commit -m "fix: polish shared provider history select"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 2 placeholder row with the real commit hash and verification evidence.
 
