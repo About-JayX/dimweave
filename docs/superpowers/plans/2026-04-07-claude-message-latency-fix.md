@@ -31,6 +31,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `41765645` | `manual diff review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx`; `git diff --check HEAD~1 HEAD` | Lock the target UX with explicit RED tests before moving Claude draft rendering out of the footer rail. |
 | Task 2 | `0c1db752` | `manual diff review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx`; `bun run build`; `git diff --check HEAD` | Fix the runtime path in production code, but repair SSR-only harness problems with test-local module mocks instead of shipping `initialItemCount` or new dependencies. |
+| Task 3 | `be280d7f` | `manual diff review` | `rg -n '不展示 \`claude_stream.preview\`|只消费稳定的 \`thinking…\` / 最终结果' CLAUDE.md`; `git diff --check HEAD` | Keep `CLAUDE.md` aligned with the implemented Claude UX so future work does not regress toward the old footer-only preview model. |
 
 ## Task 1: Lock the intended timeline behavior with failing frontend tests
 
@@ -269,7 +270,7 @@ git commit -m "fix: inline Claude draft into message timeline"
 
 **Planned CM:** `docs: refresh Claude streaming UX notes`
 
-- [ ] **Step 1: Update the stale limitation note**
+- [x] **Step 1: Update the stale limitation note**
 
 Replace the current limitation text with wording consistent with the implemented behavior:
 
@@ -279,7 +280,7 @@ Replace the current limitation text with wording consistent with the implemented
 - The transient draft is UI-only state; it does not create an extra persisted task/session message.
 ```
 
-- [ ] **Step 2: Verify the stale wording is gone**
+- [x] **Step 2: Verify the stale wording is gone**
 
 Run:
 
@@ -289,12 +290,14 @@ rg -n "不展示 `claude_stream.preview`|只消费稳定的 `thinking…` / 最�
 
 Expected: no matches.
 
-- [ ] **Step 3: Commit the doc correction**
+- [x] **Step 3: Commit the doc correction**
 
 ```bash
 git add CLAUDE.md
 git commit -m "docs: refresh Claude streaming UX notes"
 ```
+
+- [x] **Step 4: Update `## CM Memory`**
 
 ## Final Verification
 
