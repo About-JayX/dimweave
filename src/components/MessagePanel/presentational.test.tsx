@@ -11,6 +11,18 @@ describe("BackToBottomButton", () => {
     expect(html).toContain("Back to bottom");
     expect(html).toContain("bg-transparent");
   });
+
+  test("back-to-bottom button keeps the original chrome with a transparent background", () => {
+    const html = renderToStaticMarkup(
+      createElement(BackToBottomButton, { onClick: () => {} }),
+    );
+    expect(html).toContain("Back to bottom");
+    expect(html).toContain("rounded-full");
+    expect(html).toContain("text-primary-foreground");
+    expect(html).toContain("shadow-lg");
+    expect(html).toContain("bg-transparent");
+    expect(html).not.toContain("bg-primary/90");
+  });
 });
 
 describe("MessageSearchChrome", () => {

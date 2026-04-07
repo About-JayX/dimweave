@@ -37,6 +37,7 @@
 | Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
 | Task 5 | `540f33d6` | `self-review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | Provider history rows must favor readability over compact truncation; export HistoryMenuOption for direct testability instead of needing a defaultOpen prop. |
 | Task 6 | `92641c8f` | `self-review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 10 pass; `bun run build` ✅; `git diff --check` ✅ | Product fix needed: remove chatMessages.length > 0 guard — Zustand v5 SSR uses api.getInitialState() which cannot be reliably patched from outside the store closure; removing the guard is the correct minimal fix. |
+| Task 7 | `4109a9fb` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
 
 ### Task 1: Record the approved design and execution contract
 
@@ -508,3 +509,62 @@ git commit -m "fix: restore visible header search entrypoint"
 - [x] **Step 5: Update `## CM Memory`**
 
 Replace the Task 6 placeholder row with the real commit hash and verification evidence.
+
+### Task 7: Restore the back-to-bottom chrome while keeping the background transparent
+
+**Files:**
+- Modify: `src/components/MessagePanel/search-chrome.tsx`
+- Modify: `src/components/MessagePanel/presentational.test.tsx`
+
+- [x] **Step 1: Write the failing presentation test**
+
+Extend the button presentation test so it fails unless the back-to-bottom control keeps the pre-polish chrome while only changing the background fill:
+
+```tsx
+test("back-to-bottom button keeps the original chrome with a transparent background", () => {
+  const html = renderToStaticMarkup(
+    createElement(BackToBottomButton, { onClick: () => {} }),
+  );
+  expect(html).toContain("Back to bottom");
+  expect(html).toContain("rounded-full");
+  expect(html).toContain("text-primary-foreground");
+  expect(html).toContain("shadow-lg");
+  expect(html).toContain("bg-transparent");
+  expect(html).not.toContain("bg-primary/90");
+});
+```
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx
+```
+
+Expected: FAIL because the current transparent button dropped the original chrome classes instead of only changing the background treatment.
+
+- [x] **Step 2: Restore the original chrome classes and only swap the fill**
+
+Update `src/components/MessagePanel/search-chrome.tsx` so `BackToBottomButton` keeps the original sizing, rounding, foreground color, shadow, and transition classes from the pre-polish button, but uses a transparent background in both resting and hover states.
+
+- [x] **Step 3: Re-run focused verification**
+
+Run:
+
+```bash
+bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"
+bun run build
+git diff --check
+```
+
+Expected: PASS.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add src/components/MessagePanel/search-chrome.tsx src/components/MessagePanel/presentational.test.tsx docs/superpowers/plans/2026-04-07-session-history-ui-polish.md
+git commit -m "style: restore back-to-bottom chrome"
+```
+
+- [x] **Step 5: Update `## CM Memory`**
+
+Append the real Task 7 commit hash, review result, and verification evidence to `## CM Memory`.

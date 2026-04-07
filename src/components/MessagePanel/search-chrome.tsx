@@ -4,7 +4,7 @@ export function BackToBottomButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="z-10 rounded-full bg-transparent px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+      className="z-10 rounded-full bg-transparent px-3 py-1.5 text-[11px] text-primary-foreground shadow-lg transition-colors hover:bg-transparent"
     >
       ↓ Back to bottom
     </button>
