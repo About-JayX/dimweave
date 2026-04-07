@@ -92,14 +92,21 @@ export function getTransientIndicators(
   ];
 }
 
+export interface MessageListDisplayStateInput {
+  messageCount: number;
+  hasClaudeDraft: boolean;
+  streamRailIndicators: StreamIndicatorId[];
+}
+
 export function getMessageListDisplayState(
-  messageCount: number,
-  streamRailIndicators: StreamIndicatorId[],
+  input: MessageListDisplayStateInput,
 ): MessageListDisplayState {
+  const { messageCount, hasClaudeDraft, streamRailIndicators } = input;
   return {
-    timelineCount: messageCount,
+    timelineCount: messageCount + (hasClaudeDraft ? 1 : 0),
     streamRailIndicators,
-    hasContent: messageCount > 0 || streamRailIndicators.length > 0,
+    hasContent:
+      messageCount > 0 || hasClaudeDraft || streamRailIndicators.length > 0,
   };
 }
 

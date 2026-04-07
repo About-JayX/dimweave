@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, mock } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -6,6 +6,45 @@ import {
   getMessageSearchSummary,
   getMessageListDisplayState,
 } from "./view-model";
+
+// Module-level mocks — must precede any dynamic import of components
+// that consume these modules so Bun's registry serves the mock version.
+
+// 1. Minimal mutable bridge store (only fields MessageList + indicators read)
+let _bs = {
+  claudeStream: { thinking: false, previewText: "", lastUpdatedAt: 0 },
+  codexStream: {
+    thinking: false, currentDelta: "", lastMessage: "",
+    turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+  },
+};
+const _store = Object.assign((sel: (s: typeof _bs) => unknown) => sel(_bs), {
+  getState: () => _bs,
+  setState: (up: typeof _bs | ((s: typeof _bs) => typeof _bs)) => {
+    _bs = typeof up === "function" ? { ..._bs, ...up(_bs) } : { ..._bs, ...up };
+  },
+  subscribe: () => () => {},
+});
+mock.module("@/stores/bridge-store", () => ({ useBridgeStore: _store }));
+
+// 2. Fake Virtuoso: renders all items synchronously (bypasses SSR item-skip)
+mock.module("react-virtuoso", () => ({
+  Virtuoso: ({ totalCount, itemContent, components, context }: {
+    totalCount: number;
+    itemContent: (i: number) => unknown;
+    components?: { Footer?: React.ComponentType<{ context?: unknown }> };
+    context?: unknown;
+  }) => {
+    const Footer = components?.Footer;
+    return createElement(
+      "div", null,
+      ...Array.from({ length: totalCount }, (_, i) =>
+        createElement("div", { key: i }, itemContent(i) as React.ReactNode),
+      ),
+      Footer ? createElement(Footer, { context }) : null,
+    );
+  },
+}));
 
 function installTauriStub() {
   let callbackId = 0;
@@ -70,12 +109,20 @@ describe("MessageList", () => {
   });
 
   test("stream indicators do not inflate timelineCount", () => {
-    const state = getMessageListDisplayState(3, ["claude", "codex"]);
+    const state = getMessageListDisplayState({
+      messageCount: 3,
+      hasClaudeDraft: false,
+      streamRailIndicators: ["codex"],
+    });
     expect(state.timelineCount).toBe(3);
   });
 
   test("hasContent is true when only stream indicators are active", () => {
-    const state = getMessageListDisplayState(0, ["claude"]);
+    const state = getMessageListDisplayState({
+      messageCount: 0,
+      hasClaudeDraft: false,
+      streamRailIndicators: ["codex"],
+    });
     expect(state.hasContent).toBe(true);
     expect(state.timelineCount).toBe(0);
   });
@@ -85,13 +132,13 @@ describe("MessageList", () => {
     const { StreamTailFooter } = await import("./MessageList");
 
     const withIndicator = renderToStaticMarkup(
-      createElement(StreamTailFooter, { context: { indicators: ["claude"] } }),
+      createElement(StreamTailFooter, { context: { indicators: ["codex"] } }),
     );
     const withoutIndicator = renderToStaticMarkup(
       createElement(StreamTailFooter, { context: { indicators: [] } }),
     );
 
-    expect(withIndicator).not.toBe(""); // tail container renders when active
+    expect(withIndicator).not.toBe(""); // tail container renders for codex
     expect(withoutIndicator).toBe(""); // nothing when no indicators
   });
 
