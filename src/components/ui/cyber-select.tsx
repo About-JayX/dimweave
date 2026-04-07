@@ -71,7 +71,7 @@ export function CyberSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-50 min-w-36 max-h-52 overflow-y-auto rounded-lg border border-border/60 bg-popover p-1 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-7 z-50 min-w-36 max-w-64 max-h-52 overflow-y-auto rounded-lg border border-border/60 bg-popover p-1 shadow-xl animate-in fade-in zoom-in-95 duration-150">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -81,19 +81,14 @@ export function CyberSelect({
                 setOpen(false);
               }}
               className={cn(
-                "flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left text-[11px] transition-colors duration-150",
+                "flex w-full items-start rounded-md px-2.5 py-1.5 text-left text-[11px] transition-colors duration-150",
                 "hover:bg-primary/10 hover:text-foreground",
                 opt.value === value
                   ? "bg-primary/15 text-foreground"
                   : "text-foreground/80",
               )}
             >
-              <span className="font-medium">{opt.label}</span>
-              {opt.description && (
-                <span className="text-[9px] text-muted-foreground mt-0.5">
-                  {opt.description}
-                </span>
-              )}
+              <span className="font-medium truncate">{opt.label}</span>
             </button>
           ))}
         </div>

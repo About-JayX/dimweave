@@ -16,13 +16,10 @@ export function buildProviderHistoryOptions(
     {
       value: NEW_PROVIDER_SESSION_VALUE,
       label: "New session",
-      description: "Start a fresh session in this workspace",
     },
     ...providerItems.map((entry) => ({
       value: entry.externalId,
       label: entry.title?.trim() || `${provider} session`,
-      description:
-        entry.preview?.trim() || `Resume ${entry.externalId.slice(0, 24)}`,
     })),
   ];
 }
@@ -62,6 +59,21 @@ export function formatProviderConnectionLabel(
   const mode = session.connectionMode === "resumed" ? "Resumed" : "New";
   const kind = session.provider === "codex" ? "thread" : "session";
   return { short: `${mode} ${kind} ${shortId}`, full: `${mode} ${kind} ${id}` };
+}
+
+export type ProviderHistoryAction =
+  | { kind: "new" }
+  | { kind: "resumeNormalized"; sessionId: string }
+  | { kind: "resumeExternal"; externalId: string };
+
+export function resolveProviderHistoryAction(
+  entry: Pick<ProviderHistoryInfo, "externalId" | "normalizedSessionId"> | null,
+): ProviderHistoryAction {
+  if (!entry) return { kind: "new" };
+  if (entry.normalizedSessionId) {
+    return { kind: "resumeNormalized", sessionId: entry.normalizedSessionId };
+  }
+  return { kind: "resumeExternal", externalId: entry.externalId };
 }
 
 export function resolveProviderHistoryWorkspace(

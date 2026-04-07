@@ -3,6 +3,7 @@ import {
   NEW_PROVIDER_SESSION_VALUE,
   buildProviderHistoryOptions,
   formatProviderConnectionLabel,
+  resolveProviderHistoryAction,
   resolveProviderHistoryWorkspace,
 } from "../src/components/AgentStatus/provider-session-view-model";
 import type { ProviderHistoryInfo } from "../src/stores/task-store/types";
@@ -42,7 +43,7 @@ describe("buildProviderHistoryOptions", () => {
       "resume_1",
     ]);
     expect(options[0]?.label).toBe("New session");
-    expect(options[1]?.description).toContain("Preview resume_2");
+    expect(options[1]?.label).toBe("claude resume_2");
   });
 });
 
@@ -68,6 +69,30 @@ describe("formatProviderConnectionLabel", () => {
     const freshLabel = formatProviderConnectionLabel(fresh);
     expect(freshLabel?.short).toBe("New thread thread_123");
     expect(freshLabel?.full).toBe("New thread thread_123");
+  });
+});
+
+describe("resolveProviderHistoryAction", () => {
+  test("normalized session id present → resumeNormalized", () => {
+    expect(
+      resolveProviderHistoryAction({
+        externalId: "claude_hist_1",
+        normalizedSessionId: "sess_123",
+      }),
+    ).toEqual({ kind: "resumeNormalized", sessionId: "sess_123" });
+  });
+
+  test("only external id present → resumeExternal", () => {
+    expect(
+      resolveProviderHistoryAction({
+        externalId: "thread_hist_1",
+        normalizedSessionId: null,
+      }),
+    ).toEqual({ kind: "resumeExternal", externalId: "thread_hist_1" });
+  });
+
+  test("null entry → new", () => {
+    expect(resolveProviderHistoryAction(null)).toEqual({ kind: "new" });
   });
 });
 
