@@ -1,8 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  useTaskStore,
-} from "@/stores/task-store";
+import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
   selectActiveTaskArtifacts,
@@ -10,7 +8,7 @@ import {
 } from "@/stores/task-store/selectors";
 import { ArtifactTimeline } from "./ArtifactTimeline";
 import { SessionTree } from "./SessionTree";
-import { TaskHeader } from "./TaskHeader";
+import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   buildArtifactDetailModel,
   buildArtifactTimeline,
@@ -28,15 +26,19 @@ export function TaskPanel() {
     () => buildSessionTreeRows(taskSessions, task),
     [task, taskSessions],
   );
-  const activeSessionCount = sessionRows.length;
   const artifactTimeline = useMemo(
     () => buildArtifactTimeline(taskArtifacts, taskSessions),
     [taskArtifacts, taskSessions],
   );
-  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
-  const [artifactDetail, setArtifactDetail] = useState<ArtifactDetailPayload | null>(null);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(
+    null,
+  );
+  const [artifactDetail, setArtifactDetail] =
+    useState<ArtifactDetailPayload | null>(null);
   const [artifactDetailLoading, setArtifactDetailLoading] = useState(false);
-  const [artifactDetailError, setArtifactDetailError] = useState<string | null>(null);
+  const [artifactDetailError, setArtifactDetailError] = useState<string | null>(
+    null,
+  );
 
   const handleResume = useCallback(
     (sessionId: string) => {
@@ -56,14 +58,16 @@ export function TaskPanel() {
     setSelectedArtifactId((current) =>
       current && artifactTimeline.some((item) => item.artifactId === current)
         ? current
-        : artifactTimeline[0]?.artifactId ?? null,
+        : (artifactTimeline[0]?.artifactId ?? null),
     );
   }, [artifactTimeline]);
 
   const selectedArtifact = useMemo(
     () =>
       selectedArtifactId
-        ? artifactTimeline.find((item) => item.artifactId === selectedArtifactId) ?? null
+        ? (artifactTimeline.find(
+            (item) => item.artifactId === selectedArtifactId,
+          ) ?? null)
         : null,
     [artifactTimeline, selectedArtifactId],
   );
@@ -107,71 +111,33 @@ export function TaskPanel() {
     [artifactDetail, selectedArtifact],
   );
 
+  const reviewBadge: ReviewBadge | null =
+    task?.status === "reviewing" ? { label: "Review", tone: "warning" } : null;
+
   if (!task) {
     return (
-      <section className="rounded-2xl border border-border/40 bg-card/45 px-4 py-4">
-        <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/55">
-          Task context
-        </div>
-        <div className="rounded-xl border border-dashed border-border/40 bg-background/20 px-4 py-3 text-xs text-muted-foreground/65">
-          {getTaskPanelEmptyStateMessage()}
-        </div>
-      </section>
+      <div className="rounded-xl border border-dashed border-border/40 bg-background/20 px-4 py-3 text-xs text-muted-foreground/65">
+        {getTaskPanelEmptyStateMessage()}
+      </div>
     );
   }
 
   return (
-    <section className="space-y-3">
-      <div className="rounded-2xl border border-border/40 bg-card/55 px-4 py-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/55">
-              Task context
-            </div>
-            <div className="mt-0.5 text-sm font-semibold text-foreground">
-              Session context
-            </div>
-          </div>
-        <div className="text-[11px] text-muted-foreground/65">
-          {activeSessionCount} sessions · {taskArtifacts.length} artifacts
-        </div>
+    <div className="space-y-3">
+      <TaskHeader task={task} reviewBadge={reviewBadge} />
+      <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
+        <SessionTree rows={sessionRows} onResume={handleResume} />
       </div>
-      <TaskHeader task={task} />
-        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="rounded-xl border border-border/35 bg-background/30 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/55">
-              Active sessions
-            </div>
-            <div className="mt-1 text-lg font-semibold text-foreground">
-              {activeSessionCount}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/35 bg-background/30 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/55">
-              Artifacts
-            </div>
-            <div className="mt-1 text-lg font-semibold text-foreground">
-              {taskArtifacts.length}
-            </div>
-          </div>
-        </div>
+      <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
+        <ArtifactTimeline
+          items={artifactTimeline}
+          selectedArtifactId={selectedArtifactId}
+          detail={artifactDetailModel}
+          detailLoading={artifactDetailLoading}
+          detailError={artifactDetailError}
+          onSelect={setSelectedArtifactId}
+        />
       </div>
-
-      <div className="min-w-0 space-y-3">
-        <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
-          <SessionTree rows={sessionRows} onResume={handleResume} />
-        </div>
-        <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
-          <ArtifactTimeline
-            items={artifactTimeline}
-            selectedArtifactId={selectedArtifactId}
-            detail={artifactDetailModel}
-            detailLoading={artifactDetailLoading}
-            detailError={artifactDetailError}
-            onSelect={setSelectedArtifactId}
-          />
-        </div>
-      </div>
-    </section>
+    </div>
   );
 }

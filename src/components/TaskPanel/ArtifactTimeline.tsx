@@ -26,13 +26,8 @@ export function ArtifactTimeline({
 }) {
   return (
     <section className="px-4 py-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/55">
-          Artifact Timeline
-        </div>
-        <div className="text-[10px] text-muted-foreground/50">
-          {items.length} items
-        </div>
+      <div className="mb-2 text-[11px] font-medium text-muted-foreground/60">
+        Artifacts
       </div>
       {items.length === 0 ? (
         <div className="text-xs text-muted-foreground/60">

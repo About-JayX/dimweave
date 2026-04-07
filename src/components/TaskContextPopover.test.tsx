@@ -45,8 +45,8 @@ describe("TaskContextPopover", () => {
       <TaskContextPopover activePane={null} onClose={() => {}} task={null} />,
     );
 
-    expect(html).toContain("data-shell-sidebar-panel=\"true\"");
-    expect(html).toContain("aria-hidden=\"true\"");
+    expect(html).toContain('data-shell-sidebar-panel="true"');
+    expect(html).toContain('aria-hidden="true"');
     expect(html).not.toContain("fixed left-20 top-4");
   });
 
@@ -54,17 +54,14 @@ describe("TaskContextPopover", () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");
     const html = renderToStaticMarkup(
-      <TaskContextPopover
-        activePane="task"
-        onClose={() => {}}
-        task={null}
-      />,
+      <TaskContextPopover activePane="task" onClose={() => {}} task={null} />,
     );
 
-    expect(html).toContain("data-shell-sidebar-panel=\"true\"");
+    expect(html).toContain('data-shell-sidebar-panel="true"');
     expect(html).toContain("Task workspace");
     expect(html).toContain("No active task");
     expect(html).not.toContain("Runtime control");
+    expect(html).not.toContain("Active sessions"); // dashboard metric grid removed
     expect(html).not.toContain(
       "The conversation timeline stays live, but task context and review state will appear here once a task is active.",
     );
@@ -81,7 +78,7 @@ describe("TaskContextPopover", () => {
           taskId: "task-1",
           title: "Refine shell header",
           workspaceRoot: "/Users/jason/Desktop/figma",
-          status: "active",
+          status: "implementing",
           createdAt: 1,
           updatedAt: 1,
         }}
@@ -97,7 +94,11 @@ describe("TaskContextPopover", () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");
     const html = renderToStaticMarkup(
-      <TaskContextPopover activePane="approvals" onClose={() => {}} task={null} />,
+      <TaskContextPopover
+        activePane="approvals"
+        onClose={() => {}}
+        task={null}
+      />,
     );
 
     expect(html).toContain("Approvals");

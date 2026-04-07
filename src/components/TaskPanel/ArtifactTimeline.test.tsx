@@ -33,6 +33,23 @@ describe("ArtifactTimeline", () => {
 
     expect(html).toContain("Artifact detail");
     expect(html).toContain("diff --git");
-    expect(html).toContain("type=\"button\"");
+    expect(html).toContain('type="button"');
+    expect(html).not.toContain("Artifact Timeline"); // old heavy section label removed
+  });
+
+  test("renders empty state when no artifacts", () => {
+    const html = renderToStaticMarkup(
+      <ArtifactTimeline
+        items={[]}
+        selectedArtifactId={null}
+        detail={null}
+        detailLoading={false}
+        detailError={null}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("No task artifacts captured yet");
+    expect(html).not.toContain("Artifact Timeline");
   });
 });

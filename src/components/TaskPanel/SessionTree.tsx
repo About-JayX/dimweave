@@ -21,8 +21,8 @@ export function SessionTree({
 }) {
   return (
     <section className="px-4 py-3">
-      <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/55">
-        Session Tree
+      <div className="mb-2 text-[11px] font-medium text-muted-foreground/60">
+        Sessions
       </div>
       {rows.length === 0 ? (
         <div className="text-xs text-muted-foreground/60">No sessions yet.</div>
