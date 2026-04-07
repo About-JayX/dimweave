@@ -1,13 +1,11 @@
 import { useEffect } from "react";
 import { ClaudePanel } from "@/components/ClaudePanel";
 import { useBridgeStore } from "@/stores/bridge-store";
-import {
-  selectAgents,
-  selectConnected,
-} from "@/stores/bridge-store/selectors";
+import { selectAgents, selectConnected } from "@/stores/bridge-store/selectors";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
+import { TelegramPanel } from "./TelegramPanel";
 
 export function AgentStatusPanel() {
   const agents = useBridgeStore(selectAgents);
@@ -43,13 +41,17 @@ export function AgentStatusPanel() {
               Runtime control
             </div>
           </div>
-          <StatusDot status={connected ? "connected" : "error"} variant="generic" />
+          <StatusDot
+            status={connected ? "connected" : "error"}
+            variant="generic"
+          />
           <span className="text-[11px] text-muted-foreground">
             {connected ? "Daemon online" : "Daemon offline"}
           </span>
         </div>
         <div className="mt-2 text-[12px] text-muted-foreground/65">
-          Keep Claude and Codex available here, but push message work back to the central timeline.
+          Keep Claude and Codex available here, but push message work back to
+          the central timeline.
         </div>
       </div>
 
@@ -67,6 +69,7 @@ export function AgentStatusPanel() {
           refreshUsage={refreshUsage}
           providerSession={agents.codex?.providerSession}
         />
+        <TelegramPanel />
 
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",

@@ -8,6 +8,7 @@ const sourceLabel: Record<string, string> = {
   lead: "Lead",
   coder: "Coder",
   reviewer: "Reviewer",
+  telegram: "Telegram",
 };
 
 export function getSourceBadgePresentation(source: string): {

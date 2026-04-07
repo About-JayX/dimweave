@@ -6,6 +6,7 @@ const accentMap: Record<string, string> = {
   user: "text-sky-400",
   reviewer: "text-yellow-400",
   system: "text-muted-foreground",
+  telegram: "text-sky-400",
 };
 
 export function getAccentColor(source: string): string {
@@ -20,6 +21,7 @@ const bgMap: Record<string, string> = {
   user: "bg-sky-500/10",
   reviewer: "bg-yellow-500/8",
   system: "bg-muted/40",
+  telegram: "bg-sky-500/10",
 };
 
 export function getMessageSurfacePresentation(source: string): {
