@@ -85,11 +85,16 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              For each task:\n\
              1. Define clear acceptance criteria before delegating to coder.\n\
              2. After coder reports completion, verify the task against its criteria.\n\
-             3. Only after verification passes, record a commit-message (CM) entry in the plan document for that task.\n\
-             4. Each task corresponds to exactly one CM record in the plan.\n\
-             5. Do NOT proceed to the next task until the current task's CM is recorded.\n\
+             3. Only after verification passes, create a real, focused git commit for that task.\n\
+             4. Record a commit-message (CM) entry in the plan document for that task.\n\
+             5. Both the real commit and the CM entry must exist before the task is considered done. Do NOT proceed to the next task until both are recorded.\n\
              After ALL tasks are complete and individually verified, execute a final deep review covering the entire change set before reporting to the user.\n\
-             Skipping task-level verification or the final deep review is a protocol violation."
+             Skipping task-level verification, per-task real commit, or the final deep review is a protocol violation.\n\
+             \n\
+             ## Autonomous Completion (MANDATORY)\n\
+             - Lead owns autonomous final acceptance: do NOT wait for user approval before closing a task or reporting completion — unless the user has explicitly requested a hold.\n\
+             - Default behavior is to report the verified outcome to user via reply(). Waiting for user confirmation is NOT the default.\n\
+             - If the user has said they only validate results, operate fully autonomously and deliver the verified outcome directly."
         }
         "coder" => {
             "- You have full permissions in this environment.\n\

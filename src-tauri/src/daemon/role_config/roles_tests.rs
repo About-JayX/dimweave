@@ -92,3 +92,13 @@ fn lead_prompt_retains_full_permissions() {
     let prompt = get_role("lead").unwrap().base_instructions;
     assert!(prompt.contains("lead — planning/review/report coordinator with full permissions"));
 }
+
+#[test]
+fn prompt_requires_autonomous_final_acceptance() {
+    let prompt = get_role("lead").unwrap().base_instructions;
+    assert!(prompt.contains("create a real, focused git commit"));
+    assert!(prompt.contains("before the task is considered done"));
+    assert!(prompt.contains("autonomous final acceptance"));
+    assert!(prompt.contains("do NOT wait for user approval"));
+    assert!(prompt.contains("report the verified outcome to user"));
+}

@@ -150,6 +150,16 @@ mod tests {
     }
 
     #[test]
+    fn prompt_requires_autonomous_final_acceptance() {
+        let prompt = claude_system_prompt("lead");
+        assert!(prompt.contains("create a real, focused git commit"));
+        assert!(prompt.contains("before the task is considered done"));
+        assert!(prompt.contains("autonomous final acceptance"));
+        assert!(prompt.contains("do NOT wait for user approval"));
+        assert!(prompt.contains("report the verified outcome to user"));
+    }
+
+    #[test]
     fn prompts_do_not_list_removed_runtime_role() {
         let prompt = claude_system_prompt("lead");
         assert!(!prompt.contains("tester"));
