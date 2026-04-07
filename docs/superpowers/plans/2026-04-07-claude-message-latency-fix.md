@@ -30,6 +30,7 @@
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
 | Task 1 | `41765645` | `manual diff review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx`; `git diff --check HEAD~1 HEAD` | Lock the target UX with explicit RED tests before moving Claude draft rendering out of the footer rail. |
+| Task 2 | `0c1db752` | `manual diff review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx`; `bun run build`; `git diff --check HEAD` | Fix the runtime path in production code, but repair SSR-only harness problems with test-local module mocks instead of shipping `initialItemCount` or new dependencies. |
 
 ## Task 1: Lock the intended timeline behavior with failing frontend tests
 
@@ -147,7 +148,7 @@ git commit -m "test: lock Claude inline draft timeline behavior"
 
 **Planned CM:** `fix: inline Claude draft into message timeline`
 
-- [ ] **Step 1: Update the message-list display-state contract**
+- [x] **Step 1: Update the message-list display-state contract**
 
 Change `getMessageListDisplayState()` to accept explicit display inputs:
 
@@ -171,7 +172,7 @@ export function getMessageListDisplayState(
 }
 ```
 
-- [ ] **Step 2: Make Claude a timeline item instead of a footer indicator**
+- [x] **Step 2: Make Claude a timeline item instead of a footer indicator**
 
 In `MessageList.tsx`, compute Claude draft visibility from store and reserve the last timeline row for `ClaudeStreamIndicator`:
 
@@ -214,7 +215,7 @@ itemContent={(index) => {
 }}
 ```
 
-- [ ] **Step 3: Keep the footer rail for Codex only**
+- [x] **Step 3: Keep the footer rail for Codex only**
 
 Ensure `StreamTailFooter` only renders `CodexStreamIndicator` entries:
 
@@ -228,7 +229,7 @@ Ensure `StreamTailFooter` only renders `CodexStreamIndicator` entries:
 
 There should no longer be a footer Claude rail after this task.
 
-- [ ] **Step 4: Run focused tests to verify GREEN**
+- [x] **Step 4: Run focused tests to verify GREEN**
 
 Run:
 
@@ -238,7 +239,7 @@ bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePa
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the frontend build for regression safety**
+- [x] **Step 5: Run the frontend build for regression safety**
 
 Run:
 
@@ -248,12 +249,14 @@ bun run build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the implementation**
+- [x] **Step 6: Commit the implementation**
 
 ```bash
 git add src/components/MessagePanel/view-model.ts src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.tsx src/components/MessagePanel/MessageList.test.tsx
 git commit -m "fix: inline Claude draft into message timeline"
 ```
+
+- [x] **Step 7: Update `## CM Memory`**
 
 ## Task 3: Correct the Claude architecture notes so they match reality
 
