@@ -95,6 +95,28 @@ describe("MessageList", () => {
     expect(withoutIndicator).toBe(""); // nothing when no indicators
   });
 
+  test("renders Claude working draft inline when only stream state is active", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: true,
+        previewText: "Reviewing the daemon event path",
+        lastUpdatedAt: 1,
+      },
+    }));
+
+    const html = renderToStaticMarkup(<MessageList messages={[]} />);
+
+    expect(html).toContain("Reviewing the daemon event path");
+    expect(html).toContain("working draft");
+  });
+
   test("renders a search-specific empty state when no filtered messages remain", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([
