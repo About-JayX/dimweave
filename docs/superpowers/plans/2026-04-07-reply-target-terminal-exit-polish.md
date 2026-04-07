@@ -41,7 +41,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `dda01a6c` | `manual diff review` | `bun test tests/task-store.test.ts src/components/ReplyInput/index.test.tsx`; `git diff --check` | Reply target memory belongs to task-scoped frontend state, not daemon persistence. |
 | Task 2 | `500ffcff` | `manual diff review` | `bun test src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Logs should default to bottom on entry, but should not fight the user after manual upward scrolling. |
-| Task 3 | `PENDING` | `PENDING` | `PENDING` | App exit should be a single teardown barrier: runtimes stopped, connection handles cleared, then process exit. |
+| Task 3 | `c0445a19` | `manual diff review` | `cargo test shutdown_teardown_clears_live_runtime_handles --manifest-path src-tauri/Cargo.toml`; `cargo test daemon::state::state_tests:: --manifest-path src-tauri/Cargo.toml`; `bun run build`; `git diff --check` | App exit should be a single teardown barrier: runtimes stopped, connection handles cleared, then process exit. |
 
 ### Task 1: Persist reply target per active task
 
@@ -161,14 +161,14 @@ git commit -m "fix: keep logs pinned to the bottom on entry"
 - Modify: `src-tauri/src/daemon/state_runtime.rs`
 - Modify: `src-tauri/src/daemon/state_tests.rs`
 
-- [ ] **Step 1: Write failing tests for explicit shutdown teardown**
+- [x] **Step 1: Write failing tests for explicit shutdown teardown**
 
 Cover:
 
 - shutdown clears tracked runtime/connection handles
 - shutdown path does not leave daemon-side agent/runtime state marked live after stop
 
-- [ ] **Step 2: Run the targeted tests to verify they fail**
+- [x] **Step 2: Run the targeted tests to verify they fail**
 
 Run:
 
@@ -178,7 +178,7 @@ cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests::
 
 Expected: FAIL because shutdown currently stops runtimes but does not fully assert/clear every tracked connection boundary.
 
-- [ ] **Step 3: Implement explicit shutdown teardown**
+- [x] **Step 3: Implement explicit shutdown teardown**
 
 Implementation notes:
 
@@ -187,7 +187,7 @@ Implementation notes:
 - clear attached agent/runtime senders and live provider connection state
 - keep the app exit barrier waiting on daemon shutdown completion
 
-- [ ] **Step 4: Re-run verification**
+- [x] **Step 4: Re-run verification**
 
 Run:
 
@@ -199,11 +199,11 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/main.rs src-tauri/src/daemon/mod.rs src-tauri/src/daemon/state.rs src-tauri/src/daemon/state_runtime.rs src-tauri/src/daemon/state_tests.rs
 git commit -m "fix: fully tear down runtimes on app exit"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
