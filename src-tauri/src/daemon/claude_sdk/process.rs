@@ -105,9 +105,12 @@ fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
         }
     }
 
-    // MCP config
-    let mcp_json = opts.mcp_config.as_deref().unwrap_or("{}");
-    cmd.arg("--strict-mcp-config").arg(mcp_json);
+    // MCP config: --strict-mcp-config flag MUST come before --mcp-config
+    // because --mcp-config accepts variadic args and would swallow subsequent flags.
+    if let Some(ref mcp_json) = opts.mcp_config {
+        cmd.arg("--strict-mcp-config");
+        cmd.arg("--mcp-config").arg(mcp_json);
+    }
 
     // Inject role prompt as append (preserves Claude's default system prompt + tool docs).
     // --agent file discovery doesn't work in bridge mode, so we use --append-system-prompt.

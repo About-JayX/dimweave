@@ -127,6 +127,11 @@ async fn launch_claude_sdk(
         .unwrap_or_else(|| session_id.clone());
     let launch_nonce = uuid::Uuid::new_v4().to_string();
     let mcp_config = crate::mcp::build_dimweave_mcp_config(cwd, role_id)?;
+    gui::emit_system_log(
+        app,
+        "info",
+        &format!("[Claude SDK] strict-mcp-config: {mcp_config}"),
+    );
 
     let opts = claude_sdk::process::ClaudeLaunchOpts {
         claude_bin,
@@ -344,22 +349,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 codex_handle = Some(h);
                                 let task_id = {
                                     let mut daemon = state.write().await;
-                                    if daemon
-                                        .task_graph
-                                        .find_session_by_external_id(
-                                            crate::daemon::task_graph::types::Provider::Codex,
-                                            &resumed_thread_id,
-                                        )
-                                        .is_none()
-                                    {
-                                        crate::daemon::provider::codex::register_on_launch(
-                                            &mut daemon,
-                                            &resume_role,
-                                            &resume_cwd,
-                                            &resumed_thread_id,
-                                        );
-                                    }
-                                    daemon.active_task_id.clone()
+                                    launch_task_sync::sync_codex_launch_into_task(
+                                        &mut daemon,
+                                        &resume_role,
+                                        &resume_cwd,
+                                        &resumed_thread_id,
+                                    )
                                 };
                                 if let Some(task_id) = task_id {
                                     emit_task_context_events(&state, &app, &task_id).await;

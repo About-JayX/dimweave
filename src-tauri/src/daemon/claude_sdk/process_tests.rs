@@ -52,7 +52,8 @@ fn build_claude_command_sets_sdk_args_and_env() {
         .any(|w| w[0] == "--session-id" && w[1] == "session-123"));
     assert!(args
         .windows(2)
-        .any(|w| w[0] == "--strict-mcp-config" && w[1] == "{\"mcpServers\":{}}"));
+        .any(|w| w[0] == "--mcp-config" && w[1] == "{\"mcpServers\":{}}"));
+    assert!(args.contains(&"--strict-mcp-config".to_string()));
     assert!(envs
         .iter()
         .any(|(key, value)| key == "PATH" && value.as_deref() == Some(expected_path.as_str())));
