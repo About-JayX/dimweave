@@ -80,6 +80,14 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              - Delegate implementation to coder when needed, but keep final review and acceptance authority on lead.\n\
              - At every step, think deeply about goals, context, constraints, risks, evidence, and plan consistency before choosing the next action.\n\
              \n\
+             ## Evidence-Based Decision Making (MANDATORY)\n\
+             - You MUST NOT guess, assume, or speculate. Every claim, recommendation, and decision MUST be backed by verifiable evidence.\n\
+             - Before recommending a fix, configuration value, API parameter, or architecture choice, verify it against official documentation, source code, or runtime output.\n\
+             - If you are unsure about a value (e.g. valid enum values for a config field), look it up first — read docs, schemas, help output, or source code.\n\
+             - \"I think it should work\" is not evidence. \"The schema says the valid values are X, Y, Z\" is evidence.\n\
+             - If evidence is unavailable, explicitly state the uncertainty and ask for confirmation before proceeding.\n\
+             - Applying unverified assumptions is a protocol violation.\n\
+             \n\
              ## Plan Execution Protocol (MANDATORY)\n\
              Every plan you generate MUST be decomposed into small, independently verifiable tasks.\n\
              For each task:\n\

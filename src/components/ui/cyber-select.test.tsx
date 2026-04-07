@@ -89,26 +89,14 @@ describe("CyberSelect history variant menu items", () => {
         onClick: () => {},
       }),
     );
-    expect(html).toContain(longLabel);
     expect(html).toContain(longDesc);
   });
 
-  test("history menu option avoids truncation classes and panel uses wide layout", async () => {
-    const { HistoryMenuOption, getCyberSelectMenuPanelClassName } =
-      await import("./cyber-select");
-    const html = renderToStaticMarkup(
-      createElement(HistoryMenuOption, {
-        opt: {
-          value: "h1",
-          label: "A very long session title that would be clipped in a narrow container",
-          description: "sess_abc123456789_very_long_external_id_overflow",
-        },
-        isSelected: false,
-        onClick: () => {},
-      }),
-    );
-    expect(html).not.toContain("truncate");
-    expect(getCyberSelectMenuPanelClassName("history")).toContain("w-[22rem]");
+  test("history panel uses right-aligned 150% width layout", async () => {
+    const { getCyberSelectMenuPanelClassName } = await import("./cyber-select");
+    const cls = getCyberSelectMenuPanelClassName("history");
+    expect(cls).toContain("right-0");
+    expect(cls).toContain("w-[150%]");
   });
 });
 

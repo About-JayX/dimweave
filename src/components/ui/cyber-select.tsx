@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
+export function middleEllipsis(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const keep = Math.floor((maxLen - 1) / 2);
+  return `${text.slice(0, keep)}…${text.slice(-keep)}`;
+}
+
 export interface CyberSelectOption {
   value: string;
   label: string;
@@ -20,7 +26,7 @@ export function getCyberSelectMenuPanelClassName(
   variant: "default" | "history",
 ): string {
   return variant === "history"
-    ? "left-1/2 -translate-x-1/2 top-7 w-[22rem] max-w-[min(22rem,calc(100vw-2rem))] max-h-48 rounded-lg p-1"
+    ? "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1"
     : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
 }
 
@@ -44,7 +50,9 @@ export function HistoryMenuOption({
       )}
     >
       <div className="flex flex-col items-start w-full">
-        <span className="font-medium w-full break-words">{opt.label}</span>
+        <span className="font-medium w-full truncate">
+          {middleEllipsis(opt.label, 36)}
+        </span>
         {opt.description && (
           <span className="text-[9px] text-muted-foreground/60 w-full break-all">
             {opt.description}
@@ -168,7 +176,9 @@ export function CyberSelect({
                 )}
               >
                 <div className="flex flex-col items-start min-w-0 flex-1">
-                  <span className="font-medium truncate w-full">{opt.label}</span>
+                  <span className="font-medium truncate w-full">
+                    {opt.label}
+                  </span>
                   {opt.description && (
                     <span className="text-[10px] text-muted-foreground/70 truncate w-full mt-0.5">
                       {opt.description}

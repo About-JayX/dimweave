@@ -87,18 +87,21 @@ pub fn get_role(role_id: &str) -> Option<RoleConfig> {
             base_instructions: build_role_prompt("user"),
             sandbox_mode: "workspace-write",
             network_access: false,
+
             approval_policy: "never",
         }),
         "lead" => Some(RoleConfig {
             base_instructions: build_role_prompt("lead"),
-            sandbox_mode: "none",
+            sandbox_mode: "danger-full-access",
             network_access: true,
+
             approval_policy: "never",
         }),
         "coder" => Some(RoleConfig {
             base_instructions: build_role_prompt("coder"),
             sandbox_mode: "workspace-write",
             network_access: false,
+
             approval_policy: "never",
         }),
         _ => None,
