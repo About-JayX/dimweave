@@ -513,6 +513,29 @@ fn invalidate_claude_sdk_session_if_current_returns_task_id() {
 }
 
 #[test]
+fn codex_register_on_launch_binds_resumed_thread_to_active_task() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.active_task_id = Some(task.task_id.clone());
+
+    crate::daemon::provider::codex::register_on_launch(&mut s, "coder", "/ws", "thread_resumed_1");
+
+    let session = s
+        .task_graph
+        .find_session_by_external_id(
+            crate::daemon::task_graph::types::Provider::Codex,
+            "thread_resumed_1",
+        )
+        .expect("resumed thread should be registered in task graph");
+    assert_eq!(session.task_id, task.task_id);
+    let updated_task = s.task_graph.get_task(&task.task_id).unwrap();
+    assert_eq!(
+        updated_task.current_coder_session_id.as_deref(),
+        Some(session.session_id.as_str())
+    );
+}
+
+#[test]
 fn review_gate_buffers_next_coder_todo_until_review_is_approved() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");

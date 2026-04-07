@@ -325,6 +325,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let launch_result = match resume_thread_id {
                     Some(thread_id) => {
                         let resumed_thread_id = thread_id.clone();
+                        let resume_role = role_id.clone();
+                        let resume_cwd = cwd.clone();
                         match codex::resume(
                             codex::ResumeOpts {
                                 role_id,
@@ -340,15 +342,25 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         {
                             Ok(h) => {
                                 codex_handle = Some(h);
-                                let task_id = state
-                                    .read()
-                                    .await
-                                    .task_graph
-                                    .find_session_by_external_id(
-                                        crate::daemon::task_graph::types::Provider::Codex,
-                                        &resumed_thread_id,
-                                    )
-                                    .map(|session| session.task_id.clone());
+                                let task_id = {
+                                    let mut daemon = state.write().await;
+                                    if daemon
+                                        .task_graph
+                                        .find_session_by_external_id(
+                                            crate::daemon::task_graph::types::Provider::Codex,
+                                            &resumed_thread_id,
+                                        )
+                                        .is_none()
+                                    {
+                                        crate::daemon::provider::codex::register_on_launch(
+                                            &mut daemon,
+                                            &resume_role,
+                                            &resume_cwd,
+                                            &resumed_thread_id,
+                                        );
+                                    }
+                                    daemon.active_task_id.clone()
+                                };
                                 if let Some(task_id) = task_id {
                                     emit_task_context_events(&state, &app, &task_id).await;
                                 }
