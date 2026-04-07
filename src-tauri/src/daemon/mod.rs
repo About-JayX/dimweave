@@ -467,6 +467,9 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             DaemonCmd::Shutdown { reply } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
                 stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                let session_mgr = { state.read().await.session_mgr.clone() };
+                session_mgr.lock().await.cleanup_all();
+                state.write().await.teardown_runtime_handles_for_shutdown();
                 let _ = reply.send(());
                 break;
             }

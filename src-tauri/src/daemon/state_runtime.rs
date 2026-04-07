@@ -221,4 +221,16 @@ impl DaemonState {
     pub fn clear_runtime_health(&mut self) {
         self.runtime_health = None;
     }
+
+    pub fn teardown_runtime_handles_for_shutdown(&mut self) {
+        self.attached_agents.clear();
+        self.buffered_messages.clear();
+        self.pending_permissions.clear();
+        self.buffered_verdicts.clear();
+        self.invalidate_codex_session();
+        self.invalidate_claude_sdk_session();
+        self.telegram_outbound_tx = None;
+        self.telegram_paired_chat_id = None;
+        self.clear_runtime_health();
+    }
 }

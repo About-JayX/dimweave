@@ -39,8 +39,8 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `PENDING` | `PENDING` | `PENDING` | Reply target memory belongs to task-scoped frontend state, not daemon persistence. |
-| Task 2 | `PENDING` | `PENDING` | `PENDING` | Logs should default to bottom on entry, but should not fight the user after manual upward scrolling. |
+| Task 1 | `dda01a6c` | `manual diff review` | `bun test tests/task-store.test.ts src/components/ReplyInput/index.test.tsx`; `git diff --check` | Reply target memory belongs to task-scoped frontend state, not daemon persistence. |
+| Task 2 | `500ffcff` | `manual diff review` | `bun test src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Logs should default to bottom on entry, but should not fight the user after manual upward scrolling. |
 | Task 3 | `PENDING` | `PENDING` | `PENDING` | App exit should be a single teardown barrier: runtimes stopped, connection handles cleared, then process exit. |
 
 ### Task 1: Persist reply target per active task
@@ -53,7 +53,7 @@
 - Modify: `tests/task-store.test.ts`
 - Modify: `src/components/ReplyInput/index.test.tsx`
 
-- [ ] **Step 1: Write failing tests for task-scoped reply target memory**
+- [x] **Step 1: Write failing tests for task-scoped reply target memory**
 
 Cover:
 
@@ -61,7 +61,7 @@ Cover:
 - restoring the previous target for the active task instead of defaulting to `"auto"`
 - different tasks keeping independent target values
 
-- [ ] **Step 2: Run the targeted tests to verify they fail**
+- [x] **Step 2: Run the targeted tests to verify they fail**
 
 Run:
 
@@ -71,7 +71,7 @@ bun test tests/task-store.test.ts src/components/ReplyInput/index.test.tsx
 
 Expected: FAIL because reply target still lives in local component state.
 
-- [ ] **Step 3: Implement task-scoped target memory**
+- [x] **Step 3: Implement task-scoped target memory**
 
 Implementation notes:
 
@@ -80,7 +80,7 @@ Implementation notes:
 - update the picker to write through the task-scoped setter
 - fall back to `"auto"` when there is no active task
 
-- [ ] **Step 4: Re-run verification**
+- [x] **Step 4: Re-run verification**
 
 Run:
 
@@ -91,14 +91,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/ReplyInput/index.tsx src/stores/task-store/types.ts src/stores/task-store/index.ts src/stores/task-store/selectors.ts tests/task-store.test.ts src/components/ReplyInput/index.test.tsx
 git commit -m "fix: remember reply target per task"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 ### Task 2: Open logs at the bottom and preserve sensible follow behavior
 
@@ -107,14 +107,14 @@ git commit -m "fix: remember reply target per task"
 - Modify: `src/components/MessagePanel/MessageList.tsx`
 - Modify: `src/components/MessagePanel/index.test.tsx`
 
-- [ ] **Step 1: Write failing tests for logs-surface bottom behavior**
+- [x] **Step 1: Write failing tests for logs-surface bottom behavior**
 
 Cover:
 
 - switching to logs should scroll to the latest entry
 - follow behavior should continue only when already at bottom
 
-- [ ] **Step 2: Run the targeted tests to verify they fail**
+- [x] **Step 2: Run the targeted tests to verify they fail**
 
 Run:
 
@@ -124,7 +124,7 @@ bun test src/components/MessagePanel/index.test.tsx
 
 Expected: FAIL because logs surface has no explicit bottom-on-entry logic.
 
-- [ ] **Step 3: Implement bottom-oriented logs behavior**
+- [x] **Step 3: Implement bottom-oriented logs behavior**
 
 Implementation notes:
 
@@ -132,7 +132,7 @@ Implementation notes:
 - scroll to the last item when entering `"logs"`
 - preserve bottom-follow semantics without overriding manual upward scroll
 
-- [ ] **Step 4: Re-run verification**
+- [x] **Step 4: Re-run verification**
 
 Run:
 
@@ -143,14 +143,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MessagePanel/index.tsx src/components/MessagePanel/MessageList.tsx src/components/MessagePanel/index.test.tsx
 git commit -m "fix: keep logs pinned to the bottom on entry"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 ### Task 3: Tear down all tracked runtimes/connections on app exit
 

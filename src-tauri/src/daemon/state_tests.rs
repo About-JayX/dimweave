@@ -749,3 +749,75 @@ fn observe_task_message_auto_saves_without_explicit_call() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn shutdown_teardown_clears_live_runtime_handles() {
+    let mut s = DaemonState::new();
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    let (sdk_tx, _sdk_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let (event_tx, _event_rx) = tokio::sync::mpsc::channel::<Vec<serde_json::Value>>(1);
+    let (ready_tx, _ready_rx) = tokio::sync::oneshot::channel();
+    let (telegram_tx, _telegram_rx) =
+        tokio::sync::mpsc::channel::<crate::telegram::types::TelegramOutbound>(1);
+
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
+    s.codex_inject_tx = Some(codex_tx);
+    s.claude_sdk_ws_tx = Some(sdk_tx);
+    s.claude_sdk_event_tx = Some(event_tx);
+    s.claude_sdk_ready_tx = Some(ready_tx);
+    s.telegram_outbound_tx = Some(telegram_tx);
+    s.buffer_message(BridgeMessage::system("linger", "lead"));
+    s.store_permission_request(
+        "claude",
+        PermissionRequest {
+            request_id: "req-1".into(),
+            tool_name: "Bash".into(),
+            description: "run pwd".into(),
+            input_preview: None,
+        },
+        100,
+    );
+    s.set_provider_connection(
+        "claude",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Claude,
+            external_session_id: "claude_session".into(),
+            cwd: "/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+        },
+    );
+    s.set_provider_connection(
+        "codex",
+        crate::daemon::types::ProviderConnectionState {
+            provider: crate::daemon::task_graph::types::Provider::Codex,
+            external_session_id: "thread_1".into(),
+            cwd: "/ws".into(),
+            connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+        },
+    );
+    s.set_runtime_health(crate::daemon::types::RuntimeHealthStatus {
+        level: crate::daemon::types::RuntimeHealthLevel::Error,
+        source: "claude_sdk".into(),
+        message: "stale".into(),
+    });
+
+    s.teardown_runtime_handles_for_shutdown();
+
+    assert!(s.attached_agents.is_empty());
+    assert!(s.buffered_messages.is_empty());
+    assert!(s.codex_inject_tx.is_none());
+    assert!(s.claude_sdk_ws_tx.is_none());
+    assert!(s.claude_sdk_event_tx.is_none());
+    assert!(s.claude_sdk_ready_tx.is_none());
+    assert!(s.provider_connection("claude").is_none());
+    assert!(s.provider_connection("codex").is_none());
+    assert!(s.runtime_health.is_none());
+    assert!(s.telegram_outbound_tx.is_none());
+    assert!(s
+        .resolve_permission("req-1", PermissionBehavior::Allow, 200)
+        .is_none());
+}
