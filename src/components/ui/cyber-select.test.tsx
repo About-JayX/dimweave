@@ -83,6 +83,25 @@ describe("CyberSelect rendering", () => {
   });
 });
 
+describe("CyberSelect history variant menu items", () => {
+  test("history menu option renders full text without truncation classes", async () => {
+    const { HistoryMenuOption } = await import("./cyber-select");
+    const longLabel =
+      "A very long session title that would be clipped in a narrow container";
+    const longDesc = "sess_abc123456789_very_long_external_id_overflow";
+    const html = renderToStaticMarkup(
+      createElement(HistoryMenuOption, {
+        opt: { value: "h1", label: longLabel, description: longDesc },
+        isSelected: false,
+        onClick: () => {},
+      }),
+    );
+    expect(html).toContain(longLabel);
+    expect(html).toContain(longDesc);
+    expect(html).not.toContain("truncate");
+  });
+});
+
 describe("CyberSelect history variant", () => {
   test("history variant keeps collapsed trigger compact", async () => {
     const { CyberSelect } = await import("./cyber-select");

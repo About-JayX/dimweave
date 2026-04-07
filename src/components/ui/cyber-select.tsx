@@ -16,6 +16,37 @@ interface CyberSelectProps {
   variant?: "default" | "history";
 }
 
+export function HistoryMenuOption({
+  opt,
+  isSelected,
+  onClick,
+}: {
+  opt: CyberSelectOption;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-start rounded-md px-3 py-2 text-[12px] text-left transition-colors duration-150",
+        "hover:bg-primary/10 hover:text-foreground",
+        isSelected ? "bg-primary/15 text-foreground" : "text-foreground/80",
+      )}
+    >
+      <div className="flex flex-col items-start w-full gap-0.5">
+        <span className="font-medium break-words">{opt.label}</span>
+        {opt.description && (
+          <span className="text-[11px] text-muted-foreground/70 break-all">
+            {opt.description}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
 export function CyberSelect({
   value,
   options,
@@ -103,38 +134,44 @@ export function CyberSelect({
               : "top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1",
           )}
         >
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-start rounded-md text-left transition-colors duration-150",
-                isHistory ? "px-3 py-2 text-[12px]" : "px-2.5 py-1.5 text-[11px]",
-                "hover:bg-primary/10 hover:text-foreground",
-                opt.value === value
-                  ? "bg-primary/15 text-foreground"
-                  : "text-foreground/80",
-              )}
-            >
-              <div className="flex flex-col items-start min-w-0 flex-1">
-                <span className="font-medium truncate w-full">{opt.label}</span>
-                {opt.description && (
-                  <span
-                    className={cn(
-                      "text-muted-foreground/70 truncate w-full mt-0.5",
-                      isHistory ? "text-[11px]" : "text-[10px]",
-                    )}
-                  >
-                    {opt.description}
-                  </span>
+          {options.map((opt) =>
+            isHistory ? (
+              <HistoryMenuOption
+                key={opt.value}
+                opt={opt}
+                isSelected={opt.value === value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+              />
+            ) : (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-start rounded-md px-2.5 py-1.5 text-[11px] text-left transition-colors duration-150",
+                  "hover:bg-primary/10 hover:text-foreground",
+                  opt.value === value
+                    ? "bg-primary/15 text-foreground"
+                    : "text-foreground/80",
                 )}
-              </div>
-            </button>
-          ))}
+              >
+                <div className="flex flex-col items-start min-w-0 flex-1">
+                  <span className="font-medium truncate w-full">{opt.label}</span>
+                  {opt.description && (
+                    <span className="text-[10px] text-muted-foreground/70 truncate w-full mt-0.5">
+                      {opt.description}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ),
+          )}
         </div>
       )}
     </div>
