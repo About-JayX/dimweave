@@ -42,11 +42,11 @@
 - Modify: `src/components/MessagePanel/view-model.ts`
 - Modify: `src/components/MessagePanel/MessageList.test.tsx`
 
-- [ ] **Step 1: Add a focused regression test for inline stream-tail rendering**
+- [x] **Step 1: Add a focused regression test for inline stream-tail rendering**
 
 Extend `MessageList.test.tsx` with a render case that seeds `claudeStream` or `codexStream`, renders `MessageList` with at least one real message, and asserts the stream indicator markup appears inside the list container rather than in a detached sibling footer wrapper.
 
-- [ ] **Step 2: Render stream indicators through the Virtuoso footer instead of a detached section**
+- [x] **Step 2: Render stream indicators through the Virtuoso footer instead of a detached section**
 
 In `MessageList.tsx`, keep `totalCount` bound to real messages but move `displayState.streamRailIndicators` into a `Virtuoso` footer renderer so the active stream UI is part of the scrollable chat flow. Keep message rows unchanged:
 
@@ -64,7 +64,7 @@ In `MessageList.tsx`, keep `totalCount` bound to real messages but move `display
 />
 ```
 
-- [ ] **Step 3: Make the bottom button target the true rendered tail**
+- [x] **Step 3: Make the bottom button target the true rendered tail**
 
 Replace the current `scrollToIndex({ index: "LAST" })`-only behavior with footer-anchor scrolling when a stream footer is mounted, falling back to the last message only when no footer exists:
 
@@ -76,11 +76,11 @@ if (footerAnchorRef.current) {
 }
 ```
 
-- [ ] **Step 4: Keep view-model semantics minimal**
+- [x] **Step 4: Keep view-model semantics minimal**
 
 Leave `getMessageListDisplayState()` message-count semantics tied to real chat messages, but preserve `streamRailIndicators` for deciding whether the footer should render.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -90,7 +90,9 @@ bun test src/components/MessagePanel/MessageList.test.tsx src/components/Message
 
 Expected: all tests pass.
 
-- [ ] **CM:** `fix: inline transient stream tail into message timeline`
+Lead verification: `bun test src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/CodexStreamIndicator.test.ts` → `11 pass, 0 fail` on 2026-04-07.
+
+- [x] **CM:** `fix: inline transient stream tail into message timeline` — commit `cd0bdd52`
 
 ---
 
@@ -106,11 +108,11 @@ Expected: all tests pass.
 - Modify: `src/components/MessagePanel/index.tsx`
 - Modify: `src/components/MessagePanel/index.test.tsx`
 
-- [ ] **Step 1: Add a render test covering the open-search row layout**
+- [x] **Step 1: Add a render test covering the open-search row layout**
 
 Update `index.test.tsx` with a case that seeds at least one message, renders the panel, and verifies the default header shows the search trigger but not the inline search input. Add a second case that exercises the open-state markup through extracted rendering logic or stateful test setup and asserts the search row is present under the header border.
 
-- [ ] **Step 2: Split the current header into two layers**
+- [x] **Step 2: Split the current header into two layers**
 
 Keep the compact header bar for actions only, and when `searchOpen` is true, render a second bordered row below it containing the input, summary, and close action:
 
@@ -121,7 +123,7 @@ Keep the compact header bar for actions only, and when `searchOpen` is true, ren
 </div>
 ```
 
-- [ ] **Step 3: Keep current focus and reset behavior**
+- [x] **Step 3: Keep current focus and reset behavior**
 
 Preserve the existing autofocus and `requestAnimationFrame` focus behavior when opening search. Closing search must still call:
 
@@ -130,7 +132,7 @@ setSearchQuery("");
 setSearchOpen(false);
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -140,7 +142,9 @@ bun test src/components/MessagePanel/index.test.tsx src/components/MessagePanel/
 
 Expected: all tests pass.
 
-- [ ] **CM:** `fix: move message search into dedicated panel row`
+Lead verification: `bun test src/components/MessagePanel/index.test.tsx src/components/MessagePanel/MessageList.test.tsx` → `9 pass, 0 fail` on 2026-04-07.
+
+- [x] **CM:** `fix: move message search into dedicated panel row` — commit `05645621`
 
 ---
 
@@ -157,7 +161,7 @@ Expected: all tests pass.
 - Modify: `src/components/AgentStatus/provider-session-view-model.ts`
 - Add: `src/components/ui/cyber-select.test.tsx`
 
-- [ ] **Step 1: Extend the option model to support description text**
+- [x] **Step 1: Extend the option model to support description text**
 
 Keep the existing shape but actually use the optional `description?: string` field for history entries:
 
@@ -169,7 +173,7 @@ export interface CyberSelectOption {
 }
 ```
 
-- [ ] **Step 2: Populate description for provider history items**
+- [x] **Step 2: Populate description for provider history items**
 
 In `buildProviderHistoryOptions()`, preserve `"New session"` as a single-line option and map history entries to:
 
@@ -181,7 +185,7 @@ In `buildProviderHistoryOptions()`, preserve `"New session"` as a single-line op
 }
 ```
 
-- [ ] **Step 3: Update CyberSelect rendering for optional two-line options**
+- [x] **Step 3: Update CyberSelect rendering for optional two-line options**
 
 Render the selected value and dropdown options with stacked text when `description` exists, but keep the old single-line compact path when it does not:
 
@@ -196,13 +200,13 @@ Render the selected value and dropdown options with stacked text when `descripti
 )}
 ```
 
-- [ ] **Step 4: Add a focused component test**
+- [x] **Step 4: Add a focused component test**
 
 Create `src/components/ui/cyber-select.test.tsx` that renders one single-line option and one two-line option, then asserts that:
 - the two-line selected state contains both label and description
 - the single-line option does not render an unnecessary second line
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -212,7 +216,9 @@ bun test src/components/ui/cyber-select.test.tsx
 
 Expected: all tests pass.
 
-- [ ] **CM:** `fix: show provider history with title and task metadata`
+Lead verification: `bun test src/components/ui/cyber-select.test.tsx` → `5 pass, 0 fail` on 2026-04-07.
+
+- [x] **CM:** `fix: show provider history with title and task metadata` — commit `554550d6`
 
 ---
 
@@ -232,7 +238,7 @@ Expected: all tests pass.
 - Modify: `src/components/TaskContextPopover.test.tsx`
 - Modify: `src/components/TaskPanel/ArtifactTimeline.test.tsx`
 
-- [ ] **Step 1: Simplify the top-level TaskPanel structure**
+- [x] **Step 1: Simplify the top-level TaskPanel structure**
 
 Remove the current dashboard-style metric grid from `TaskPanel/index.tsx`. Keep one compact summary card followed by the sessions and artifacts sections:
 
@@ -244,7 +250,7 @@ Remove the current dashboard-style metric grid from `TaskPanel/index.tsx`. Keep 
 </section>
 ```
 
-- [ ] **Step 2: Rewrite TaskHeader around identity-first metadata**
+- [x] **Step 2: Rewrite TaskHeader around identity-first metadata**
 
 Adjust `TaskHeader.tsx` so the summary emphasizes:
 - task title
@@ -255,15 +261,15 @@ Adjust `TaskHeader.tsx` so the summary emphasizes:
 
 Do not reintroduce large counters or duplicate section labels.
 
-- [ ] **Step 3: Lighten the section copy inside SessionTree and ArtifactTimeline**
+- [x] **Step 3: Lighten the section copy inside SessionTree and ArtifactTimeline**
 
 Rename headings to shorter inspector-style labels such as `Sessions` and `Artifacts`, keep metadata readable, and preserve resume / selection actions. Avoid repeated all-caps dashboard language except for small section eyebrows where already used consistently.
 
-- [ ] **Step 4: Update tests to match the lighter structure**
+- [x] **Step 4: Update tests to match the lighter structure**
 
 Adjust `TaskContextPopover.test.tsx` and `ArtifactTimeline.test.tsx` so they assert the new lighter copy without expecting removed dashboard wording.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -273,7 +279,12 @@ bun test src/components/TaskContextPopover.test.tsx src/components/TaskPanel/Art
 
 Expected: all tests pass.
 
-- [ ] **CM:** `refactor: simplify task inspector structure`
+Lead verification:
+- `bun test src/components/TaskContextPopover.test.tsx src/components/TaskPanel/ArtifactTimeline.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` → `10 pass, 0 fail` on 2026-04-07
+- `bun test src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx src/components/MessagePanel/CodexStreamIndicator.test.ts src/components/ui/cyber-select.test.tsx src/components/TaskContextPopover.test.tsx src/components/TaskPanel/ArtifactTimeline.test.tsx` → `27 pass, 0 fail` on 2026-04-07
+- `bun run build` → success on 2026-04-07
+
+- [x] **CM:** `refactor: simplify task inspector structure` — commit `238b1d54`
 
 ---
 
