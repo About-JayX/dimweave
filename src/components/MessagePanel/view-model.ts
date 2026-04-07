@@ -3,6 +3,7 @@ import type {
   ClaudeStreamState,
   CodexStreamState,
 } from "@/stores/bridge-store/types";
+import type { ShellMainSurface } from "@/components/shell-layout-state";
 import { hasMessagePayload } from "@/lib/message-payload";
 export {
   filterMessagesByQuery,
@@ -32,6 +33,18 @@ export interface MessageListDisplayState {
   timelineCount: number;
   streamRailIndicators: StreamIndicatorId[];
   hasContent: boolean;
+}
+
+export function shouldAutoScrollLogsOnSurfaceChange(
+  previousSurface: ShellMainSurface | null,
+  nextSurface: ShellMainSurface,
+  lineCount: number,
+): boolean {
+  return previousSurface !== "logs" && nextSurface === "logs" && lineCount > 0;
+}
+
+export function getLogsFollowOutputMode(atBottom: boolean): false | "smooth" {
+  return atBottom ? "smooth" : false;
 }
 
 export function getMessageIdentityPresentation(

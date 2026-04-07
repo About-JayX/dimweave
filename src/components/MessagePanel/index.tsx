@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { Search, X } from "lucide-react";
-import { Virtuoso } from "react-virtuoso";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { selectMessages } from "@/stores/bridge-store/selectors";
@@ -17,7 +17,9 @@ import {
   filterMessagesByQuery,
   filterRenderableChatMessages,
   formatTerminalTimestamp,
+  getLogsFollowOutputMode,
   getMessageSearchSummary,
+  shouldAutoScrollLogsOnSurfaceChange,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
 
@@ -79,6 +81,9 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const logsVirtuosoRef = useRef<VirtuosoHandle>(null);
+  const previousSurfaceModeRef = useRef<ShellMainSurface | null>(surfaceMode);
+  const [logsAtBottom, setLogsAtBottom] = useState(true);
 
   const chatMessages = useMemo(
     () => filterRenderableChatMessages(messages),
@@ -104,6 +109,28 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
       clearClaudeAttention();
     }
   }, [claudeNeedsAttention, clearClaudeAttention]);
+
+  useEffect(() => {
+    const previousSurface = previousSurfaceModeRef.current;
+    if (
+      shouldAutoScrollLogsOnSurfaceChange(
+        previousSurface,
+        surfaceMode,
+        allTerminalLines.length,
+      )
+    ) {
+      const raf = window.requestAnimationFrame(() => {
+        logsVirtuosoRef.current?.scrollToIndex({
+          index: "LAST",
+          behavior: "auto",
+        });
+      });
+      previousSurfaceModeRef.current = surfaceMode;
+      return () => window.cancelAnimationFrame(raf);
+    }
+
+    previousSurfaceModeRef.current = surfaceMode;
+  }, [allTerminalLines.length, surfaceMode]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -154,9 +181,12 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
           )}
           {allTerminalLines.length > 0 && (
             <Virtuoso
+              ref={logsVirtuosoRef}
               data={allTerminalLines}
               className="h-full px-4 py-2 font-mono text-[11px] leading-relaxed"
               increaseViewportBy={160}
+              atBottomStateChange={setLogsAtBottom}
+              followOutput={getLogsFollowOutputMode(logsAtBottom)}
               itemContent={(_, line) => (
                 <div
                   className={`py-0.5 ${line.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}

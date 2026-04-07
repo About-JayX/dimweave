@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import {
+  getLogsFollowOutputMode,
+  shouldAutoScrollLogsOnSurfaceChange,
+} from "./view-model";
 
 function installTauriStub() {
   let callbackId = 0;
@@ -26,6 +30,17 @@ function installTauriStub() {
 }
 
 describe("MessagePanel", () => {
+  test("auto-scrolls logs only when entering the logs surface with content", () => {
+    expect(shouldAutoScrollLogsOnSurfaceChange("chat", "logs", 3)).toBe(true);
+    expect(shouldAutoScrollLogsOnSurfaceChange("logs", "logs", 3)).toBe(false);
+    expect(shouldAutoScrollLogsOnSurfaceChange("chat", "logs", 0)).toBe(false);
+  });
+
+  test("follows log output only when already at the bottom", () => {
+    expect(getLogsFollowOutputMode(true)).toBe("smooth");
+    expect(getLogsFollowOutputMode(false)).toBe(false);
+  });
+
   test("renders the chat empty state without reviving header controls", async () => {
     installTauriStub();
     const [{ MessagePanel }, { useBridgeStore }] = await Promise.all([
