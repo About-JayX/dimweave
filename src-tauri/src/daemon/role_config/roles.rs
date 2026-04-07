@@ -91,7 +91,7 @@ pub fn get_role(role_id: &str) -> Option<RoleConfig> {
         }),
         "lead" => Some(RoleConfig {
             base_instructions: build_role_prompt("lead"),
-            sandbox_mode: "workspace-write",
+            sandbox_mode: "none",
             network_access: true,
             approval_policy: "never",
         }),
