@@ -185,10 +185,12 @@ async fn handle_pair(
     );
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
+fn truncate(s: &str, max_chars: usize) -> String {
+    let mut chars = s.chars();
+    let truncated: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{truncated}…")
     } else {
-        format!("{}...", &s[..max])
+        truncated
     }
 }

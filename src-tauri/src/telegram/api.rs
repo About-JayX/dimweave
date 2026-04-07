@@ -93,7 +93,6 @@ pub async fn send_message(
     let body = serde_json::json!({
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "HTML",
     });
     let resp: TelegramResponse<serde_json::Value> = client
         .post(api_url(token, "sendMessage"))

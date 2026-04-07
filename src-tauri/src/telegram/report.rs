@@ -16,7 +16,7 @@ pub fn should_send_lead_report(msg: &BridgeMessage) -> bool {
 pub fn build_lead_report(task_title: Option<&str>, msg: &BridgeMessage) -> String {
     let status_str = msg.status.as_ref().map(|s| s.as_str()).unwrap_or("done");
     format!(
-        "<b>Dimweave update</b>\nTask: {}\nStatus: {}\n\n{}",
+        "Dimweave update\nTask: {}\nStatus: {}\n\n{}",
         task_title.unwrap_or("No active task"),
         status_str,
         msg.content.trim(),
