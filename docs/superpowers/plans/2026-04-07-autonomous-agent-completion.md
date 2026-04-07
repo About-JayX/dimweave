@@ -25,8 +25,8 @@
 
 | Task | Commit | Verification | Notes |
 |------|--------|--------------|-------|
-| Task 1 | _pending_ | `cargo test lead_prompt_enforces_planning_review_reporting_role --manifest-path src-tauri/Cargo.toml`; `cargo test prompt_requires_autonomous_final_acceptance --manifest-path src-tauri/Cargo.toml`; `cargo test role_config::roles::tests --manifest-path src-tauri/Cargo.toml` | Runtime prompt must own autonomous completion rules directly; skill docs alone are insufficient because providers render their prompts from `role_protocol.rs`. |
-| Task 2 | _pending_ | `git diff --check -- .agents/skills/superpowers/brainstorming/SKILL.md .agents/skills/superpowers/writing-plans/SKILL.md` | Skill-level user-review gates must become opt-in rather than default when the user has already approved autonomous execution. |
+| Task 1 | `17a06f55` | `cargo test lead_prompt_enforces_planning_review_reporting_role --manifest-path src-tauri/Cargo.toml`; `cargo test prompt_requires_autonomous_final_acceptance --manifest-path src-tauri/Cargo.toml`; `cargo test role_config::roles::tests --manifest-path src-tauri/Cargo.toml` | Runtime prompt must own autonomous completion rules directly; skill docs alone are insufficient because providers render their prompts from `role_protocol.rs`. |
+| Task 2 | `80191d01` | `git diff --check -- .agents/skills/superpowers/brainstorming/SKILL.md .agents/skills/superpowers/writing-plans/SKILL.md` | Skill-level user-review gates must become opt-in rather than default when the user has already approved autonomous execution. |
 | Task 3 | `bee9dd20` | `bun test src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx src/components/MessagePanel/CodexStreamIndicator.test.ts src/components/ui/cyber-select.test.tsx src/components/TaskContextPopover.test.tsx src/components/TaskPanel/ArtifactTimeline.test.tsx src/components/TaskPanel/TaskHeader.test.tsx`; `bun run build`; `git status --short` | Previously verified UI bugfix tasks must be converted into real git commits so CM records correspond to actual repository history, not only plan-document checkmarks. |
 
 ---
@@ -73,7 +73,7 @@ cargo test role_config::roles::tests --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [x] **CM:** `refactor: require autonomous final acceptance in role prompts`
+- [x] **CM:** `refactor: require autonomous final acceptance in role prompts` — commit `17a06f55`
 
 ---
 
@@ -110,7 +110,7 @@ git diff --check -- .agents/skills/superpowers/brainstorming/SKILL.md .agents/sk
 
 Expected: no formatting issues.
 
-- [x] **CM:** `docs: remove default user gates from autonomous workflows`
+- [x] **CM:** `docs: remove default user gates from autonomous workflows` — commit `80191d01`
 
 ---
 
@@ -171,4 +171,4 @@ Expected:
 - build succeeds
 - working tree clean except for this plan/spec task if not yet committed
 
-- [x] **CM:** `chore: finalize autonomous bugfix task commits`
+- [x] **CM:** `docs: backfill real commit evidence into chat/inspector bugfix plan` — commit `bee9dd20`
