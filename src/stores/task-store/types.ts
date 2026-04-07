@@ -11,6 +11,7 @@ export type TaskStatus =
 export type SessionStatus = "active" | "paused" | "completed" | "error";
 export type Provider = "claude" | "codex";
 export type SessionRole = "lead" | "coder";
+export type ReplyTarget = "auto" | "lead" | "coder";
 export type ArtifactKind =
   | "research"
   | "plan"
@@ -90,6 +91,7 @@ export interface ArtifactsChangedPayload {
 export interface TaskStoreData {
   activeTaskId: string | null;
   tasks: Record<string, TaskInfo>;
+  replyTargets: Record<string, ReplyTarget>;
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;
   providerHistory: Record<string, ProviderHistoryInfo[]>;
@@ -103,6 +105,7 @@ export interface TaskStoreState extends TaskStoreData {
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
+  setReplyTarget: (target: ReplyTarget) => void;
   fetchSnapshot: () => Promise<void>;
   fetchProviderHistory: (workspace: string) => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;

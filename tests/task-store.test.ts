@@ -10,6 +10,7 @@ import {
   createStartWorkspaceTaskAction,
   createFetchProviderHistoryAction,
   deriveWorkspaceTaskTitle,
+  setReplyTargetPatch,
   snapshotToPatch,
 } from "../src/stores/task-store";
 import type {
@@ -23,6 +24,7 @@ function emptyState(): TaskStoreData {
   return {
     activeTaskId: null,
     tasks: {},
+    replyTargets: {},
     sessions: {},
     artifacts: {},
     providerHistory: {},
@@ -207,6 +209,27 @@ describe("snapshotToPatch", () => {
     expect("reviewStatus" in (patch.tasks?.t1 ?? {})).toBe(false);
     expect(patch.sessions?.t1?.[0]?.sessionId).toBe("s1");
     expect(patch.artifacts?.t1?.[0]?.artifactId).toBe("a1");
+  });
+});
+
+describe("setReplyTargetPatch", () => {
+  test("stores a reply target for the active task only", () => {
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      replyTargets: { t2: "lead" as const },
+    };
+
+    const patch = setReplyTargetPatch(state, state.activeTaskId, "coder");
+
+    expect(patch.replyTargets).toEqual({
+      t2: "lead",
+      t1: "coder",
+    });
+  });
+
+  test("returns an empty patch when there is no active task", () => {
+    expect(setReplyTargetPatch(emptyState(), null, "coder")).toEqual({});
   });
 });
 

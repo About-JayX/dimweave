@@ -1,6 +1,7 @@
 import type {
   ArtifactInfo,
   ProviderHistoryInfo,
+  ReplyTarget,
   SessionInfo,
   TaskStoreState,
 } from "./types";
@@ -11,6 +12,12 @@ const EMPTY_PROVIDER_HISTORY: ProviderHistoryInfo[] = [];
 
 export function selectActiveTask(state: TaskStoreState) {
   return state.activeTaskId ? state.tasks[state.activeTaskId] ?? null : null;
+}
+
+export function selectActiveReplyTarget(state: TaskStoreState): ReplyTarget {
+  return state.activeTaskId
+    ? state.replyTargets[state.activeTaskId] ?? "auto"
+    : "auto";
 }
 
 export function selectActiveTaskSessions(state: TaskStoreState) {

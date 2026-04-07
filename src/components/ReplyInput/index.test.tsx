@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { selectActiveReplyTarget } from "@/stores/task-store/selectors";
+import { useTaskStore } from "@/stores/task-store";
 import { getTaskSessionWarning } from "./task-session-guard";
 
 function makeTask(id: string, workspaceRoot: string) {
@@ -32,7 +34,7 @@ function makeClaudeLeadSession(taskId: string, externalSessionId: string, cwd: s
   };
 }
 
-function installTauriStub() {
+function installTauriStub(snapshot: { task: ReturnType<typeof makeTask>; sessions: unknown[]; artifacts: unknown[] } | null = null) {
   let callbackId = 0;
   Object.assign(globalThis, {
     window: {
@@ -44,7 +46,8 @@ function installTauriStub() {
           if (cmd === "daemon_get_status_snapshot") {
             return { agents: [], claudeRole: "lead", codexRole: "coder" };
           }
-          if (cmd === "daemon_get_task_snapshot") return null;
+          if (cmd === "daemon_get_task_snapshot") return snapshot;
+          if (cmd === "daemon_clear_active_task") return null;
           return null;
         },
       },
@@ -67,6 +70,28 @@ function installTauriStub() {
 }
 
 describe("ReplyInput", () => {
+  test("restores the task-scoped reply target instead of falling back to auto", () => {
+    useTaskStore.setState({
+      activeTaskId: "task-2",
+      tasks: {
+        "task-2": makeTask("task-2", "/repo-b"),
+      },
+      replyTargets: {
+        "task-2": "coder",
+      },
+      sessions: {
+        "task-2": [],
+      },
+      artifacts: {},
+      providerHistory: {},
+      providerHistoryLoading: {},
+      providerHistoryError: {},
+      bootstrapComplete: true,
+      bootstrapError: null,
+    });
+    expect(selectActiveReplyTarget(useTaskStore.getState())).toBe("coder");
+  });
+
   test("renders a centered pill grip with a narrow trigger zone instead of a full-width strip", async () => {
     installTauriStub();
     const { ReplyInput } = await import("./index");

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Provider,
   ProviderHistoryInfo,
+  ReplyTarget,
   SessionRole,
   TaskStoreData,
   TaskInfo,
@@ -101,6 +102,20 @@ export function createStartWorkspaceTaskAction(
   };
 }
 
+export function setReplyTargetPatch(
+  state: TaskStoreData,
+  taskId: string | null,
+  target: ReplyTarget,
+): Partial<TaskStoreData> {
+  if (!taskId) return {};
+  return {
+    replyTargets: {
+      ...state.replyTargets,
+      [taskId]: target,
+    },
+  };
+}
+
 export function createFetchProviderHistoryAction(
   set: ProviderHistorySetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
@@ -169,6 +184,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
   return {
     activeTaskId: null,
     tasks: {},
+    replyTargets: {},
     sessions: {},
     artifacts: {},
     providerHistory: {},
@@ -194,6 +210,9 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     selectTask: async (taskId) => {
       await invoke("daemon_select_task", { taskId });
     },
+
+    setReplyTarget: (target) =>
+      set((s) => setReplyTargetPatch(s, s.activeTaskId, target)),
 
     fetchSnapshot: async () => {
       const snap = await invoke<TaskSnapshot | null>("daemon_get_task_snapshot");

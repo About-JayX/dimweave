@@ -4,6 +4,7 @@ import { selectAnyAgentConnected } from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
+  selectActiveReplyTarget,
   selectActiveTaskSessions,
 } from "@/stores/task-store/selectors";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,7 +27,8 @@ export function ReplyInput() {
   const draft = useBridgeStore((s) => s.draft);
   const setDraft = useBridgeStore((s) => s.setDraft);
   const sendToCodex = useBridgeStore((s) => s.sendToCodex);
-  const [target, setTarget] = useState<Target>("auto");
+  const target = useTaskStore(selectActiveReplyTarget);
+  const setReplyTarget = useTaskStore((s) => s.setReplyTarget);
   const [sendOnEnter, setSendOnEnter] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const composingRef = useRef(false);
@@ -140,7 +142,7 @@ export function ReplyInput() {
 
         <ReplyInputFooter
           target={target}
-          setTarget={setTarget}
+          setTarget={setReplyTarget}
           onPickFiles={handlePickFiles}
           activeTaskTitle={activeTask?.title ?? null}
           taskSessionWarning={taskSessionWarning}
