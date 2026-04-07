@@ -19,6 +19,8 @@ mod commands_task;
 mod daemon;
 #[allow(dead_code)]
 mod mcp;
+mod telegram;
+mod commands_telegram;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
@@ -154,6 +156,10 @@ fn main() {
             commands::stop_claude,
             commands::daemon_launch_claude_sdk,
             commands::daemon_stop_claude_sdk,
+            commands_telegram::telegram_get_state,
+            commands_telegram::telegram_save_config,
+            commands_telegram::telegram_generate_pair_code,
+            commands_telegram::telegram_clear_pairing,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

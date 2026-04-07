@@ -72,6 +72,8 @@ pub struct DaemonState {
     pub task_graph: TaskGraphStore,
     pub active_task_id: Option<String>,
     pub(crate) review_gate: ReviewGate,
+    pub telegram_outbound_tx: Option<tokio::sync::mpsc::Sender<crate::telegram::types::TelegramOutbound>>,
+    pub telegram_paired_chat_id: Option<i64>,
 }
 
 impl Default for DaemonState {
@@ -103,6 +105,8 @@ impl Default for DaemonState {
             task_graph: TaskGraphStore::new(),
             active_task_id: None,
             review_gate: ReviewGate::new(),
+            telegram_outbound_tx: None,
+            telegram_paired_chat_id: None,
         }
     }
 }

@@ -159,6 +159,10 @@ pub fn emit_permission_prompt(
     );
 }
 
+pub fn emit_telegram_state(app: &AppHandle, state: &crate::telegram::types::TelegramRuntimeState) {
+    let _ = app.emit("telegram_state", state.clone());
+}
+
 #[cfg(test)]
 mod tests {
     use super::{should_auto_finish_idle_claude_thinking, ClaudeStreamPayload};

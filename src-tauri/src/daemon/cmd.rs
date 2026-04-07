@@ -99,6 +99,22 @@ pub enum DaemonCmd {
         role: SessionRole,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    // ── Telegram ─────────────────────────────────────────────
+    GetTelegramState {
+        reply: oneshot::Sender<crate::telegram::types::TelegramRuntimeState>,
+    },
+    SaveTelegramConfig {
+        bot_token: String,
+        enabled: bool,
+        notifications_enabled: bool,
+        reply: oneshot::Sender<Result<crate::telegram::types::TelegramRuntimeState, String>>,
+    },
+    GenerateTelegramPairCode {
+        reply: oneshot::Sender<Result<crate::telegram::types::TelegramRuntimeState, String>>,
+    },
+    ClearTelegramPairing {
+        reply: oneshot::Sender<Result<crate::telegram::types::TelegramRuntimeState, String>>,
+    },
 }
 
 pub fn channel() -> (mpsc::Sender<DaemonCmd>, mpsc::Receiver<DaemonCmd>) {
