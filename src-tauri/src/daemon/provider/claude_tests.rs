@@ -196,6 +196,53 @@ fn sync_claude_launch_sets_current_coder_session_for_active_task() {
 }
 
 #[test]
+fn sync_claude_launch_resumes_known_history_session() {
+    let mut state = DaemonState::new();
+    let task_current = state.create_and_select_task("/ws", "Current Task");
+    let task_history = state.task_graph.create_task("/ws", "History Task");
+
+    let history_session = state.task_graph.create_session(CreateSessionParams {
+        task_id: &task_history.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Claude lead",
+    });
+    state
+        .task_graph
+        .set_external_session_id(&history_session.session_id, "claude_hist_1");
+    state
+        .task_graph
+        .set_lead_session(&task_history.task_id, &history_session.session_id);
+
+    sync_claude_launch_into_active_task(
+        &mut state,
+        "lead",
+        "/ws",
+        "claude_hist_1",
+        "/tmp/.claude/projects/-ws/claude_hist_1.jsonl",
+    );
+
+    assert_eq!(
+        state.active_task_id.as_deref(),
+        Some(task_history.task_id.as_str())
+    );
+    assert_eq!(
+        state
+            .task_graph
+            .get_task(&task_history.task_id)
+            .and_then(|t| t.lead_session_id.as_deref()),
+        Some(history_session.session_id.as_str())
+    );
+    assert!(state
+        .task_graph
+        .get_task(&task_current.task_id)
+        .and_then(|t| t.lead_session_id.as_deref())
+        .is_none());
+}
+
+#[test]
 fn workspace_history_dir_scopes_to_workspace_slug() {
     let root = std::env::temp_dir().join("claude-history-root");
     let path = claude::workspace_history_dir("/Users/example/project-x", &root);

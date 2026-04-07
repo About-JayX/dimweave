@@ -301,7 +301,7 @@ async fn launch(
             i += 1;
         }
     }
-    gui::emit_agent_status(&app, "codex", true, None, Some(provider_session));
+    gui::emit_agent_status_online(&app, "codex", Some(provider_session), role_id.clone());
     gui::emit_system_log(
         &app,
         "info",

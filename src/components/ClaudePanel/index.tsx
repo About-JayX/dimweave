@@ -20,6 +20,7 @@ import {
   findProviderHistoryEntry,
   formatProviderConnectionLabel,
   NEW_PROVIDER_SESSION_VALUE,
+  resolveProviderHistoryAction,
   resolveProviderHistoryWorkspace,
 } from "@/components/AgentStatus/provider-session-view-model";
 import { ClaudeConfigRows } from "./ClaudeConfigRows";
@@ -45,6 +46,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
   const claudeRole = useBridgeStore((s) => s.claudeRole);
   const activeTask = useTaskStore(selectActiveTask);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
+  const resumeSession = useTaskStore((s) => s.resumeSession);
   const effectiveCwd = useMemo(
     () => resolveProviderHistoryWorkspace(activeTask?.workspaceRoot),
     [activeTask?.workspaceRoot],
@@ -106,22 +108,28 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
     setConnecting(true);
     try {
       setActionError(null);
-      await invoke(
-        "daemon_launch_claude_sdk",
-        buildClaudeLaunchRequest({
-          claudeRole,
-          cwd: effectiveCwd,
-          model,
-          effort,
-          resumeSessionId: selectedHistory?.externalId,
-        }),
-      );
+      const action = resolveProviderHistoryAction(selectedHistory);
+      if (action.kind === "resumeNormalized") {
+        await resumeSession(action.sessionId);
+      } else {
+        await invoke(
+          "daemon_launch_claude_sdk",
+          buildClaudeLaunchRequest({
+            claudeRole,
+            cwd: effectiveCwd,
+            model,
+            effort,
+            resumeSessionId:
+              action.kind === "resumeExternal" ? action.externalId : undefined,
+          }),
+        );
+      }
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     } finally {
       setConnecting(false);
     }
-  }, [claudeRole, effectiveCwd, model, effort, selectedHistory]);
+  }, [claudeRole, effectiveCwd, model, effort, selectedHistory, resumeSession]);
 
   const handleLaunch = useCallback(async () => {
     if (!effectiveCwd) return;

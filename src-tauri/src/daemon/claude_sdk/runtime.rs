@@ -131,7 +131,7 @@ pub async fn spawn_runtime(
         s.clear_runtime_health();
     }
     gui::emit_runtime_health(&app, None);
-    gui::emit_agent_status(&app, "claude", true, None, Some(provider_session.clone()));
+    gui::emit_agent_status_online(&app, "claude", Some(provider_session.clone()), role_id.clone());
     gui::emit_system_log(
         &app,
         "info",

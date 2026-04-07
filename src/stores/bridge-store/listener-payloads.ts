@@ -20,6 +20,7 @@ export interface AgentStatusPayload {
   online: boolean;
   exitCode?: number;
   providerSession?: ProviderSessionInfo;
+  role?: string;
 }
 
 export interface RuntimeHealthPayload {

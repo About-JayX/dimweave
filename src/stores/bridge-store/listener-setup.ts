@@ -28,6 +28,37 @@ type BridgeSetter = (fn: (state: BridgeState) => Partial<BridgeState>) => void;
 
 type NextLogId = () => number;
 
+export function reduceAgentStatus(
+  state: BridgeState,
+  payload: AgentStatusPayload,
+): Partial<BridgeState> {
+  const { agent, online, providerSession, role } = payload;
+  const roleUpdate: Partial<BridgeState> =
+    online && role
+      ? agent === "claude"
+        ? { claudeRole: role }
+        : agent === "codex"
+          ? { codexRole: role }
+          : {}
+      : {};
+  return {
+    agents: {
+      ...state.agents,
+      [agent]: {
+        ...state.agents[agent],
+        name: agent,
+        displayName: state.agents[agent]?.displayName ?? agent,
+        status: online ? ("connected" as const) : ("disconnected" as const),
+        providerSession: online ? providerSession : undefined,
+      },
+    },
+    ...(agent === "claude" && !online
+      ? { claudeStream: resetClaudeStream(state) }
+      : {}),
+    ...roleUpdate,
+  };
+}
+
 export function reducePermissionPrompt(
   state: BridgeState,
   payload: PermissionPromptPayload,
@@ -90,7 +121,7 @@ export function createBridgeListeners(
       }));
     }),
     listen<AgentStatusPayload>("agent_status", (e) => {
-      const { agent, online, providerSession } = e.payload;
+      const { agent, online } = e.payload;
       if (agent === "claude" && !online) {
         clearPendingClaudePreview(pendingStreamUpdates);
         if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
@@ -103,21 +134,7 @@ export function createBridgeListeners(
           cancelPendingFlush();
         }
       }
-      set((s) => ({
-        agents: {
-          ...s.agents,
-          [agent]: {
-            ...s.agents[agent],
-            name: agent,
-            displayName: s.agents[agent]?.displayName ?? agent,
-            status: online ? ("connected" as const) : ("disconnected" as const),
-            providerSession: online ? providerSession : undefined,
-          },
-        },
-        ...(agent === "claude" && !online
-          ? { claudeStream: resetClaudeStream(s) }
-          : {}),
-      }));
+      set((s) => reduceAgentStatus(s, e.payload));
     }),
     listen<ClaudeStreamPayload>("claude_stream", (e) => {
       if (queueClaudePreviewUpdate(pendingStreamUpdates, e.payload)) {

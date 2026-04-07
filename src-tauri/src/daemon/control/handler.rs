@@ -63,7 +63,7 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     break;
                 }
                 agent_id = Some(id.clone());
-                let (buffered_messages, buffered_verdicts) = {
+                let (buffered_messages, buffered_verdicts, runtime_role) = {
                     let mut daemon = state.write().await;
                     let role = match id.as_str() {
                         "claude" => Some(daemon.claude_role.clone()),
@@ -91,16 +91,21 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         id.clone(),
                         crate::daemon::state::AgentSender::new(tx.clone(), gen),
                     );
-                    (
-                        role.map(|role_id| daemon.take_buffered_for(&role_id))
-                            .unwrap_or_default(),
-                        daemon.take_buffered_verdicts_for(&id),
-                    )
+                    let buffered = role
+                        .as_deref()
+                        .map(|role_id| daemon.take_buffered_for(role_id))
+                        .unwrap_or_default();
+                    let verdicts = daemon.take_buffered_verdicts_for(&id);
+                    (buffered, verdicts, role)
                 };
                 replay_messages(&tx, &state, buffered_messages).await;
                 replay_verdicts(&tx, &state, &id, buffered_verdicts).await;
                 let provider_session = state.read().await.provider_connection(&id);
-                gui::emit_agent_status(&app, &id, true, None, provider_session);
+                if let Some(role) = runtime_role {
+                    gui::emit_agent_status_online(&app, &id, provider_session, role);
+                } else {
+                    gui::emit_agent_status(&app, &id, true, None, provider_session);
+                }
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} connected"));
             }
             FromAgent::AgentReply { mut message } => {
@@ -237,11 +242,13 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     .into_iter()
                     .cloned()
                     .collect();
+                let active_task_id = daemon.active_task_id.clone();
                 let events = crate::daemon::gui_task::build_task_context_events(
                     daemon.task_graph.get_task(&task_id),
                     &task_id,
                     &sess,
                     &arts,
+                    active_task_id.as_deref(),
                 );
                 drop(daemon);
                 for event in events {

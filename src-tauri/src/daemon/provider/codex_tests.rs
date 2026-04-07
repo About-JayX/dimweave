@@ -1,3 +1,4 @@
+use crate::daemon::launch_task_sync::sync_codex_launch_into_task;
 use crate::daemon::provider::codex;
 use crate::daemon::provider::shared::{
     ProviderHistoryEntry, ProviderHistoryPage, SessionRegistration,
@@ -177,6 +178,68 @@ fn register_on_launch_links_to_lead_session() {
         Some(lead.session_id.as_str())
     );
     assert_eq!(s.task_graph.children_of_session(&lead.session_id).len(), 1);
+}
+
+// ── sync_codex_launch_into_task (history resume) ───────────
+
+#[test]
+fn sync_codex_launch_resumes_known_history_session() {
+    let mut s = DaemonState::new();
+    let task_current = s.task_graph.create_task("/ws", "Current Task");
+    let task_history = s.task_graph.create_task("/ws", "History Task");
+
+    let history_session = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task_history.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Codex coder",
+    });
+    s.task_graph
+        .set_external_session_id(&history_session.session_id, "thread_hist_1");
+    s.task_graph
+        .set_coder_session(&task_history.task_id, &history_session.session_id);
+    s.set_active_task(Some(task_current.task_id.clone()));
+
+    let returned_task_id =
+        sync_codex_launch_into_task(&mut s, "coder", "/ws", "thread_hist_1");
+
+    assert_eq!(
+        returned_task_id.as_deref(),
+        Some(task_history.task_id.as_str())
+    );
+    assert_eq!(
+        s.active_task_id.as_deref(),
+        Some(task_history.task_id.as_str())
+    );
+    assert_eq!(
+        s.task_graph
+            .get_task(&task_history.task_id)
+            .and_then(|t| t.current_coder_session_id.as_deref()),
+        Some(history_session.session_id.as_str())
+    );
+    assert!(s
+        .task_graph
+        .get_task(&task_current.task_id)
+        .and_then(|t| t.current_coder_session_id.as_deref())
+        .is_none());
+}
+
+#[test]
+fn sync_codex_launch_registers_unknown_thread_on_active_task() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Active Task");
+    s.set_active_task(Some(task.task_id.clone()));
+
+    let returned = sync_codex_launch_into_task(&mut s, "coder", "/ws", "thread_new");
+
+    assert_eq!(returned.as_deref(), Some(task.task_id.as_str()));
+    assert!(s
+        .task_graph
+        .get_task(&task.task_id)
+        .and_then(|t| t.current_coder_session_id.as_deref())
+        .is_some());
 }
 
 // ── adapter trait shape (future-proofing) ──────────────────

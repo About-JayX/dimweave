@@ -102,14 +102,15 @@ export function buildSessionTreeRows(
     sessions.map((session) => [session.sessionId, session]),
   );
   const visited = new Set<string>();
-  const visit = (sessionId: string, depth: number) => {
-    if (visited.has(sessionId)) {
-      return;
-    }
+
+  const visit = (
+    sessionId: string,
+    depth: number,
+    childFilter?: (c: SessionInfo) => boolean,
+  ) => {
+    if (visited.has(sessionId)) return;
     const session = sessionsById.get(sessionId);
-    if (!session) {
-      return;
-    }
+    if (!session) return;
     visited.add(sessionId);
     const reviewBadge =
       task?.currentCoderSessionId === session.sessionId &&
@@ -118,19 +119,22 @@ export function buildSessionTreeRows(
         : null;
     rows.push({ sessionId: session.sessionId, depth, session, reviewBadge });
     for (const child of children.get(session.sessionId) ?? []) {
-      visit(child.sessionId, depth + 1);
+      if (childFilter && !childFilter(child)) continue;
+      visit(child.sessionId, depth + 1, childFilter);
     }
   };
 
   if (task) {
+    // In task context: only traverse children that are still active or
+    // explicitly pinned as a task pointer (so paused coder after disconnect
+    // does not remain visible when currentCoderSessionId is cleared).
+    const pinnedIds = new Set(currentRootIds);
+    const activeOrPinned = (c: SessionInfo) =>
+      c.status === "active" || pinnedIds.has(c.sessionId);
     for (const rootId of currentRootIds) {
-      visit(rootId, 0);
+      visit(rootId, 0, activeOrPinned);
     }
-    if (rows.length > 0) {
-      return rows;
-    }
-    // Task exists but lead/coder pointers are cleared (e.g. after disconnect).
-    // Fall through to show all top-level sessions so paused sessions remain visible.
+    return rows;
   }
 
   for (const session of children.get(null) ?? []) {

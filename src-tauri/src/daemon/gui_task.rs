@@ -111,16 +111,25 @@ pub fn build_task_change_events(before: Option<&Task>, after: Option<&Task>) -> 
     }
 }
 
+/// Build UI events for a task-context sync.
+///
+/// `active_task_id` is the backend's current active task. `ActiveTaskChanged`
+/// is only emitted when the task being refreshed matches the active task,
+/// so non-active-task refreshes (e.g. during disconnect churn) cannot bounce
+/// the frontend selection back to a stale task.
 pub fn build_task_context_events(
     task: Option<&Task>,
     task_id: &str,
     sessions: &[SessionHandle],
     artifacts: &[Artifact],
+    active_task_id: Option<&str>,
 ) -> Vec<TaskUiEvent> {
     let mut events = task.map(build_task_state_events).unwrap_or_default();
-    events.push(TaskUiEvent::ActiveTaskChanged {
-        task_id: Some(task_id.to_string()),
-    });
+    if active_task_id.map_or(false, |active| active == task_id) {
+        events.push(TaskUiEvent::ActiveTaskChanged {
+            task_id: Some(task_id.to_string()),
+        });
+    }
     events.push(TaskUiEvent::SessionTreeChanged {
         task_id: task_id.to_string(),
         sessions: sessions.to_vec(),
@@ -154,7 +163,9 @@ pub async fn emit_task_context_events(
         .into_iter()
         .cloned()
         .collect();
-    let events = build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts);
+    let active_task_id = s.active_task_id.as_deref();
+    let events =
+        build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts, active_task_id);
     drop(s);
     for event in events {
         event.emit(app);
@@ -305,24 +316,26 @@ mod tests {
         );
     }
 
-    #[test]
-    fn build_task_context_events_includes_task_and_review_updates() {
-        use crate::daemon::task_graph::types::*;
-
-        let task = Task {
-            task_id: "task_1".into(),
+    fn make_test_task(task_id: &str) -> Task {
+        use crate::daemon::task_graph::types::TaskStatus;
+        Task {
+            task_id: task_id.into(),
             workspace_root: "/ws".into(),
-            title: "T1".into(),
+            title: "T".into(),
             status: TaskStatus::Reviewing,
             review_status: Some(ReviewStatus::PendingLeadApproval),
             lead_session_id: Some("sess_1".into()),
             current_coder_session_id: None,
             created_at: 100,
             updated_at: 200,
-        };
-        let sessions = vec![SessionHandle {
+        }
+    }
+
+    fn make_test_session(task_id: &str) -> SessionHandle {
+        use crate::daemon::task_graph::types::*;
+        SessionHandle {
             session_id: "sess_1".into(),
-            task_id: "task_1".into(),
+            task_id: task_id.into(),
             parent_session_id: None,
             provider: Provider::Claude,
             role: SessionRole::Lead,
@@ -333,18 +346,30 @@ mod tests {
             title: "Lead".into(),
             created_at: 100,
             updated_at: 200,
-        }];
-        let artifacts = vec![Artifact {
+        }
+    }
+
+    fn make_test_artifact(task_id: &str) -> Artifact {
+        use crate::daemon::task_graph::types::ArtifactKind;
+        Artifact {
             artifact_id: "art_1".into(),
-            task_id: "task_1".into(),
+            task_id: task_id.into(),
             session_id: "sess_1".into(),
             kind: ArtifactKind::Plan,
             title: "plan".into(),
             content_ref: "artifact://plan".into(),
             created_at: 300,
-        }];
+        }
+    }
 
-        let events = build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts);
+    #[test]
+    fn build_task_context_events_includes_task_and_review_updates() {
+        let task = make_test_task("task_1");
+        let sessions = vec![make_test_session("task_1")];
+        let artifacts = vec![make_test_artifact("task_1")];
+
+        let events =
+            build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, Some("task_1"));
 
         assert_eq!(events.len(), 5);
         assert_eq!(events[0], TaskUiEvent::TaskUpdated(task.clone()));
@@ -374,6 +399,53 @@ mod tests {
                 task_id: "task_1".into(),
                 artifacts,
             }
+        );
+    }
+
+    #[test]
+    fn build_task_context_events_non_active_does_not_emit_active_task_changed() {
+        let task_a = make_test_task("task_a");
+        let sessions = vec![make_test_session("task_a")];
+        let artifacts = vec![make_test_artifact("task_a")];
+
+        // task_a is being refreshed, but the active task is task_b
+        let events =
+            build_task_context_events(Some(&task_a), &task_a.task_id, &sessions, &artifacts, Some("task_b"));
+
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                TaskUiEvent::ActiveTaskChanged { task_id }
+                    if task_id.as_deref() == Some("task_a")
+            )),
+            "non-active task refresh must not emit ActiveTaskChanged for task_a"
+        );
+        // Should still emit the other context events
+        assert!(events.iter().any(|e| matches!(e, TaskUiEvent::TaskUpdated(_))));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, TaskUiEvent::SessionTreeChanged { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, TaskUiEvent::ArtifactsChanged { .. })));
+    }
+
+    #[test]
+    fn build_task_context_events_active_task_emits_active_task_changed() {
+        let task = make_test_task("task_1");
+        let sessions = vec![make_test_session("task_1")];
+        let artifacts = vec![make_test_artifact("task_1")];
+
+        let events =
+            build_task_context_events(Some(&task), "task_1", &sessions, &artifacts, Some("task_1"));
+
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                TaskUiEvent::ActiveTaskChanged { task_id }
+                    if task_id.as_deref() == Some("task_1")
+            )),
+            "active task refresh must emit ActiveTaskChanged"
         );
     }
 }

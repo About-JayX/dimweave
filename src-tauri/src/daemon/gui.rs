@@ -27,6 +27,8 @@ pub struct AgentStatusEvent {
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_session: Option<ProviderConnectionState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -132,6 +134,25 @@ pub fn emit_agent_status(
             online,
             exit_code,
             provider_session,
+            role: None,
+        },
+    );
+}
+
+pub fn emit_agent_status_online(
+    app: &AppHandle,
+    agent: &str,
+    provider_session: Option<ProviderConnectionState>,
+    role: String,
+) {
+    let _ = app.emit(
+        "agent_status",
+        AgentStatusEvent {
+            agent: agent.into(),
+            online: true,
+            exit_code: None,
+            provider_session,
+            role: Some(role),
         },
     );
 }

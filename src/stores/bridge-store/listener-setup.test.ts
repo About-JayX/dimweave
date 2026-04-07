@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
-import { reducePermissionPrompt } from "./listener-setup";
+import { reduceAgentStatus, reducePermissionPrompt } from "./listener-setup";
 import { handleCodexStreamEvent } from "./stream-reducers";
-import type { CodexStreamPayload } from "./listener-payloads";
+import type {
+  AgentStatusPayload,
+  CodexStreamPayload,
+} from "./listener-payloads";
 
 function baseState(): BridgeState {
   return {
@@ -120,5 +123,54 @@ describe("handleCodexStreamEvent", () => {
     expect(state.codexStream.activity).toBe("");
     expect(state.codexStream.reasoning).toBe("");
     expect(state.codexStream.commandOutput).toBe("");
+  });
+});
+
+describe("reduceAgentStatus role sync", () => {
+  function applyAgentStatus(
+    state: BridgeState,
+    payload: AgentStatusPayload,
+  ): BridgeState {
+    const partial = reduceAgentStatus(state, payload);
+    return { ...state, ...partial };
+  }
+
+  test("updates codexRole when codex agent-status arrives online with role", () => {
+    const state = baseState();
+    const next = applyAgentStatus(state, {
+      agent: "codex",
+      online: true,
+      role: "lead",
+    });
+    expect(next.codexRole).toBe("lead");
+  });
+
+  test("updates claudeRole when claude agent-status arrives online with role", () => {
+    const state = baseState();
+    const next = applyAgentStatus(state, {
+      agent: "claude",
+      online: true,
+      role: "coder",
+    });
+    expect(next.claudeRole).toBe("coder");
+  });
+
+  test("does not change role when agent-status has no role field", () => {
+    const state = { ...baseState(), codexRole: "coder" };
+    const next = applyAgentStatus(state, {
+      agent: "codex",
+      online: true,
+    });
+    expect(next.codexRole).toBe("coder");
+  });
+
+  test("does not update role on offline status", () => {
+    const state = { ...baseState(), claudeRole: "lead" };
+    const next = applyAgentStatus(state, {
+      agent: "claude",
+      online: false,
+      role: "coder",
+    });
+    expect(next.claudeRole).toBe("lead");
   });
 });

@@ -15,6 +15,7 @@ import {
   findProviderHistoryEntry,
   formatProviderConnectionLabel,
   NEW_PROVIDER_SESSION_VALUE,
+  resolveProviderHistoryAction,
   resolveProviderHistoryWorkspace,
 } from "./provider-session-view-model";
 import {
@@ -57,6 +58,7 @@ export function CodexPanel({
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const activeTask = useTaskStore(selectActiveTask);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
+  const resumeSession = useTaskStore((s) => s.resumeSession);
 
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedReasoning, setSelectedReasoning] = useState("");
@@ -202,14 +204,20 @@ export function CodexPanel({
     setActionError(null);
     setConnectStartedAt(Date.now());
     try {
-      await applyConfig(
-        buildCodexLaunchConfig({
-          model: selectedModel,
-          reasoningEffort: selectedReasoning,
-          cwd: effectiveCwd,
-          resumeThreadId: selectedHistory?.externalId,
-        }),
-      );
+      const action = resolveProviderHistoryAction(selectedHistory);
+      if (action.kind === "resumeNormalized") {
+        await resumeSession(action.sessionId);
+      } else {
+        await applyConfig(
+          buildCodexLaunchConfig({
+            model: selectedModel,
+            reasoningEffort: selectedReasoning,
+            cwd: effectiveCwd,
+            resumeThreadId:
+              action.kind === "resumeExternal" ? action.externalId : undefined,
+          }),
+        );
+      }
     } catch (error) {
       setConnecting(false);
       setConnectStartedAt(null);
@@ -217,6 +225,7 @@ export function CodexPanel({
     }
   }, [
     applyConfig,
+    resumeSession,
     selectedModel,
     selectedReasoning,
     effectiveCwd,

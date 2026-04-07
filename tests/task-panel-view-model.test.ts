@@ -132,10 +132,23 @@ describe("buildSessionTreeRows", () => {
       makeTask({ leadSessionId: null, currentCoderSessionId: null }),
     );
 
-    expect(rows.map((row) => row.sessionId)).toEqual([
-      "sess_lead",
-      "sess_coder_b",
-    ]);
+    // All sessions are paused and no task pointers are set — tree is empty.
+    expect(rows.map((row) => row.sessionId)).toEqual([]);
+  });
+
+  test("does not show paused coder child after Codex disconnects", () => {
+    const rows = buildSessionTreeRows(
+      [
+        makeSession("sess_lead", "lead", { status: "active" }),
+        makeSession("sess_coder_paused", "coder", {
+          parentSessionId: "sess_lead",
+          status: "paused",
+        }),
+      ],
+      makeTask({ leadSessionId: "sess_lead", currentCoderSessionId: null }),
+    );
+
+    expect(rows.map((row) => row.sessionId)).toEqual(["sess_lead"]);
   });
 });
 
