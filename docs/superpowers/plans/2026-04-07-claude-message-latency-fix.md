@@ -25,6 +25,12 @@
 - Modify: `src/components/MessagePanel/MessageList.test.tsx`
 - Modify: `CLAUDE.md`
 
+## CM Memory
+
+| Task | Commit | Review | Verification | Memory |
+|------|--------|--------|--------------|--------|
+| Task 1 | `41765645` | `manual diff review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx`; `git diff --check HEAD~1 HEAD` | Lock the target UX with explicit RED tests before moving Claude draft rendering out of the footer rail. |
+
 ## Task 1: Lock the intended timeline behavior with failing frontend tests
 
 **Acceptance criteria:**
@@ -38,7 +44,7 @@
 
 **Planned CM:** `test: lock Claude inline draft timeline behavior`
 
-- [ ] **Step 1: Add a failing view-model test for Claude draft timeline items**
+- [x] **Step 1: Add a failing view-model test for Claude draft timeline items**
 
 Add tests that describe the target timeline model:
 
@@ -71,7 +77,7 @@ describe("getMessageListDisplayState", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused view-model test to verify RED**
+- [x] **Step 2: Run the focused view-model test to verify RED**
 
 Run:
 
@@ -81,7 +87,7 @@ bun test src/components/MessagePanel/view-model.test.ts
 
 Expected: FAIL because `getMessageListDisplayState()` does not yet accept the object shape / Claude-draft signal.
 
-- [ ] **Step 3: Add a failing message-list rendering test**
+- [x] **Step 3: Add a failing message-list rendering test**
 
 Extend `MessageList.test.tsx` with a rendering-level expectation:
 
@@ -109,7 +115,7 @@ test("renders Claude working draft inline when only stream state is active", asy
 });
 ```
 
-- [ ] **Step 4: Run the focused message-list test to verify RED**
+- [x] **Step 4: Run the focused message-list test to verify RED**
 
 Run:
 
@@ -119,12 +125,14 @@ bun test src/components/MessagePanel/MessageList.test.tsx
 
 Expected: FAIL because Claude’s draft still renders in the footer rail path, not as an inline timeline item.
 
-- [ ] **Step 5: Commit the red tests**
+- [x] **Step 5: Commit the red tests**
 
 ```bash
 git add src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx
 git commit -m "test: lock Claude inline draft timeline behavior"
 ```
+
+- [x] **Step 6: Update `## CM Memory`**
 
 ## Task 2: Move Claude’s live draft from the footer rail into the timeline
 
