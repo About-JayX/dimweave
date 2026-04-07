@@ -59,7 +59,7 @@ export function ClaudeStreamIndicator() {
 
 | Task | Commit | Verification |
 |------|--------|--------------|
-| 修复 hooks 违规 + slug bug + ErrorBoundary + 清理 devtools | `PENDING` | `cargo test`; `bun run build`; `bun test`; 全量 hooks 审计通过 |
+| 修复 hooks 违规 + slug bug + ErrorBoundary + 清理 devtools | `9c84b9d9` | `cargo test` 310 pass; `bun run build` pass; `bun test` 188 pass; 全量 hooks 审计通过 |
 
 ## 验收标准
 
