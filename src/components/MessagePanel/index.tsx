@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Search, X } from "lucide-react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
@@ -22,52 +21,11 @@ import {
   shouldAutoScrollLogsOnSurfaceChange,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
+import { MessageSearchChrome } from "./search-chrome";
+export { MessageSearchChrome, SearchRow } from "./search-chrome";
 
 interface MessagePanelProps {
   surfaceMode: ShellMainSurface;
-}
-
-export function SearchRow({
-  searchQuery,
-  searchSummary,
-  inputRef,
-  onQueryChange,
-  onClose,
-}: {
-  searchQuery: string;
-  searchSummary: string | null;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-  onQueryChange: (query: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 border-b border-border/35 px-4 py-1.5">
-      <input
-        ref={inputRef}
-        aria-label="Search messages"
-        type="search"
-        value={searchQuery}
-        onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="Search messages"
-        className="flex-1 rounded-lg border border-border/45 bg-background/65 px-3 py-1.5 text-[13px] text-foreground outline-none transition-colors focus:border-primary/50"
-        // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus
-      />
-      {searchSummary && (
-        <span className="shrink-0 text-[11px] text-muted-foreground/70">
-          {searchSummary}
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onClose}
-        className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
-        aria-label="Close search"
-      >
-        <X className="size-4" />
-      </button>
-    </div>
-  );
 }
 
 export function MessagePanel({ surfaceMode }: MessagePanelProps) {
@@ -137,32 +95,18 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
       {surfaceMode === "chat" && (
         <>
           {chatMessages.length > 0 && (
-            <>
-              <div className="flex items-center border-b border-border/35 px-4 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchOpen(true);
-                    requestAnimationFrame(() =>
-                      searchInputRef.current?.focus(),
-                    );
-                  }}
-                  className="rounded-md p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
-                  aria-label="Search messages"
-                >
-                  <Search className="size-4" />
-                </button>
-              </div>
-              {searchOpen && (
-                <SearchRow
-                  searchQuery={searchQuery}
-                  searchSummary={searchSummary}
-                  inputRef={searchInputRef}
-                  onQueryChange={setSearchQuery}
-                  onClose={handleCloseSearch}
-                />
-              )}
-            </>
+            <MessageSearchChrome
+              searchOpen={searchOpen}
+              searchQuery={searchQuery}
+              searchSummary={searchSummary}
+              inputRef={searchInputRef}
+              onOpen={() => {
+                setSearchOpen(true);
+                requestAnimationFrame(() => searchInputRef.current?.focus());
+              }}
+              onQueryChange={setSearchQuery}
+              onClose={handleCloseSearch}
+            />
           )}
           <MessageList
             messages={filteredMessages}
