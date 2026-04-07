@@ -37,7 +37,7 @@
 | Task 4 | `bf6cb39d` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx`; `bun run build`; `git diff --check` | Secondary chat affordances should read like lightweight navigation, not filled primary-action pills. |
 | Task 5 | `540f33d6` | `self-review` | `bun test src/components/ui/cyber-select.test.tsx` ✅ 7 pass; `bun run build` ✅; `git diff --check` ✅ | Provider history rows must favor readability over compact truncation; export HistoryMenuOption for direct testability instead of needing a defaultOpen prop. |
 | Task 6 | `92641c8f` | `self-review` | `bun test src/components/MessagePanel/presentational.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 10 pass; `bun run build` ✅; `git diff --check` ✅ | Product fix needed: remove chatMessages.length > 0 guard — Zustand v5 SSR uses api.getInitialState() which cannot be reliably patched from outside the store closure; removing the guard is the correct minimal fix. |
-| Task 7 | `4109a9fb` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
+| Task 7 | `de71e3e7` | `manual review` | `bun test src/components/MessagePanel/presentational.test.tsx -t "BackToBottomButton"` ✅ 2 pass; `bun run build` ✅; `git diff --check` ✅ | Back-to-bottom control should keep its existing chrome; only the fill treatment changes to transparent. |
 
 ### Task 1: Record the approved design and execution contract
 
