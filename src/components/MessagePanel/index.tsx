@@ -26,12 +26,13 @@ export { MessageSearchChrome, SearchRow } from "./search-chrome";
 
 interface MessagePanelProps {
   surfaceMode: ShellMainSurface;
+  searchOpen: boolean;
+  onSearchClose: () => void;
 }
 
-export function MessagePanel({ surfaceMode }: MessagePanelProps) {
+export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: MessagePanelProps) {
   const [lightboxAttachment, setLightboxAttachment] =
     useState<Attachment | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const messages = useBridgeStore(selectMessages);
@@ -59,8 +60,14 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
 
   const handleCloseSearch = useCallback(() => {
     setSearchQuery("");
-    setSearchOpen(false);
-  }, []);
+    onSearchClose();
+  }, [onSearchClose]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  }, [searchOpen]);
 
   useEffect(() => {
     if (claudeNeedsAttention) {
@@ -99,10 +106,6 @@ export function MessagePanel({ surfaceMode }: MessagePanelProps) {
             searchQuery={searchQuery}
             searchSummary={searchSummary}
             inputRef={searchInputRef}
-            onOpen={() => {
-              setSearchOpen(true);
-              requestAnimationFrame(() => searchInputRef.current?.focus());
-            }}
             onQueryChange={setSearchQuery}
             onClose={handleCloseSearch}
           />

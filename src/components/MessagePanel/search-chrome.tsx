@@ -59,7 +59,6 @@ export function MessageSearchChrome({
   searchQuery,
   searchSummary,
   inputRef,
-  onOpen,
   onQueryChange,
   onClose,
 }: {
@@ -67,31 +66,17 @@ export function MessageSearchChrome({
   searchQuery: string;
   searchSummary: string | null;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  onOpen: () => void;
   onQueryChange: (query: string) => void;
   onClose: () => void;
 }) {
+  if (!searchOpen) return null;
   return (
-    <>
-      <div className="flex items-center border-b border-border/35 px-4 py-1.5">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="rounded-md p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
-          aria-label="Search messages"
-        >
-          <Search className="size-4" />
-        </button>
-      </div>
-      {searchOpen ? (
-        <SearchRow
-          searchQuery={searchQuery}
-          searchSummary={searchSummary}
-          inputRef={inputRef}
-          onQueryChange={onQueryChange}
-          onClose={onClose}
-        />
-      ) : null}
-    </>
+    <SearchRow
+      searchQuery={searchQuery}
+      searchSummary={searchSummary}
+      inputRef={inputRef}
+      onQueryChange={onQueryChange}
+      onClose={onClose}
+    />
   );
 }

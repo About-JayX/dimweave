@@ -40,6 +40,7 @@ export default function App() {
   const [recentWorkspacesLoaded, setRecentWorkspacesLoaded] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] =
     useState<WorkspaceCandidate | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(
     null,
   );
@@ -174,11 +175,16 @@ export default function App() {
             logLineCount={allTerminalLines.length}
             errorCount={errorCount}
             onClear={clearMessages}
+            onSearchToggle={() => setSearchOpen((v) => !v)}
             onChooseWorkspace={handleChooseWorkspace}
             onSelectRecentWorkspace={handleSelectRecentWorkspace}
             onContinueIntoWorkspace={handleContinueIntoWorkspace}
           />
-          <MessagePanel surfaceMode={shellLayout.mainSurface} />
+          <MessagePanel
+            surfaceMode={shellLayout.mainSurface}
+            searchOpen={searchOpen}
+            onSearchClose={() => setSearchOpen(false)}
+          />
           {shellLayout.mainSurface === "chat" && <ReplyInput />}
         </main>
       </div>

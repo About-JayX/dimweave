@@ -1,4 +1,4 @@
-import { TerminalSquare } from "lucide-react";
+import { Search, TerminalSquare } from "lucide-react";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
@@ -14,6 +14,7 @@ interface ShellTopBarProps {
   logLineCount: number;
   errorCount: number;
   onClear: () => void;
+  onSearchToggle?: () => void;
   onChooseWorkspace: () => void;
   onSelectRecentWorkspace: (workspace: WorkspaceCandidate) => void;
   onContinueIntoWorkspace: () => void;
@@ -29,6 +30,7 @@ export function ShellTopBar({
   logLineCount,
   errorCount,
   onClear,
+  onSearchToggle,
   onChooseWorkspace,
   onSelectRecentWorkspace,
   onContinueIntoWorkspace,
@@ -58,6 +60,16 @@ export function ShellTopBar({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {surfaceMode === "chat" && onSearchToggle && (
+          <button
+            type="button"
+            onClick={onSearchToggle}
+            className="rounded-md p-1 text-muted-foreground/50 hover:text-foreground transition-colors"
+            aria-label="Search messages"
+          >
+            <Search className="size-4" />
+          </button>
+        )}
         {surfaceMode === "chat" && (
           <Button variant="secondary" size="xs" onClick={onClear}>
             Clear
