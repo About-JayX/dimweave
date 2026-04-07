@@ -142,6 +142,13 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     set({ loginPending: true, loginUri: null });
     try {
       const info = await invoke<OAuthLaunchInfo>("codex_login");
+      if (!info.verificationUri) {
+        set({ loginPending: false, loginUri: null });
+        console.error(
+          "[CodexAccount] login returned no verification URI — possible rate limit",
+        );
+        return;
+      }
       set({ loginUri: info.verificationUri });
       // Poll for auth completion — stop when profile has email
       clearLoginPolling();
