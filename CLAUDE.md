@@ -1,6 +1,6 @@
 # Dimweave
 
-通用 AI Agent 桥接桌面应用。当前实现把 **Tauri/Rust 主进程** 作为唯一常驻后端，把 **Claude Code** 和 **Codex app-server** 接到同一个消息路由层里，并由 daemon 维护标准化的 **task / session / artifact** 图，让用户在一个桌面界面里协调两个 agent、恢复历史会话并查看 review gate。
+通用 AI Agent 桥接桌面应用。当前实现把 **Tauri/Rust 主进程** 作为唯一常驻后端，把 **Claude Code** 和 **Codex app-server** 接到同一个消息路由层里，并由 daemon 维护标准化的 **task / session / artifact** 图，让用户在一个桌面界面里协调两个 agent、恢复历史会话并查看任务上下文。
 
 ### 当前产品形态
 
@@ -81,7 +81,7 @@
 │ task-store        → 监听 task/session/artifact/provider history                   │
 │ ClaudePanel       → project picker + history dropdown + connect/resume            │
 │ AgentStatus/      → CodexPanel / RoleSelect / StatusDot                           │
-│ TaskPanel         → session tree / artifact timeline / review gate                │
+│ TaskPanel         → session tree / artifact timeline                              │
 │ MessagePanel      → 消息与日志与 Permission 审批                  │
 └──────────────────────────────────────────────────────────────────┘
 
@@ -136,7 +136,7 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 - `src-tauri/src/daemon/provider/codex.rs` / `history.rs` 负责 Codex thread history、离线 fallback 与 provider-agnostic history DTO
 - `src/stores/task-store/` 把 daemon 的 task/session/artifact/provider-history 事件水合到前端 store
 - `src/components/ClaudePanel/` 与 `src/components/AgentStatus/CodexPanel.tsx` 是 provider history 的主入口：按 `cwd` 拉历史，选择后决定 `new` 或 `resumed` 连接
-- `src/components/TaskPanel/` 现在只展示 active normalized task 的 session tree、artifact timeline、review gate badge，不再负责 provider history picker
+- `src/components/TaskPanel/` 现在只展示 active normalized task 的 session tree 和 artifact timeline，不再负责 provider history picker
 - `daemon_attach_provider_history` 仍然存在，但它是“把外部 provider history 显式挂到当前 task”的 task 语义入口，不等同于 provider-native connect/resume
 
 ### 三种会话语义
@@ -154,7 +154,7 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 3. **normalized task session**
    - daemon `task_graph` 里的持久化 session 记录
    - 可以绑定外部 `session_id` / `thread_id`
-   - 只有进入 task graph 后，才会参与 review gate、artifact timeline、session tree
+   - 只有进入 task graph 后，才会参与 artifact timeline 和 session tree
 
 结论：`provider history`、`live connection`、`normalized task session` 不是同一个概念，UI 和文档都必须保持这个边界。
 
