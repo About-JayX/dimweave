@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   reduceTaskUpdated,
   reduceActiveTaskChanged,
-  reduceReviewGateChanged,
   reduceSessionTreeChanged,
   reduceArtifactsChanged,
 } from "../src/stores/task-store/events";
@@ -40,7 +39,6 @@ function makeTask(id: string, title = "Test"): TaskInfo {
     workspaceRoot: "/ws",
     title,
     status: "draft",
-    reviewStatus: null,
     leadSessionId: null,
     currentCoderSessionId: null,
     createdAt: 100,
@@ -102,35 +100,6 @@ describe("reduceActiveTaskChanged", () => {
     const state = { ...emptyState(), activeTaskId: "t1" };
     const patch = reduceActiveTaskChanged(state, { taskId: null });
     expect(patch.activeTaskId).toBeNull();
-  });
-});
-
-describe("reduceReviewGateChanged", () => {
-  test("updates review status on existing task", () => {
-    const state = { ...emptyState(), tasks: { t1: makeTask("t1") } };
-    const patch = reduceReviewGateChanged(state, {
-      taskId: "t1",
-      reviewStatus: "pending_lead_approval",
-    });
-    expect(patch.tasks?.["t1"]?.reviewStatus).toBe("pending_lead_approval");
-  });
-
-  test("no-ops for unknown task", () => {
-    const patch = reduceReviewGateChanged(emptyState(), {
-      taskId: "missing",
-      reviewStatus: "in_review",
-    });
-    expect(patch).toEqual({});
-  });
-
-  test("clears review status to null", () => {
-    const task = { ...makeTask("t1"), reviewStatus: "in_review" as const };
-    const state = { ...emptyState(), tasks: { t1: task } };
-    const patch = reduceReviewGateChanged(state, {
-      taskId: "t1",
-      reviewStatus: null,
-    });
-    expect(patch.tasks?.["t1"]?.reviewStatus).toBeNull();
   });
 });
 
@@ -235,6 +204,7 @@ describe("snapshotToPatch", () => {
 
     expect(patch.activeTaskId).toBe("t1");
     expect(patch.tasks?.t1?.title).toBe("Hydrated");
+    expect("reviewStatus" in (patch.tasks?.t1 ?? {})).toBe(false);
     expect(patch.sessions?.t1?.[0]?.sessionId).toBe("s1");
     expect(patch.artifacts?.t1?.[0]?.artifactId).toBe("a1");
   });

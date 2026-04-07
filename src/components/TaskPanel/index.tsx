@@ -16,7 +16,6 @@ import {
   buildArtifactTimeline,
   buildSessionTreeRows,
   getTaskPanelEmptyStateMessage,
-  getReviewBadge,
   type ArtifactDetailPayload,
 } from "./view-model";
 
@@ -25,11 +24,6 @@ export function TaskPanel() {
   const taskSessions = useTaskStore(selectActiveTaskSessions);
   const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
-
-  const reviewBadge = useMemo(
-    () => getReviewBadge(task?.reviewStatus),
-    [task?.reviewStatus],
-  );
   const sessionRows = useMemo(
     () => buildSessionTreeRows(taskSessions, task),
     [task, taskSessions],
@@ -138,11 +132,11 @@ export function TaskPanel() {
               Session context
             </div>
           </div>
-          <div className="text-[11px] text-muted-foreground/65">
-            {activeSessionCount} sessions · {taskArtifacts.length} artifacts
-          </div>
+        <div className="text-[11px] text-muted-foreground/65">
+          {activeSessionCount} sessions · {taskArtifacts.length} artifacts
         </div>
-        <TaskHeader task={task} reviewBadge={reviewBadge} />
+      </div>
+      <TaskHeader task={task} />
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded-xl border border-border/35 bg-background/30 px-3 py-2">
             <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/55">

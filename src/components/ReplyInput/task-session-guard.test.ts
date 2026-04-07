@@ -7,7 +7,6 @@ function makeTask(id: string, workspaceRoot: string) {
     workspaceRoot,
     title: `Task ${id}`,
     status: "draft" as const,
-    reviewStatus: null,
     leadSessionId: `${id}-lead`,
     currentCoderSessionId: null,
     createdAt: 100,

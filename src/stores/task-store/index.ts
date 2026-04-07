@@ -195,10 +195,6 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       await invoke("daemon_select_task", { taskId });
     },
 
-    approveReview: async () => {
-      await invoke("daemon_approve_review");
-    },
-
     fetchSnapshot: async () => {
       const snap = await invoke<TaskSnapshot | null>("daemon_get_task_snapshot");
       if (!snap) return;

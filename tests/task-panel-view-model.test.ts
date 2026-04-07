@@ -4,7 +4,6 @@ import {
   buildArtifactTimeline,
   buildHistoryPickerModel,
   buildSessionTreeRows,
-  getReviewBadge,
   getTaskPanelEmptyStateMessage,
 } from "../src/components/TaskPanel/view-model";
 import type {
@@ -20,7 +19,6 @@ function makeTask(overrides: Partial<TaskInfo> = {}): TaskInfo {
     workspaceRoot: "/ws",
     title: "Ship session history",
     status: "reviewing",
-    reviewStatus: "pending_lead_approval",
     leadSessionId: "sess_lead",
     currentCoderSessionId: "sess_coder_b",
     createdAt: 100,
@@ -88,14 +86,13 @@ describe("buildSessionTreeRows", () => {
     expect(rows.map((row) => row.depth)).toEqual([0, 1, 1]);
   });
 
-  test("marks the active coder review gate badge on current coder session", () => {
+  test("does not attach review badges to current coder session", () => {
     const rows = buildSessionTreeRows(
       [makeSession("sess_lead", "lead"), makeSession("sess_coder_b", "coder")],
       makeTask(),
     );
 
-    expect(rows[1]?.reviewBadge?.label).toBe("Pending Approval");
-    expect(rows[1]?.reviewBadge?.tone).toBe("warning");
+    expect("reviewBadge" in (rows[1] ?? {})).toBe(false);
   });
 
   test("shows only the sessions currently bound to the active task", () => {
@@ -294,23 +291,10 @@ describe("buildArtifactDetailModel", () => {
   });
 });
 
-describe("getReviewBadge", () => {
-  test("maps lead approval state to warning badge", () => {
-    expect(getReviewBadge("pending_lead_approval")).toEqual({
-      label: "Pending Approval",
-      tone: "warning",
-    });
-  });
-
-  test("returns null for missing review state", () => {
-    expect(getReviewBadge(null)).toBeNull();
-  });
-});
-
 describe("getTaskPanelEmptyStateMessage", () => {
   test("keeps the no-task copy scoped to task workspace semantics", () => {
     expect(getTaskPanelEmptyStateMessage()).toBe(
-      "No active task. Create or select a task to track progress, review status, and artifacts.",
+      "No active task. Create or select a task to track progress and artifacts.",
     );
   });
 });

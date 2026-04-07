@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-const TARGETS = ["auto", "lead", "coder", "reviewer"] as const;
+const TARGETS = ["auto", "lead", "coder"] as const;
 export type Target = (typeof TARGETS)[number];
 
 const TARGET_COLORS: Record<Target, string> = {
   auto: "text-purple-400 border-purple-400/30",
   lead: "text-yellow-400 border-yellow-400/30",
   coder: "text-emerald-400 border-emerald-400/30",
-  reviewer: "text-orange-400 border-orange-400/30",
 };
 
 interface TargetPickerProps {

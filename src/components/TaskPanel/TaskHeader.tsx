@@ -1,6 +1,4 @@
 import type { TaskInfo } from "@/stores/task-store/types";
-import { ReviewGateBadge } from "./ReviewGateBadge";
-import type { ReviewBadge } from "./view-model";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -13,10 +11,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function TaskHeader({
   task,
-  reviewBadge,
 }: {
   task: TaskInfo;
-  reviewBadge: ReviewBadge | null;
 }) {
   return (
     <div className="space-y-2 rounded-xl border border-border/35 bg-background/35 px-4 py-3">
@@ -36,9 +32,6 @@ export function TaskHeader({
           {STATUS_LABELS[task.status] ?? task.status}
         </div>
       </div>
-      {reviewBadge && (
-        <ReviewGateBadge badge={reviewBadge} />
-      )}
     </div>
   );
 }

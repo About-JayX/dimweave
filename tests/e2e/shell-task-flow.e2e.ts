@@ -12,7 +12,6 @@ test.beforeEach(async ({ page }) => {
         workspaceRoot: string;
         title: string;
         status: string;
-        reviewStatus: null;
         leadSessionId: null;
         currentCoderSessionId: null;
         createdAt: number;
@@ -50,7 +49,6 @@ test.beforeEach(async ({ page }) => {
                 workspaceRoot: String(args?.workspace ?? stubbedWorkspace),
                 title: stubbedWorkspaceName,
                 status: "draft",
-                reviewStatus: null,
                 leadSessionId: null,
                 currentCoderSessionId: null,
                 createdAt: Date.now(),

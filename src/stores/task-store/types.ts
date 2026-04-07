@@ -18,17 +18,12 @@ export type ArtifactKind =
   | "diff"
   | "verification"
   | "summary";
-export type ReviewStatus =
-  | "pending_lead_review"
-  | "in_review"
-  | "pending_lead_approval";
 
 export interface TaskInfo {
   taskId: string;
   workspaceRoot: string;
   title: string;
   status: TaskStatus;
-  reviewStatus?: ReviewStatus | null;
   leadSessionId?: string | null;
   currentCoderSessionId?: string | null;
   createdAt: number;
@@ -80,11 +75,6 @@ export interface ActiveTaskChangedPayload {
   taskId: string | null;
 }
 
-export interface ReviewGateChangedPayload {
-  taskId: string;
-  reviewStatus: ReviewStatus | null;
-}
-
 export interface SessionTreeChangedPayload {
   taskId: string;
   sessions: SessionInfo[];
@@ -113,7 +103,6 @@ export interface TaskStoreState extends TaskStoreData {
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
-  approveReview: () => Promise<void>;
   fetchSnapshot: () => Promise<void>;
   fetchProviderHistory: (workspace: string) => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;

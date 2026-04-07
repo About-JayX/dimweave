@@ -1,7 +1,6 @@
 import type {
   ArtifactInfo,
   ProviderHistoryInfo,
-  ReviewStatus,
   SessionInfo,
   TaskInfo,
 } from "@/stores/task-store/types";
@@ -11,18 +10,10 @@ export {
   type ArtifactDetailPayload,
 } from "./artifact-detail";
 
-export type BadgeTone = "warning" | "progress" | "neutral";
-
-export interface ReviewBadge {
-  label: string;
-  tone: BadgeTone;
-}
-
 export interface SessionTreeRow {
   sessionId: string;
   depth: number;
   session: SessionInfo;
-  reviewBadge: ReviewBadge | null;
 }
 
 export type HistoryAction =
@@ -53,23 +44,8 @@ export interface ArtifactTimelineItem extends ArtifactInfo {
   sessionTitle: string;
 }
 
-export function getReviewBadge(
-  reviewStatus: ReviewStatus | null | undefined,
-): ReviewBadge | null {
-  switch (reviewStatus) {
-    case "pending_lead_review":
-      return { label: "Pending Review", tone: "warning" };
-    case "in_review":
-      return { label: "In Review", tone: "progress" };
-    case "pending_lead_approval":
-      return { label: "Pending Approval", tone: "warning" };
-    default:
-      return null;
-  }
-}
-
 export function getTaskPanelEmptyStateMessage(): string {
-  return "No active task. Create or select a task to track progress, review status, and artifacts.";
+  return "No active task. Create or select a task to track progress and artifacts.";
 }
 
 export function buildSessionTreeRows(
@@ -112,12 +88,7 @@ export function buildSessionTreeRows(
     const session = sessionsById.get(sessionId);
     if (!session) return;
     visited.add(sessionId);
-    const reviewBadge =
-      task?.currentCoderSessionId === session.sessionId &&
-      session.role === "coder"
-        ? getReviewBadge(task.reviewStatus)
-        : null;
-    rows.push({ sessionId: session.sessionId, depth, session, reviewBadge });
+    rows.push({ sessionId: session.sessionId, depth, session });
     for (const child of children.get(session.sessionId) ?? []) {
       if (childFilter && !childFilter(child)) continue;
       visit(child.sessionId, depth + 1, childFilter);

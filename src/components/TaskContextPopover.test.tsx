@@ -82,7 +82,6 @@ describe("TaskContextPopover", () => {
           title: "Refine shell header",
           workspaceRoot: "/Users/jason/Desktop/figma",
           status: "active",
-          reviewStatus: null,
           createdAt: 1,
           updatedAt: 1,
         }}

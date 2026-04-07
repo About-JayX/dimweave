@@ -2,7 +2,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ActiveTaskChangedPayload,
   ArtifactsChangedPayload,
-  ReviewGateChangedPayload,
   SessionTreeChangedPayload,
   TaskInfo,
   TaskStoreData,
@@ -26,20 +25,6 @@ export function reduceActiveTaskChanged(
   payload: ActiveTaskChangedPayload,
 ): Partial<TaskStoreData> {
   return { activeTaskId: payload.taskId };
-}
-
-export function reduceReviewGateChanged(
-  state: TaskStoreData,
-  payload: ReviewGateChangedPayload,
-): Partial<TaskStoreData> {
-  const existing = state.tasks[payload.taskId];
-  if (!existing) return {};
-  return {
-    tasks: {
-      ...state.tasks,
-      [payload.taskId]: { ...existing, reviewStatus: payload.reviewStatus },
-    },
-  };
 }
 
 export function reduceSessionTreeChanged(
@@ -69,9 +54,6 @@ export function createTaskListeners(set: TaskSetter): Promise<UnlistenFn[]> {
     }),
     listen<ActiveTaskChangedPayload>("active_task_changed", (e) => {
       set((s) => reduceActiveTaskChanged(s, e.payload));
-    }),
-    listen<ReviewGateChangedPayload>("review_gate_changed", (e) => {
-      set((s) => reduceReviewGateChanged(s, e.payload));
     }),
     listen<SessionTreeChangedPayload>("session_tree_changed", (e) => {
       set((s) => reduceSessionTreeChanged(s, e.payload));

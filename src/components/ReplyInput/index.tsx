@@ -6,7 +6,6 @@ import {
   selectActiveTask,
   selectActiveTaskSessions,
 } from "@/stores/task-store/selectors";
-import { getReviewBadge } from "@/components/TaskPanel/view-model";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { hasMessagePayload } from "@/lib/message-payload";
@@ -34,7 +33,6 @@ export function ReplyInput() {
   const { textareaRef, handleResizePointerDown } = useReplyInputResizer(draft);
   const activeTask = useTaskStore(selectActiveTask);
   const activeTaskSessions = useTaskStore(selectActiveTaskSessions);
-  const reviewBadge = getReviewBadge(activeTask?.reviewStatus);
   const { attachments, addFiles, removeAt, clear } = useAttachments();
   const taskSessionWarning = getTaskSessionWarning({
     target,
@@ -145,7 +143,6 @@ export function ReplyInput() {
           setTarget={setTarget}
           onPickFiles={handlePickFiles}
           activeTaskTitle={activeTask?.title ?? null}
-          reviewBadge={reviewBadge}
           taskSessionWarning={taskSessionWarning}
           connected={connected}
           sendOnEnter={sendOnEnter}

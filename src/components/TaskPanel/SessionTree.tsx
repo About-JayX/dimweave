@@ -1,5 +1,4 @@
 import type { SessionTreeRow } from "./view-model";
-import { ReviewGateBadge } from "./ReviewGateBadge";
 
 const PROVIDER_LABELS: Record<string, string> = {
   claude: "Claude",
@@ -58,12 +57,6 @@ export function SessionTree({
                     >
                       {row.session.status}
                     </span>
-                    {row.reviewBadge && (
-                      <ReviewGateBadge
-                        badge={row.reviewBadge}
-                        className="px-1.5 py-0.5"
-                      />
-                    )}
                     {row.session.externalSessionId && (
                       <span className="truncate text-[10px] text-muted-foreground/55">
                         {row.session.externalSessionId}

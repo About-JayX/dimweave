@@ -1,7 +1,5 @@
 import { Paperclip, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ReviewGateBadge } from "@/components/TaskPanel/ReviewGateBadge";
-import type { ReviewBadge } from "@/components/TaskPanel/view-model";
 import { TargetPicker, type Target } from "./TargetPicker";
 
 type ReplyInputFooterProps = {
@@ -9,7 +7,6 @@ type ReplyInputFooterProps = {
   setTarget: (target: Target) => void;
   onPickFiles: () => void;
   activeTaskTitle: string | null;
-  reviewBadge: ReviewBadge | null;
   taskSessionWarning: string | null;
   connected: boolean;
   sendOnEnter: boolean;
@@ -24,7 +21,6 @@ export function ReplyInputFooter({
   setTarget,
   onPickFiles,
   activeTaskTitle,
-  reviewBadge,
   taskSessionWarning,
   connected,
   sendOnEnter,
@@ -51,7 +47,6 @@ export function ReplyInputFooter({
         ) : (
           <span className="text-[10px] text-muted-foreground/55">No active task</span>
         )}
-        {reviewBadge ? <ReviewGateBadge badge={reviewBadge} /> : null}
         {taskSessionWarning ? (
           <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-600">
             {taskSessionWarning}

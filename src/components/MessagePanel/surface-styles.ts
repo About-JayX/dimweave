@@ -4,7 +4,6 @@ const accentMap: Record<string, string> = {
   codex: "text-codex",
   coder: "text-codex",
   user: "text-sky-400",
-  reviewer: "text-yellow-400",
   system: "text-muted-foreground",
   telegram: "text-sky-400",
 };
@@ -19,7 +18,6 @@ const bgMap: Record<string, string> = {
   codex: "bg-codex/8",
   coder: "bg-codex/8",
   user: "bg-sky-500/10",
-  reviewer: "bg-yellow-500/8",
   system: "bg-muted/40",
   telegram: "bg-sky-500/10",
 };

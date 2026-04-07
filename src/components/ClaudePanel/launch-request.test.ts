@@ -5,14 +5,14 @@ describe("buildClaudeLaunchRequest", () => {
   test("uses the selected Claude role instead of hard-coding lead", () => {
     expect(
       buildClaudeLaunchRequest({
-        claudeRole: "reviewer",
+        claudeRole: "coder",
         cwd: "/repo",
         model: "claude-sonnet-4-20250514",
         effort: "high",
         resumeSessionId: "session-123",
       }),
     ).toEqual({
-      roleId: "reviewer",
+      roleId: "coder",
       cwd: "/repo",
       model: "claude-sonnet-4-20250514",
       effort: "high",

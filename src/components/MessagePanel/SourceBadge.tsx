@@ -7,7 +7,6 @@ const sourceLabel: Record<string, string> = {
   system: "System",
   lead: "Lead",
   coder: "Coder",
-  reviewer: "Reviewer",
   telegram: "Telegram",
 };
 

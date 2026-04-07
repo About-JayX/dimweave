@@ -6,7 +6,6 @@ import { CyberSelect } from "@/components/ui/cyber-select";
 const ALL_ROLES = [
   { value: "lead", label: "Lead" },
   { value: "coder", label: "Coder" },
-  { value: "reviewer", label: "Reviewer" },
 ];
 
 export function RoleSelect({
