@@ -7,15 +7,15 @@ import { getStreamSurfacePresentation } from "./surface-styles";
 export function ClaudeStreamIndicator() {
   const thinking = useBridgeStore((s) => s.claudeStream.thinking);
   const previewText = useBridgeStore((s) => s.claudeStream.previewText);
-  if (!thinking && !previewText) return null;
-
-  const hasContent = previewText.length > 0;
   const surface = getStreamSurfacePresentation("claude");
-  // Show tail of long content to keep it responsive
   const displayText = useMemo(
     () => getStreamTextTail(previewText, 3000),
     [previewText],
   );
+
+  if (!thinking && !previewText) return null;
+
+  const hasContent = previewText.length > 0;
 
   return (
     <div className="py-1.5">

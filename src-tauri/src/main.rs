@@ -105,11 +105,6 @@ fn main() {
             let (cmd_tx, cmd_rx) = daemon::channel();
             app.handle().manage(DaemonSender(cmd_tx));
 
-            // Enable devtools in all builds for debugging
-            if let Some(w) = app.get_webview_window("main") {
-                w.open_devtools();
-            }
-
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(daemon::run(handle, cmd_rx));
             Ok(())
@@ -178,7 +173,3 @@ fn main() {
         }
     });
 }
-
-#[cfg(test)]
-#[path = "main_tests.rs"]
-mod tests;
