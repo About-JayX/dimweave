@@ -44,17 +44,17 @@ fn upsert_mcp_server_marks_changed_when_role_differs() {
         }
     });
 
-    let (next, changed) = upsert_mcp_server(config, "/tmp/bridge", &[], "reviewer", &[]).unwrap();
+    let (next, changed) = upsert_mcp_server(config, "/tmp/bridge", &[], "coder", &[]).unwrap();
     assert!(changed);
     assert_eq!(
         next["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
-        "reviewer"
+        "coder"
     );
 }
 
 #[test]
 fn build_inline_mcp_config_serializes_dimweave_server() {
-    let raw = build_inline_mcp_config("/tmp/dimweave-bridge", "reviewer").unwrap();
+    let raw = build_inline_mcp_config("/tmp/dimweave-bridge", "coder").unwrap();
     let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(
         value["mcpServers"]["agentnexus"]["command"],
@@ -62,7 +62,7 @@ fn build_inline_mcp_config_serializes_dimweave_server() {
     );
     assert_eq!(
         value["mcpServers"]["agentnexus"]["env"]["AGENTBRIDGE_ROLE"],
-        "reviewer"
+        "coder"
     );
 }
 

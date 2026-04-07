@@ -22,7 +22,7 @@ fn file_attachment() -> Attachment {
 
 #[test]
 fn valid_roles_accepted() {
-    for role in &["lead", "coder", "reviewer"] {
+    for role in &["lead", "coder"] {
         assert!(
             crate::daemon::is_valid_agent_role(role),
             "{role} should be valid"
@@ -39,6 +39,7 @@ fn user_role_rejected() {
 fn unknown_role_rejected() {
     assert!(!crate::daemon::is_valid_agent_role("admin"));
     assert!(!crate::daemon::is_valid_agent_role(""));
+    assert!(!crate::daemon::is_valid_agent_role("reviewer"));
 }
 
 // ── fan-out behavior tests (route_message_inner level) ────────────
@@ -137,8 +138,8 @@ async fn valid_role_offline_is_buffered() {
         id: "buf-1".into(),
         from: "user".into(),
         display_source: Some("user".into()),
-        to: "reviewer".into(),
-        content: "review this".into(),
+        to: "coder".into(),
+        content: "implement this".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -151,6 +152,29 @@ async fn valid_role_offline_is_buffered() {
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
     assert_eq!(state.read().await.buffered_messages.len(), 1);
+}
+
+#[tokio::test]
+async fn reviewer_target_is_dropped_not_buffered() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let msg = BridgeMessage {
+        id: "bad-reviewer-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "reviewer".into(),
+        content: "review this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(matches!(result, RouteResult::Dropped));
+    assert!(state.read().await.buffered_messages.is_empty());
 }
 
 #[test]

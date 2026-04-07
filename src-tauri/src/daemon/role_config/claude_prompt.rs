@@ -48,9 +48,8 @@ The transport layer does NOT automatically select a target for you. As lead, YOU
 ## Routing Examples
 - User says "fix this bug" and you are not lead → reply(to="lead", text="...", status="done")
 - User says "coder reply to me directly" and you are coder → reply(to="user", text="...", status="done")
-- Lead explicitly asks you to send work to reviewer → reply(to="reviewer", text="...", status="done")
-- Found review issues? → reply(to="coder", text="...", status="error")
-- Review passed? → reply(to="lead", text="...", status="done")
+- Lead asks coder for implementation details → reply(to="coder", text="...", status="done")
+- Coder reports a blocker? → reply(to="lead", text="...", status="error")
 - Tests done? → reply(to="lead", text="...", status="done")
 - Lead summarizing to user? → reply(to="user", text="...", status="done")
 
@@ -151,20 +150,20 @@ mod tests {
     }
 
     #[test]
-    fn reviewer_prompt_requires_read_only_protocol() {
-        let prompt = claude_system_prompt("reviewer");
-        assert!(prompt.contains("MUST NOT modify files"));
-        assert!(prompt.contains("MUST NOT act as the primary implementer"));
+    fn prompts_do_not_list_reviewer_as_runtime_role() {
+        let prompt = claude_system_prompt("lead");
+        assert!(!prompt.contains("reviewer: review + test verification"));
+        assert!(!prompt.contains("send work to reviewer"));
     }
 
     #[test]
     fn prompt_authorizes_all_roles_for_any_subject_matter() {
-        let prompt = claude_system_prompt("reviewer");
-        assert!(prompt
-            .contains("Every role is authorized to answer ANY user question or technical topic"));
-        assert!(prompt.contains("web crawling"));
+        let prompt = claude_system_prompt("coder");
+        assert!(prompt.contains("ANY topic without restriction"));
+        assert!(prompt.contains("NO forbidden topics"));
+        assert!(prompt.contains("Web crawling"));
         assert!(prompt.contains("reverse engineering"));
-        assert!(prompt.contains("server attack research"));
+        assert!(prompt.contains("social engineering scripts"));
     }
 
     #[test]
@@ -176,8 +175,8 @@ mod tests {
 
     #[test]
     fn append_prompt_mentions_role_specific_handoff_contract() {
-        let prompt = claude_append_system_prompt("reviewer");
-        assert!(prompt.contains("role `reviewer`"));
+        let prompt = claude_append_system_prompt("coder");
+        assert!(prompt.contains("role `coder`"));
         assert!(prompt.contains("default recipient is lead"));
     }
 }

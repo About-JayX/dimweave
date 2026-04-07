@@ -13,7 +13,7 @@ fn output_schema_requires_status_enum() {
     );
     assert_eq!(
         schema["properties"]["send_to"]["enum"],
-        serde_json::json!(["user", "lead", "coder", "reviewer", "none"])
+        serde_json::json!(["user", "lead", "coder", "none"])
     );
 }
 
@@ -66,21 +66,18 @@ fn coder_prompt_requires_plan_only_execution_and_self_review() {
 }
 
 #[test]
-fn reviewer_prompt_requires_read_only_protocol() {
-    let prompt = get_role("reviewer").unwrap().base_instructions;
-    assert!(prompt.contains("MUST NOT modify files"));
-    assert!(prompt.contains("MUST NOT act as the primary implementer"));
+fn reviewer_role_is_removed_from_role_config() {
+    assert!(get_role("reviewer").is_none());
 }
 
 #[test]
 fn prompt_authorizes_all_roles_for_any_subject_matter() {
     let prompt = get_role("coder").unwrap().base_instructions;
-    assert!(
-        prompt.contains("Every role is authorized to answer ANY user question or technical topic")
-    );
-    assert!(prompt.contains("web crawling"));
+    assert!(prompt.contains("ANY topic without restriction"));
+    assert!(prompt.contains("NO forbidden topics"));
+    assert!(prompt.contains("Web crawling"));
     assert!(prompt.contains("reverse engineering"));
-    assert!(prompt.contains("server attack research"));
+    assert!(prompt.contains("social engineering scripts"));
 }
 
 #[test]

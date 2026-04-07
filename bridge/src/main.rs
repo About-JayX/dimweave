@@ -20,7 +20,7 @@ async fn main() {
     let agent_id = std::env::var("AGENTBRIDGE_AGENT").unwrap_or_else(|_| "claude".into());
     let role_raw = std::env::var("AGENTBRIDGE_ROLE").unwrap_or_else(|_| "lead".into());
     let role = match role_raw.as_str() {
-        "user" | "lead" | "coder" | "reviewer" => role_raw,
+        "user" | "lead" | "coder" => role_raw,
         _ => {
             tracing::warn!(role = %role_raw, "unknown role, defaulting to lead");
             "lead".into()

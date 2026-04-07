@@ -121,7 +121,7 @@ pub fn channel() -> (mpsc::Sender<DaemonCmd>, mpsc::Receiver<DaemonCmd>) {
     mpsc::channel(64)
 }
 
-const AGENT_ROLES: &[&str] = &["lead", "coder", "reviewer"];
+const AGENT_ROLES: &[&str] = &["lead", "coder"];
 
 pub fn is_valid_agent_role(role: &str) -> bool {
     AGENT_ROLES.contains(&role)

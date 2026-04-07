@@ -93,7 +93,8 @@ fn reply_schema_has_enum_constraint() {
         .collect();
     assert!(targets.contains(&"user"));
     assert!(targets.contains(&"lead"));
-    assert!(targets.contains(&"reviewer"));
+    assert!(targets.contains(&"coder"));
+    assert!(!targets.contains(&"reviewer"));
     assert!(!targets.contains(&"tester"));
     assert!(!targets.contains(&"admin"));
 }

@@ -1,7 +1,7 @@
 use crate::types::{BridgeMessage, PermissionRequest, PermissionVerdict};
 use std::collections::HashMap;
 
-const ALLOWED_SENDERS: &[&str] = &["user", "system", "lead", "coder", "reviewer"];
+const ALLOWED_SENDERS: &[&str] = &["user", "system", "lead", "coder"];
 
 /// Minimal channel state: sender validation + pending permission tracking.
 /// Routing is handled by the daemon, not the bridge.
@@ -127,5 +127,11 @@ mod tests {
     fn unknown_sender_is_dropped() {
         let state = ChannelState::new();
         assert!(state.prepare_channel_message(&msg("intruder")).is_none());
+    }
+
+    #[test]
+    fn reviewer_sender_is_dropped() {
+        let state = ChannelState::new();
+        assert!(state.prepare_channel_message(&msg("reviewer")).is_none());
     }
 }

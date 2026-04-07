@@ -156,7 +156,7 @@ async fn handle_completed_agent_message(
         parsed
             .send_to
             .as_deref()
-            .filter(|target| matches!(*target, "lead" | "coder" | "reviewer"))
+            .filter(|target| matches!(*target, "lead" | "coder"))
     } else {
         None
     };

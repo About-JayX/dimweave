@@ -59,8 +59,8 @@ fn build_role_prompt(role_id: &str) -> String {
          Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \"send_to\": \"lead\", \"status\": \"done\"}}\n\n\
          User: \"Coder, reply to me directly after you fix the login bug\"\n\
          Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \"send_to\": \"user\", \"status\": \"done\"}}\n\n\
-         Lead: \"Send test results to reviewer\"\n\
-         Output: {{\"message\": \"All 15 tests passed. No regressions found.\", \"send_to\": \"reviewer\", \"status\": \"done\"}}\n\n\
+         Lead: \"Send implementation details to coder\"\n\
+         Output: {{\"message\": \"The migration is complete and tests passed.\", \"send_to\": \"coder\", \"status\": \"done\"}}\n\n\
          {security_research_policy}\n\n\
          ## Tool Usage (from Codex defaults)\n\
          - Prefer `rg` for searching text/files (faster than grep). Use `rg --files` for file listing.\n\
@@ -101,12 +101,6 @@ pub fn get_role(role_id: &str) -> Option<RoleConfig> {
             network_access: false,
             approval_policy: "never",
         }),
-        "reviewer" => Some(RoleConfig {
-            base_instructions: build_role_prompt("reviewer"),
-            sandbox_mode: "read-only",
-            network_access: false,
-            approval_policy: "never",
-        }),
         _ => None,
     }
 }
@@ -122,7 +116,7 @@ pub fn output_schema() -> serde_json::Value {
             },
             "send_to": {
                 "type": "string",
-                "enum": ["user", "lead", "coder", "reviewer", "none"],
+                "enum": ["user", "lead", "coder", "none"],
                 "description": "Target role to deliver this message to, or 'none' for local only"
             },
             "status": {

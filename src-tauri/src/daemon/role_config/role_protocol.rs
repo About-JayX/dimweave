@@ -9,9 +9,6 @@ pub fn role_summary(role_id: &str) -> Cow<'static, str> {
         "coder" => Cow::Borrowed(
             "coder — implementation executor: follow lead's plan exactly, stay in scope, self-review, and report changes to lead",
         ),
-        "reviewer" => Cow::Borrowed(
-            "reviewer — review + test verification: analyze quality, find bugs, run tests, and verify behavior without modifying files",
-        ),
         _ => Cow::Owned(role_id.to_string()),
     }
 }
@@ -21,7 +18,7 @@ pub fn codex_role_intro(role_id: &str) -> Cow<'static, str> {
         "user" => Cow::Borrowed(
             "Your role: user — the human administrator with full authority.\n\
              You have full permissions. Execute directly.\n\
-             Route to: lead (delegate), coder/reviewer (direct commands).",
+             Route to: lead (delegate), coder (direct commands).",
         ),
         "lead" => Cow::Borrowed(
             "Your role: lead — planning/review/report coordinator with full permissions.",
@@ -29,9 +26,6 @@ pub fn codex_role_intro(role_id: &str) -> Cow<'static, str> {
         "coder" => {
             Cow::Borrowed("Your role: coder — implementation executor with full permissions.")
         }
-        "reviewer" => Cow::Borrowed(
-            "Your role: reviewer — review + test verification (read-only prompt contract).",
-        ),
         _ => Cow::Owned(format!("Your role: {role_id}.")),
     }
 }
@@ -40,8 +34,7 @@ pub fn roles_section() -> &'static str {
     "## Roles\n\
      - user: human administrator, final authority\n\
      - lead: planning/review/report coordinator — uses superpowers to drive plans, review code, and report verified outcomes; does not write code\n\
-     - coder: implementation executor — follows lead's plan exactly, stays in scope, self-reviews, and reports changes to lead\n\
-     - reviewer: review + test verification — analyzes quality, finds issues, runs tests, and verifies behavior without modifying files"
+     - coder: implementation executor — follows lead's plan exactly, stays in scope, self-reviews, and reports changes to lead"
 }
 
 pub fn subject_matter_authority_section() -> &'static str {
@@ -84,7 +77,7 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              - You MUST NOT write code or act as the primary implementer.\n\
              - You must use the relevant superpowers workflow to clarify requirements, write/update plans, review delivered code, and report verified results to the user.\n\
              - Before implementation moves forward, ensure there is an explicit plan or approved plan update.\n\
-             - Delegate implementation to coder and verification to reviewer when needed.\n\
+             - Delegate implementation to coder when needed, but keep final review and acceptance authority on lead.\n\
              - At every step, think deeply about goals, context, constraints, risks, evidence, and plan consistency before choosing the next action.\n\
              \n\
              ## Plan Execution Protocol (MANDATORY)\n\
@@ -114,13 +107,6 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
                 - Execute ONLY what the plan specifies. No additions, no shortcuts, no improvements.\n\
                 - If you discover something unexpected during implementation, STOP and report to lead. Do NOT improvise a fix.\n\
                 - Deviating from the approved plan in any way is a protocol violation."
-        }
-        "reviewer" => {
-            "- You MUST NOT modify files or apply patches.\n\
-             - You MUST NOT act as the primary implementer.\n\
-             - Focus on analysis, verification, test execution, and review feedback.\n\
-             - Route blocking findings to coder and verification outcomes or approvals to lead.\n\
-             - If tools in the environment would allow edits anyway, you must still follow this read-only review contract."
         }
         "user" => "- You have full permissions. Execute directly.",
         _ => "- Follow the routing policy, execute your current role's responsibilities, and provide evidence-backed results.",

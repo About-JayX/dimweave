@@ -4,7 +4,7 @@ use std::path::PathBuf;
 fn build_claude_command_sets_sdk_args_and_env() {
     let opts = ClaudeLaunchOpts {
         claude_bin: PathBuf::from("/usr/local/bin/claude"),
-        role: Some("reviewer".into()),
+        role: Some("coder".into()),
         cwd: "/tmp/workspace".into(),
         session_id: "session-123".into(),
         launch_nonce: "nonce-123".into(),
@@ -40,7 +40,7 @@ fn build_claude_command_sets_sdk_args_and_env() {
     ));
     assert!(args
         .windows(2)
-        .any(|w| w[0] == "--append-system-prompt" && w[1].contains("reviewer")));
+        .any(|w| w[0] == "--append-system-prompt" && w[1].contains("coder")));
     assert!(args
         .windows(2)
         .any(|w| w[0] == "--model" && w[1] == "claude-sonnet-4-6"));
