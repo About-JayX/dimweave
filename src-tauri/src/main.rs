@@ -19,6 +19,7 @@ mod commands_task;
 mod daemon;
 #[allow(dead_code)]
 mod mcp;
+mod paste_attachments;
 mod telegram;
 mod commands_telegram;
 
@@ -99,6 +100,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard::init())
         .manage(Arc::new(OAuthHandle::new()))
         .manage(ExitState::default())
         .setup(|app| {
@@ -159,6 +161,7 @@ fn main() {
             commands_telegram::telegram_save_config,
             commands_telegram::telegram_generate_pair_code,
             commands_telegram::telegram_clear_pairing,
+            paste_attachments::read_paste_attachments,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

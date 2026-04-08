@@ -25,6 +25,7 @@ portable-pty = "0.9.0"
 uuid = { version = "1", features = ["v4"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 rand = "0.9"
+tauri-plugin-clipboard = "2.1.11"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
