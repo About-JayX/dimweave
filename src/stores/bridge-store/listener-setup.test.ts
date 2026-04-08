@@ -2,8 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
 import { reduceAgentStatus, reducePermissionPrompt } from "./listener-setup";
 import { handleCodexStreamEvent } from "./stream-reducers";
+import {
+  createPendingStreamUpdates,
+  clearPendingClaudePreview,
+  queueClaudePreviewUpdate,
+  flushPendingStreamUpdates,
+} from "./stream-batching";
 import type {
   AgentStatusPayload,
+  ClaudeStreamPayload,
   CodexStreamPayload,
 } from "./listener-payloads";
 
@@ -60,6 +67,29 @@ function applyCodexEvent(
     codexStream: partial.codexStream ?? state.codexStream,
   };
 }
+
+// RED: The claude_stream listener currently calls clearPendingClaudePreview()
+// BEFORE flushPendingStreamUpdates() on non-preview events. This drops the
+// last queued preview chunk — the user sees the draft disappear without the
+// text ever landing in state.
+test("clearPendingClaudePreview before flush drops the queued preview chunk", () => {
+  const pending = createPendingStreamUpdates();
+  queueClaudePreviewUpdate(pending, { kind: "preview", text: "final streamed sentence" } as ClaudeStreamPayload);
+
+  const state = baseState();
+
+  // Wrong order: clear pending first, then attempt flush (too late)
+  clearPendingClaudePreview(pending);
+  const flushed = flushPendingStreamUpdates(state, pending);
+  const stateAfterFlush = {
+    ...state,
+    ...flushed,
+    claudeStream: flushed.claudeStream ?? state.claudeStream,
+  };
+
+  // FAILS: previewText is "" because the text was wiped before flushing
+  expect(stateAfterFlush.claudeStream.previewText).toBe("final streamed sentence");
+});
 
 describe("handleCodexStreamEvent", () => {
   test("clears stale permission errors when a new prompt arrives", () => {

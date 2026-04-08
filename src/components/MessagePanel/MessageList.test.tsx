@@ -167,6 +167,46 @@ describe("MessageList", () => {
     expect(html).toContain("writing");
   });
 
+  // RED: Regression guard for the draft-to-final handoff.
+  //
+  // Bug: ClaudeStreamPayload.Done fires BEFORE route_message() delivers the
+  // final bubble. When the draft row clears, messages is still empty, so the
+  // user sees the empty-state placeholder instead of the final reply.
+  //
+  // This test simulates that bad state:
+  //   - claudeStream is idle (Done already cleared the draft)
+  //   - messages is still [] (route_message hasn't fired yet)
+  //
+  // FAILS: with messages=[] and idle stream, empty placeholder renders instead
+  // of the final bubble. Fix in Task 4 passes messages=[finalMessage].
+  test("renders the final Claude bubble after the draft row clears", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
+        lastUpdatedAt: 2,
+      },
+    }));
+
+    // Bug scenario: Done cleared the draft before route_message delivered
+    // the final message, so messages is still empty.
+    const html = renderToStaticMarkup(<MessageList messages={[]} />);
+
+    // FAILS: empty state placeholder renders, not the final bubble
+    expect(html).toContain("Final report delivered to the user.");
+    expect(html).not.toContain("writing");
+  });
+
   test("renders a search-specific empty state when no filtered messages remain", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([
