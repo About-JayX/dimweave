@@ -35,7 +35,7 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `pending` | `pending` | `pending` | Lock the missing backend ownership regressions on top of `main` before porting behavior. |
+| Task 1 | `70677d8a` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml` (PASS); `git diff --check` | Lock the missing backend ownership regressions on top of `main` before porting behavior. Keep Task 1 helper-level because `main` still uses the old `(status, content)` helper signature; Task 2 will refactor it to `BridgeMessage`. |
 | Task 2 | `pending` | `pending` | `pending` | Port only backend logic and ordering; keep `main`’s stream UI protocol untouched. |
 | Task 3 | `pending` | `pending` | `pending` | Reproduce the real frontend timing bug on `main`’s current stream state model before fixing it. |
 | Task 4 | `pending` | `pending` | `pending` | Flush pending preview before terminal clear, then update docs to match verified behavior on `main`. |
@@ -61,7 +61,7 @@ Expected: PASS on the untouched `main`-based worktree before porting changes.
 
 **Planned CM:** `test: lock Claude delivery ownership regressions on main`
 
-- [ ] **Step 1: Add the missing state-machine regression test**
+- [x] **Step 1: Add the missing state-machine regression test**
 
 Append this test near the existing delivery-claim tests in `src-tauri/src/daemon/state_tests.rs`:
 
@@ -75,7 +75,7 @@ fn inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery() {
 }
 ```
 
-- [ ] **Step 2: Run the focused state test to verify RED**
+- [x] **Step 2: Run the focused state test to verify RED**
 
 Run:
 
@@ -85,7 +85,7 @@ cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delive
 
 Expected: FAIL because `claim_claude_bridge_terminal_delivery()` still returns `true` in the `Inactive` branch without latching `CompletedByBridge`.
 
-- [ ] **Step 3: Add the control-handler ownership guard tests**
+- [x] **Step 3: Add the control-handler ownership guard tests**
 
 Because `main` still has the old helper signature, add these helper-level tests to `src-tauri/src/daemon/control/handler.rs`:
 
@@ -107,7 +107,7 @@ fn terminal_bridge_handoff_to_worker_does_not_claim_visible_result() {
 }
 ```
 
-- [ ] **Step 4: Run the focused control-handler test to verify RED**
+- [x] **Step 4: Run the focused control-handler test to verify RED**
 
 Run:
 
@@ -117,14 +117,14 @@ cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --
 
 Expected: FAIL because the helper still returns `true` for any non-empty terminal content.
 
-- [ ] **Step 5: Commit the failing backend tests**
+- [x] **Step 5: Commit the failing backend tests**
 
 ```bash
 git add src-tauri/src/daemon/state_tests.rs src-tauri/src/daemon/control/handler.rs
 git commit -m "test: lock Claude delivery ownership regressions on main"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 ## Task 2: Port backend ownership and terminal-ordering logic onto `main`
 
