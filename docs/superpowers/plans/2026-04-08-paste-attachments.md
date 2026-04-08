@@ -35,7 +35,7 @@ Do not expand this feature to repair those unrelated baseline issues. Use the ta
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `feat: ingest pasted clipboard attachments` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path src-tauri/Cargo.toml paste_attachments::tests::`; `cargo test --manifest-path src-tauri/Cargo.toml` | `3794f45c` — Clipboard-specific complexity belongs in one Rust ingress layer; the rest of the app should still only see local file paths. |
+| Task 1 | `feat: ingest pasted clipboard attachments` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path src-tauri/Cargo.toml paste_attachments::tests::`; `cargo test --manifest-path src-tauri/Cargo.toml` | `3794f45c`, `ae92d697` — Clipboard-specific complexity belongs in one Rust ingress layer; the rest of the app should still only see local file paths. |
 | Task 2 | `feat: wire composer paste into attachment flow` | `bun test src/components/ReplyInput/paste-attachments.test.ts src/components/ReplyInput/index.test.tsx`; `bun run build`; `git diff --check` | Paste should be a third attachment source, not a parallel attachment model; text paste must keep its native behavior. |
 
 ## Task 1: Add a Rust clipboard-to-path ingress command
