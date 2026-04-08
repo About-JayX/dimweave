@@ -26,9 +26,7 @@ export function StreamTailFooter({ context }: { context?: FooterContext }) {
   return (
     <div className="px-4 pb-2">
       {indicators.map((indicator) =>
-        indicator === "codex" ? (
-          <CodexStreamIndicator key={indicator} />
-        ) : null,
+        indicator === "codex" ? <CodexStreamIndicator key={indicator} /> : null,
       )}
     </div>
   );
@@ -50,9 +48,7 @@ export function MessageList({
     (s) => getCodexStreamIndicatorViewModel(s.codexStream).visible,
   );
   const streamRailIndicators = useMemo(
-    () => [
-      ...(codexVisible ? (["codex"] as const) : []),
-    ],
+    () => [...(codexVisible ? (["codex"] as const) : [])],
     [codexVisible],
   );
 
@@ -128,7 +124,8 @@ export function MessageList({
           context={footerContext}
           components={{ Footer: StreamTailFooter }}
           itemContent={(index) => {
-            const isClaudeDraftRow = hasClaudeDraft && index === messages.length;
+            const isClaudeDraftRow =
+              hasClaudeDraft && index === messages.length;
             if (isClaudeDraftRow) {
               return (
                 <div className="px-4">
@@ -138,14 +135,17 @@ export function MessageList({
             }
             return (
               <div className="px-4">
-                <MessageBubble msg={messages[index]} onOpenImage={onOpenImage} />
+                <MessageBubble
+                  msg={messages[index]}
+                  onOpenImage={onOpenImage}
+                />
               </div>
             );
           }}
         />
       </div>
       {!atBottom && (
-        <div className="flex justify-center py-1.5">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
           <BackToBottomButton onClick={scrollToBottom} />
         </div>
       )}
