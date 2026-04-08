@@ -10,7 +10,8 @@ mod types;
 #[tokio::main]
 async fn main() {
     let _ = tracing_subscriber::fmt::try_init();
-    let control_port: u16 = std::env::var("AGENTBRIDGE_CONTROL_PORT")
+    let control_port: u16 = std::env::var("DIMWEAVE_DAEMON_PORT")
+        .or_else(|_| std::env::var("AGENTBRIDGE_CONTROL_PORT"))
         .unwrap_or_else(|_| "4502".into())
         .parse()
         .unwrap_or_else(|e| {

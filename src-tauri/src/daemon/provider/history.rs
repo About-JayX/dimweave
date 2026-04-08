@@ -17,10 +17,10 @@ pub async fn list_workspace_provider_history(
     entries.extend(
         load_codex_history_entries(
             workspace,
-            codex::is_app_server_reachable(4500).await,
+            codex::is_app_server_reachable(crate::daemon::ports::PortConfig::from_env().codex).await,
             || async {
                 codex::list_threads(
-                    4500,
+                    crate::daemon::ports::PortConfig::from_env().codex,
                     &codex::ListThreadsParams {
                         archived: false,
                         cwd: Some(workspace.to_string()),

@@ -8,6 +8,7 @@ pub mod image_compress;
 mod launch_task_sync;
 pub mod orchestrator;
 mod permission;
+pub mod ports;
 pub mod provider;
 pub mod role_config;
 pub mod routing;
@@ -142,7 +143,7 @@ async fn launch_claude_sdk(
         model,
         effort,
         resume: resume_session_id,
-        daemon_port: 4502,
+        daemon_port: ports::PortConfig::from_env().daemon,
         mcp_config: Some(mcp_config),
     };
 
@@ -252,7 +253,7 @@ async fn attach_provider_history(
                     cwd: cwd.clone(),
                     thread_id: external_id.clone(),
                     launch_epoch,
-                    codex_port: 4500,
+                    codex_port: ports::PortConfig::from_env().codex,
                 },
                 state.clone(),
                 app.clone(),
@@ -284,13 +285,16 @@ async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id:
 }
 
 pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
+    let ports = ports::PortConfig::from_env();
+    let daemon_port = ports.daemon;
+    let codex_port = ports.codex;
     let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
     // WS control server — bridge processes connect here
     {
         let s = state.clone();
         let a = app.clone();
         tokio::spawn(async move {
-            if let Err(e) = control::server::start(4502, s, a).await {
+            if let Err(e) = control::server::start(daemon_port, s, a).await {
                 eprintln!("[Daemon] control server error: {e}");
             }
         });
@@ -338,7 +342,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 cwd,
                                 thread_id,
                                 launch_epoch,
-                                codex_port: 4500,
+                                codex_port,
                             },
                             state.clone(),
                             app.clone(),
@@ -379,7 +383,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             model,
                             effort: reasoning_effort,
                             launch_epoch,
-                            codex_port: 4500,
+                            codex_port,
                         },
                         state.clone(),
                         app.clone(),
@@ -608,7 +612,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         cwd: target.cwd,
                                         thread_id: target.external_id,
                                         launch_epoch,
-                                        codex_port: 4500,
+                                        codex_port,
                                     },
                                     state.clone(),
                                     app.clone(),
