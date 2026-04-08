@@ -36,7 +36,7 @@
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
 | Task 1 | `70677d8a` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml` (PASS); `git diff --check` | Lock the missing backend ownership regressions on top of `main` before porting behavior. Keep Task 1 helper-level because `main` still uses the old `(status, content)` helper signature; Task 2 will refactor it to `BridgeMessage`. |
-| Task 2 | `pending` | `pending` | `pending` | Port only backend logic and ordering; keep `main`’s stream UI protocol untouched. |
+| Task 2 | `978fbd92` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q sdk_terminal_delivery_claim_blocks_later_bridge_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q bridge_terminal_delivery_claim_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Port only backend logic and ordering; keep `main`’s stream UI protocol untouched. `main` already had `flush_pending_preview_batch()` in `handle_result()`, so no extra preview work was needed in this task. |
 | Task 3 | `pending` | `pending` | `pending` | Reproduce the real frontend timing bug on `main`’s current stream state model before fixing it. |
 | Task 4 | `pending` | `pending` | `pending` | Flush pending preview before terminal clear, then update docs to match verified behavior on `main`. |
 
@@ -140,7 +140,7 @@ git commit -m "test: lock Claude delivery ownership regressions on main"
 
 **Planned CM:** `fix: port Claude delivery ownership logic to main`
 
-- [ ] **Step 1: Latch bridge ownership in both `Active` and `Inactive`**
+- [x] **Step 1: Latch bridge ownership in both `Active` and `Inactive`**
 
 Update `claim_claude_bridge_terminal_delivery()` in `src-tauri/src/daemon/state_delivery.rs`:
 
@@ -157,7 +157,7 @@ pub fn claim_claude_bridge_terminal_delivery(&mut self) -> bool {
 }
 ```
 
-- [ ] **Step 2: Narrow visible-result ownership to user-visible terminal replies**
+- [x] **Step 2: Narrow visible-result ownership to user-visible terminal replies**
 
 Refactor the helper in `src-tauri/src/daemon/control/handler.rs` to accept the full message:
 
@@ -173,7 +173,7 @@ fn claude_terminal_reply_claims_visible_result(
 
 Also update the tests to construct `BridgeMessage` values and assert against the refactored helper.
 
-- [ ] **Step 3: Emit `Done` only after bridge-routed final delivery**
+- [x] **Step 3: Emit `Done` only after bridge-routed final delivery**
 
 Restructure the Claude terminal branch in `handle_connection()` so the durable final message routes before `ClaudeStreamPayload::Done`:
 
@@ -214,7 +214,7 @@ if bridge_claimed_delivery || is_claude_terminal {
 }
 ```
 
-- [ ] **Step 4: Emit SDK `Done` only after the durable SDK final message is routed**
+- [x] **Step 4: Emit SDK `Done` only after the durable SDK final message is routed**
 
 Restructure `handle_result()` in `src-tauri/src/daemon/claude_sdk/event_handler.rs`:
 
@@ -248,7 +248,7 @@ gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
 gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
 ```
 
-- [ ] **Step 5: Run the focused backend regression suite to verify GREEN**
+- [x] **Step 5: Run the focused backend regression suite to verify GREEN**
 
 Run:
 
@@ -262,14 +262,14 @@ cargo test -q bridge_terminal_delivery_claim_blocks_later_sdk_terminal_delivery 
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the backend port**
+- [x] **Step 6: Commit the backend port**
 
 ```bash
 git add src-tauri/src/daemon/state_delivery.rs src-tauri/src/daemon/state_tests.rs src-tauri/src/daemon/control/handler.rs src-tauri/src/daemon/claude_sdk/event_handler.rs
 git commit -m "fix: port Claude delivery ownership logic to main"
 ```
 
-- [ ] **Step 7: Update `## CM Memory`**
+- [x] **Step 7: Update `## CM Memory`**
 
 ## Task 3: Lock frontend preview-flush timing on `main`’s current stream model
 
