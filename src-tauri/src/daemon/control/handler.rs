@@ -13,8 +13,12 @@ fn is_allowed_agent(agent_id: &str) -> bool {
     matches!(agent_id, "claude" | "codex")
 }
 
-fn claude_terminal_reply_claims_visible_result(status: MessageStatus, content: &str) -> bool {
-    status.is_terminal() && !content.trim().is_empty()
+fn claude_terminal_reply_claims_visible_result(
+    message: &crate::daemon::types::BridgeMessage,
+) -> bool {
+    message.to == "user"
+        && message.status.is_some_and(|s| s.is_terminal())
+        && !message.content.trim().is_empty()
 }
 
 fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
@@ -112,6 +116,7 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 // Bind message.from to the authenticated agent's role
                 // (prevents spoofing — bridge can't claim to be a different sender)
                 let mut suppress_message = false;
+                let mut bridge_claimed_delivery = false;
                 if let Some(id) = agent_id.as_deref() {
                     let role = {
                         let s = state.read().await;
@@ -141,14 +146,17 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         );
                     }
                     if id == "claude" && status.is_terminal() {
-                        if claude_terminal_reply_claims_visible_result(status, &message.content) {
+                        if claude_terminal_reply_claims_visible_result(&message) {
                             let should_route =
                                 state.write().await.claim_claude_bridge_terminal_delivery();
                             if should_route {
-                                gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
+                                // Defer Done until after route_message so the
+                                // durable bubble arrives before the draft clears.
+                                bridge_claimed_delivery = true;
                             } else {
                                 suppress_message = true;
                                 state.write().await.finish_claude_sdk_direct_text_turn();
+                                gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                                 gui::emit_system_log(
                                     &app,
                                     "info",
@@ -156,9 +164,9 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                                 );
                             }
                         } else {
-                            // Empty terminal replies are allowed to end the visible
-                            // thinking state without stealing final-message ownership
-                            // from an in-flight SDK fallback turn.
+                            // Non-user-targeted or empty terminal replies end the
+                            // visible thinking state without claiming final-message
+                            // ownership — SDK result can still deliver to the user.
                             gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
                         }
                     }
@@ -167,6 +175,9 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     continue;
                 }
                 routing::route_message(&state, &app, message).await;
+                if bridge_claimed_delivery {
+                    gui::emit_claude_stream(&app, ClaudeStreamPayload::Done);
+                }
             }
             FromAgent::PermissionRequest { request } => {
                 let Some(id) = agent_id.as_deref() else {
@@ -271,38 +282,61 @@ mod tests {
     use super::{claude_terminal_reply_claims_visible_result, summarize_bridge_message_shape};
     use crate::daemon::types::{BridgeMessage, MessageStatus};
 
+    fn make_msg(to: &str, content: &str, status: MessageStatus) -> BridgeMessage {
+        BridgeMessage {
+            id: "test".into(),
+            from: "lead".into(),
+            display_source: Some("claude".into()),
+            to: to.to_string(),
+            content: content.to_string(),
+            timestamp: 1,
+            reply_to: None,
+            priority: None,
+            status: Some(status),
+            task_id: None,
+            session_id: None,
+            sender_agent_id: Some("claude".into()),
+            attachments: None,
+        }
+    }
+
     #[test]
     fn empty_terminal_claude_reply_only_ends_thinking() {
-        assert!(!claude_terminal_reply_claims_visible_result(
-            MessageStatus::Done,
-            "   "
-        ));
-        assert!(!claude_terminal_reply_claims_visible_result(
-            MessageStatus::Error,
-            ""
-        ));
+        assert!(!claude_terminal_reply_claims_visible_result(&make_msg(
+            "user",
+            "   ",
+            MessageStatus::Done
+        )));
+        assert!(!claude_terminal_reply_claims_visible_result(&make_msg(
+            "user",
+            "",
+            MessageStatus::Error
+        )));
     }
 
     #[test]
     fn non_empty_terminal_claude_reply_claims_visible_result() {
-        assert!(claude_terminal_reply_claims_visible_result(
-            MessageStatus::Done,
-            "final reply"
-        ));
-        assert!(claude_terminal_reply_claims_visible_result(
-            MessageStatus::Error,
-            "blocked"
-        ));
+        assert!(claude_terminal_reply_claims_visible_result(&make_msg(
+            "user",
+            "final reply",
+            MessageStatus::Done
+        )));
+        assert!(claude_terminal_reply_claims_visible_result(&make_msg(
+            "user",
+            "blocked",
+            MessageStatus::Error
+        )));
     }
 
     #[test]
     fn terminal_bridge_reply_to_user_claims_visible_result() {
         // A terminal bridge reply addressed to the user with non-empty content
         // must claim visible-result ownership.
-        assert!(claude_terminal_reply_claims_visible_result(
-            MessageStatus::Done,
+        assert!(claude_terminal_reply_claims_visible_result(&make_msg(
+            "user",
             "Final answer for the user.",
-        ));
+            MessageStatus::Done,
+        )));
     }
 
     #[test]
@@ -310,12 +344,16 @@ mod tests {
         // A terminal bridge reply routed to a worker role (lead/coder, not user)
         // must NOT claim visible-result ownership — the SDK result should still
         // be able to deliver the user-visible message.
-        // RED: the current helper has no `to` parameter and returns true for any
-        // non-empty terminal content regardless of recipient.
-        assert!(!claude_terminal_reply_claims_visible_result(
-            MessageStatus::Done,
+        assert!(!claude_terminal_reply_claims_visible_result(&make_msg(
+            "coder",
             "Implementation complete, reporting to lead.",
-        ));
+            MessageStatus::Done,
+        )));
+        assert!(!claude_terminal_reply_claims_visible_result(&make_msg(
+            "lead",
+            "Implementation complete.",
+            MessageStatus::Done,
+        )));
     }
 
     #[test]

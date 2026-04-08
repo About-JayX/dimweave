@@ -158,7 +158,6 @@ fn handle_system(event: &Value, app: &AppHandle) {
 
 async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &AppHandle) {
     flush_pending_preview_batch(state, app).await;
-    gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
     // Extract final text if present in result
     let text = event["result"]
         .as_str()
@@ -180,6 +179,7 @@ async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &App
                 ),
             );
             finish_sdk_direct_text_turn(state).await;
+            gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
             gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
             return;
         }
@@ -196,5 +196,8 @@ async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &App
             routing::route_message(state, app, msg).await;
         }
     }
+    // Done is emitted after route_message so the durable bubble arrives
+    // before the frontend draft clears.
+    gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
     gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
 }

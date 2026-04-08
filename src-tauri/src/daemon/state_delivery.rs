@@ -42,11 +42,10 @@ impl DaemonState {
 
     pub fn claim_claude_bridge_terminal_delivery(&mut self) -> bool {
         match self.claude_sdk_direct_text_state {
-            ClaudeSdkDirectTextState::Active => {
+            ClaudeSdkDirectTextState::Active | ClaudeSdkDirectTextState::Inactive => {
                 self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::CompletedByBridge;
                 true
             }
-            ClaudeSdkDirectTextState::Inactive => true,
             ClaudeSdkDirectTextState::CompletedBySdk
             | ClaudeSdkDirectTextState::CompletedByBridge => false,
         }
