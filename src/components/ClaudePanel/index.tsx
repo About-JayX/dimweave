@@ -171,7 +171,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
     <div
       className={cn(
         "rounded-2xl border bg-card px-4 py-3 card-depth transition-colors",
-        connected
+        connected || connecting
           ? "border-claude/35 glow-claude-subtle border-glow-claude"
           : "border-input hover:border-input/80",
       )}

@@ -86,7 +86,8 @@ export function CyberSelect({
   }, [open]);
 
   const selected = options.find((o) => o.value === value);
-  const displayLabel = selected?.label ?? placeholder ?? value;
+  const rawLabel = selected?.label ?? placeholder ?? value;
+  const displayLabel = isHistory ? middleEllipsis(rawLabel, 20) : rawLabel;
 
   return (
     <div ref={ref} className="relative inline-flex">
