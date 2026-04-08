@@ -3,10 +3,16 @@ import type {
   ClaudeStreamPayload,
   CodexStreamPayload,
 } from "./listener-payloads";
-import {
-  handleClaudeStreamEvent,
-  handleCodexStreamBatch,
-} from "./stream-reducers";
+import { handleClaudeStreamEvent } from "./stream-reducers";
+
+const MAX_CODEX_PREVIEW_CHARS = 100_000;
+
+interface CodexStreamBatch {
+  activity: string | null;
+  reasoning: string | null;
+  delta: string | null;
+  commandOutputAppend: string;
+}
 
 export interface PendingStreamUpdates {
   claudePreviewText: string;
@@ -124,4 +130,27 @@ export function flushPendingStreamUpdates(
   clearPendingClaudePreview(pending);
   clearPendingCodexStream(pending);
   return partial;
+}
+
+function handleCodexStreamBatch(
+  state: BridgeState,
+  batch: CodexStreamBatch,
+): Partial<BridgeState> {
+  const next = { ...state.codexStream };
+
+  if (batch.activity !== null) {
+    next.activity = batch.activity;
+    next.commandOutput = "";
+  }
+  if (batch.reasoning !== null) {
+    next.reasoning = batch.reasoning.slice(-MAX_CODEX_PREVIEW_CHARS);
+  }
+  if (batch.delta !== null) {
+    next.currentDelta = batch.delta.slice(-MAX_CODEX_PREVIEW_CHARS);
+  }
+  if (batch.commandOutputAppend) {
+    next.commandOutput += batch.commandOutputAppend;
+  }
+
+  return { codexStream: next };
 }

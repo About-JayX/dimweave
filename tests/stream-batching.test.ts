@@ -21,6 +21,9 @@ function baseState(): BridgeState {
     claudeStream: {
       thinking: true,
       previewText: "",
+      thinkingText: "",
+      blockType: "idle",
+      toolName: "",
       lastUpdatedAt: 0,
     },
     codexStream: {
@@ -68,6 +71,32 @@ describe("stream batching", () => {
     expect(partial.claudeStream).toMatchObject({
       thinking: true,
       previewText: "hello",
+    });
+    expect(hasPendingStreamUpdates(pending)).toBe(false);
+  });
+
+  test("does not duplicate Claude text already applied from live text deltas", () => {
+    const pending = createPendingStreamUpdates();
+    const state = baseState();
+    state.claudeStream = {
+      ...state.claudeStream,
+      previewText: "hello",
+      blockType: "text",
+    };
+
+    expect(
+      queueClaudePreviewUpdate(pending, {
+        kind: "preview",
+        text: "hello",
+      }),
+    ).toBe(true);
+
+    const partial = flushPendingStreamUpdates(state, pending);
+
+    expect(partial.claudeStream).toMatchObject({
+      thinking: true,
+      previewText: "hello",
+      blockType: "text",
     });
     expect(hasPendingStreamUpdates(pending)).toBe(false);
   });
