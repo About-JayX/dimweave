@@ -167,18 +167,15 @@ describe("MessageList", () => {
     expect(html).toContain("writing");
   });
 
-  // RED: Regression guard for the draft-to-final handoff.
+  // GREEN: Regression guard for the draft-to-final handoff (post-fix).
   //
-  // Bug: ClaudeStreamPayload.Done fires BEFORE route_message() delivers the
-  // final bubble. When the draft row clears, messages is still empty, so the
-  // user sees the empty-state placeholder instead of the final reply.
+  // Fix (Tasks 2 + 4): route_message() now delivers the final bubble BEFORE
+  // ClaudeStreamPayload.Done fires, so when the draft row clears the final
+  // message is already present in the messages list.
   //
-  // This test simulates that bad state:
-  //   - claudeStream is idle (Done already cleared the draft)
-  //   - messages is still [] (route_message hasn't fired yet)
-  //
-  // FAILS: with messages=[] and idle stream, empty placeholder renders instead
-  // of the final bubble. Fix in Task 4 passes messages=[finalMessage].
+  // Post-fix state:
+  //   - claudeStream is idle (done cleared the draft)
+  //   - messages contains the final bubble (route_message ran before Done)
   test("renders the final Claude bubble after the draft row clears", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([
@@ -198,11 +195,16 @@ describe("MessageList", () => {
       },
     }));
 
-    // Bug scenario: Done cleared the draft before route_message delivered
-    // the final message, so messages is still empty.
-    const html = renderToStaticMarkup(<MessageList messages={[]} />);
+    // Post-fix: route_message() ran before Done, so the final message is here.
+    const finalMessage = {
+      id: "msg_final",
+      from: "claude",
+      to: "user",
+      content: "Final report delivered to the user.",
+      timestamp: 2,
+    };
+    const html = renderToStaticMarkup(<MessageList messages={[finalMessage]} />);
 
-    // FAILS: empty state placeholder renders, not the final bubble
     expect(html).toContain("Final report delivered to the user.");
     expect(html).not.toContain("writing");
   });

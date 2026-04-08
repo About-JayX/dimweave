@@ -141,6 +141,9 @@ export function createBridgeListeners(
         schedulePendingFlush();
         return;
       }
+      // Flush any queued preview into state BEFORE clearing pending,
+      // so the last preview chunk is visible before done/reset clears the draft.
+      flushPendingStreams();
       clearPendingClaudePreview(pendingStreamUpdates);
       if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
         cancelPendingFlush();

@@ -92,6 +92,16 @@ export function queueCodexBufferedUpdate(
   }
 }
 
+export function flushClaudePreviewIfPending(
+  state: BridgeState,
+  pending: PendingStreamUpdates,
+): Partial<BridgeState> {
+  if (!pending.claudePreviewText) {
+    return {};
+  }
+  return flushPendingStreamUpdates(state, pending);
+}
+
 export function flushPendingStreamUpdates(
   state: BridgeState,
   pending: PendingStreamUpdates,

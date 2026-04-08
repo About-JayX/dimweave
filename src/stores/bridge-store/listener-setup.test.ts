@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
 import { reduceAgentStatus, reducePermissionPrompt } from "./listener-setup";
-import { handleCodexStreamEvent } from "./stream-reducers";
+import { handleClaudeStreamEvent, handleCodexStreamEvent } from "./stream-reducers";
 import {
   createPendingStreamUpdates,
-  clearPendingClaudePreview,
+  flushClaudePreviewIfPending,
   queueClaudePreviewUpdate,
-  flushPendingStreamUpdates,
 } from "./stream-batching";
 import type {
   AgentStatusPayload,
@@ -68,27 +67,40 @@ function applyCodexEvent(
   };
 }
 
-// RED: The claude_stream listener currently calls clearPendingClaudePreview()
-// BEFORE flushPendingStreamUpdates() on non-preview events. This drops the
-// last queued preview chunk — the user sees the draft disappear without the
-// text ever landing in state.
-test("clearPendingClaudePreview before flush drops the queued preview chunk", () => {
+// Fixed-ordering contract: the listener now calls flushPendingStreams() BEFORE
+// clearPendingClaudePreview() on non-preview claude_stream events.
+// These two tests lock that ordering using the narrow helper from stream-batching.
+test("flushes queued Claude preview before terminal done clears the draft", () => {
   const pending = createPendingStreamUpdates();
   queueClaudePreviewUpdate(pending, { kind: "preview", text: "final streamed sentence" } as ClaudeStreamPayload);
 
   const state = baseState();
 
-  // Wrong order: clear pending first, then attempt flush (too late)
-  clearPendingClaudePreview(pending);
-  const flushed = flushPendingStreamUpdates(state, pending);
+  // Fixed listener path: flush pending preview into state first.
+  const flushed = flushClaudePreviewIfPending(state, pending);
   const stateAfterFlush = {
     ...state,
     ...flushed,
     claudeStream: flushed.claudeStream ?? state.claudeStream,
   };
 
-  // FAILS: previewText is "" because the text was wiped before flushing
+  // Preview was materialized into state before the pending was cleared.
   expect(stateAfterFlush.claudeStream.previewText).toBe("final streamed sentence");
+  expect(pending.claudePreviewText).toBe(""); // flush clears pending
+
+  // done/reset can now clear the draft cleanly — the preview was already seen.
+  const donePartial = handleClaudeStreamEvent(stateAfterFlush, { kind: "done" });
+  expect(donePartial.claudeStream?.previewText).toBe("");
+});
+
+test("no-op flush when pending claude preview is empty", () => {
+  const pending = createPendingStreamUpdates(); // nothing queued
+  const state = baseState();
+
+  const result = flushClaudePreviewIfPending(state, pending);
+
+  expect(result).toEqual({});
+  expect(state.claudeStream.previewText).toBe("");
 });
 
 describe("handleCodexStreamEvent", () => {

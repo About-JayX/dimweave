@@ -55,11 +55,15 @@ SDK result 到达 (handle_result):
   CompletedByBridge → 抑制（bridge 已投递）
   CompletedBySdk → 抑制（已投递过）
 
-Bridge reply 到达 (agent_reply, terminal status):
-  Active → CompletedByBridge → 投递到 GUI
-  Inactive → 投递到 GUI（bridge 不经过 turn 状态）
-  CompletedBySdk → 抑制（SDK 已投递）
+Bridge reply 到达 (agent_reply, terminal status, to="user"):
+  Active   → CompletedByBridge → 投递到 GUI
+  Inactive → CompletedByBridge → 投递到 GUI
+  CompletedBySdk    → 抑制（SDK 已投递）
   CompletedByBridge → 抑制（已投递过）
+
+注意：claim_claude_bridge_terminal_delivery() 同时覆盖 Active 和 Inactive 两个分支。
+  只有 to="user" 且 terminal status 且内容非空的 bridge reply 才触发 visible-result 投递；
+  reply(to="coder") 等非用户路由不走此分支，SDK result 仍可正常兜底投递。
 
 Turn 结束:
   任意状态 → Inactive
@@ -93,5 +97,7 @@ reply() 和 SDK result 的关系：
 
 1. Claude 有时不调 reply() 直接结束 turn → SDK result 兜底投递
 2. Claude 调了 reply(to="user") 且 SDK 也有 result → 先到先赢，另一条去重
-3. Claude 调 reply(to="coder") → bridge 路由到 Codex，SDK result 仍会投递给 GUI（因为 to 不同，不冲突）
+3. Claude 调 reply(to="coder") → bridge 路由到 Codex，不触发 visible-result claim（claude_terminal_reply_claims_visible_result 检查 to=="user"），SDK result 仍可正常兜底投递给 GUI
 4. bridge 未连接时 → SDK result 始终直投
+5. 前端收到非 preview 的 claude_stream 事件前，先 flush 待处理的 preview 文本再清空 pending，保证最后一帧预览在 draft 清除前落地（stream-batching flushClaudePreviewIfPending）
+6. Rust daemon：route_message() 投递最终消息在 emit ClaudeStreamPayload::Done 之前，保证前端 draft 清除时消息已到达
