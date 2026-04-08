@@ -37,6 +37,9 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     claudeStream: {
       thinking: false,
       previewText: "",
+      thinkingText: "",
+      blockType: "idle",
+      toolName: "",
       lastUpdatedAt: 0,
     },
     codexStream: {
@@ -74,7 +77,9 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
             (prompt) => prompt.requestId !== requestId,
           ),
           permissionError:
-            s.permissionError?.requestId === requestId ? null : s.permissionError,
+            s.permissionError?.requestId === requestId
+              ? null
+              : s.permissionError,
         }));
       } catch (error) {
         const message = String(error);

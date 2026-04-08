@@ -106,6 +106,15 @@ pub fn emit_codex_stream(app: &AppHandle, payload: CodexStreamPayload) {
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum ClaudeStreamPayload {
     ThinkingStarted,
+    /// Thinking block delta (extended thinking text)
+    ThinkingDelta { text: String },
+    /// Text block started
+    TextStarted,
+    /// Text block delta (assistant output text)
+    TextDelta { text: String },
+    /// Tool use block started
+    ToolStarted { name: String },
+    /// Legacy: accumulated preview text (kept for batching compat)
     Preview { text: String },
     Done,
     Reset,

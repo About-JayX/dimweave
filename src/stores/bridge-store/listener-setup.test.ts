@@ -22,6 +22,9 @@ function baseState(): BridgeState {
     claudeStream: {
       thinking: false,
       previewText: "",
+      thinkingText: "",
+      blockType: "idle",
+      toolName: "",
       lastUpdatedAt: 0,
     },
     codexStream: {

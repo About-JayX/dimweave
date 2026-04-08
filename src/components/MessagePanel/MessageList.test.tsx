@@ -12,7 +12,7 @@ import {
 
 // 1. Minimal mutable bridge store (only fields MessageList + indicators read)
 let _bs = {
-  claudeStream: { thinking: false, previewText: "", lastUpdatedAt: 0 },
+  claudeStream: { thinking: false, previewText: "", thinkingText: "", blockType: "idle" as const, toolName: "", lastUpdatedAt: 0 },
   codexStream: {
     thinking: false, currentDelta: "", lastMessage: "",
     turnStatus: "", activity: "", reasoning: "", commandOutput: "",
@@ -154,6 +154,9 @@ describe("MessageList", () => {
       claudeStream: {
         thinking: true,
         previewText: "Reviewing the daemon event path",
+        thinkingText: "",
+        blockType: "text" as const,
+        toolName: "",
         lastUpdatedAt: 1,
       },
     }));
@@ -161,7 +164,7 @@ describe("MessageList", () => {
     const html = renderToStaticMarkup(<MessageList messages={[]} />);
 
     expect(html).toContain("Reviewing the daemon event path");
-    expect(html).toContain("working draft");
+    expect(html).toContain("writing");
   });
 
   test("renders a search-specific empty state when no filtered messages remain", async () => {
@@ -175,6 +178,9 @@ describe("MessageList", () => {
       claudeStream: {
         thinking: false,
         previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
         lastUpdatedAt: 0,
       },
       codexStream: {

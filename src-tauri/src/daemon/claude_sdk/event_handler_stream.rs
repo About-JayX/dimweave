@@ -9,9 +9,9 @@ const CLAUDE_PREVIEW_BATCH_WINDOW_MS: u64 = 50;
 /// Parse `stream_event` and emit `claude_stream` for real-time UI updates.
 ///
 /// stream_event.event contains raw Anthropic API events:
-/// - content_block_start {content_block: {type: "text"|"tool_use"|...}}
-/// - content_block_delta {delta: {type: "text_delta", text: "..."}}
-/// - message_start, message_delta, message_stop
+/// - content_block_start {content_block: {type: "thinking"|"text"|"tool_use"}}
+/// - content_block_delta {delta: {type: "thinking_delta"|"text_delta"|"input_json_delta"}}
+/// - content_block_stop, message_start, message_delta, message_stop
 pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app: &AppHandle) {
     let inner = &event["event"];
     let event_type = inner["type"].as_str().unwrap_or("");
@@ -19,28 +19,65 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
     match event_type {
         "content_block_start" => {
             let block_type = inner["content_block"]["type"].as_str().unwrap_or("");
-            if block_type == "text" {
-                state.write().await.clear_claude_preview_batch();
-                gui::emit_claude_stream(app, ClaudeStreamPayload::ThinkingStarted);
+            match block_type {
+                "thinking" => {
+                    state.write().await.clear_claude_preview_batch();
+                    gui::emit_claude_stream(app, ClaudeStreamPayload::ThinkingStarted);
+                }
+                "text" => {
+                    flush_pending_preview_batch(state, app).await;
+                    gui::emit_claude_stream(app, ClaudeStreamPayload::TextStarted);
+                }
+                "tool_use" => {
+                    flush_pending_preview_batch(state, app).await;
+                    let name = inner["content_block"]["name"]
+                        .as_str()
+                        .unwrap_or("tool")
+                        .to_string();
+                    gui::emit_claude_stream(app, ClaudeStreamPayload::ToolStarted { name });
+                }
+                _ => {}
             }
         }
         "content_block_delta" => {
             let delta_type = inner["delta"]["type"].as_str().unwrap_or("");
-            if delta_type == "text_delta" {
-                if let Some(text) = inner["delta"]["text"].as_str() {
-                    let should_schedule = state.write().await.append_claude_preview_delta(text);
-                    if should_schedule {
-                        let state = state.clone();
-                        let app = app.clone();
-                        tokio::spawn(async move {
-                            tokio::time::sleep(Duration::from_millis(
-                                CLAUDE_PREVIEW_BATCH_WINDOW_MS,
-                            ))
-                            .await;
-                            flush_pending_preview_batch(&state, &app).await;
-                        });
+            match delta_type {
+                "thinking_delta" => {
+                    if let Some(text) = inner["delta"]["thinking"].as_str() {
+                        gui::emit_claude_stream(
+                            app,
+                            ClaudeStreamPayload::ThinkingDelta {
+                                text: text.to_string(),
+                            },
+                        );
                     }
                 }
+                "text_delta" => {
+                    if let Some(text) = inner["delta"]["text"].as_str() {
+                        // Batch text deltas for preview compat + direct emit for live UI
+                        let should_schedule =
+                            state.write().await.append_claude_preview_delta(text);
+                        gui::emit_claude_stream(
+                            app,
+                            ClaudeStreamPayload::TextDelta {
+                                text: text.to_string(),
+                            },
+                        );
+                        if should_schedule {
+                            let state = state.clone();
+                            let app = app.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(
+                                    CLAUDE_PREVIEW_BATCH_WINDOW_MS,
+                                ))
+                                .await;
+                                flush_pending_preview_batch(&state, &app).await;
+                            });
+                        }
+                    }
+                }
+                // input_json_delta for tool_use — not rendered as text
+                _ => {}
             }
         }
         _ => {}
