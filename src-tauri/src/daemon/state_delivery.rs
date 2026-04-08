@@ -29,20 +29,14 @@ impl DaemonState {
 
     pub fn claim_claude_sdk_terminal_delivery(&mut self) -> bool {
         match self.claude_sdk_direct_text_state {
-            ClaudeSdkDirectTextState::Active => {
+            ClaudeSdkDirectTextState::Active | ClaudeSdkDirectTextState::Inactive => {
                 self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::CompletedBySdk;
                 true
             }
-            ClaudeSdkDirectTextState::Inactive => {
-                if self.attached_agents.contains_key("claude") {
-                    false
-                } else {
-                    self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::CompletedBySdk;
-                    true
-                }
-            }
-            ClaudeSdkDirectTextState::CompletedBySdk
-            | ClaudeSdkDirectTextState::CompletedByBridge => false,
+            // Bridge already delivered this turn's result — suppress SDK duplicate
+            ClaudeSdkDirectTextState::CompletedByBridge => false,
+            // SDK already delivered — suppress duplicate
+            ClaudeSdkDirectTextState::CompletedBySdk => false,
         }
     }
 
