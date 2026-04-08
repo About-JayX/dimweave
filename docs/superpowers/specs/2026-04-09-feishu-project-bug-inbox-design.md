@@ -2,7 +2,7 @@
 
 ## Summary
 
-Dimweave should gain an embedded Bug Inbox tool for a single Feishu Project workspace. The user opens the tool from a dedicated shell icon, sees a live list of Feishu Project work items, configures connection and sync parameters inside the same panel, and manually starts handling a selected item. Starting handling should create or resume exactly one Dimweave task for that work item, then seed the lead role with the issue context so the normal planning -> execution -> review -> CM workflow begins inside Dimweave.
+Dimweave should gain an embedded Bug Inbox tool for a single Feishu Project workspace. The user opens the tool from a dedicated shell icon, sees a live list of Feishu Project work items, configures connection and sync parameters inside the same panel, and manually starts handling a selected item. Starting handling should create or resume exactly one Dimweave task for that work item, persist a local issue snapshot file, and seed the lead role with the issue context so the normal planning -> execution -> review -> CM workflow begins inside Dimweave.
 
 The agreed V1 product choices are:
 
@@ -12,7 +12,7 @@ The agreed V1 product choices are:
 - launch model: half-automatic (`Start handling` is user-triggered)
 - Dimweave task reuse: repeated starts reopen the existing linked task instead of creating duplicates
 - Feishu write-back: excluded from V1
-- ingress model: webhook-first with polling reconciliation
+- ingress model: polling baseline with webhook fast path
 
 ## Product Goal
 
@@ -36,7 +36,7 @@ Turn Feishu Project into a first-class Dimweave intake source so the product can
 - Feishu Project webhook ingestion
 - Deduplicated work-item list persistence
 - Idempotent `Start handling` orchestration that creates or resumes a linked Dimweave task
-- Storing the source issue snapshot as a Dimweave task artifact for inspection
+- Storing the source issue snapshot as a persisted local file for inspection and lead handoff
 
 ### Excluded
 
@@ -51,7 +51,7 @@ Turn Feishu Project into a first-class Dimweave intake source so the product can
 ### Feishu Project platform facts
 
 - Feishu Project provides both **standard API** and **Webhook** capabilities; the 2024 version guide lists both as product capabilities and publishes daily quotas. Source: <https://www.feishu.cn/content/epjgdgdd>
-- Feishu Project webhook/automation payloads include `header.event_type`, `header.token`, and an idempotency `header.uuid`. The automation connector docs enumerate work-item events such as `WorkitemCreateEvent`, `WorkitemStatusEvent`, `WorkitemUpdateEvent`, `WorkitemCommentEvent`, and `WorkitemFinishEvent`. Source: <https://www.feishu.cn/content/ef835n76>
+- Feishu Project webhook/automation payloads include `header.event_type`, `header.token`, and an idempotency `header.uuid`. The webhook guide enumerates work-item events such as `WorkitemCreateEvent`, `WorkitemStatusEvent`, `WorkitemUpdateEvent`, `WorkitemCommentEvent`, and `WorkitemFinishEvent`, and it states webhook delivery is `POST`, times out after 6 seconds, and retries up to 3 times. Source: <https://www.feishu.cn/content/49fq0rvm>
 - Feishu Project OpenAPI access to space data requires a **plugin token** installed into the target space; the FAQ explicitly says space APIs need a plugin token and that the plugin must be installed in the space. Source: <https://www.feishu.cn/content/60bl79n2>
 - The same FAQ states `X-USER-KEY` can be obtained via API and that the acting user must have the corresponding space permissions. Source: <https://www.feishu.cn/content/60bl79n2>
 - The FAQ states webhook source IPs are **dynamic** and cannot be pre-listed. Source: <https://www.feishu.cn/content/60bl79n2>
@@ -64,6 +64,9 @@ Turn Feishu Project into a first-class Dimweave intake source so the product can
 - Dimweave already has a durable config/runtime pattern for external integrations via the Telegram integration (`src-tauri/src/telegram/*`, `src/stores/telegram-store.ts`, `src/components/AgentStatus/TelegramPanel.tsx`).
 - Dimweave already has a task system with task/session/artifact persistence and GUI snapshots (`src-tauri/src/daemon/task_graph/*`, `src/stores/task-store/*`).
 - Existing user input routing stamps active-task context automatically when a task is selected (`src-tauri/src/daemon/routing_user_input.rs`), so the lead handoff can reuse normal user-message routing after task creation.
+- `TaskContextPopover.tsx` uses a `paneMeta satisfies Record<ShellSidebarPane, ...>` map, so adding a `bugs` pane requires both shell-layout-type changes and a new `paneMeta.bugs` entry or TypeScript will fail.
+- `ShellContextBar.tsx` currently only supports approval/message counts, so a Bug Inbox badge needs an explicit new prop and render path.
+- `DaemonState` currently contains Telegram integration fields but no Feishu Project runtime state, so `src-tauri/src/daemon/state.rs` must be part of the change set.
 
 ## Design
 
@@ -110,23 +113,42 @@ Each record should store:
 
 Dimweave-facing workflow state should be derived from `linked_task_id` and the linked task status where possible, so the inbox does not fork a second workflow state machine.
 
-### 5. Make `Start handling` idempotent
+### 5. Keep issue snapshots as persisted files first, not task artifacts first
+
+`TaskGraphStore::add_artifact()` requires a `session_id`, but creating/selecting a task does not create a lead session by itself. Therefore V1 should persist the latest Feishu work-item snapshot as a standalone markdown/JSON file referenced by the inbox record, and attach that file to the seeded lead handoff message.
+
+If later we want the same file mirrored into task artifacts, that should happen only after a real task session exists. That mirror is explicitly out of V1 scope.
+
+### 6. Make `Start handling` idempotent
 
 When the user clicks `Start handling`:
 
 - if the record already has a `linked_task_id` and that task still exists, select that task and do not create another one
 - otherwise create a new Dimweave task in the currently selected workspace
-- persist the latest work-item snapshot as a `research` artifact
-- route a structured user message to `lead`
+- persist the latest work-item snapshot as a local file if it has not already been materialized
+- route a structured message to `lead`
 
 The seeded lead message should include:
 
 - Feishu issue title and link
 - current status/assignee
 - latest known summary/body excerpt
+- the snapshot file as an attachment when available
 - a short instruction that this is a repair task originating from Feishu Project and should follow Dimweave’s plan -> execute -> review -> CM flow
 
-### 6. Keep Feishu read-only in V1
+The delivery path should use a normal routed `BridgeMessage` with `from: "system"` and `display_source: Some("feishu_project")` so the timeline correctly shows the source instead of making the handoff look like user-typed text.
+
+### 7. Integrate polling into the daemon lifecycle, not as an ad-hoc helper
+
+The polling loop should follow the Telegram pattern:
+
+- a dedicated runtime handle owned in `src-tauri/src/daemon/mod.rs`
+- start/stop/restart logic inside `daemon/feishu_project_lifecycle.rs`
+- persisted runtime state updates emitted to the frontend
+
+This avoids orphan background tasks and keeps integration lifecycle control inside the daemon instead of scattering it across command handlers.
+
+### 8. Keep Feishu read-only in V1
 
 V1 should not update Feishu Project status or comments. The inbox is a source-of-truth intake feed plus Dimweave task launcher. This reduces permission surface, avoids bidirectional state drift, and matches the explicit product decision.
 
@@ -231,6 +253,7 @@ type FeishuProjectInboxItem = {
 - Modify: `src-tauri/src/main.rs`
 - Modify: `src-tauri/src/daemon/cmd.rs`
 - Modify: `src-tauri/src/daemon/mod.rs`
+- Modify: `src-tauri/src/daemon/state.rs`
 - Modify: `src-tauri/src/daemon/gui.rs`
 - Modify: `src-tauri/src/daemon/control/server.rs`
 - Create: `src-tauri/src/daemon/control/feishu_project_webhook.rs`
@@ -239,12 +262,13 @@ type FeishuProjectInboxItem = {
 - Create: `src-tauri/src/feishu_project/mod.rs`
 - Create: `src-tauri/src/feishu_project/config.rs`
 - Create: `src-tauri/src/feishu_project/types.rs`
+- Create: `src-tauri/src/feishu_project/store.rs`
 - Create: `src-tauri/src/feishu_project/api.rs`
 - Create: `src-tauri/src/feishu_project/runtime.rs`
 
 ## Testing Strategy
 
-- Rust unit tests for config round trips, record upsert/idempotency, webhook token validation, and task-link deduplication
+- Rust unit tests for config round trips, record upsert/idempotency, webhook token validation, polling pagination merge behavior, and task-link deduplication
 - Rust integration tests for webhook route payload ingestion and polling merge behavior
 - Frontend tests for shell-rail rendering, panel rendering, config-state display, and `Start handling` button behavior
 - Targeted Bun tests for the new store and panel view model
@@ -261,4 +285,5 @@ type FeishuProjectInboxItem = {
 - The list shows all workspace work items, not just issues/bugs.
 - Clicking `Start handling` creates exactly one linked Dimweave task for that work item and hands the context to lead.
 - Clicking `Start handling` again on the same row reopens the existing linked task instead of creating a duplicate.
+- Feishu issue handoff appears in the timeline as a Feishu/system-sourced message, not as if the user typed it.
 - V1 does not write changes back to Feishu Project.
