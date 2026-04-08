@@ -160,8 +160,9 @@ Codex app-server ← WS :4500 → Rust daemon/codex/session.rs
 
 ### 当前已知限制
 
-- Claude 的 provider-native resume 已接通，但当前前端仍然只消费稳定的 `thinking…` / 最终结果，不展示 `claude_stream.preview` 文本
-- 这是当前实现的有意选择，避免 `stream_event` 级摘要噪音直接污染消息区
+- Claude SDK `stream_event` preview text 以 transient inline draft 形式渲染在聊天 timeline 里
+- Persisted Claude chat messages 仍然在 bridge terminal reply 或 SDK terminal result 时落定
+- Transient draft 是纯 UI 状态；不会在 task/session 里产生额外的 persisted message
 - provider history 当前按 workspace/cwd 查询；如果没有 active task，也仍然可以在 Claude/Codex 面板里查看历史并恢复连接
 - `resume_session()` 既可用于 normalized session 指针恢复，也会在 provider 具备外部会话 id 时尝试触发真实 runtime reconnect；不要再把它理解成“只移动 task graph 指针”的旧逻辑
 

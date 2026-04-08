@@ -26,11 +26,9 @@ export function StreamTailFooter({ context }: { context?: FooterContext }) {
   return (
     <div className="px-4 pb-2">
       {indicators.map((indicator) =>
-        indicator === "claude" ? (
-          <ClaudeStreamIndicator key={indicator} />
-        ) : (
+        indicator === "codex" ? (
           <CodexStreamIndicator key={indicator} />
-        ),
+        ) : null,
       )}
     </div>
   );
@@ -46,20 +44,26 @@ export function MessageList({
   const didInitialScrollRef = useRef(false);
   const [atBottom, setAtBottom] = useState(true);
   const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
+  const claudePreviewText = useBridgeStore((s) => s.claudeStream.previewText);
+  const hasClaudeDraft = claudeThinking || claudePreviewText.length > 0;
   const codexVisible = useBridgeStore(
     (s) => getCodexStreamIndicatorViewModel(s.codexStream).visible,
   );
   const streamRailIndicators = useMemo(
     () => [
-      ...(claudeThinking ? (["claude"] as const) : []),
       ...(codexVisible ? (["codex"] as const) : []),
     ],
-    [claudeThinking, codexVisible],
+    [codexVisible],
   );
 
   const displayState = useMemo(
-    () => getMessageListDisplayState(messages.length, streamRailIndicators),
-    [messages.length, streamRailIndicators],
+    () =>
+      getMessageListDisplayState({
+        messageCount: messages.length,
+        hasClaudeDraft,
+        streamRailIndicators,
+      }),
+    [messages.length, hasClaudeDraft, streamRailIndicators],
   );
   const totalCount = displayState.timelineCount;
 
@@ -123,11 +127,21 @@ export function MessageList({
           increaseViewportBy={200}
           context={footerContext}
           components={{ Footer: StreamTailFooter }}
-          itemContent={(index) => (
-            <div className="px-4">
-              <MessageBubble msg={messages[index]} onOpenImage={onOpenImage} />
-            </div>
-          )}
+          itemContent={(index) => {
+            const isClaudeDraftRow = hasClaudeDraft && index === messages.length;
+            if (isClaudeDraftRow) {
+              return (
+                <div className="px-4">
+                  <ClaudeStreamIndicator />
+                </div>
+              );
+            }
+            return (
+              <div className="px-4">
+                <MessageBubble msg={messages[index]} onOpenImage={onOpenImage} />
+              </div>
+            );
+          }}
         />
       </div>
       {!atBottom && (
