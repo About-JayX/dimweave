@@ -38,7 +38,7 @@
 | Task 1 | `70677d8a` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml` (PASS); `git diff --check` | Lock the missing backend ownership regressions on top of `main` before porting behavior. Keep Task 1 helper-level because `main` still uses the old `(status, content)` helper signature; Task 2 will refactor it to `BridgeMessage`. |
 | Task 2 | `978fbd92` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q sdk_terminal_delivery_claim_blocks_later_bridge_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q bridge_terminal_delivery_claim_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Port only backend logic and ordering; keep `main`’s stream UI protocol untouched. `main` already had `flush_pending_preview_batch()` in `handle_result()`, so no extra preview work was needed in this task. |
 | Task 3 | `77141856` | `manual diff review` | `bun test src/stores/bridge-store/listener-setup.test.ts` (FAIL as expected); `bun test src/components/MessagePanel/MessageList.test.tsx` (FAIL as expected); `git diff --check` | Reproduce the real frontend timing bug on `main`’s current stream state model before fixing it. The richer `ClaudeStreamState` on `main` (`thinkingText`, `blockType`, `toolName`) does not change the underlying red/green ordering logic. |
-| Task 4 | `pending` | `pending` | `pending` | Flush pending preview before terminal clear, then update docs to match verified behavior on `main`. |
+| Task 4 | `4015eb44` | `manual diff review` | `bun test src/stores/bridge-store/listener-setup.test.ts src/components/MessagePanel/MessageList.test.tsx`; `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Flush pending preview before terminal clear, then update docs to match verified behavior on `main`. The doc wording now names the real code gate (`to == \"user\"`) instead of implying a looser “targets differ” rule. |
 
 ## Baseline Verification
 
@@ -390,7 +390,7 @@ git commit -m "test: lock Claude preview flush timing on main"
 
 **Planned CM:** `fix: port Claude preview flush logic to main`
 
-- [ ] **Step 1: Flush pending Claude preview before clearing pending state**
+- [x] **Step 1: Flush pending Claude preview before clearing pending state**
 
 Update the Claude listener path in `src/stores/bridge-store/listener-setup.ts`:
 
@@ -411,7 +411,7 @@ listen<ClaudeStreamPayload>("claude_stream", (e) => {
 });
 ```
 
-- [ ] **Step 2: Add the narrow preview-flush helper if it makes the test contract clearer**
+- [x] **Step 2: Add the narrow preview-flush helper if it makes the test contract clearer**
 
 If helpful, add this to `src/stores/bridge-store/stream-batching.ts`:
 
@@ -427,7 +427,7 @@ export function flushClaudePreviewIfPending(
 }
 ```
 
-- [ ] **Step 3: Rewrite the frontend timing tests to the fixed ordering**
+- [x] **Step 3: Rewrite the frontend timing tests to the fixed ordering**
 
 Update `src/stores/bridge-store/listener-setup.test.ts` to assert:
 
@@ -462,7 +462,7 @@ expect(html).toContain("Final report delivered to the user.");
 expect(html).not.toContain("writing");
 ```
 
-- [ ] **Step 4: Update `docs/agents/claude-message-delivery.md`**
+- [x] **Step 4: Update `docs/agents/claude-message-delivery.md`**
 
 Revise the document so it states:
 
@@ -475,7 +475,7 @@ Revise the document so it states:
 
 Also rewrite the `reply(to="coder")` note so it matches the verified `to=="user"` ownership gate.
 
-- [ ] **Step 5: Run focused verification**
+- [x] **Step 5: Run focused verification**
 
 Run:
 
@@ -488,14 +488,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the frontend/doc port**
+- [x] **Step 6: Commit the frontend/doc port**
 
 ```bash
 git add src/stores/bridge-store/listener-setup.ts src/stores/bridge-store/stream-batching.ts src/stores/bridge-store/listener-setup.test.ts src/components/MessagePanel/MessageList.test.tsx docs/agents/claude-message-delivery.md
 git commit -m "fix: port Claude preview flush logic to main"
 ```
 
-- [ ] **Step 7: Update `## CM Memory`**
+- [x] **Step 7: Update `## CM Memory`**
 
 ## Final Verification
 
