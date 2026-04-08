@@ -118,10 +118,11 @@ describe("getTransientIndicators", () => {
 
 describe("getMessageListDisplayState", () => {
   test("keeps the virtualized timeline count tied to persisted messages only", () => {
-    const state = getMessageListDisplayState(
-      2,
-      ["claude", "codex"],
-    );
+    const state = getMessageListDisplayState({
+      messageCount: 2,
+      hasClaudeDraft: false,
+      streamRailIndicators: ["claude", "codex"],
+    });
 
     expect(state.timelineCount).toBe(2);
     expect(state.streamRailIndicators).toEqual(["claude", "codex"]);
@@ -129,7 +130,11 @@ describe("getMessageListDisplayState", () => {
   });
 
   test("treats active stream indicators as content even before the first persisted message", () => {
-    const state = getMessageListDisplayState(0, ["claude"]);
+    const state = getMessageListDisplayState({
+      messageCount: 0,
+      hasClaudeDraft: false,
+      streamRailIndicators: ["claude"],
+    });
 
     expect(state.timelineCount).toBe(0);
     expect(state.streamRailIndicators).toEqual(["claude"]);

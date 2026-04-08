@@ -7,13 +7,6 @@ import type {
 const MAX_CLAUDE_PREVIEW_CHARS = 5_000;
 const MAX_CODEX_PREVIEW_CHARS = 100_000;
 
-interface CodexStreamBatch {
-  activity: string | null;
-  reasoning: string | null;
-  delta: string | null;
-  commandOutputAppend: string;
-}
-
 export function resetClaudeStream(
   state: BridgeState,
 ): BridgeState["claudeStream"] {
@@ -21,6 +14,9 @@ export function resetClaudeStream(
     ...state.claudeStream,
     thinking: false,
     previewText: "",
+    thinkingText: "",
+    blockType: "idle",
+    toolName: "",
     lastUpdatedAt: Date.now(),
   };
 }
@@ -29,23 +25,84 @@ export function handleClaudeStreamEvent(
   state: BridgeState,
   payload: ClaudeStreamPayload,
 ): Partial<BridgeState> {
+  const now = Date.now();
   switch (payload.kind) {
     case "thinkingStarted":
       return {
         claudeStream: {
+          ...state.claudeStream,
           thinking: true,
-          previewText: "",
-          lastUpdatedAt: Date.now(),
+          thinkingText: "",
+          blockType: "thinking",
+          lastUpdatedAt: now,
         },
       };
-    case "preview":
+    case "thinkingDelta":
       return {
         claudeStream: {
+          ...state.claudeStream,
+          thinking: true,
+          thinkingText: (
+            state.claudeStream.thinkingText + (payload.text ?? "")
+          ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
+          blockType: "thinking",
+          lastUpdatedAt: now,
+        },
+      };
+    case "textStarted":
+      return {
+        claudeStream: {
+          ...state.claudeStream,
+          thinking: true,
+          previewText: "",
+          blockType: "text",
+          lastUpdatedAt: now,
+        },
+      };
+    case "textDelta":
+      return {
+        claudeStream: {
+          ...state.claudeStream,
           thinking: true,
           previewText: (
             state.claudeStream.previewText + (payload.text ?? "")
           ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
-          lastUpdatedAt: Date.now(),
+          blockType: "text",
+          lastUpdatedAt: now,
+        },
+      };
+    case "toolStarted":
+      return {
+        claudeStream: {
+          ...state.claudeStream,
+          thinking: true,
+          toolName: payload.name ?? "",
+          blockType: "tool",
+          lastUpdatedAt: now,
+        },
+      };
+    case "preview":
+      // Legacy batched preview — still used by batching layer
+      if (
+        state.claudeStream.blockType === "text" &&
+        state.claudeStream.previewText.length > 0
+      ) {
+        return {
+          claudeStream: {
+            ...state.claudeStream,
+            thinking: true,
+            lastUpdatedAt: now,
+          },
+        };
+      }
+      return {
+        claudeStream: {
+          ...state.claudeStream,
+          thinking: true,
+          previewText: (
+            state.claudeStream.previewText + (payload.text ?? "")
+          ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
+          lastUpdatedAt: now,
         },
       };
     case "done":
@@ -125,27 +182,4 @@ export function handleCodexStreamEvent(
     default:
       return {};
   }
-}
-
-export function handleCodexStreamBatch(
-  state: BridgeState,
-  batch: CodexStreamBatch,
-): Partial<BridgeState> {
-  const next = { ...state.codexStream };
-
-  if (batch.activity !== null) {
-    next.activity = batch.activity;
-    next.commandOutput = "";
-  }
-  if (batch.reasoning !== null) {
-    next.reasoning = batch.reasoning.slice(-MAX_CODEX_PREVIEW_CHARS);
-  }
-  if (batch.delta !== null) {
-    next.currentDelta = batch.delta.slice(-MAX_CODEX_PREVIEW_CHARS);
-  }
-  if (batch.commandOutputAppend) {
-    next.commandOutput += batch.commandOutputAppend;
-  }
-
-  return { codexStream: next };
 }

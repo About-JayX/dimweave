@@ -44,6 +44,15 @@ export interface CodexStreamPayload {
 }
 
 export interface ClaudeStreamPayload {
-  kind: "thinkingStarted" | "preview" | "done" | "reset";
+  kind:
+    | "thinkingStarted"
+    | "thinkingDelta"
+    | "textStarted"
+    | "textDelta"
+    | "toolStarted"
+    | "preview"
+    | "done"
+    | "reset";
   text?: string;
+  name?: string;
 }

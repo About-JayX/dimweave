@@ -37,6 +37,14 @@ describe("selectAnyAgentConnected", () => {
       } as any),
     ).toBe(false);
   });
+
+  test("returns false when the agents map is missing", () => {
+    expect(
+      selectAnyAgentConnected({
+        agents: undefined,
+      } as any),
+    ).toBe(false);
+  });
 });
 
 describe("bridge selector counters", () => {

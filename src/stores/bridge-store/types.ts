@@ -26,9 +26,14 @@ export interface CodexStreamState {
   commandOutput: string;
 }
 
+export type ClaudeBlockType = "thinking" | "text" | "tool" | "idle";
+
 export interface ClaudeStreamState {
   thinking: boolean;
   previewText: string;
+  thinkingText: string;
+  blockType: ClaudeBlockType;
+  toolName: string;
   lastUpdatedAt: number;
 }
 

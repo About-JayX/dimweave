@@ -13,9 +13,10 @@ export function selectMessages(state: BridgeState) {
 }
 
 export function selectAnyAgentConnected(state: BridgeState) {
+  const agents = state.agents ?? {};
   return (
-    state.agents.codex?.status === "connected" ||
-    state.agents.claude?.status === "connected"
+    agents.codex?.status === "connected" ||
+    agents.claude?.status === "connected"
   );
 }
 
