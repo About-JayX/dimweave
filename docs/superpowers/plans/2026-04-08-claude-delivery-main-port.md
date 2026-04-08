@@ -37,7 +37,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `70677d8a` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml` (FAIL as expected); `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml` (PASS); `git diff --check` | Lock the missing backend ownership regressions on top of `main` before porting behavior. Keep Task 1 helper-level because `main` still uses the old `(status, content)` helper signature; Task 2 will refactor it to `BridgeMessage`. |
 | Task 2 | `978fbd92` | `manual diff review` | `cargo test -q inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_handoff_to_worker_does_not_claim_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q terminal_bridge_reply_to_user_claims_visible_result --manifest-path src-tauri/Cargo.toml`; `cargo test -q sdk_terminal_delivery_claim_blocks_later_bridge_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `cargo test -q bridge_terminal_delivery_claim_blocks_later_sdk_terminal_delivery --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Port only backend logic and ordering; keep `main`’s stream UI protocol untouched. `main` already had `flush_pending_preview_batch()` in `handle_result()`, so no extra preview work was needed in this task. |
-| Task 3 | `pending` | `pending` | `pending` | Reproduce the real frontend timing bug on `main`’s current stream state model before fixing it. |
+| Task 3 | `77141856` | `manual diff review` | `bun test src/stores/bridge-store/listener-setup.test.ts` (FAIL as expected); `bun test src/components/MessagePanel/MessageList.test.tsx` (FAIL as expected); `git diff --check` | Reproduce the real frontend timing bug on `main`’s current stream state model before fixing it. The richer `ClaudeStreamState` on `main` (`thinkingText`, `blockType`, `toolName`) does not change the underlying red/green ordering logic. |
 | Task 4 | `pending` | `pending` | `pending` | Flush pending preview before terminal clear, then update docs to match verified behavior on `main`. |
 
 ## Baseline Verification
@@ -284,7 +284,7 @@ git commit -m "fix: port Claude delivery ownership logic to main"
 
 **Planned CM:** `test: lock Claude preview flush timing on main`
 
-- [ ] **Step 1: Add the listener-order red test**
+- [x] **Step 1: Add the listener-order red test**
 
 Add the real bad-ordering regression to `src/stores/bridge-store/listener-setup.test.ts`:
 
@@ -314,7 +314,7 @@ test("flushes queued Claude preview before terminal done clears the draft", () =
 });
 ```
 
-- [ ] **Step 2: Run the focused listener test to verify RED**
+- [x] **Step 2: Run the focused listener test to verify RED**
 
 Run:
 
@@ -324,7 +324,7 @@ bun test src/stores/bridge-store/listener-setup.test.ts
 
 Expected: FAIL because the current listener clears pending Claude preview before it flushes.
 
-- [ ] **Step 3: Add the draft-to-final red scenario in the main MessageList test**
+- [x] **Step 3: Add the draft-to-final red scenario in the main MessageList test**
 
 Append this test to `src/components/MessagePanel/MessageList.test.tsx`:
 
@@ -355,7 +355,7 @@ test("renders the final Claude bubble after the draft row clears", async () => {
 });
 ```
 
-- [ ] **Step 4: Run the focused MessageList test to verify RED**
+- [x] **Step 4: Run the focused MessageList test to verify RED**
 
 Run:
 
@@ -365,14 +365,14 @@ bun test src/components/MessagePanel/MessageList.test.tsx
 
 Expected: FAIL because the empty-state gap is still reachable before the ported ordering fix.
 
-- [ ] **Step 5: Commit the red frontend tests**
+- [x] **Step 5: Commit the red frontend tests**
 
 ```bash
 git add src/stores/bridge-store/listener-setup.test.ts src/components/MessagePanel/MessageList.test.tsx
 git commit -m "test: lock Claude preview flush timing on main"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 ## Task 4: Port preview flush ordering and update the delivery doc on `main`
 
