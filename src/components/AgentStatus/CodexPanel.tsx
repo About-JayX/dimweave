@@ -345,8 +345,10 @@ export function CodexPanel({
             reasoningSelectOptions={reasoningSelectOptions}
           />
 
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">History</span>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              History
+            </span>
             <CyberSelect
               variant="history"
               value={selectedHistoryId}

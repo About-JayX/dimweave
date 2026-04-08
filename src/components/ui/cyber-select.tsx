@@ -86,18 +86,23 @@ export function CyberSelect({
   }, [open]);
 
   const selected = options.find((o) => o.value === value);
-  const rawLabel = selected?.label ?? placeholder ?? value;
-  const displayLabel = isHistory ? middleEllipsis(rawLabel, 20) : rawLabel;
+  const displayLabel = selected?.label ?? placeholder ?? value;
 
   return (
-    <div ref={ref} className="relative inline-flex">
+    <div
+      ref={ref}
+      className={cn(
+        "relative",
+        isHistory ? "flex min-w-0 flex-1" : "inline-flex",
+      )}
+    >
       <button
         type="button"
         onClick={() => !disabled && setOpen(!open)}
         className={cn(
           "inline-flex items-center gap-1 border outline-none transition-colors duration-200 font-medium",
           isHistory
-            ? "min-w-32 max-w-52 justify-between rounded-full px-2.5 py-0.5 text-[10px]"
+            ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-0.5 text-[10px]"
             : "rounded px-1.5 py-0.5 text-[10px]",
           disabled
             ? "opacity-50 cursor-not-allowed border-input bg-muted text-foreground/60"
