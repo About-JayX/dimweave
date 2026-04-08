@@ -17,6 +17,7 @@ import { REPLY_INPUT_MIN_ROWS } from "./height";
 import { ReplyInputFooter } from "./Footer";
 import { getTaskSessionWarning } from "./task-session-guard";
 import { useReplyInputResizer } from "./use-reply-input-resizer";
+import { collectPastedAttachmentPaths } from "./paste-attachments";
 import { useAttachments } from "./use-attachments";
 
 export function ReplyInput() {
@@ -81,6 +82,12 @@ export function ReplyInput() {
     [handleSend, sendOnEnter],
   );
 
+  const handlePaste = useCallback(() => {
+    void collectPastedAttachmentPaths().then((paths) => {
+      if (paths.length > 0) addFiles(paths);
+    });
+  }, [addFiles]);
+
   const handlePickFiles = useCallback(async () => {
     const paths = await invoke<string[] | null>("pick_files");
     if (paths) addFiles(paths);
@@ -127,6 +134,7 @@ export function ReplyInput() {
           className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={handlePaste}
           onKeyDown={handleKeyDown}
           onCompositionStart={() => {
             composingRef.current = true;
