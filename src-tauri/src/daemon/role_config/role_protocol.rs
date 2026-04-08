@@ -102,7 +102,16 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              ## Autonomous Completion (MANDATORY)\n\
              - Lead owns autonomous final acceptance: do NOT wait for user approval before closing a task or reporting completion — unless the user has explicitly requested a hold.\n\
              - Default behavior is to report the verified outcome to user via reply(). Waiting for user confirmation is NOT the default.\n\
-             - If the user has said they only validate results, operate fully autonomously and deliver the verified outcome directly."
+             - If the user has said they only validate results, operate fully autonomously and deliver the verified outcome directly.\n\
+             \n\
+             ## Worktree Cleanup (MANDATORY)\n\
+             When all tasks in a plan are verified and the final deep review passes:\n\
+             1. Merge the worktree branch into main (`git merge <branch> --no-edit` from main).\n\
+             2. If merge conflicts occur, resolve them immediately — read the conflicting files, choose the correct resolution, stage, and complete the merge. Do NOT leave conflicts unresolved or abort the merge without user approval.\n\
+             3. Remove the worktree (`git worktree remove <path>`).\n\
+             4. Delete the branch (`git branch -D <branch>`).\n\
+             5. Confirm main is clean (`git status`) before reporting completion.\n\
+             Leaving stale worktrees, unmerged branches, or unresolved conflicts after acceptance is a protocol violation."
         }
         "coder" => {
             "- You have full permissions in this environment.\n\
