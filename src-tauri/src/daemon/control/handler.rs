@@ -296,6 +296,29 @@ mod tests {
     }
 
     #[test]
+    fn terminal_bridge_reply_to_user_claims_visible_result() {
+        // A terminal bridge reply addressed to the user with non-empty content
+        // must claim visible-result ownership.
+        assert!(claude_terminal_reply_claims_visible_result(
+            MessageStatus::Done,
+            "Final answer for the user.",
+        ));
+    }
+
+    #[test]
+    fn terminal_bridge_handoff_to_worker_does_not_claim_visible_result() {
+        // A terminal bridge reply routed to a worker role (lead/coder, not user)
+        // must NOT claim visible-result ownership — the SDK result should still
+        // be able to deliver the user-visible message.
+        // RED: the current helper has no `to` parameter and returns true for any
+        // non-empty terminal content regardless of recipient.
+        assert!(!claude_terminal_reply_claims_visible_result(
+            MessageStatus::Done,
+            "Implementation complete, reporting to lead.",
+        ));
+    }
+
+    #[test]
     fn summarize_bridge_reply_reports_shape_and_lengths() {
         let message = BridgeMessage {
             id: "msg-1".into(),

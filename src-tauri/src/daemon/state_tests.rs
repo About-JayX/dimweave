@@ -357,6 +357,19 @@ fn bridge_terminal_delivery_claim_blocks_later_sdk_terminal_delivery() {
 }
 
 #[test]
+fn inactive_bridge_terminal_delivery_blocks_later_sdk_terminal_delivery() {
+    // A bridge terminal reply that arrives while state is Inactive (bridge
+    // connected, no assistant event yet) must latch CompletedByBridge so a
+    // later SDK result cannot also claim visible-result ownership.
+    // RED: the current Inactive arm returns true but forgets to latch —
+    // so claim_claude_sdk_terminal_delivery() still sees Inactive and
+    // also returns true.
+    let mut s = DaemonState::new();
+    assert!(s.claim_claude_bridge_terminal_delivery());
+    assert!(!s.claim_claude_sdk_terminal_delivery());
+}
+
+#[test]
 fn completed_direct_turn_does_not_leak_into_next_bridge_owned_turn() {
     let mut s = DaemonState::new();
 
