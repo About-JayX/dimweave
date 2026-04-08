@@ -12,7 +12,7 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: Number(process.env.DIMWEAVE_VITE_PORT) || 1420,
     strictPort: true,
     hmr: true,
   },

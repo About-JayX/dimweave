@@ -70,8 +70,8 @@ async fn handle_ws_connection(
             epoch,
             trace_nonce,
             ws_generation,
-            crate::daemon::claude_sdk::process::sdk_ws_url(4502, None),
-            crate::daemon::claude_sdk::process::sdk_events_url(4502, None),
+            crate::daemon::claude_sdk::process::sdk_ws_url(crate::daemon::ports::PortConfig::from_env().daemon, None),
+            crate::daemon::claude_sdk::process::sdk_events_url(crate::daemon::ports::PortConfig::from_env().daemon, None),
         ),
     );
 
