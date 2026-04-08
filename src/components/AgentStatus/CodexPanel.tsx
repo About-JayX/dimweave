@@ -292,12 +292,18 @@ export function CodexPanel({
           </Button>
         ) : (
           <Button
-            className="flex-1 rounded-full bg-codex/15 text-codex border-codex/25 hover:bg-codex/25"
+            className={cn(
+              "flex-1 rounded-full",
+              connecting
+                ? "bg-codex/20 text-codex border-codex/30 cursor-wait"
+                : "bg-codex/15 text-codex border-codex/25 hover:bg-codex/25",
+            )}
             size="sm"
             disabled={
+              !connecting &&
               !canConnectCodex({
                 cwd: effectiveCwd,
-                connecting,
+                connecting: false,
                 running: !!codexTuiRunning,
               })
             }

@@ -119,9 +119,7 @@ export function MessageBubbleView({
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto">
-          <MessageMarkdown content={msg.content} />
-        </div>
+        <MessageMarkdown content={msg.content} />
         {msg.attachments && msg.attachments.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {msg.attachments.map((att, i) =>

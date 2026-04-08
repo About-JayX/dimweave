@@ -231,8 +231,13 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
         ) : (
           <Button
             size="sm"
-            className="flex-1 rounded-full bg-claude/15 text-claude border-claude/25 hover:bg-claude/25"
-            disabled={!effectiveCwd || connecting || disconnecting}
+            className={cn(
+              "flex-1 rounded-full",
+              connecting
+                ? "bg-claude/20 text-claude border-claude/30 cursor-wait"
+                : "bg-claude/15 text-claude border-claude/25 hover:bg-claude/25",
+            )}
+            disabled={!connecting && (!effectiveCwd || disconnecting)}
             onClick={handleLaunch}
           >
             {connecting ? (

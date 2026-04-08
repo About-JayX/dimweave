@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
-import { getStreamTextTail } from "./view-model";
+import { getExpandableTextState, getStreamTextTail } from "./view-model";
 import { SourceBadge } from "./SourceBadge";
 import { getStreamSurfacePresentation } from "./surface-styles";
 import type { ClaudeBlockType } from "@/stores/bridge-store/types";
@@ -25,22 +25,26 @@ export function ClaudeStreamIndicator() {
   const blockType = useBridgeStore((s) => s.claudeStream.blockType);
   const toolName = useBridgeStore((s) => s.claudeStream.toolName);
   const surface = getStreamSurfacePresentation("claude");
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
   const displayText = useMemo(
     () => getStreamTextTail(previewText, 3000),
     [previewText],
   );
   const displayThinking = useMemo(
-    () => getStreamTextTail(thinkingText, 1000),
-    [thinkingText],
+    () => getExpandableTextState(thinkingText, 300, thinkingExpanded),
+    [thinkingText, thinkingExpanded],
   );
+
+  useEffect(() => {
+    setThinkingExpanded(false);
+  }, [thinkingText]);
 
   if (!thinking && !previewText && !thinkingText) return null;
 
   const hasText = previewText.length > 0;
-  const hasThinking = thinkingText.length > 0;
   const label = blockLabel(blockType, toolName);
-  const isAnimating = blockType === "thinking" && !hasThinking;
+  const isAnimating = blockType === "thinking" && !thinkingText;
 
   return (
     <div className="py-1.5">
@@ -54,13 +58,24 @@ export function ClaudeStreamIndicator() {
               {label}
             </span>
           </div>
-          {hasThinking && blockType === "thinking" && (
-            <div className="text-[11px] text-muted-foreground/50 italic whitespace-pre-wrap max-h-24 overflow-hidden mb-1">
-              {displayThinking}
+          {hasText && <div className={surface.commandClass}>{displayText}</div>}
+          {displayThinking.text && (
+            <div
+              className={`text-[11px] text-muted-foreground/50 italic whitespace-pre-wrap mt-1 ${
+                thinkingExpanded ? "" : "max-h-24 overflow-hidden"
+              }`}
+            >
+              {displayThinking.text}
             </div>
           )}
-          {hasText && (
-            <div className={surface.commandClass}>{displayText}</div>
+          {displayThinking.canExpand && (
+            <button
+              type="button"
+              onClick={() => setThinkingExpanded((v) => !v)}
+              className="mt-1 text-[11px] font-medium text-claude hover:text-claude/80 transition-colors active:scale-95"
+            >
+              {displayThinking.toggleLabel}
+            </button>
           )}
         </div>
       </div>
