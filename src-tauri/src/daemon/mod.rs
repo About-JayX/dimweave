@@ -18,6 +18,7 @@ pub mod routing_target_session;
 pub mod routing_user_input;
 pub mod session_manager;
 pub mod feishu_project_lifecycle;
+mod feishu_project_task_link;
 mod telegram_lifecycle;
 pub mod state;
 pub mod task_graph;

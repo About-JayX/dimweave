@@ -101,6 +101,36 @@ describe("BugInboxPanel", () => {
     expect(html).not.toContain("Handle");
   });
 
+  test("IssueList shows Open task for linked items", async () => {
+    installTauriStub();
+    const { IssueList } = await import("./IssueList");
+    const html = renderToStaticMarkup(
+      <IssueList
+        items={[
+          {
+            recordId: "p_3",
+            projectKey: "p",
+            workItemId: "3",
+            workItemTypeKey: "bug",
+            title: "Linked bug",
+            updatedAt: 0,
+            sourceUrl: "",
+            rawSnapshotRef: "",
+            ignored: false,
+            lastIngress: "poll",
+            linkedTaskId: "task_42",
+          },
+        ]}
+        onIgnore={() => {}}
+        onStartHandling={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Open task");
+    expect(html).toContain("Linked");
+    expect(html).not.toContain("Handle");
+  });
+
   test("view-model activeItemCount excludes ignored items", async () => {
     const { activeItemCount } = await import("./view-model");
 

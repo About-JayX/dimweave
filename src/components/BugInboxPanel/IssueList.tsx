@@ -53,6 +53,9 @@ export function IssueList({
               <div className="mt-0.5 flex items-center gap-2 text-[9px] text-muted-foreground">
                 {item.assigneeLabel && <span>{item.assigneeLabel}</span>}
                 <span className="capitalize">{item.lastIngress}</span>
+                {item.linkedTaskId && (
+                  <span className="text-primary/70">Linked</span>
+                )}
               </div>
             </div>
             <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -62,12 +65,12 @@ export function IssueList({
               >
                 {item.ignored ? "Restore" : "Ignore"}
               </button>
-              {!item.ignored && !item.linkedTaskId && (
+              {!item.ignored && (
                 <button
                   className="rounded border border-primary/50 px-1.5 py-0.5 text-[9px] text-primary hover:bg-primary/10 active:bg-primary/20 focus-visible:ring-1 focus-visible:ring-primary/40"
                   onClick={() => onStartHandling(item.workItemId)}
                 >
-                  Handle
+                  {item.linkedTaskId ? "Open task" : "Handle"}
                 </button>
               )}
             </div>

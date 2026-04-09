@@ -86,13 +86,12 @@ pub async fn sync_now(
         .map_err(|e| e.to_string())
 }
 
-/// Stub: real task linking will be implemented in Task 4.
 pub async fn start_handling(
-    _state: &SharedState,
-    _app: &AppHandle,
-    _work_item_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+    work_item_id: &str,
 ) -> Result<String, String> {
-    Err("start_handling not yet implemented".into())
+    super::feishu_project_task_link::start_handling(state, app, work_item_id).await
 }
 
 pub async fn set_ignored(

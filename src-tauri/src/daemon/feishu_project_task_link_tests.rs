@@ -1,0 +1,99 @@
+use super::*;
+use crate::daemon::state::DaemonState;
+use crate::feishu_project::types::{FeishuProjectInboxItem, IngressSource};
+
+fn sample_item() -> FeishuProjectInboxItem {
+    FeishuProjectInboxItem {
+        record_id: "rec_1".into(),
+        project_key: "proj".into(),
+        work_item_id: "1001".into(),
+        work_item_type_key: "bug".into(),
+        title: "Crash on launch".into(),
+        status_label: Some("Open".into()),
+        assignee_label: Some("alice".into()),
+        updated_at: 10,
+        source_url: "https://project.feishu.cn/proj/issues/1001".into(),
+        raw_snapshot_ref: "".into(),
+        ignored: false,
+        linked_task_id: None,
+        last_ingress: IngressSource::Poll,
+        last_event_uuid: None,
+    }
+}
+
+#[test]
+fn write_snapshot_creates_json_file() {
+    let item = sample_item();
+    let task_id = format!("test_snap_{}", chrono::Utc::now().timestamp_millis());
+    let path = write_snapshot(&item, &task_id).unwrap();
+    assert!(std::path::Path::new(&path).exists());
+    let content = std::fs::read_to_string(&path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["workItemId"], "1001");
+    assert_eq!(parsed["title"], "Crash on launch");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn build_handoff_message_has_correct_fields() {
+    let item = sample_item();
+    let msg = build_handoff_message(&item, "task_42", "/tmp/snap.json");
+    assert_eq!(msg.from, "system");
+    assert_eq!(msg.display_source.as_deref(), Some("feishu_project"));
+    assert_eq!(msg.to, "lead");
+    assert_eq!(msg.task_id.as_deref(), Some("task_42"));
+    assert!(msg.content.contains("Crash on launch"));
+    assert!(msg.content.contains("1001"));
+    let attachments = msg.attachments.unwrap();
+    assert_eq!(attachments.len(), 1);
+    assert_eq!(attachments[0].file_path, "/tmp/snap.json");
+    assert_eq!(attachments[0].file_name, "task_42.json");
+    assert!(!attachments[0].is_image);
+}
+
+#[test]
+fn handoff_message_includes_repair_workflow_instructions() {
+    let item = sample_item();
+    let msg = build_handoff_message(&item, "task_42", "/tmp/snap.json");
+    assert!(msg.content.contains("repair plan"));
+    assert!(msg.content.contains("plan → execute → review → CM flow"));
+    assert!(msg.content.contains("Feishu Project"));
+}
+
+#[test]
+fn link_sets_linked_task_id_in_store() {
+    let mut state = DaemonState::new();
+    state.feishu_project_store.upsert(sample_item());
+    let task = state.create_and_select_task("/ws", "[bug] Crash on launch");
+    if let Some(item) = state
+        .feishu_project_store
+        .find_by_work_item_id_mut("1001")
+    {
+        item.linked_task_id = Some(task.task_id.clone());
+    }
+    let item = state
+        .feishu_project_store
+        .find_by_work_item_id("1001")
+        .unwrap();
+    assert_eq!(item.linked_task_id.as_deref(), Some(task.task_id.as_str()));
+}
+
+#[test]
+fn relink_same_item_selects_existing_task() {
+    let mut state = DaemonState::new();
+    state.feishu_project_store.upsert(sample_item());
+    let task = state.create_and_select_task("/ws", "[bug] Crash");
+    let task_id = task.task_id.clone();
+    if let Some(item) = state
+        .feishu_project_store
+        .find_by_work_item_id_mut("1001")
+    {
+        item.linked_task_id = Some(task_id.clone());
+    }
+    // Create another task to change active
+    let _other = state.create_and_select_task("/ws", "Other");
+    assert_ne!(state.active_task_id.as_deref(), Some(task_id.as_str()));
+    // select_task should reactivate the linked task
+    state.select_task(&task_id).unwrap();
+    assert_eq!(state.active_task_id.as_deref(), Some(task_id.as_str()));
+}
