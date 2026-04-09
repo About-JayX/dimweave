@@ -32,7 +32,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     permissionError: null,
     runtimeHealth: null,
     claudeNeedsAttention: false,
-    claudeRole: "lead",
+    claudeRole: "",
     codexRole: "coder",
     claudeStream: {
       thinking: false,

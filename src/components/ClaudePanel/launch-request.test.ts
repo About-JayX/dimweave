@@ -37,4 +37,13 @@ describe("buildClaudeLaunchRequest", () => {
       resumeSessionId: null,
     });
   });
+
+  test("rejects a blank Claude role", () => {
+    expect(() =>
+      buildClaudeLaunchRequest({
+        claudeRole: "   ",
+        cwd: "/repo",
+      }),
+    ).toThrow("Select Claude role before connecting");
+  });
 });

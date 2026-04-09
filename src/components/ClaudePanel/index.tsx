@@ -26,6 +26,7 @@ import {
 import { ClaudeConfigRows } from "./ClaudeConfigRows";
 import { ClaudeHint } from "./ClaudeHint";
 import { buildClaudeLaunchRequest } from "./launch-request";
+import { canConnectClaude } from "./connect-state";
 import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 
 interface ClaudePanelProps {
@@ -237,7 +238,16 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
                 ? "bg-claude/20 text-claude border-claude/30 cursor-wait"
                 : "bg-claude/15 text-claude border-claude/25 hover:bg-claude/25",
             )}
-            disabled={!connecting && (!effectiveCwd || disconnecting)}
+            disabled={
+              !connecting &&
+              !canConnectClaude({
+                cwd: effectiveCwd,
+                role: claudeRole,
+                connecting,
+                connected,
+                disconnecting,
+              })
+            }
             onClick={handleLaunch}
           >
             {connecting ? (

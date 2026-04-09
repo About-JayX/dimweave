@@ -104,11 +104,16 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 };
                 replay_messages(&tx, &state, buffered_messages).await;
                 replay_verdicts(&tx, &state, &id, buffered_verdicts).await;
-                let provider_session = state.read().await.provider_connection(&id);
-                if let Some(role) = runtime_role {
-                    gui::emit_agent_status_online(&app, &id, provider_session, role);
-                } else {
-                    gui::emit_agent_status(&app, &id, true, None, provider_session);
+                let (provider_session, surfaced_online) = {
+                    let daemon = state.read().await;
+                    (daemon.provider_connection(&id), daemon.is_agent_online(&id))
+                };
+                if surfaced_online {
+                    if let Some(role) = runtime_role {
+                        gui::emit_agent_status_online(&app, &id, provider_session, role);
+                    } else {
+                        gui::emit_agent_status(&app, &id, true, None, provider_session);
+                    }
                 }
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} connected"));
             }

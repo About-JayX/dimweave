@@ -95,7 +95,7 @@ impl Default for DaemonState {
             claude_sdk_direct_text_state: ClaudeSdkDirectTextState::Inactive,
             claude_preview_buffer: String::new(),
             claude_preview_flush_scheduled: false,
-            claude_role: "lead".into(),
+            claude_role: "".into(),
             codex_role: "coder".into(),
             claude_connection: None,
             codex_connection: None,

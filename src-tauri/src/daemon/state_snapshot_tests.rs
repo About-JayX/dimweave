@@ -9,13 +9,12 @@ fn online_agents_snapshot_empty_when_no_agents() {
 }
 
 #[test]
-fn online_agents_snapshot_only_claude() {
+fn online_agents_snapshot_only_claude_sdk() {
     let mut s = DaemonState::new();
-    let (tx, _rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(tx, 0),
-    );
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    s.claude_role = "lead".into();
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", tx).is_some());
 
     let snapshot = s.online_agents_snapshot();
     assert_eq!(snapshot.len(), 1);
@@ -27,6 +26,19 @@ fn online_agents_snapshot_only_claude() {
             model_source: "claude".into(),
         }
     );
+}
+
+#[test]
+fn online_agents_snapshot_excludes_bridge_only_claude() {
+    let mut s = DaemonState::new();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(tx, 0),
+    );
+
+    let snapshot = s.online_agents_snapshot();
+    assert!(snapshot.is_empty());
 }
 
 #[test]
@@ -50,12 +62,11 @@ fn online_agents_snapshot_only_codex() {
 #[test]
 fn online_agents_snapshot_both_agents_in_fixed_order() {
     let mut s = DaemonState::new();
-    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
     let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    s.claude_role = "lead".into();
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
 
     let snapshot = s.online_agents_snapshot();
@@ -67,15 +78,13 @@ fn online_agents_snapshot_both_agents_in_fixed_order() {
 #[test]
 fn online_agents_snapshot_role_reflects_current_state() {
     let mut s = DaemonState::new();
-    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
     let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
-    s.codex_inject_tx = Some(codex_tx);
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
     s.claude_role = "coder".into();
     s.codex_role = "lead".into();
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
+    s.codex_inject_tx = Some(codex_tx);
 
     let snapshot = s.online_agents_snapshot();
     assert_eq!(snapshot[0].role, "coder");

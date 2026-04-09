@@ -17,6 +17,12 @@ fn telegram_notifications_disabled_by_default() {
 }
 
 #[test]
+fn claude_role_is_unselected_by_default() {
+    let s = DaemonState::new();
+    assert_eq!(s.claude_role, "");
+}
+
+#[test]
 fn flush_clears_buffer() {
     let mut s = DaemonState::new();
     s.buffer_message(BridgeMessage::system("hello", "lead"));
@@ -88,12 +94,11 @@ fn expired_permissions_are_rejected() {
 #[test]
 fn status_snapshot_reports_current_online_agents() {
     let mut s = DaemonState::new();
-    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
     let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    s.claude_role = "lead".into();
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
 
     let snapshot = s.status_snapshot();
@@ -107,6 +112,25 @@ fn status_snapshot_reports_current_online_agents() {
         .agents
         .iter()
         .any(|agent| agent.agent == "codex" && agent.online));
+}
+
+#[test]
+fn status_snapshot_does_not_treat_claude_bridge_as_connected_provider() {
+    let mut s = DaemonState::new();
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    s.attached_agents.insert(
+        "claude".into(),
+        crate::daemon::state::AgentSender::new(claude_tx, 0),
+    );
+
+    let snapshot = s.status_snapshot();
+    let claude = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.agent == "claude")
+        .expect("claude present");
+
+    assert!(!claude.online);
 }
 
 #[test]

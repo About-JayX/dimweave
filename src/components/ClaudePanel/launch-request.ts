@@ -19,11 +19,19 @@ function normalizeOptional(value?: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeRequiredRole(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("Select Claude role before connecting");
+  }
+  return trimmed;
+}
+
 export function buildClaudeLaunchRequest(
   input: BuildClaudeLaunchRequestInput,
 ): ClaudeLaunchRequest {
   return {
-    roleId: input.claudeRole,
+    roleId: normalizeRequiredRole(input.claudeRole),
     cwd: input.cwd,
     model: normalizeOptional(input.model),
     effort: normalizeOptional(input.effort),

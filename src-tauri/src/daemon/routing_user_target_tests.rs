@@ -18,14 +18,14 @@ fn auto_with_no_agents_returns_empty() {
 }
 
 #[test]
-fn auto_with_claude_only() {
+fn auto_with_claude_bridge_only_returns_empty() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
     s.attached_agents.insert(
         "claude".into(),
         crate::daemon::state::AgentSender::new(tx, 0),
     );
-    assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead"]);
+    assert!(resolve_user_targets(&s, "auto").is_empty());
 }
 
 #[test]
@@ -33,6 +33,7 @@ fn auto_with_claude_sdk_only() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
     let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    s.claude_role = "lead".into();
     assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", tx).is_some());
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead"]);
 }
@@ -50,10 +51,9 @@ fn auto_with_both_agents_returns_two_roles() {
     let mut s = DaemonState::new();
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    s.claude_role = "lead".into();
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead", "coder"]);
 }
@@ -65,10 +65,8 @@ fn auto_dedupes_when_same_role() {
     s.codex_role = "coder".into();
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder"]);
 }
@@ -78,10 +76,8 @@ fn auto_excludes_user_role() {
     let mut s = DaemonState::new();
     s.claude_role = "user".into();
     let (tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(tx, 0),
-    );
+    let epoch = s.begin_claude_sdk_launch("nonce-a".into());
+    assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", tx).is_some());
     assert!(resolve_user_targets(&s, "auto").is_empty());
 }
 

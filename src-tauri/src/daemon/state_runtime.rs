@@ -182,7 +182,7 @@ impl DaemonState {
 
     pub fn is_agent_online(&self, agent: &str) -> bool {
         match agent {
-            "claude" => self.attached_agents.contains_key("claude") || self.is_claude_sdk_online(),
+            "claude" => self.is_claude_sdk_online(),
             "codex" => self.codex_inject_tx.is_some(),
             other => self.attached_agents.contains_key(other),
         }
