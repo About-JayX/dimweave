@@ -21,7 +21,7 @@ function installTauriStub() {
 }
 
 describe("ConfigCard", () => {
-  test("shows MCP connection status when configured", async () => {
+  test("configured state shows workspace name and action trigger", async () => {
     installTauriStub();
     const { ConfigCard } = await import("./ConfigCard");
     const html = renderToStaticMarkup(
@@ -31,6 +31,9 @@ describe("ConfigCard", () => {
           domain: "https://project.feishu.cn",
           workspaceHint: "myspace",
           refreshIntervalMinutes: 10,
+          syncMode: "todo",
+          projectName: null,
+          teamMembers: [],
           mcpStatus: "connected",
           discoveredToolCount: 8,
           tokenLabel: "tok_a***",
@@ -41,14 +44,39 @@ describe("ConfigCard", () => {
       />,
     );
 
-    expect(html).toContain("Connected");
-    expect(html).toContain("8 tools discovered");
-    expect(html).toContain("tok_a***");
-    expect(html).toContain("Sync now");
-    expect(html).toContain("Edit");
+    // Shows workspace name as fallback when projectName is null
+    expect(html).toContain("myspace");
+    // ActionMenu trigger renders (portal menu items not in static HTML)
+    expect(html).toContain('aria-label="Actions"');
   });
 
-  test("shows unauthorized status with error", async () => {
+  test("configured state shows project name when available", async () => {
+    installTauriStub();
+    const { ConfigCard } = await import("./ConfigCard");
+    const html = renderToStaticMarkup(
+      <ConfigCard
+        runtimeState={{
+          enabled: true,
+          domain: "https://project.feishu.cn",
+          workspaceHint: "myspace",
+          refreshIntervalMinutes: 10,
+          syncMode: "todo",
+          projectName: "极光矩阵--娱乐站",
+          teamMembers: [],
+          mcpStatus: "connected",
+          discoveredToolCount: 8,
+          tokenLabel: "tok_a***",
+        }}
+        loading={false}
+        onSave={() => {}}
+        onSync={() => {}}
+      />,
+    );
+
+    expect(html).toContain("极光矩阵--娱乐站");
+  });
+
+  test("unauthorized state still renders configured layout", async () => {
     installTauriStub();
     const { ConfigCard } = await import("./ConfigCard");
     const html = renderToStaticMarkup(
@@ -57,6 +85,9 @@ describe("ConfigCard", () => {
           enabled: true,
           domain: "https://project.feishu.cn",
           refreshIntervalMinutes: 10,
+          syncMode: "todo",
+          projectName: null,
+          teamMembers: [],
           mcpStatus: "unauthorized",
           discoveredToolCount: 0,
           tokenLabel: "tok_x***",
@@ -68,11 +99,12 @@ describe("ConfigCard", () => {
       />,
     );
 
-    expect(html).toContain("Unauthorized");
-    expect(html).toContain("invalid MCP token");
+    // Renders configured layout with Feishu Project fallback name
+    expect(html).toContain("Feishu Project");
+    expect(html).toContain('aria-label="Actions"');
   });
 
-  test("unconfigured state shows Configure button", async () => {
+  test("unconfigured state shows default label and action trigger", async () => {
     installTauriStub();
     const { ConfigCard } = await import("./ConfigCard");
     const html = renderToStaticMarkup(
@@ -84,7 +116,8 @@ describe("ConfigCard", () => {
       />,
     );
 
-    expect(html).toContain("Not configured");
-    expect(html).toContain("Configure");
+    expect(html).toContain("Feishu Project");
+    // ActionMenu renders with "Configure" item (portal, but trigger visible)
+    expect(html).toContain('aria-label="Actions"');
   });
 });

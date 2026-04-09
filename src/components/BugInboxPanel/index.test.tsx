@@ -44,7 +44,7 @@ describe("BugInboxPanel", () => {
     expect(html).toContain("No items in inbox");
   });
 
-  test("IssueList renders items with ignore button", async () => {
+  test("IssueList renders item with type label and action trigger", async () => {
     installTauriStub();
     const { IssueList } = await import("./IssueList");
     const html = renderToStaticMarkup(
@@ -70,11 +70,12 @@ describe("BugInboxPanel", () => {
 
     expect(html).toContain("Crash on launch");
     expect(html).toContain("bug");
-    expect(html).toContain("Ignore");
-    expect(html).toContain("Handle");
+    expect(html).toContain("mcp");
+    // ActionMenu trigger present (menu items are portal-rendered, not in static HTML)
+    expect(html).toContain('aria-label="Actions"');
   });
 
-  test("IssueList shows Restore for ignored items", async () => {
+  test("IssueList renders ignored items with reduced styling", async () => {
     installTauriStub();
     const { IssueList } = await import("./IssueList");
     const html = renderToStaticMarkup(
@@ -98,11 +99,14 @@ describe("BugInboxPanel", () => {
       />,
     );
 
-    expect(html).toContain("Restore");
-    expect(html).not.toContain("Handle");
+    expect(html).toContain("Ignored item");
+    expect(html).toContain("story");
+    // Ignored items have reduced opacity styling
+    expect(html).toContain("opacity-60");
+    expect(html).toContain('aria-label="Actions"');
   });
 
-  test("IssueList shows Open task for linked items", async () => {
+  test("IssueList shows Linked badge for items with linkedTaskId", async () => {
     installTauriStub();
     const { IssueList } = await import("./IssueList");
     const html = renderToStaticMarkup(
@@ -127,9 +131,10 @@ describe("BugInboxPanel", () => {
       />,
     );
 
-    expect(html).toContain("Open task");
+    expect(html).toContain("Linked bug");
     expect(html).toContain("Linked");
-    expect(html).not.toContain("Handle");
+    expect(html).toContain("bug");
+    expect(html).toContain('aria-label="Actions"');
   });
 
   test("view-model activeItemCount excludes ignored items", async () => {
