@@ -8,6 +8,26 @@ fn load_cfg() -> crate::feishu_project::types::FeishuProjectConfig {
         .unwrap_or_default()
 }
 
+/// Merge incoming config with existing on-disk config.
+/// Only preserves empty fields from the existing config when `incoming.enabled`
+/// is true (edit-save). When disabling, empty fields stay empty (clear intent).
+fn merge_config(
+    mut incoming: crate::feishu_project::types::FeishuProjectConfig,
+    existing: Option<&crate::feishu_project::types::FeishuProjectConfig>,
+) -> crate::feishu_project::types::FeishuProjectConfig {
+    if incoming.enabled {
+        if let Some(existing) = existing {
+            if incoming.mcp_user_token.trim().is_empty() {
+                incoming.mcp_user_token = existing.mcp_user_token.clone();
+            }
+            if incoming.workspace_hint.trim().is_empty() {
+                incoming.workspace_hint = existing.workspace_hint.clone();
+            }
+        }
+    }
+    incoming
+}
+
 pub async fn get_runtime_state(
     state: &SharedState,
 ) -> crate::feishu_project::types::FeishuProjectRuntimeState {
@@ -31,16 +51,8 @@ pub async fn save_and_restart(
     state.write().await.feishu_project_runtime = None;
     let config_path =
         crate::feishu_project::config::default_config_path().map_err(|e| e.to_string())?;
-    // Merge: preserve existing values for fields the UI left empty
-    let mut merged = incoming;
-    if let Ok(existing) = crate::feishu_project::config::load_config(&config_path) {
-        if merged.mcp_user_token.trim().is_empty() {
-            merged.mcp_user_token = existing.mcp_user_token;
-        }
-        if merged.workspace_hint.trim().is_empty() {
-            merged.workspace_hint = existing.workspace_hint;
-        }
-    }
+    let existing = crate::feishu_project::config::load_config(&config_path).ok();
+    let merged = merge_config(incoming, existing.as_ref());
     crate::feishu_project::config::save_config(&config_path, &merged)
         .map_err(|e| e.to_string())?;
     // Start MCP runtime if enabled and token is configured
