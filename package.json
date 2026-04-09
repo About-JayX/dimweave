@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "bridge": "cargo build --manifest-path bridge/Cargo.toml",
-    "test:e2e": "playwright test tests/e2e/shell-task-flow.e2e.ts"
+    "test:e2e": "playwright test tests/e2e/shell-task-flow.e2e.ts",
+    "dev:alt": "DIMWEAVE_VITE_PORT=2420 DIMWEAVE_DAEMON_PORT=5502 DIMWEAVE_CODEX_PORT=5500 tauri dev --config '{\"build\":{\"devUrl\":\"http://localhost:2420\"}}'",
+    "dev:tg": "DIMWEAVE_VITE_PORT=3420 DIMWEAVE_DAEMON_PORT=6502 DIMWEAVE_CODEX_PORT=6500 tauri dev --config '{\"build\":{\"devUrl\":\"http://localhost:3420\"}}'"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

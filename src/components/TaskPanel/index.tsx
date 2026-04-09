@@ -116,7 +116,7 @@ export function TaskPanel() {
 
   if (!task) {
     return (
-      <div className="rounded-xl border border-dashed border-border/40 bg-background/20 px-4 py-3 text-xs text-muted-foreground/65">
+      <div className="rounded-xl border border-dashed border-border/50 bg-card/30 px-4 py-3 text-xs text-muted-foreground/70">
         {getTaskPanelEmptyStateMessage()}
       </div>
     );
@@ -125,10 +125,10 @@ export function TaskPanel() {
   return (
     <div className="space-y-3">
       <TaskHeader task={task} reviewBadge={reviewBadge} />
-      <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
+      <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
         <SessionTree rows={sessionRows} onResume={handleResume} />
       </div>
-      <div className="rounded-2xl border border-border/40 bg-card/45 p-0">
+      <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
         <ArtifactTimeline
           items={artifactTimeline}
           selectedArtifactId={selectedArtifactId}

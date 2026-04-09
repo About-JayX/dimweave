@@ -135,5 +135,8 @@ mod state_task_flow;
 #[path = "state_task_snapshot_tests.rs"]
 mod state_task_snapshot_tests;
 #[cfg(test)]
+#[path = "state_persistence_tests.rs"]
+mod state_persistence_tests;
+#[cfg(test)]
 #[path = "state_tests.rs"]
 mod state_tests;

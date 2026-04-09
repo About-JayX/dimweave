@@ -200,6 +200,31 @@ pub fn emit_feishu_project_state(
     let _ = app.emit("feishu_project_state", state.clone());
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSaveStatusEvent {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub task_id: String,
+    pub timestamp: u64,
+}
+
+pub fn emit_task_save_status(app: &AppHandle, success: bool, error: Option<String>, task_id: &str) {
+    let _ = app.emit(
+        "task_save_status",
+        TaskSaveStatusEvent {
+            success,
+            error,
+            task_id: task_id.to_string(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        },
+    );
+}
+
 pub fn emit_feishu_project_items(
     app: &AppHandle,
     items: &[crate::feishu_project::types::FeishuProjectInboxItem],
@@ -208,22 +233,5 @@ pub fn emit_feishu_project_items(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{should_auto_finish_idle_claude_thinking, ClaudeStreamPayload};
-
-    #[test]
-    fn thinking_started_does_not_auto_finish_idle_claude_thinking() {
-        assert!(!should_auto_finish_idle_claude_thinking(
-            &ClaudeStreamPayload::ThinkingStarted
-        ));
-    }
-
-    #[test]
-    fn preview_does_not_auto_finish_idle_claude_thinking() {
-        assert!(!should_auto_finish_idle_claude_thinking(
-            &ClaudeStreamPayload::Preview {
-                text: "preview".into(),
-            }
-        ));
-    }
-}
+#[path = "gui_tests.rs"]
+mod tests;

@@ -88,6 +88,13 @@ export interface ArtifactsChangedPayload {
 
 // Store data (separate from actions for testability)
 
+export interface SaveStatus {
+  success: boolean;
+  error?: string | null;
+  taskId: string;
+  timestamp: number;
+}
+
 export interface TaskStoreData {
   activeTaskId: string | null;
   tasks: Record<string, TaskInfo>;
@@ -99,6 +106,7 @@ export interface TaskStoreData {
   providerHistoryError: Record<string, string | null>;
   bootstrapComplete: boolean;
   bootstrapError: string | null;
+  lastSave: SaveStatus | null;
 }
 
 export interface TaskStoreState extends TaskStoreData {

@@ -11,6 +11,9 @@ pub fn load_config(path: &Path) -> anyhow::Result<TelegramConfig> {
         return Ok(TelegramConfig::default());
     }
     let data = std::fs::read_to_string(path)?;
+    if data.trim().is_empty() {
+        return Ok(TelegramConfig::default());
+    }
     let cfg: TelegramConfig = serde_json::from_str(&data)?;
     Ok(cfg)
 }
@@ -49,6 +52,7 @@ mod tests {
             last_update_id: Some(42),
             pending_pair_code: None,
             pending_pair_expires_at: None,
+            bot_username: None,
         };
         let path = temp_path("round_trip");
         save_config(&path, &cfg).unwrap();

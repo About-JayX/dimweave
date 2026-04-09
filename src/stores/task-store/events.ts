@@ -2,6 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ActiveTaskChangedPayload,
   ArtifactsChangedPayload,
+  SaveStatus,
   SessionTreeChangedPayload,
   TaskInfo,
   TaskStoreData,
@@ -45,6 +46,13 @@ export function reduceArtifactsChanged(
   };
 }
 
+export function reduceSaveStatus(
+  _state: TaskStoreData,
+  payload: SaveStatus,
+): Partial<TaskStoreData> {
+  return { lastSave: payload };
+}
+
 // ── Listener setup ───────────────────────────────────────────
 
 export function createTaskListeners(set: TaskSetter): Promise<UnlistenFn[]> {
@@ -60,6 +68,9 @@ export function createTaskListeners(set: TaskSetter): Promise<UnlistenFn[]> {
     }),
     listen<ArtifactsChangedPayload>("artifacts_changed", (e) => {
       set((s) => reduceArtifactsChanged(s, e.payload));
+    }),
+    listen<SaveStatus>("task_save_status", (e) => {
+      set((s) => reduceSaveStatus(s, e.payload));
     }),
   ]);
 }

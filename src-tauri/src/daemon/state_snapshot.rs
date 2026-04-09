@@ -110,10 +110,12 @@ impl DaemonState {
     }
 
     /// Create a new task and set it as active.
+    ///
+    /// Does **not** auto-persist. Callers that need persistence must call
+    /// `save_task_graph()` explicitly so the result can drive status events.
     pub fn create_and_select_task(&mut self, workspace: &str, title: &str) -> Task {
         let task = self.task_graph.create_task(workspace, title);
         self.active_task_id = Some(task.task_id.clone());
-        self.auto_save_task_graph();
         task
     }
 

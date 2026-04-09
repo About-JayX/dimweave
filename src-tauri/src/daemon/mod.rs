@@ -307,7 +307,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         feishu_project_lifecycle::auto_start(&state, &app).await;
     let mut codex_handle: Option<codex::CodexHandle> = None;
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
-    let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> = None;
+    let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> =
+        telegram_lifecycle::auto_start(&state, &app).await;
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             DaemonCmd::SendUserInput { content, target, attachments } => {
@@ -544,6 +545,18 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     .write()
                     .await
                     .create_and_select_task(&workspace, &title);
+                // Verify persistence succeeded (auto_save inside create is
+                // fire-and-forget; re-save to get a reliable result).
+                let save_result = state.read().await.save_task_graph();
+                match save_result {
+                    Ok(()) => gui::emit_task_save_status(&app, true, None, &task.task_id),
+                    Err(e) => gui::emit_task_save_status(
+                        &app,
+                        false,
+                        Some(e.to_string()),
+                        &task.task_id,
+                    ),
+                }
                 emit_task_context_events(&state, &app, &task.task_id).await;
                 let _ = reply.send(task);
             }
@@ -787,11 +800,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(result);
             }
             DaemonCmd::GenerateTelegramPairCode { reply } => {
-                let result = telegram_lifecycle::generate_pair(&state, &app, telegram_handle.is_some()).await;
+                let result = telegram_lifecycle::generate_pair(&state, &app, &telegram_handle, telegram_handle.is_some()).await;
                 let _ = reply.send(result);
             }
             DaemonCmd::ClearTelegramPairing { reply } => {
-                let result = telegram_lifecycle::clear_pair(&state, &app, telegram_handle.is_some()).await;
+                let result = telegram_lifecycle::clear_pair(&state, &app, &telegram_handle, telegram_handle.is_some()).await;
                 let _ = reply.send(result);
             }
         }

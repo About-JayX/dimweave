@@ -77,7 +77,9 @@ export const useTelegramStore = create<TelegramStore>((set) => ({
   clearPairing: async () => {
     set({ error: null });
     try {
-      const state = await invoke<TelegramStateInfo>("telegram_clear_pairing");
+      await invoke<TelegramStateInfo>("telegram_clear_pairing");
+      // Auto-generate a new pairing code after unpair
+      const state = await invoke<TelegramStateInfo>("telegram_generate_pair_code");
       set({ state });
     } catch (e) {
       set({ error: String(e) });
