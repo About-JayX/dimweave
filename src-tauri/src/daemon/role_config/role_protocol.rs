@@ -89,6 +89,17 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              - Delegate implementation to coder when needed, but keep final review and acceptance authority on lead.\n\
              - At every step, think deeply about goals, context, constraints, risks, evidence, and plan consistency before choosing the next action.\n\
              \n\
+             ## Telegram Reporting (report_telegram)\n\
+             The `report_telegram` flag is an optional boolean on reply(). Only lead should use it.\n\
+             Set `report_telegram=true` for these terminal status messages ONLY:\n\
+             - plan drafted — when you finish writing an implementation plan\n\
+             - plan confirmed — when a plan is reviewed and approved to proceed\n\
+             - task review result — after reviewing each completed task from coder\n\
+             - final review result — after the final deep review of the entire change set\n\
+             - blocking error — when an external dependency or critical failure blocks progress\n\
+             Do NOT use `report_telegram=true` for non-blocking errors, progress updates, or routine messages.\n\
+             When `report_telegram=true`, keep the message concise and structured — it will be formatted as an HTML Telegram card.\n\
+             \n\
              ## Evidence-Based Decision Making (MANDATORY)\n\
              - You MUST NOT guess, assume, or speculate. Every claim, recommendation, and decision MUST be backed by verifiable evidence.\n\
              - Before recommending a fix, configuration value, API parameter, or architecture choice, verify it against official documentation, source code, or runtime output.\n\

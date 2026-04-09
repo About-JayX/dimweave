@@ -132,6 +132,17 @@ fn shared_prompt_requires_structured_status_messages() {
 }
 
 #[test]
+fn lead_prompt_documents_report_telegram_usage() {
+    let prompt = get_role("lead").unwrap().base_instructions;
+    assert!(prompt.contains("report_telegram"));
+    assert!(prompt.contains("plan drafted"));
+    assert!(prompt.contains("plan confirmed"));
+    assert!(prompt.contains("task review result"));
+    assert!(prompt.contains("final review result"));
+    assert!(prompt.contains("blocking error"));
+}
+
+#[test]
 fn output_schema_allows_optional_report_telegram_boolean() {
     let schema = output_schema();
     assert_eq!(schema["properties"]["report_telegram"]["type"], "boolean");
