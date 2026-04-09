@@ -2,14 +2,10 @@ use crate::daemon::types::{BridgeMessage, MessageStatus};
 
 const TELEGRAM_MAX_LENGTH: usize = 4096;
 
-/// Only terminal lead messages with `report_telegram=true` trigger Telegram reports.
+/// Lead messages with `report_telegram=true` trigger Telegram reports.
+/// Runtime gates (enabled flag, outbound tx, paired chat) live in `routing_dispatch.rs`.
 pub fn should_send_telegram_report(msg: &BridgeMessage) -> bool {
-    msg.from == "lead"
-        && msg.report_telegram == Some(true)
-        && matches!(
-            msg.status,
-            Some(MessageStatus::Done) | Some(MessageStatus::Error)
-        )
+    msg.from == "lead" && msg.report_telegram == Some(true)
 }
 
 /// Escape dynamic text for safe embedding in Telegram HTML messages.
@@ -89,8 +85,8 @@ mod tests {
     }
 
     #[test]
-    fn old_trigger_no_longer_fires_without_flag() {
-        // Old behavior: lead->user terminal triggered. New: requires report_telegram=true.
+    fn no_flag_does_not_trigger() {
+        // lead + terminal status but no flag → no trigger
         assert!(!should_send_telegram_report(&test_message(
             "lead",
             "user",
@@ -99,37 +95,48 @@ mod tests {
     }
 
     #[test]
-    fn report_telegram_requires_lead_terminal_and_flag() {
+    fn lead_with_flag_triggers_regardless_of_status() {
+        // done
         let mut msg = test_message("lead", "coder", Some(MessageStatus::Done));
         msg.report_telegram = Some(true);
         assert!(should_send_telegram_report(&msg));
 
-        // Missing flag → no trigger
+        // error
+        let mut msg = test_message("lead", "user", Some(MessageStatus::Error));
+        msg.report_telegram = Some(true);
+        assert!(should_send_telegram_report(&msg));
+
+        // in_progress — now triggers too
+        let mut msg = test_message("lead", "user", Some(MessageStatus::InProgress));
+        msg.report_telegram = Some(true);
+        assert!(should_send_telegram_report(&msg));
+
+        // no status — also triggers
+        let mut msg = test_message("lead", "user", None);
+        msg.report_telegram = Some(true);
+        assert!(should_send_telegram_report(&msg));
+    }
+
+    #[test]
+    fn flag_missing_or_false_does_not_trigger() {
+        let mut msg = test_message("lead", "coder", Some(MessageStatus::Done));
+
+        // None → no trigger
         msg.report_telegram = None;
         assert!(!should_send_telegram_report(&msg));
 
-        // false flag → no trigger
+        // false → no trigger
         msg.report_telegram = Some(false);
         assert!(!should_send_telegram_report(&msg));
     }
 
     #[test]
-    fn report_telegram_error_status_triggers() {
-        let mut msg = test_message("lead", "user", Some(MessageStatus::Error));
-        msg.report_telegram = Some(true);
-        assert!(should_send_telegram_report(&msg));
-    }
-
-    #[test]
-    fn report_telegram_in_progress_does_not_trigger() {
-        let mut msg = test_message("lead", "user", Some(MessageStatus::InProgress));
+    fn non_lead_does_not_trigger_even_with_flag() {
+        let mut msg = test_message("coder", "lead", Some(MessageStatus::Done));
         msg.report_telegram = Some(true);
         assert!(!should_send_telegram_report(&msg));
-    }
 
-    #[test]
-    fn report_telegram_non_lead_does_not_trigger() {
-        let mut msg = test_message("coder", "lead", Some(MessageStatus::Done));
+        let mut msg = test_message("user", "lead", None);
         msg.report_telegram = Some(true);
         assert!(!should_send_telegram_report(&msg));
     }
