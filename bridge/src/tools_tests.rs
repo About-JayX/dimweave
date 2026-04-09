@@ -140,7 +140,22 @@ fn reply_schema_exposes_optional_report_telegram() {
 }
 
 #[test]
-fn handle_reply_preserves_report_telegram() {
+fn report_telegram_preserved_for_lead() {
+    let params = serde_json::json!({
+        "name": "reply",
+        "arguments": {
+            "to": "user",
+            "text": "final summary",
+            "status": "done",
+            "report_telegram": true
+        }
+    });
+    let msg = handle_tool_call(&params, "lead").unwrap().unwrap();
+    assert_eq!(msg.report_telegram, Some(true));
+}
+
+#[test]
+fn report_telegram_stripped_for_coder() {
     let params = serde_json::json!({
         "name": "reply",
         "arguments": {
@@ -151,7 +166,7 @@ fn handle_reply_preserves_report_telegram() {
         }
     });
     let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
-    assert_eq!(msg.report_telegram, Some(true));
+    assert_eq!(msg.report_telegram, None);
 }
 
 #[test]
@@ -160,6 +175,6 @@ fn handle_reply_defaults_report_telegram_to_none() {
         "name": "reply",
         "arguments": { "to": "lead", "text": "hello", "status": "done" }
     });
-    let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
+    let msg = handle_tool_call(&params, "lead").unwrap().unwrap();
     assert_eq!(msg.report_telegram, None);
 }

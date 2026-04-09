@@ -137,7 +137,8 @@ fn build_completed_output_message(
     };
 
     let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
-    msg.report_telegram = if parsed.report_telegram {
+    // Only lead may trigger Telegram reports; strip flag from non-lead senders.
+    msg.report_telegram = if role_id == "lead" && parsed.report_telegram {
         Some(true)
     } else {
         None
@@ -356,7 +357,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn completed_output_builder_preserves_user_target_and_report_flag() {
+    fn completed_output_builder_preserves_report_flag_for_lead() {
         let parsed = ParsedOutput {
             message: "final review result".into(),
             send_to: Some("user".into()),
@@ -368,6 +369,20 @@ mod tests {
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
         assert_eq!(msg.report_telegram, Some(true));
+    }
+
+    #[test]
+    fn completed_output_builder_strips_report_flag_for_coder() {
+        let parsed = ParsedOutput {
+            message: "task done".into(),
+            send_to: Some("user".into()),
+            status: MessageStatus::Done,
+            report_telegram: true,
+        };
+
+        let msg = build_completed_output_message("coder", &parsed, true).expect("message");
+        assert_eq!(msg.to, "user");
+        assert_eq!(msg.report_telegram, None);
     }
 
     #[test]

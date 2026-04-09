@@ -107,9 +107,12 @@ pub fn handle_tool_call(
         }
         None => MessageStatus::Done,
     };
-    let report_telegram = args
-        .get("report_telegram")
-        .and_then(|value| value.as_bool());
+    // Only lead may trigger Telegram reports; strip flag from non-lead senders.
+    let report_telegram = if from == "lead" {
+        args.get("report_telegram").and_then(|value| value.as_bool())
+    } else {
+        None
+    };
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     Ok(Some(BridgeMessage {
         id: format!("claude_{}_{seq}", chrono::Utc::now().timestamp_millis()),
