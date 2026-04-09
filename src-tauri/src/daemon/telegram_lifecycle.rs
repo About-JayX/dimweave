@@ -17,6 +17,7 @@ pub async fn auto_start(
             let mut s = state.write().await;
             s.telegram_outbound_tx = Some(h.outbound_tx.clone());
             s.telegram_paired_chat_id = cfg.paired_chat_id;
+            s.telegram_notifications_enabled = cfg.notifications_enabled;
             let rs = crate::telegram::types::TelegramRuntimeState::from_config(&cfg);
             gui::emit_telegram_state(app, &crate::telegram::types::TelegramRuntimeState {
                 connected: true,
@@ -70,6 +71,7 @@ pub async fn save_and_restart(
         let mut s = state.write().await;
         s.telegram_outbound_tx = None;
         s.telegram_paired_chat_id = None;
+        s.telegram_notifications_enabled = false;
     }
 
     let config_path = crate::telegram::config::default_config_path().map_err(|e| e.to_string())?;
@@ -86,6 +88,7 @@ pub async fn save_and_restart(
                 let mut s = state.write().await;
                 s.telegram_outbound_tx = Some(h.outbound_tx.clone());
                 s.telegram_paired_chat_id = cfg.paired_chat_id;
+                s.telegram_notifications_enabled = cfg.notifications_enabled;
                 *handle = Some(h);
             }
             Err(e) => {

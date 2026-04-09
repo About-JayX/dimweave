@@ -37,26 +37,28 @@ async fn route_message_with_display(
         // Telegram outbound hook — queue report_telegram messages
         if crate::telegram::report::should_send_telegram_report(&msg) {
             let s = state.read().await;
-            if let (Some(ref tx), Some(chat_id)) =
-                (&s.telegram_outbound_tx, s.telegram_paired_chat_id)
-            {
-                let task_title = s
-                    .active_task_id
-                    .as_ref()
-                    .and_then(|tid| s.task_graph.get_task(tid))
-                    .map(|t| t.title.clone());
-                let tx = tx.clone();
-                drop(s);
-                let report =
-                    crate::telegram::report::build_telegram_report(task_title.as_deref(), &msg);
-                for chunk in crate::telegram::report::chunk_report(&report) {
-                    let _ = tx
-                        .send(crate::telegram::types::TelegramOutbound {
-                            chat_id,
-                            text: chunk,
-                            parse_mode: Some("HTML".into()),
-                        })
-                        .await;
+            if s.telegram_notifications_enabled {
+                if let (Some(ref tx), Some(chat_id)) =
+                    (&s.telegram_outbound_tx, s.telegram_paired_chat_id)
+                {
+                    let task_title = s
+                        .active_task_id
+                        .as_ref()
+                        .and_then(|tid| s.task_graph.get_task(tid))
+                        .map(|t| t.title.clone());
+                    let tx = tx.clone();
+                    drop(s);
+                    let report =
+                        crate::telegram::report::build_telegram_report(task_title.as_deref(), &msg);
+                    for chunk in crate::telegram::report::chunk_report(&report) {
+                        let _ = tx
+                            .send(crate::telegram::types::TelegramOutbound {
+                                chat_id,
+                                text: chunk,
+                                parse_mode: Some("HTML".into()),
+                            })
+                            .await;
+                    }
                 }
             }
         }

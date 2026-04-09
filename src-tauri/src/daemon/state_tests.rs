@@ -11,6 +11,12 @@ fn temp_state_path(name: &str) -> std::path::PathBuf {
 }
 
 #[test]
+fn telegram_notifications_disabled_by_default() {
+    let s = DaemonState::new();
+    assert!(!s.telegram_notifications_enabled);
+}
+
+#[test]
 fn flush_clears_buffer() {
     let mut s = DaemonState::new();
     s.buffer_message(BridgeMessage::system("hello", "lead"));

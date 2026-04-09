@@ -72,6 +72,7 @@ pub struct DaemonState {
     pub active_task_id: Option<String>,
     pub telegram_outbound_tx: Option<tokio::sync::mpsc::Sender<crate::telegram::types::TelegramOutbound>>,
     pub telegram_paired_chat_id: Option<i64>,
+    pub telegram_notifications_enabled: bool,
     pub feishu_project_store: crate::feishu_project::store::FeishuProjectStore,
 }
 
@@ -105,6 +106,7 @@ impl Default for DaemonState {
             active_task_id: None,
             telegram_outbound_tx: None,
             telegram_paired_chat_id: None,
+            telegram_notifications_enabled: false,
             feishu_project_store: crate::feishu_project::store::FeishuProjectStore::default(),
         }
     }
