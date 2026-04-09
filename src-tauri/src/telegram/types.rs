@@ -64,6 +64,7 @@ pub fn mask_token(token: &str) -> Option<String> {
 pub struct TelegramOutbound {
     pub chat_id: i64,
     pub text: String,
+    pub parse_mode: Option<String>,
 }
 
 #[cfg(test)]

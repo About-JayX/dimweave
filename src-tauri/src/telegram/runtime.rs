@@ -62,8 +62,9 @@ pub async fn start_runtime(
                 }
                 outbound = outbound_rx.recv() => {
                     if let Some(msg) = outbound {
-                        if let Err(e) = api::send_message(
+                        if let Err(e) = api::send_message_html(
                             &client, &token, msg.chat_id, &msg.text,
+                            msg.parse_mode.as_deref(),
                         ).await {
                             gui::emit_system_log(
                                 &app,

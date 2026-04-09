@@ -90,10 +90,23 @@ pub async fn send_message(
     chat_id: i64,
     text: &str,
 ) -> anyhow::Result<()> {
-    let body = serde_json::json!({
+    send_message_html(client, token, chat_id, text, None).await
+}
+
+pub async fn send_message_html(
+    client: &Client,
+    token: &str,
+    chat_id: i64,
+    text: &str,
+    parse_mode: Option<&str>,
+) -> anyhow::Result<()> {
+    let mut body = serde_json::json!({
         "chat_id": chat_id,
         "text": text,
     });
+    if let Some(mode) = parse_mode {
+        body["parse_mode"] = serde_json::json!(mode);
+    }
     let resp: TelegramResponse<serde_json::Value> = client
         .post(api_url(token, "sendMessage"))
         .json(&body)

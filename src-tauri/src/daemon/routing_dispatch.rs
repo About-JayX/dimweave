@@ -34,8 +34,8 @@ async fn route_message_with_display(
         for released_msg in effects.released {
             Box::pin(route_message_with_display(state, app, released_msg, false)).await;
         }
-        // Telegram outbound hook — queue lead terminal reports
-        if crate::telegram::report::should_send_lead_report(&msg) {
+        // Telegram outbound hook — queue report_telegram messages
+        if crate::telegram::report::should_send_telegram_report(&msg) {
             let s = state.read().await;
             if let (Some(ref tx), Some(chat_id)) =
                 (&s.telegram_outbound_tx, s.telegram_paired_chat_id)
@@ -48,12 +48,13 @@ async fn route_message_with_display(
                 let tx = tx.clone();
                 drop(s);
                 let report =
-                    crate::telegram::report::build_lead_report(task_title.as_deref(), &msg);
+                    crate::telegram::report::build_telegram_report(task_title.as_deref(), &msg);
                 for chunk in crate::telegram::report::chunk_report(&report) {
                     let _ = tx
                         .send(crate::telegram::types::TelegramOutbound {
                             chat_id,
                             text: chunk,
+                            parse_mode: Some("HTML".into()),
                         })
                         .await;
                 }

@@ -2,26 +2,49 @@ use crate::daemon::types::{BridgeMessage, MessageStatus};
 
 const TELEGRAM_MAX_LENGTH: usize = 4096;
 
-/// Only terminal `lead -> user` messages trigger Telegram reports.
-pub fn should_send_lead_report(msg: &BridgeMessage) -> bool {
+/// Only terminal lead messages with `report_telegram=true` trigger Telegram reports.
+pub fn should_send_telegram_report(msg: &BridgeMessage) -> bool {
     msg.from == "lead"
-        && msg.to == "user"
+        && msg.report_telegram == Some(true)
         && matches!(
             msg.status,
             Some(MessageStatus::Done) | Some(MessageStatus::Error)
         )
 }
 
-/// Build a plain-text lead report.
-pub fn build_lead_report(task_title: Option<&str>, msg: &BridgeMessage) -> String {
-    let status_str = msg.status.as_ref().map(|s| s.as_str()).unwrap_or("done");
+/// Escape dynamic text for safe embedding in Telegram HTML messages.
+pub fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn event_emoji(status: &MessageStatus) -> &'static str {
+    match status {
+        MessageStatus::Done => "\u{2705}",
+        MessageStatus::Error => "\u{1f6a8}",
+        MessageStatus::InProgress => "\u{23f3}",
+    }
+}
+
+/// Build an HTML-formatted Telegram report card.
+pub fn build_telegram_report(task_title: Option<&str>, msg: &BridgeMessage) -> String {
+    let status = msg.status.as_ref().copied().unwrap_or(MessageStatus::Done);
+    let emoji = event_emoji(&status);
+    let task_id = msg.task_id.as_deref().unwrap_or("—");
+    let title = task_title.unwrap_or("No active task");
+    let body = escape_html(msg.content.trim());
     format!(
-        "Dimweave update\nTask: {}\nStatus: {}\n\n{}",
-        task_title.unwrap_or("No active task"),
-        status_str,
-        msg.content.trim(),
+        "{emoji} <b>Dimweave</b> · {status}\n\
+         \u{1f4cb} <b>{title_escaped}</b>\n\
+         <code>{task_id}</code>\n\n\
+         {body}",
+        status = escape_html(status.as_str()),
+        title_escaped = escape_html(title),
     )
 }
+
 
 /// Chunk text to fit Telegram's message length limit.
 pub fn chunk_report(text: &str) -> Vec<String> {
@@ -66,32 +89,76 @@ mod tests {
     }
 
     #[test]
-    fn only_terminal_lead_to_user_triggers() {
-        assert!(should_send_lead_report(&test_message(
+    fn old_trigger_no_longer_fires_without_flag() {
+        // Old behavior: lead->user terminal triggered. New: requires report_telegram=true.
+        assert!(!should_send_telegram_report(&test_message(
             "lead",
             "user",
             Some(MessageStatus::Done)
         )));
-        assert!(should_send_lead_report(&test_message(
-            "lead",
-            "user",
-            Some(MessageStatus::Error)
-        )));
-        assert!(!should_send_lead_report(&test_message(
-            "lead",
-            "user",
-            Some(MessageStatus::InProgress)
-        )));
-        assert!(!should_send_lead_report(&test_message(
-            "coder",
-            "user",
-            Some(MessageStatus::Done)
-        )));
-        assert!(!should_send_lead_report(&test_message(
-            "lead",
-            "coder",
-            Some(MessageStatus::Done)
-        )));
+    }
+
+    #[test]
+    fn report_telegram_requires_lead_terminal_and_flag() {
+        let mut msg = test_message("lead", "coder", Some(MessageStatus::Done));
+        msg.report_telegram = Some(true);
+        assert!(should_send_telegram_report(&msg));
+
+        // Missing flag → no trigger
+        msg.report_telegram = None;
+        assert!(!should_send_telegram_report(&msg));
+
+        // false flag → no trigger
+        msg.report_telegram = Some(false);
+        assert!(!should_send_telegram_report(&msg));
+    }
+
+    #[test]
+    fn report_telegram_error_status_triggers() {
+        let mut msg = test_message("lead", "user", Some(MessageStatus::Error));
+        msg.report_telegram = Some(true);
+        assert!(should_send_telegram_report(&msg));
+    }
+
+    #[test]
+    fn report_telegram_in_progress_does_not_trigger() {
+        let mut msg = test_message("lead", "user", Some(MessageStatus::InProgress));
+        msg.report_telegram = Some(true);
+        assert!(!should_send_telegram_report(&msg));
+    }
+
+    #[test]
+    fn report_telegram_non_lead_does_not_trigger() {
+        let mut msg = test_message("coder", "lead", Some(MessageStatus::Done));
+        msg.report_telegram = Some(true);
+        assert!(!should_send_telegram_report(&msg));
+    }
+
+    #[test]
+    fn html_formatter_escapes_dynamic_text() {
+        let formatted = escape_html(r#"<tag> & "quote""#);
+        assert_eq!(formatted, "&lt;tag&gt; &amp; &quot;quote&quot;");
+    }
+
+    #[test]
+    fn html_report_includes_task_id_and_status() {
+        let mut msg = test_message("lead", "user", Some(MessageStatus::Done));
+        msg.report_telegram = Some(true);
+        msg.task_id = Some("task_42".into());
+        let report = build_telegram_report(Some("Fix login bug"), &msg);
+        assert!(report.contains("task_42"));
+        assert!(report.contains("Fix login bug"));
+        assert!(report.contains("done"));
+    }
+
+    #[test]
+    fn html_report_escapes_content() {
+        let mut msg = test_message("lead", "user", Some(MessageStatus::Done));
+        msg.report_telegram = Some(true);
+        msg.content = "<script>alert('xss')</script>".into();
+        let report = build_telegram_report(None, &msg);
+        assert!(!report.contains("<script>"));
+        assert!(report.contains("&lt;script&gt;"));
     }
 
     #[test]
