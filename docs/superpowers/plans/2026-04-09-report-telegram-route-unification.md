@@ -48,8 +48,8 @@
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
 | Task 1 | `2b255a06` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture` ✅ 6 passed; `git diff --check` ✅ | Codex dynamic `reply` must preserve the same routing metadata that Claude bridge `reply` already preserves. |
-| Task 2 | `PENDING` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | Prompt-originated user-target terminal messages must still go through `routing::route_message(...)`; direct GUI emission bypasses Telegram fan-out. |
-| Final | `PENDING` | `final deep review` | `cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | The supported Telegram contract is: explicit prompt/tool intent in, unified routing path through daemon, Telegram hook decides fan-out. |
+| Task 2 | `bdbc9a95` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml session_event -- --nocapture` ✅ 9 passed; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture` ✅ 34 passed; `git diff --check` ✅ | Prompt-originated user-target terminal messages must still go through `routing::route_message(...)`; direct GUI emission bypasses Telegram fan-out. |
+| Final | `PENDING` | `final deep review` | `cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | The supported Telegram contract is: explicit prompt/tool intent in, unified routing path through daemon, Telegram hook decides fan-out. |
 
 ### Task 1: Preserve full `reply()` routing metadata in Codex dynamic tool handling
 
@@ -191,7 +191,7 @@ Replace the Task 1 placeholder row with the real commit and verification evidenc
 **Files:**
 - Modify: `src-tauri/src/daemon/codex/session_event.rs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add pure-helper tests in `src-tauri/src/daemon/codex/session_event.rs`:
 
@@ -226,7 +226,7 @@ fn completed_output_builder_restricts_schema_routes_to_known_roles() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests to confirm RED**
+- [x] **Step 2: Run the focused tests to confirm RED**
 
 Run:
 
@@ -236,7 +236,7 @@ cargo test --manifest-path src-tauri/Cargo.toml codex::session_event -- --nocapt
 
 Expected: FAIL because the helper does not exist and the `user` path still emits directly to GUI.
 
-- [ ] **Step 3: Implement the routed builder**
+- [x] **Step 3: Implement the routed builder**
 
 Extract a helper in `src-tauri/src/daemon/codex/session_event.rs`:
 
@@ -278,7 +278,7 @@ routing::route_message(state, app, msg).await;
 
 This intentionally removes the `gui::emit_agent_message(...)` branch for structured terminal output.
 
-- [ ] **Step 4: Run the focused tests to confirm GREEN**
+- [x] **Step 4: Run the focused tests to confirm GREEN**
 
 Run:
 
@@ -289,7 +289,7 @@ cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Verify diff hygiene**
+- [x] **Step 5: Verify diff hygiene**
 
 Run:
 
@@ -299,14 +299,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/daemon/codex/session_event.rs
 git commit -m "fix: route codex report_telegram messages through router"
 ```
 
-- [ ] **Step 7: Update `## CM Memory`**
+- [x] **Step 7: Update `## CM Memory`**
 
 Replace the Task 2 placeholder row with the real commit and verification evidence.
 
