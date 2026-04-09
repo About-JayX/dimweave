@@ -543,3 +543,53 @@ The plan consistently uses one field name everywhere:
 - TypeScript surface: `reportTelegram`
 
 No alternate spellings are introduced.
+
+## Execution Record
+
+### Task 1
+
+- CM: `feat: add report_telegram to message protocol`
+- Implementation commit: `3e2c95a7`
+- Lead verification:
+  - `cargo test structured_output` -> 16 passed, 0 failed
+  - `cargo test -p dimweave-bridge tools` -> 17 passed, 0 failed
+  - `cargo test telegram` -> passed
+  - `bun run build` -> success
+  - `git diff --check` -> clean
+
+### Task 2
+
+- CM: `docs: define report_telegram prompt contract`
+- Implementation commit: `6a6ad203`
+- Lead verification:
+  - `cargo test claude_prompt` -> 15 passed, 0 failed
+  - `cargo test -p dimweave-bridge mcp_protocol` -> 9 passed, 0 failed
+  - `cargo test lead_prompt` -> 12 passed, 0 failed
+  - `git diff --check` -> clean
+
+### Task 3
+
+- CM: `feat: route report_telegram messages to telegram`
+- Implementation commit: `fa5f16e4`
+- Follow-up fix commit: `d5e76ef5` (`fix: add notifications_enabled hard gate to report_telegram routing`)
+- Lead verification:
+  - `cargo test telegram` -> 37 passed, 0 failed
+  - `cargo test telegram_notifications_disabled` -> 1 passed, 0 failed
+  - `cargo test` -> 442 passed, 0 failed
+  - `bun run build` -> success
+  - `git diff --check` -> clean
+
+### Task 4
+
+- CM: `chore: verify report_telegram integration`
+- Lead verification:
+  - `cargo test telegram` -> 37 passed, 0 failed
+  - `cargo test structured_output` -> 16 passed, 0 failed
+  - `cargo test -p dimweave-bridge tools` -> 17 passed, 0 failed
+  - `bun run build` -> success
+  - `git diff --check` -> clean
+- Manual review:
+  - `report_telegram` naming is consistent across Rust, JSON, prompt, and TypeScript surfaces
+  - Telegram routing no longer depends on `to == "user"`
+  - `report_telegram` remains optional everywhere
+  - `notifications_enabled` remains a hard gate
