@@ -300,8 +300,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             }
         });
     }
-    // Hydrate persisted Feishu Project inbox store
+    // Hydrate persisted Feishu Project inbox store and auto-start polling
     feishu_project_lifecycle::hydrate_store(&state).await;
+    let mut feishu_project_handle: Option<crate::feishu_project::runtime::FeishuProjectHandle> =
+        feishu_project_lifecycle::auto_start(&state, &app).await;
     let mut codex_handle: Option<codex::CodexHandle> = None;
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> = None;
@@ -472,6 +474,9 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
             }
             DaemonCmd::Shutdown { reply } => {
+                if let Some(mut h) = feishu_project_handle.take() {
+                    h.stop().await;
+                }
                 stop_codex_session(&mut codex_handle, &state, &app).await;
                 stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
                 let session_mgr = { state.read().await.session_mgr.clone() };
@@ -723,8 +728,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(rs);
             }
             DaemonCmd::SaveFeishuProjectConfig { config, reply } => {
-                let result =
-                    feishu_project_lifecycle::save_config(&state, &app, config).await;
+                let result = feishu_project_lifecycle::save_and_restart(
+                    &state,
+                    &app,
+                    &mut feishu_project_handle,
+                    config,
+                )
+                .await;
                 let _ = reply.send(result);
             }
             DaemonCmd::FeishuProjectSyncNow { reply } => {

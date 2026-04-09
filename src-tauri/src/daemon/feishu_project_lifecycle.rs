@@ -4,32 +4,59 @@ use tauri::AppHandle;
 
 pub const WEBHOOK_PATH: &str = "/integrations/feishu-project/webhook";
 
-pub async fn get_runtime_state(
-    state: &SharedState,
-) -> crate::feishu_project::types::FeishuProjectRuntimeState {
-    let cfg = match crate::feishu_project::config::default_config_path()
+fn load_cfg() -> crate::feishu_project::types::FeishuProjectConfig {
+    crate::feishu_project::config::default_config_path()
         .and_then(|p| crate::feishu_project::config::load_config(&p))
-    {
-        Ok(cfg) => cfg,
-        Err(_) => crate::feishu_project::types::FeishuProjectConfig::default(),
-    };
-    let rs = crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
-        &cfg,
-        WEBHOOK_PATH,
-    );
-    rs
+        .unwrap_or_default()
 }
 
-pub async fn save_config(
+pub async fn get_runtime_state(
+    _state: &SharedState,
+) -> crate::feishu_project::types::FeishuProjectRuntimeState {
+    crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
+        &load_cfg(),
+        WEBHOOK_PATH,
+    )
+}
+
+pub async fn save_and_restart(
     state: &SharedState,
     app: &AppHandle,
+    handle: &mut Option<crate::feishu_project::runtime::FeishuProjectHandle>,
     incoming: crate::feishu_project::types::FeishuProjectConfig,
 ) -> Result<crate::feishu_project::types::FeishuProjectRuntimeState, String> {
+    // Stop existing poller
+    if let Some(h) = handle.take() {
+        let mut h = h;
+        h.stop().await;
+    }
     let config_path =
         crate::feishu_project::config::default_config_path().map_err(|e| e.to_string())?;
     crate::feishu_project::config::save_config(&config_path, &incoming)
         .map_err(|e| e.to_string())?;
-
+    // Restart poller if enabled
+    if incoming.enabled && !incoming.plugin_token.is_empty() && !incoming.project_key.is_empty() {
+        match crate::feishu_project::runtime::start_polling(
+            state.clone(),
+            app.clone(),
+            incoming.clone(),
+        )
+        .await
+        {
+            Ok(h) => *handle = Some(h),
+            Err(e) => {
+                gui::emit_system_log(app, "error", &format!("[FeishuProject] start failed: {e}"));
+                // Persist error into config so it survives app reload
+                if let Ok(mut saved) = crate::feishu_project::config::load_config(&config_path) {
+                    saved.last_error = Some(e.to_string());
+                    let _ = crate::feishu_project::config::save_config(&config_path, &saved);
+                }
+                let rs = get_runtime_state(state).await;
+                gui::emit_feishu_project_state(app, &rs);
+                return Err(e.to_string());
+            }
+        }
+    }
     let rs = get_runtime_state(state).await;
     gui::emit_feishu_project_state(app, &rs);
     Ok(rs)
@@ -41,13 +68,22 @@ pub async fn list_items(
     state.read().await.feishu_project_store.items.clone()
 }
 
-/// Stub: real polling will be implemented in Task 2.
+/// Trigger an immediate poll cycle (manual "Sync now").
 pub async fn sync_now(
-    _state: &SharedState,
-    _app: &AppHandle,
+    state: &SharedState,
+    app: &AppHandle,
 ) -> Result<(), String> {
-    // Task 2 will implement actual Feishu API polling here.
-    Err("sync not yet implemented".into())
+    let cfg = load_cfg();
+    if cfg.project_key.is_empty() || cfg.plugin_token.is_empty() {
+        return Err("feishu project not configured".into());
+    }
+    let client = reqwest::Client::new();
+    crate::feishu_project::runtime::run_poll_cycle(&client, &cfg, state, app)
+        .await
+        .map(|n| {
+            gui::emit_system_log(app, "info", &format!("[FeishuProject] sync: {n} items"));
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// Stub: real task linking will be implemented in Task 4.
@@ -56,7 +92,6 @@ pub async fn start_handling(
     _app: &AppHandle,
     _work_item_id: &str,
 ) -> Result<String, String> {
-    // Task 4 will implement idempotent task creation/reuse here.
     Err("start_handling not yet implemented".into())
 }
 
@@ -73,7 +108,6 @@ pub async fn set_ignored(
     if !ok {
         return Err(format!("work item not found: {work_item_id}"));
     }
-    // Persist store
     if let Ok(path) = crate::feishu_project::store::default_store_path() {
         let store = state.read().await.feishu_project_store.clone();
         let _ = crate::feishu_project::store::save_store(&path, &store);
@@ -88,6 +122,37 @@ pub async fn hydrate_store(state: &SharedState) {
     if let Ok(path) = crate::feishu_project::store::default_store_path() {
         if let Ok(store) = crate::feishu_project::store::load_store(&path) {
             state.write().await.feishu_project_store = store;
+        }
+    }
+}
+
+/// Auto-start polling on daemon boot if config is enabled.
+pub async fn auto_start(
+    state: &SharedState,
+    app: &AppHandle,
+) -> Option<crate::feishu_project::runtime::FeishuProjectHandle> {
+    let cfg = load_cfg();
+    if !cfg.enabled || cfg.plugin_token.is_empty() || cfg.project_key.is_empty() {
+        return None;
+    }
+    match crate::feishu_project::runtime::start_polling(
+        state.clone(),
+        app.clone(),
+        cfg,
+    )
+    .await
+    {
+        Ok(h) => Some(h),
+        Err(e) => {
+            gui::emit_system_log(app, "warn", &format!("[FeishuProject] auto-start failed: {e}"));
+            // Persist error into config so it survives app reload
+            if let Ok(path) = crate::feishu_project::config::default_config_path() {
+                if let Ok(mut saved) = crate::feishu_project::config::load_config(&path) {
+                    saved.last_error = Some(e.to_string());
+                    let _ = crate::feishu_project::config::save_config(&path, &saved);
+                }
+            }
+            None
         }
     }
 }
