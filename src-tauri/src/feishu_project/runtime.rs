@@ -1,4 +1,4 @@
-use super::{config, mcp_client::McpClient, store, types::FeishuProjectConfig};
+use super::{config, mcp_client::McpClient, mcp_sync, store, types::FeishuProjectConfig};
 use crate::daemon::{gui, SharedState};
 use tauri::AppHandle;
 use tokio::sync::oneshot;
@@ -39,8 +39,43 @@ pub async fn connect_and_discover(
     Ok(client)
 }
 
-/// Start the MCP runtime loop. Connects on start, then reconnects on each
-/// refresh interval. Returns a handle to stop the loop.
+/// Run a full MCP sync cycle: connect, discover, fetch items, upsert.
+pub async fn run_mcp_sync_cycle(
+    cfg: &FeishuProjectConfig,
+    state: &SharedState,
+    app: &AppHandle,
+) -> Result<McpClient, String> {
+    let client = connect_and_discover(cfg, app).await?;
+    match mcp_sync::run_mcp_sync(&client, &cfg.workspace_hint).await {
+        Ok(items) => {
+            let count = items.len();
+            {
+                let mut daemon = state.write().await;
+                for item in items {
+                    daemon.feishu_project_store.upsert(item);
+                }
+            }
+            persist_and_emit(state, app).await;
+            gui::emit_system_log(
+                app,
+                "info",
+                &format!("[FeishuProject MCP] synced {count} items"),
+            );
+        }
+        Err(e) => {
+            gui::emit_system_log(
+                app,
+                "warn",
+                &format!("[FeishuProject MCP] sync failed: {e}"),
+            );
+            update_mcp_state(cfg, &client, Some(e.clone()), app).await;
+            return Err(e);
+        }
+    }
+    Ok(client)
+}
+
+/// Start the MCP runtime loop with sync. Returns a handle to stop it.
 pub async fn start_mcp_runtime(
     state: SharedState,
     app: AppHandle,
@@ -50,14 +85,9 @@ pub async fn start_mcp_runtime(
     let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
 
     tokio::spawn(async move {
-        // Initial connect
-        match connect_and_discover(&cfg, &app).await {
-            Ok(client) => {
-                update_mcp_state(&cfg, &client, None, &app).await;
-            }
-            Err(e) => {
-                update_mcp_state_error(&cfg, &e, &app).await;
-            }
+        match run_mcp_sync_cycle(&cfg, &state, &app).await {
+            Ok(client) => update_mcp_state(&cfg, &client, None, &app).await,
+            Err(e) => update_mcp_state_error(&cfg, &e, &app).await,
         }
         let interval = std::time::Duration::from_secs(interval_mins * 60);
         loop {
@@ -67,13 +97,9 @@ pub async fn start_mcp_runtime(
                     return;
                 }
                 _ = tokio::time::sleep(interval) => {
-                    match connect_and_discover(&cfg, &app).await {
-                        Ok(client) => {
-                            update_mcp_state(&cfg, &client, None, &app).await;
-                        }
-                        Err(e) => {
-                            update_mcp_state_error(&cfg, &e, &app).await;
-                        }
+                    match run_mcp_sync_cycle(&cfg, &state, &app).await {
+                        Ok(client) => update_mcp_state(&cfg, &client, None, &app).await,
+                        Err(e) => update_mcp_state_error(&cfg, &e, &app).await,
                     }
                 }
             }
@@ -93,7 +119,6 @@ pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
     gui::emit_feishu_project_items(app, &store.items);
 }
 
-/// Emit updated runtime state after successful MCP connection.
 async fn update_mcp_state(
     cfg: &FeishuProjectConfig,
     client: &McpClient,
@@ -104,7 +129,7 @@ async fn update_mcp_state(
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
             saved.last_sync_at = Some(now);
-            saved.last_error = error;
+            saved.last_error = error.clone();
             let _ = config::save_config(&path, &saved);
         }
     }
@@ -112,15 +137,11 @@ async fn update_mcp_state(
     rs.mcp_status = client.status;
     rs.discovered_tool_count = client.catalog.tool_count();
     rs.last_sync_at = Some(now);
+    rs.last_error = error;
     gui::emit_feishu_project_state(app, &rs);
 }
 
-/// Emit error state when MCP connection fails.
-async fn update_mcp_state_error(
-    cfg: &FeishuProjectConfig,
-    error: &str,
-    app: &AppHandle,
-) {
+async fn update_mcp_state_error(cfg: &FeishuProjectConfig, error: &str, app: &AppHandle) {
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
             saved.last_error = Some(error.to_string());

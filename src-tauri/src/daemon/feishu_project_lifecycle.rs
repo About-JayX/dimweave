@@ -63,7 +63,7 @@ pub async fn list_items(
     state.read().await.feishu_project_store.items.clone()
 }
 
-/// Trigger an immediate MCP connect + discover cycle (manual "Sync now").
+/// Trigger an immediate MCP sync cycle (manual "Sync now").
 pub async fn sync_now(
     state: &SharedState,
     app: &AppHandle,
@@ -72,16 +72,9 @@ pub async fn sync_now(
     if cfg.mcp_user_token.is_empty() {
         return Err("MCP user token not configured".into());
     }
-    let client = crate::feishu_project::runtime::connect_and_discover(&cfg, app).await?;
-    gui::emit_system_log(
-        app,
-        "info",
-        &format!(
-            "[FeishuProject MCP] sync: {} tools discovered",
-            client.catalog.tool_count()
-        ),
-    );
-    Ok(())
+    crate::feishu_project::runtime::run_mcp_sync_cycle(&cfg, state, app)
+        .await
+        .map(|_| ())
 }
 
 pub async fn start_handling(
