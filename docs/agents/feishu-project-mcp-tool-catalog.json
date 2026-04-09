@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "captured_at": null,
+    "status": "BLOCKED — requires valid MCP_USER_TOKEN",
+    "package": "@lark-project/mcp@0.0.1",
+    "endpoint": "https://project.feishu.cn/mcp_server/v1",
+    "notes": "Real tools/list response not yet captured. The remote MCP server returns {\"error\":\"unauthorized\"} without a valid token. Placeholder structure below is inferred from help center docs — NOT verified."
+  },
+  "initialize_response": null,
+  "tools_list_response": null,
+  "expected_capability_classes": {
+    "work_item_listing": "Expected: tool to list/query work items in a space",
+    "work_item_detail": "Expected: tool to get full work item metadata",
+    "space_metadata": "Expected: tool to list/query spaces and projects",
+    "process_flow": "Expected: tool to read process/workflow definitions",
+    "view_queries": "Expected: tool to query saved views",
+    "comments": "Expected: tool to read/write work item comments"
+  },
+  "verified_facts": {
+    "protocol": "MCP StreamableHTTP (JSON-RPC 2.0 over HTTP POST)",
+    "proxy_architecture": "npm package is stdio-to-HTTP proxy, NOT standalone server",
+    "auth_header": "X-Mcp-Token",
+    "connection_type_header": "X-Meego-MCP-Connection-Type: stdio",
+    "domain_default": "https://project.feishu.cn",
+    "mcp_path": "/mcp_server/v1",
+    "unauthorized_response": "{\"error\":\"unauthorized\"}"
+  }
+}

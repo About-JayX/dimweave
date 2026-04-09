@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current token/webhook-first Feishu Project data-access layer with an MCP-first integration while preserving the existing Bug Inbox UI and linked task-handling workflow.
 
-**Architecture:** Add a Feishu Project MCP client runtime in Tauri, start with an app-managed npm-package `stdio` transport after validating the managed install model, the `MCP_USER_TOKEN` acquisition flow, and the live tool catalog, and map the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
+**Architecture:** Add a direct HTTP Feishu Project MCP client runtime in Tauri that talks to `https://project.feishu.cn/mcp_server/v1`, authenticates with `MCP_USER_TOKEN`, discovers the real tool catalog, and maps the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
 
 **Tech Stack:** React 19, TypeScript, Zustand, Tauri 2, Rust, tokio, subprocess stdio, serde_json, Bun, Cargo
 
@@ -15,7 +15,6 @@
 - The current token/webhook implementation is already committed and working, but it is not a good fit for this user because they cannot obtain project-space tokens.
 - The Bug Inbox UI and task-link path should be preserved as much as possible.
 - The new unknowns are:
-  - whether the documented Feishu stdio package `@lark-project/mcp` can be app-managed without global install
   - how `domain` and `MCP_USER_TOKEN` are obtained from the Feishu Project MCP settings UI in practice
   - the exact `tools/list` catalog and JSON schemas
 - The implementation must therefore include an explicit discovery/diagnostics stage instead of hardcoding all tool names up front.
@@ -45,7 +44,13 @@ From the Feishu Project help-center page “在 AI 工具中连接 MCP”:
 .codex/config.toml
 ```
 
-Implication: the most realistic non-global-install path is **app-managed npm package + stdio**, not a prebuilt bundled native binary.
+Task 0 investigation also proved the npm package is only a stdio-to-HTTP proxy to:
+
+```text
+https://project.feishu.cn/mcp_server/v1
+```
+
+Implication: the most realistic non-global-install path is now **direct HTTP MCP**, not a bundled native binary and not a managed npm proxy.
 
 ## Scope
 
@@ -89,19 +94,19 @@ Implication: the most realistic non-global-install path is **app-managed npm pac
 - Create: `src-tauri/src/feishu_project/mcp_stdio.rs`
 - Create: `src-tauri/src/feishu_project/tool_catalog.rs`
 - Create: `src-tauri/src/feishu_project/mcp_sync.rs`
-- Create or package: app-managed Feishu MCP npm runtime / wrapper if `@lark-project/mcp` cannot be directly vendored as-is
+- Create: `src-tauri/src/feishu_project/mcp_http.rs`
 
 ## CM Memory
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 0 | `docs: capture feishu project mcp catalog` | `git diff --check`; saved artifact with real `tools/list` response and launch notes | The pivot must start from a real catalog plus a validated app-managed launch/bundling strategy, not guesses. |
-| Task 1 | `feat: add feishu project mcp stdio runtime` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp`; `git diff --check` | The pivot must first prove we can connect, initialize, and list tools before we rewrite the inbox sync path. |
+| Task 0 | `docs: capture feishu project mcp catalog` | `git diff --check`; saved artifact with launch notes and placeholder catalog | Task 0 proved the stdio package is only a proxy and that direct HTTP is the better app-managed path. |
+| Task 1 | `feat: add feishu project mcp http runtime` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp`; `git diff --check` | The pivot must first prove we can connect, initialize, and list tools over direct HTTP before we rewrite the inbox sync path. |
 | Task 2 | `feat: switch bug inbox config to mcp connection` | `bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts`; `bun run build`; `git diff --check` | The UI must stop asking for inaccessible tokens and instead expose MCP connection status and controls. |
 | Task 3 | `feat: source bug inbox from feishu mcp` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync`; `cargo test --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Tool discovery should drive the adapter; do not hardcode final tool IDs before seeing the real catalog. |
 | Task 4 | `refactor: retire legacy feishu token sync path` | `cargo test --manifest-path src-tauri/Cargo.toml`; `bun run build`; `git diff --check` | The old path should be clearly demoted or removed so we do not maintain two conflicting primary architectures. |
 
-## Task 0: Capture the real Feishu Project MCP stdio launch contract, bundling strategy, and tool catalog
+## Task 0: Capture the real Feishu Project MCP transport shape and tool-catalog blocker
 
 **Files:**
 - Create: `docs/agents/feishu-project-mcp-tool-catalog.json`
@@ -113,7 +118,6 @@ Use the real Feishu Project MCP stdio launch command and capture:
 
 - how `@lark-project/mcp` is launched in practice
 - whether it requires an interactive login step
-- whether it can be installed and invoked from an app-managed local directory instead of a global install
 - where `domain` is obtained
 - where `MCP_USER_TOKEN` is obtained
 - the raw `initialize` response
@@ -135,9 +139,9 @@ docs/agents/feishu-project-mcp-notes.md
 
 The notes must explicitly answer:
 
-- Can Dimweave ship this as an app-managed dependency?
-- Can Dimweave install `@lark-project/mcp` into app data / project-local storage and run it without global npm install?
-- If not, is `HTTP OAuth` the required fallback primary path?
+- Is the npm package only a proxy?
+- Can Dimweave bypass it and speak direct HTTP MCP?
+- Is `MCP_USER_TOKEN` still mandatory?
 
 - [ ] **Step 3: Commit**
 
@@ -146,7 +150,7 @@ git add docs/agents/feishu-project-mcp-tool-catalog.json docs/agents/feishu-proj
 git commit -m "docs: capture feishu project mcp catalog"
 ```
 
-## Task 1a: Add Feishu Project MCP stdio transport
+## Task 1: Add Feishu Project MCP HTTP runtime and tool discovery
 
 **Files:**
 - Modify: `src-tauri/src/main.rs`
@@ -157,107 +161,57 @@ git commit -m "docs: capture feishu project mcp catalog"
 - Replace: `src-tauri/src/feishu_project/runtime.rs`
 - Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`
 - Modify: `src-tauri/src/feishu_project/mod.rs`
-- Create: `src-tauri/src/feishu_project/mcp_stdio.rs`
+- Create: `src-tauri/src/feishu_project/mcp_http.rs`
+- Create: `src-tauri/src/feishu_project/mcp_client.rs`
+- Create: `src-tauri/src/feishu_project/tool_catalog.rs`
 
-- [ ] **Step 1: Replace the config model with app-managed MCP connection config**
+- [ ] **Step 1: Replace the config model with direct MCP endpoint config**
 
-Move from REST-token config to MCP connection config, but do **not** expose raw command path fields in the user UI. The config should store only what the app needs to select its own managed launch mode and workspace hint.
+Move from REST-token config to MCP endpoint config:
 
 ```rust
-pub enum FeishuProjectConnectionMode {
-    StdioManaged,
-    HttpOAuth,
+pub struct FeishuProjectConfig {
+    pub enabled: bool,
+    pub domain: String,
+    pub mcp_user_token: String,
+    pub workspace_hint: Option<String>,
+    pub refresh_interval_minutes: u64,
+    pub last_error: Option<String>,
 }
 ```
 
-- [ ] **Step 2: Write failing tests for stdio transport**
-
-Choose and state the testing strategy explicitly:
-
-- pure serialization + correlation unit tests only, and/or
-- mock child-process fixture
-
-Do not leave the transport test strategy implicit.
+- [ ] **Step 2: Write failing tests for HTTP MCP transport and client**
 
 Tests should prove:
 
 - initialize request formatting
-- request/response correlation by `id`
-- EOF / child exit surfaces a disconnected state
+- parsing HTTP JSON-RPC responses
+- unauthorized response handling
+- missing required tools handling
 
-- [ ] **Step 3: Implement MCP stdio transport**
+- [ ] **Step 3: Implement HTTP MCP transport**
 
 The transport needs:
 
-- app-managed process spawn of the documented Feishu MCP package/runtime
-- bidirectional stdout pump loop
-- serialized stdin writes
-- pending-request correlation
-- EOF / process-exit handling
+- JSON-RPC 2.0 request building
+- HTTP POST to `{domain}/mcp_server/v1`
+- required headers:
+  - `X-Mcp-Token`
+  - `X-Meego-MCP-Connection-Type`
+- timeout + response parsing
+- initialize + tools/list + tools/call support
 
-- [ ] **Step 4: Verify**
-
-Run:
-
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_stdio
-git diff --check
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src-tauri/src/main.rs src-tauri/src/daemon/cmd.rs src-tauri/src/daemon/mod.rs src-tauri/src/feishu_project/types.rs src-tauri/src/feishu_project/config.rs src-tauri/src/feishu_project/runtime.rs src-tauri/src/daemon/feishu_project_lifecycle.rs src-tauri/src/feishu_project/mod.rs src-tauri/src/feishu_project/mcp_stdio.rs
-git commit -m "feat: add feishu project mcp stdio transport"
-```
-
-## Task 1b: Add Feishu Project MCP client API and tool discovery
-
-**Files:**
-- Modify: `src-tauri/src/main.rs`
-- Modify: `src-tauri/src/daemon/cmd.rs`
-- Modify: `src-tauri/src/daemon/mod.rs`
-- Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`
-- Modify: `src-tauri/src/feishu_project/runtime.rs`
-- Modify: `src-tauri/src/feishu_project/mod.rs`
-- Create: `src-tauri/src/feishu_project/mcp_client.rs`
-- Create: `src-tauri/src/feishu_project/tool_catalog.rs`
-
-- [ ] **Step 1: Write failing tests for MCP client handshake and runtime state**
-
-Add tests that prove:
-
-- initialize request formatting
-- parsing `tools/list` results
-- runtime state reflects connection failure
-- missing required tools is surfaced cleanly
-
-- [ ] **Step 2: Implement MCP client request lifecycle**
-
-Layer a client API on top of the transport:
-
-- `connect()`
-- `disconnect()`
-- `initialize()`
-- `list_tools()`
-- `call_tool()`
-
-with:
-
-- timeouts
-- inflight request map
-- clean shutdown
-
-- [ ] **Step 3: Add diagnostics surface in runtime state**
+- [ ] **Step 4: Add diagnostics surface in runtime state**
 
 Expose:
 
 - connected / disconnected
+- unauthorized / invalid token
 - last error
 - discovered tool count
 - maybe tool names preview
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 5: Verify**
 
 Run:
 
@@ -266,11 +220,11 @@ cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp
 git diff --check
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src-tauri/src/main.rs src-tauri/src/daemon/cmd.rs src-tauri/src/daemon/mod.rs src-tauri/src/daemon/feishu_project_lifecycle.rs src-tauri/src/feishu_project/runtime.rs src-tauri/src/feishu_project/mod.rs src-tauri/src/feishu_project/mcp_client.rs src-tauri/src/feishu_project/tool_catalog.rs
-git commit -m "feat: add feishu project mcp client runtime"
+git add src-tauri/src/main.rs src-tauri/src/daemon/cmd.rs src-tauri/src/daemon/mod.rs src-tauri/src/feishu_project/types.rs src-tauri/src/feishu_project/config.rs src-tauri/src/feishu_project/runtime.rs src-tauri/src/daemon/feishu_project_lifecycle.rs src-tauri/src/feishu_project/mod.rs src-tauri/src/feishu_project/mcp_http.rs src-tauri/src/feishu_project/mcp_client.rs src-tauri/src/feishu_project/tool_catalog.rs
+git commit -m "feat: add feishu project mcp http runtime"
 ```
 
 ## Task 2: Switch Bug Inbox config UI to MCP connection
@@ -287,7 +241,8 @@ git commit -m "feat: add feishu project mcp client runtime"
 For the first MCP pivot pass, support:
 
 - enabled
-- connection mode (default `StdioManaged`)
+- domain
+- `MCP_USER_TOKEN`
 - workspace hint
 - refresh interval
 

@@ -39,6 +39,8 @@ The user provided the following verified product facts from Feishu Project help 
   - `args: ["-y", "@lark-project/mcp", "--domain", "{domain}"]`
   - `env: { "MCP_USER_TOKEN": "" }`
 - The same page shows Codex CLI can scope MCP config at the **project level** via `.codex/config.toml`
+- Task 0 investigation proved `@lark-project/mcp` is a **stdio-to-HTTP proxy**, not the actual MCP server. The actual MCP tools are served remotely from `https://project.feishu.cn/mcp_server/v1`.
+- Task 0 also proved the npm package requires `MCP_USER_TOKEN` and does **not** implement an interactive OAuth/browser login flow.
 
 That changes the architecture tradeoff:
 
@@ -63,57 +65,58 @@ That changes the architecture tradeoff:
 
 ## Recommended Connection Strategy
 
-### Option A: HTTP OAuth first
+### Option A: Direct HTTP MCP client (**recommended**)
 
 **Pros**
-- Matches Feishu's most user-friendly path
-- No manual token entry
-- Best long-term UX
+- Eliminates Node.js runtime dependency entirely
+- Eliminates npm package management and subprocess lifecycle
+- Talks directly to the real MCP endpoint the npm package proxies to
+- Best fit for the user's “app-managed / no global install” requirement
+- Best fit for the current Rust/Tauri architecture
 
 **Cons**
-- Requires implementing an MCP-over-HTTP client plus OAuth handshake
-- Harder to ship quickly in the current Rust/Tauri codebase
+- Requires implementing MCP over HTTP / StreamableHTTP in Rust
+- Still requires `MCP_USER_TOKEN`
 
-### Option B: Stdio first, OAuth later (**recommended, pending validation**) 
+### Option B: App-managed npm proxy + stdio (**fallback only**) 
 
 **Pros**
-- Best fit for current Dimweave runtime model
-- Reuses existing subprocess lifecycle patterns
-- Avoids plugin token dependency immediately
-- We now know the concrete stdio shape Feishu documents for Claude Code:
+- We know the concrete stdio shape Feishu documents for Claude Code:
   - `npx -y @lark-project/mcp --domain {domain}`
   - `MCP_USER_TOKEN` in env
-- This makes an **app-managed npm package + stdio** design plausible
+- Can still satisfy the “no global install” requirement if Dimweave manages the package itself
 
 **Cons**
-- We still need to prove we can manage `@lark-project/mcp` ourselves inside the app/project without requiring a user-level global install
-- Stdio still uses `MCP_USER_TOKEN`, so “no plugin token” does **not** mean “no credentials at all”
-- Less turnkey than OAuth
+- Adds Node.js dependency
+- Adds npm package management
+- Adds subprocess lifecycle complexity even though the package is only a proxy
+- Strictly worse than direct HTTP if the direct endpoint is stable
 
-### Option C: Keep token/webhook as primary and add MCP as optional fallback
+### Option C: HTTP OAuth-first
 
 **Pros**
-- Reuses already implemented code
+- Friendly authorization UX if Feishu documents a stable OAuth path for the remote MCP endpoint
 
 **Cons**
-- Solves the wrong problem for this user
-- Keeps the bad dependency on unavailable admin credentials
-- Leaves two competing primary code paths
+- More moving parts than direct HTTP + token
+- Not yet evidenced by Task 0
+- Still requires implementing a remote MCP HTTP client anyway
 
 ## Recommendation
 
-**Use app-managed npm-package stdio as the new V1 primary architecture, but only after we verify the managed install model, token acquisition flow, and live tool catalog.**
+**Use a direct HTTP MCP client as the new V1 primary architecture.**
 
 Rationale:
 
-- it removes the token blocker immediately
-- it fits the current Tauri desktop/process-management model
+- Task 0 proved the documented stdio package is only a proxy to the remote HTTP MCP endpoint
+- direct HTTP removes the Node/npm/global-install question entirely
+- it best satisfies the user's hard requirement that the MCP integration be internal to the project/app
+- it fits the current Rust/Tauri desktop architecture
 - it lets us preserve almost all of the existing Bug Inbox UI and task-launch workflow
-- it leaves room to add `HTTP OAuth` later as a better UX layer without changing the core inbox model
+- it leaves room to add `HTTP OAuth` later as a better auth UX without changing the core inbox model
 
-This recommendation is now grounded in the concrete Feishu help-center stdio example, but it is still **not enough** to start coding the final adapter. We must still verify:
+This recommendation is now grounded in Task 0 evidence, but we still cannot complete the final inbox adapter until we have a real `MCP_USER_TOKEN` and real `tools/list` output. The remaining unknowns are:
 
-- whether `@lark-project/mcp` can be app-managed inside Dimweave without global install
 - how `domain` and `MCP_USER_TOKEN` are obtained from the Feishu Project MCP settings UI
 - the real live `tools/list` catalog
 
@@ -132,7 +135,7 @@ This recommendation is now grounded in the concrete Feishu help-center stdio exa
 
 - Feishu Project direct OpenAPI polling as the main path
 - Feishu Project webhook as the main path
-- HTTP OAuth implementation in this first pivot, unless the tool catalog proves stdio is unavailable
+- HTTP OAuth implementation in this first pivot
 - any final design that requires the user to globally install the Feishu Project MCP server by hand
 - Feishu write-back redesign beyond what the MCP path naturally enables later
 
@@ -141,8 +144,8 @@ This recommendation is now grounded in the concrete Feishu help-center stdio exa
 ### 1. Separate the integration into three layers
 
 ```md
-Feishu Project MCP transport
-    -> MCP client session
+Feishu Project remote MCP endpoint
+    -> HTTP MCP client session
     -> Feishu capability adapter
     -> Bug Inbox domain store
     -> existing UI + task-launch flow
@@ -150,11 +153,11 @@ Feishu Project MCP transport
 
 This keeps protocol concerns away from the inbox store and preserves the ability to swap `stdio` for `HTTP OAuth` later.
 
-### 2. Add a general-purpose Feishu MCP client runtime
+### 2. Add a general-purpose Feishu MCP HTTP client runtime
 
 New runtime responsibilities:
 
-- spawn/connect to the app-managed Feishu MCP transport
+- connect to the remote Feishu MCP endpoint
 - perform `initialize`
 - fetch and cache `tools/list`
 - expose a small internal API like:
@@ -167,14 +170,14 @@ This is the real architectural replacement for the old `api.rs + runtime.rs` tok
 
 This client is materially more complex than the old REST poller. It must own:
 
-- a bidirectional stdio pump loop
 - JSON-RPC request/response correlation by `id`
-- serialized writes to child stdin
-- notification handling
-- child-process health monitoring
-- reconnect / shutdown cleanup behavior
+- HTTP request construction against the MCP endpoint
+- response parsing
+- connection/auth state handling
+- request timeout / retry boundaries
+- clean shutdown of inflight state
 
-It should be treated as a first-class runtime subsystem, closer to the existing Codex WS client lifecycle than to a simple helper module.
+It should be treated as a first-class runtime subsystem, closer to a remote transport client than to the previous REST poll helper.
 
 ### 3. Add a capability adapter on top of tool discovery
 
@@ -204,7 +207,8 @@ The current left-rail icon and drawer pane should remain. Only the config and ba
 
 The new configuration card should ask for:
 
-- connection mode (`stdio` initially, but app-managed)
+- endpoint domain (default `https://project.feishu.cn`)
+- `MCP_USER_TOKEN`
 - target Feishu Project workspace selection or identifier
 - refresh interval
 - connection status
@@ -219,19 +223,7 @@ The old fields should be retired from the primary UI:
 - public webhook base URL
 - raw stdio command / path / args fields exposed to the user
 
-If the stdio transport requires internal launch metadata, it should live in app code or packaging config, not in user-facing settings. In practice, the likely hidden launch shape is the documented Feishu command:
-
-```bash
-npx -y @lark-project/mcp --domain {domain}
-```
-
-with:
-
-```bash
-MCP_USER_TOKEN=<value>
-```
-
-managed by Dimweave, not typed by the user into a raw command box.
+The token is still required, but it is now a **user-level MCP token**, not the old space-plugin token path.
 
 ### 5. Keep linked-task and handoff logic
 
@@ -286,14 +278,13 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 
 ### Add
 
+- `src-tauri/src/feishu_project/mcp_http.rs`
 - `src-tauri/src/feishu_project/mcp_client.rs`
-- `src-tauri/src/feishu_project/mcp_stdio.rs`
 - `src-tauri/src/feishu_project/tool_catalog.rs`
 - `src-tauri/src/feishu_project/mcp_sync.rs`
 - `src-tauri/src/commands_feishu_project.rs`
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/main.rs`
-- any app-bundled MCP binary wrapper or packaged helper needed to avoid global installation
 
 ### Remove from primary path
 
@@ -309,6 +300,5 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - Bug Inbox can populate from MCP-fetched work items
 - Existing `Handle` / `Open task` behavior still works
 - lead still receives a Feishu-sourced handoff with snapshot attachment
-- If the MCP server is missing, disconnected, or lacks required tools, Dimweave surfaces a clear runtime error state in the Bug Inbox UI
-- The runtime can shut down cleanly without leaving orphan MCP subprocesses behind
+- If the MCP endpoint is unauthorized, unavailable, or lacks required tools, Dimweave surfaces a clear runtime error state in the Bug Inbox UI
 - The final shipped solution does not require the user to globally install the Feishu Project MCP server outside Dimweave
