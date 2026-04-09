@@ -26,7 +26,7 @@
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
 | Task 1 | `47348e28` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-09-message-search-scroll-stability-design.md docs/superpowers/plans/2026-04-09-message-search-scroll-stability.md` ✅ | The approved scroll policy must be documented before code changes so implementation and review use the same definition of "search-stable". |
-| Task 2 | `PENDING` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts`; `git diff --check` | Search-active scroll policy belongs in testable helpers, not inline conditionals scattered through JSX. |
+| Task 2 | `0cdeb12c` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts` ✅ 15 pass; `git diff --check` ✅ | Search-active scroll policy belongs in testable helpers, not inline conditionals scattered through JSX. |
 | Task 3 | `PENDING` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Active search is an inspection mode: freeze auto-follow until the user clears the query or explicitly scrolls back down. |
 
 ## Baseline Notes
@@ -99,7 +99,7 @@ Replace the Task 1 placeholders with the real commit hash and verification evide
 - Modify: `src/components/MessagePanel/view-model.ts`
 - Modify: `src/components/MessagePanel/view-model.test.ts`
 
-- [ ] **Step 1: Write the failing helper tests**
+- [x] **Step 1: Write the failing helper tests**
 
 Extend `src/components/MessagePanel/view-model.test.ts` with focused cases like:
 
@@ -122,7 +122,7 @@ bun test src/components/MessagePanel/view-model.test.ts
 
 Expected: FAIL because the helpers do not exist yet.
 
-- [ ] **Step 2: Implement the minimal helpers**
+- [x] **Step 2: Implement the minimal helpers**
 
 Add explicit exports in `src/components/MessagePanel/view-model.ts`:
 
@@ -146,7 +146,7 @@ export function shouldResetMessageListInitialScroll(
 }
 ```
 
-- [ ] **Step 3: Re-run the helper tests**
+- [x] **Step 3: Re-run the helper tests**
 
 Run:
 
@@ -156,7 +156,7 @@ bun test src/components/MessagePanel/view-model.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 4: Verify diff hygiene**
+- [x] **Step 4: Verify diff hygiene**
 
 Run:
 
@@ -166,14 +166,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MessagePanel/view-model.ts src/components/MessagePanel/view-model.test.ts
 git commit -m "fix: define search-active message scroll policy"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 2 placeholders with the real commit hash and verification evidence.
 
