@@ -47,7 +47,7 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `PENDING` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture`; `git diff --check` | Codex dynamic `reply` must preserve the same routing metadata that Claude bridge `reply` already preserves. |
+| Task 1 | `2b255a06` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture` ✅ 6 passed; `git diff --check` ✅ | Codex dynamic `reply` must preserve the same routing metadata that Claude bridge `reply` already preserves. |
 | Task 2 | `PENDING` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | Prompt-originated user-target terminal messages must still go through `routing::route_message(...)`; direct GUI emission bypasses Telegram fan-out. |
 | Final | `PENDING` | `final deep review` | `cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | The supported Telegram contract is: explicit prompt/tool intent in, unified routing path through daemon, Telegram hook decides fan-out. |
 
@@ -63,7 +63,7 @@
 **Files:**
 - Modify: `src-tauri/src/daemon/codex/handler.rs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add focused tests in `src-tauri/src/daemon/codex/handler.rs` for a pure message-builder helper:
 
@@ -96,7 +96,7 @@ fn reply_builder_defaults_status_to_done_and_flag_to_none() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests to confirm RED**
+- [x] **Step 2: Run the focused tests to confirm RED**
 
 Run:
 
@@ -106,7 +106,7 @@ cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture
 
 Expected: FAIL because `handle_reply()` still hard-codes `done` and drops `report_telegram`.
 
-- [ ] **Step 3: Implement the minimal builder**
+- [x] **Step 3: Implement the minimal builder**
 
 Extract a pure helper in `src-tauri/src/daemon/codex/handler.rs`:
 
@@ -147,7 +147,7 @@ fn build_reply_message(args: &Value, from: &str) -> Option<BridgeMessage> {
 
 Then make `handle_reply()` call this helper, stamp context, and route the built message.
 
-- [ ] **Step 4: Run the focused tests to confirm GREEN**
+- [x] **Step 4: Run the focused tests to confirm GREEN**
 
 Run:
 
@@ -157,7 +157,7 @@ cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Verify diff hygiene**
+- [x] **Step 5: Verify diff hygiene**
 
 Run:
 
@@ -167,14 +167,14 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/daemon/codex/handler.rs
 git commit -m "fix: preserve codex reply routing metadata"
 ```
 
-- [ ] **Step 7: Update `## CM Memory`**
+- [x] **Step 7: Update `## CM Memory`**
 
 Replace the Task 1 placeholder row with the real commit and verification evidence.
 
