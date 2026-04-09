@@ -125,3 +125,41 @@ fn is_get_online_agents_rejects_other_tools() {
     let params = serde_json::json!({ "name": "reply", "arguments": {} });
     assert!(!is_get_online_agents(&params));
 }
+
+#[test]
+fn reply_schema_exposes_optional_report_telegram() {
+    let schema = reply_tool_schema();
+    assert_eq!(
+        schema["inputSchema"]["properties"]["report_telegram"]["type"],
+        "boolean"
+    );
+    let required = schema["inputSchema"]["required"]
+        .as_array()
+        .unwrap();
+    assert!(!required.iter().any(|v| v == "report_telegram"));
+}
+
+#[test]
+fn handle_reply_preserves_report_telegram() {
+    let params = serde_json::json!({
+        "name": "reply",
+        "arguments": {
+            "to": "lead",
+            "text": "hello",
+            "status": "done",
+            "report_telegram": true
+        }
+    });
+    let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
+    assert_eq!(msg.report_telegram, Some(true));
+}
+
+#[test]
+fn handle_reply_defaults_report_telegram_to_none() {
+    let params = serde_json::json!({
+        "name": "reply",
+        "arguments": { "to": "lead", "text": "hello", "status": "done" }
+    });
+    let msg = handle_tool_call(&params, "coder").unwrap().unwrap();
+    assert_eq!(msg.report_telegram, None);
+}

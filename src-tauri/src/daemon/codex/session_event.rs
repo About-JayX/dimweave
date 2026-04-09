@@ -162,11 +162,13 @@ async fn handle_completed_agent_message(
     };
     if let Some(target) = valid_target {
         let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
+        msg.report_telegram = parsed.report_telegram.then_some(true);
         state.read().await.stamp_message_context(role_id, &mut msg);
         eprintln!("[Codex] schema-route {} → {}", role_id, target);
         routing::route_message(state, app, msg).await;
     } else {
         let mut msg = build_msg_with_status(role_id, "user", &parsed.message, parsed.status);
+        msg.report_telegram = parsed.report_telegram.then_some(true);
         state.read().await.stamp_message_context(role_id, &mut msg);
         gui::emit_agent_message(app, &msg);
     }
@@ -332,6 +334,7 @@ fn build_msg_with_status(
         session_id: None,
         sender_agent_id: Some("codex".into()),
         attachments: None,
+        report_telegram: None,
     }
 }
 

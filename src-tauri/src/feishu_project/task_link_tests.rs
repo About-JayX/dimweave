@@ -88,6 +88,7 @@ fn handoff_message_structure() {
             is_image: false,
             media_type: Some("application/json".into()),
         }]),
+        report_telegram: None,
     };
     assert_eq!(msg.from, "system");
     assert_eq!(msg.display_source.as_deref(), Some("feishu_project"));

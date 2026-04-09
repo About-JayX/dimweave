@@ -99,6 +99,8 @@ pub struct BridgeMessage {
     pub sender_agent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<Attachment>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_telegram: Option<bool>,
 }
 
 impl BridgeMessage {
@@ -118,6 +120,7 @@ impl BridgeMessage {
             session_id: None,
             sender_agent_id: None,
             attachments: None,
+            report_telegram: None,
         }
     }
 }

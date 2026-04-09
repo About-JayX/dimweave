@@ -296,7 +296,7 @@ mod tests {
             task_id: None,
             session_id: None,
             sender_agent_id: Some("claude".into()),
-            attachments: None,
+            attachments: None, report_telegram: None,
         }
     }
 
@@ -371,7 +371,7 @@ mod tests {
             task_id: Some("task-1".into()),
             session_id: Some("session-1".into()),
             sender_agent_id: Some("claude".into()),
-            attachments: None,
+            attachments: None, report_telegram: None,
         };
 
         let summary = summarize_bridge_message_shape(&message);

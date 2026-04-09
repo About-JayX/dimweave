@@ -42,6 +42,10 @@ pub fn reply_tool_schema() -> serde_json::Value {
                     "type": "string",
                     "enum": VALID_REPLY_STATUSES,
                     "description": "Message lifecycle status"
+                },
+                "report_telegram": {
+                    "type": "boolean",
+                    "description": "When true, fan out this terminal lead message to Telegram"
                 }
             },
             "required": ["to", "text", "status"]
@@ -103,6 +107,9 @@ pub fn handle_tool_call(
         }
         None => MessageStatus::Done,
     };
+    let report_telegram = args
+        .get("report_telegram")
+        .and_then(|value| value.as_bool());
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     Ok(Some(BridgeMessage {
         id: format!("claude_{}_{seq}", chrono::Utc::now().timestamp_millis()),
@@ -116,6 +123,7 @@ pub fn handle_tool_call(
         status: Some(status),
         sender_agent_id: None,
         attachments: None,
+        report_telegram,
     }))
 }
 

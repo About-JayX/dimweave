@@ -130,3 +130,14 @@ fn shared_prompt_requires_structured_status_messages() {
     assert!(prompt.contains("next action"));
     assert!(prompt.contains("external dependency blocks completion"));
 }
+
+#[test]
+fn output_schema_allows_optional_report_telegram_boolean() {
+    let schema = output_schema();
+    assert_eq!(schema["properties"]["report_telegram"]["type"], "boolean");
+    assert!(!schema["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v == "report_telegram"));
+}

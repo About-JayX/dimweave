@@ -117,3 +117,19 @@ fn reasoning_boundary_separates_sections() {
     s.append_reasoning("Second section");
     assert_eq!(s.reasoning_text(), "First section\n\nSecond section");
 }
+
+#[test]
+fn parses_report_telegram_flag() {
+    let parsed = parse_structured_output(
+        r#"{"message":"done","send_to":"lead","status":"done","report_telegram":true}"#,
+    )
+    .unwrap();
+    assert!(parsed.report_telegram);
+}
+
+#[test]
+fn report_telegram_defaults_to_false_when_missing() {
+    let parsed =
+        parse_structured_output(r#"{"message":"done","send_to":"lead","status":"done"}"#).unwrap();
+    assert!(!parsed.report_telegram);
+}

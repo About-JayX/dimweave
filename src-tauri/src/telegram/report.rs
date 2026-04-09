@@ -61,7 +61,7 @@ mod tests {
             task_id: None,
             session_id: None,
             sender_agent_id: None,
-            attachments: None,
+            attachments: None, report_telegram: None,
         }
     }
 

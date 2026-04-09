@@ -35,6 +35,7 @@ export interface BridgeMessage {
   status?: MessageStatus;
   senderAgentId?: string;
   attachments?: Attachment[];
+  reportTelegram?: boolean;
 }
 
 export type PermissionBehavior = "allow" | "deny";

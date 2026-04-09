@@ -127,6 +127,10 @@ pub fn output_schema() -> serde_json::Value {
                 "type": "string",
                 "enum": ["in_progress", "done", "error"],
                 "description": "Reply lifecycle status"
+            },
+            "report_telegram": {
+                "type": "boolean",
+                "description": "When true, fan out this terminal lead message to Telegram"
             }
         },
         "required": ["message", "send_to", "status"],

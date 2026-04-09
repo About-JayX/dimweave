@@ -130,6 +130,7 @@ fn build_handoff_message(
             is_image: false,
             media_type: Some("application/json".into()),
         }]),
+        report_telegram: None,
     }
 }
 
