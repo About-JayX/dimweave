@@ -9,11 +9,16 @@ export type McpConnectionStatus =
   | "unauthorized"
   | "error";
 
+export type FeishuSyncMode = "todo" | "issues";
+
 export interface FeishuProjectRuntimeState {
   enabled: boolean;
   domain?: string | null;
   workspaceHint?: string | null;
   refreshIntervalMinutes: number;
+  syncMode: FeishuSyncMode;
+  projectName?: string | null;
+  teamMembers: string[];
   mcpStatus: McpConnectionStatus;
   discoveredToolCount: number;
   lastSyncAt?: number | null;
@@ -44,17 +49,21 @@ export interface FeishuProjectConfigInput {
   mcp_user_token: string;
   workspace_hint: string;
   refresh_interval_minutes: number;
+  sync_mode: FeishuSyncMode;
 }
 
 interface FeishuProjectStore {
   runtimeState: FeishuProjectRuntimeState | null;
   items: FeishuProjectInboxItem[];
   loading: boolean;
+  loadingMore: boolean;
   error: string | null;
   fetchState: () => Promise<void>;
   fetchItems: () => Promise<void>;
   saveConfig: (config: FeishuProjectConfigInput) => Promise<void>;
   syncNow: () => Promise<void>;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
   setIgnored: (workItemId: string, ignored: boolean) => Promise<void>;
   startHandling: (workItemId: string) => Promise<void>;
   cleanup: () => void;
@@ -67,7 +76,9 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set) => ({
   runtimeState: null,
   items: [],
   loading: false,
+  loadingMore: false,
   error: null,
+  hasMore: true,
 
   fetchState: async () => {
     set({ loading: true, error: null });
@@ -109,9 +120,26 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set) => ({
     set({ loading: true, error: null });
     try {
       await invoke("feishu_project_sync_now");
-      set({ loading: false });
+      // Fetch items immediately after sync completes
+      const items = await invoke<FeishuProjectInboxItem[]>(
+        "feishu_project_list_items",
+      );
+      set({ items, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
+    }
+  },
+
+  loadMore: async () => {
+    set({ loadingMore: true, error: null });
+    try {
+      const count = await invoke<number>("feishu_project_load_more");
+      const items = await invoke<FeishuProjectInboxItem[]>(
+        "feishu_project_list_items",
+      );
+      set({ items, loadingMore: false, hasMore: count >= 50 });
+    } catch (e) {
+      set({ error: String(e), loadingMore: false });
     }
   },
 

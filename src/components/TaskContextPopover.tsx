@@ -222,7 +222,7 @@ export function TaskContextPopover({
           {mountedPanes.includes("bugs") && (
             <div
               className={cn(
-                "h-full overflow-y-auto px-4 py-4 text-[12px] text-muted-foreground/78",
+                "h-full overflow-hidden px-4 py-4 text-[12px] text-muted-foreground/78",
                 activePane === "bugs" ? "block" : "hidden",
               )}
             >
