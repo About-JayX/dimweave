@@ -59,6 +59,19 @@ pub async fn feishu_project_list_items(
 }
 
 #[tauri::command]
+pub async fn feishu_project_load_more(
+    sender: State<'_, DaemonSender>,
+) -> Result<usize, String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::FeishuProjectLoadMore { reply: reply_tx })
+        .await
+        .map_err(|_| "daemon offline".to_string())?;
+    reply_rx.await.map_err(|_| "daemon dropped".to_string())?
+}
+
+#[tauri::command]
 pub async fn feishu_project_start_handling(
     sender: State<'_, DaemonSender>,
     work_item_id: String,

@@ -167,6 +167,7 @@ fn main() {
             commands_feishu_project::feishu_project_save_config,
             commands_feishu_project::feishu_project_sync_now,
             commands_feishu_project::feishu_project_list_items,
+            commands_feishu_project::feishu_project_load_more,
             commands_feishu_project::feishu_project_start_handling,
             commands_feishu_project::feishu_project_set_ignored,
             paste_attachments::read_paste_attachments,

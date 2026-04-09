@@ -1,28 +1,72 @@
 {
   "_meta": {
-    "captured_at": null,
-    "status": "BLOCKED — requires valid MCP_USER_TOKEN",
-    "package": "@lark-project/mcp@0.0.1",
+    "captured_at": "2026-04-09",
+    "status": "VERIFIED with real token",
     "endpoint": "https://project.feishu.cn/mcp_server/v1",
-    "notes": "Real tools/list response not yet captured. The remote MCP server returns {\"error\":\"unauthorized\"} without a valid token. Placeholder structure below is inferred from help center docs — NOT verified."
+    "server_info": {"name": "Meego MCP Server", "version": "1.0.0"},
+    "protocol_version": "2025-03-26",
+    "total_tools": 35
   },
-  "initialize_response": null,
-  "tools_list_response": null,
-  "expected_capability_classes": {
-    "work_item_listing": "Expected: tool to list/query work items in a space",
-    "work_item_detail": "Expected: tool to get full work item metadata",
-    "space_metadata": "Expected: tool to list/query spaces and projects",
-    "process_flow": "Expected: tool to read process/workflow definitions",
-    "view_queries": "Expected: tool to query saved views",
-    "comments": "Expected: tool to read/write work item comments"
-  },
-  "verified_facts": {
-    "protocol": "MCP StreamableHTTP (JSON-RPC 2.0 over HTTP POST)",
-    "proxy_architecture": "npm package is stdio-to-HTTP proxy, NOT standalone server",
-    "auth_header": "X-Mcp-Token",
-    "connection_type_header": "X-Meego-MCP-Connection-Type: stdio",
-    "domain_default": "https://project.feishu.cn",
-    "mcp_path": "/mcp_server/v1",
-    "unauthorized_response": "{\"error\":\"unauthorized\"}"
+  "tools_by_category": {
+    "query_my_work": [
+      {"name": "list_todo", "desc": "查询当前用户待办/已办/逾期/本周待办", "required": ["action", "page_num"]}
+    ],
+    "query_workitems": [
+      {"name": "search_by_mql", "desc": "MQL查询工作项数据", "required": ["project_key"]},
+      {"name": "get_workitem_brief", "desc": "按ID查询工作项概况", "required": ["work_item_id"]},
+      {"name": "list_related_workitem", "desc": "查询关联工作项", "required": ["project_key", "work_item_id"]},
+      {"name": "get_workitem_op_record", "desc": "获取工作项操作记录", "required": ["project_key", "work_item_id"]},
+      {"name": "list_workitem_comments", "desc": "查询工作项评论", "required": ["project_key", "work_item_id"]}
+    ],
+    "create_and_modify": [
+      {"name": "create_workitem", "desc": "创建工作项", "required": ["work_item_type"]},
+      {"name": "update_field", "desc": "修改工作项字段", "required": ["work_item_id"]},
+      {"name": "add_comment", "desc": "添加评论", "required": ["work_item_id"]},
+      {"name": "create_resource_work_item", "desc": "创建资源库实例", "required": ["project_key", "work_item_type_key"]},
+      {"name": "create_work_item_from_resource", "desc": "从资源模版创建工作项", "required": ["project_key", "work_item_id"]}
+    ],
+    "workflow_transitions": [
+      {"name": "get_transitable_states", "desc": "查询可流转目标状态", "required": ["project_key", "work_item_id", "work_item_type", "user_key"]},
+      {"name": "get_transition_required", "desc": "获取流转必填信息", "required": ["project_key", "work_item_id", "state_key"]},
+      {"name": "transition_state", "desc": "流转状态流工作项", "required": ["work_item_id"]},
+      {"name": "transition_node", "desc": "节点流转/回滚", "required": ["work_item_id"]}
+    ],
+    "node_and_subtask": [
+      {"name": "get_node_detail", "desc": "获取节点信息/子项/自定义字段", "required": ["work_item_id"]},
+      {"name": "update_node", "desc": "修改节点排期/负责人", "required": ["work_item_id"]},
+      {"name": "update_node_subtask", "desc": "创建/修改/完成/回滚子任务", "required": ["node_id"]}
+    ],
+    "project_and_config": [
+      {"name": "search_project_info", "desc": "查询空间基础信息(project_key→simpleName)", "required": ["project_key"]},
+      {"name": "list_workitem_types", "desc": "获取空间下所有工作项类型", "required": ["project_key"]},
+      {"name": "list_workitem_field_config", "desc": "查询工作项字段配置", "required": ["project_key", "work_item_type", "page_num"]},
+      {"name": "list_workitem_role_config", "desc": "查询工作项角色配置", "required": ["project_key", "work_item_type", "page_num"]},
+      {"name": "list_workitem_relations", "desc": "查询工作项关联关系", "required": ["project_key"]},
+      {"name": "list_node_field_config", "desc": "查看节点字段配置", "required": []},
+      {"name": "get_workitem_field_meta", "desc": "获取创建工作项元信息", "required": ["project_key"]},
+      {"name": "get_resource_work_item_type_conf", "desc": "获取资源库配置", "required": ["project_key", "work_item_type_key"]}
+    ],
+    "views_and_charts": [
+      {"name": "get_view_detail", "desc": "获取视图详情", "required": ["view_id"]},
+      {"name": "search_view_by_title", "desc": "按名称模糊查询视图ID", "required": ["project_key", "key_word", "view_scope"]},
+      {"name": "create_fixed_view", "desc": "新增固定视图", "required": ["project_key", "name", "work_item_type", "work_item_id_list"]},
+      {"name": "update_fixed_view", "desc": "更新固定视图工作项列表", "required": ["project_key", "view_id", "work_item_type"]},
+      {"name": "get_chart_detail", "desc": "查看图表详情", "required": ["chart_id"]},
+      {"name": "list_charts", "desc": "查询视图下图表列表", "required": ["project_key", "view_id"]}
+    ],
+    "team_and_users": [
+      {"name": "list_project_team", "desc": "查看空间下团队列表", "required": ["project_key"]},
+      {"name": "list_team_members", "desc": "查询团队成员列表", "required": ["project_key", "team_id"]},
+      {"name": "search_user_info", "desc": "批量查询用户信息(姓名→userkey)", "required": ["user_keys"]},
+      {"name": "list_schedule", "desc": "获取人员排期与工作量", "required": ["project_key", "user_keys", "start_time", "end_time"]}
+    ],
+    "review": [
+      {"name": "list_finished_info", "desc": "批量查询评审节点状态/结论", "required": ["project_key", "work_item_id", "node_ids"]},
+      {"name": "update_finished_info", "desc": "更新评审结论和意见", "required": ["project_key", "work_item_id", "node_id"]}
+    ],
+    "deliverables_and_manhour": [
+      {"name": "list_deliverables", "desc": "批量查询交付物详情", "required": ["project_key"]},
+      {"name": "get_workitem_man_hour_records", "desc": "获取工时登记记录", "required": ["project_key", "work_item_type", "work_item_id"]}
+    ]
   }
 }

@@ -114,6 +114,9 @@ pub enum DaemonCmd {
         work_item_id: String,
         reply: oneshot::Sender<Result<String, String>>,
     },
+    FeishuProjectLoadMore {
+        reply: oneshot::Sender<Result<usize, String>>,
+    },
     FeishuProjectSetIgnored {
         work_item_id: String,
         ignored: bool,

@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
+pub enum FeishuSyncMode {
+    #[default]
+    Todo,
+    Issues,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum McpConnectionStatus {
     #[default]
     Disconnected,
@@ -23,6 +31,8 @@ pub struct FeishuProjectConfig {
     pub workspace_hint: String,
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval_minutes: u64,
+    #[serde(default)]
+    pub sync_mode: FeishuSyncMode,
     // ── DEPRECATED: legacy token/webhook fields ──────────────────
     // Kept only for serde backwards compat with persisted config.
     // Not used by the active MCP path. Do not add new references.
@@ -64,6 +74,7 @@ impl Default for FeishuProjectConfig {
             mcp_user_token: String::new(),
             workspace_hint: String::new(),
             refresh_interval_minutes: default_refresh_interval(),
+            sync_mode: FeishuSyncMode::default(),
             project_key: String::new(),
             plugin_token: String::new(),
             user_key: String::new(),
@@ -86,6 +97,9 @@ pub struct FeishuProjectRuntimeState {
     pub domain: Option<String>,
     pub workspace_hint: Option<String>,
     pub refresh_interval_minutes: u64,
+    pub sync_mode: FeishuSyncMode,
+    pub project_name: Option<String>,
+    pub team_members: Vec<String>,
     pub mcp_status: McpConnectionStatus,
     pub discovered_tool_count: usize,
     pub last_sync_at: Option<u64>,
@@ -108,6 +122,9 @@ impl FeishuProjectRuntimeState {
                 Some(cfg.workspace_hint.clone())
             },
             refresh_interval_minutes: cfg.refresh_interval_minutes,
+            sync_mode: cfg.sync_mode,
+            project_name: None,
+            team_members: Vec::new(),
             mcp_status: McpConnectionStatus::Disconnected,
             discovered_tool_count: 0,
             last_sync_at: cfg.last_sync_at,

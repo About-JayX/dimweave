@@ -18,7 +18,7 @@ pub mod routing_target_session;
 pub mod routing_user_input;
 pub mod session_manager;
 pub mod feishu_project_lifecycle;
-mod feishu_project_task_link;
+pub mod feishu_project_task_link;
 mod telegram_lifecycle;
 pub mod state;
 pub mod task_graph;
@@ -765,6 +765,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             } => {
                 let result =
                     feishu_project_lifecycle::start_handling(&state, &app, &work_item_id).await;
+                let _ = reply.send(result);
+            }
+            DaemonCmd::FeishuProjectLoadMore { reply } => {
+                let result =
+                    feishu_project_lifecycle::load_more(&state, &app).await;
                 let _ = reply.send(result);
             }
             DaemonCmd::FeishuProjectSetIgnored {

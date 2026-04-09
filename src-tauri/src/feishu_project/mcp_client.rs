@@ -52,6 +52,19 @@ impl McpClient {
         Ok(())
     }
 
+    /// Lightweight connect: only `initialize`, skip `tools/list`.
+    /// Use when you only need `call_tool` and don't need the catalog.
+    pub async fn connect_lite(&mut self) -> Result<(), String> {
+        self.status = McpConnectionStatus::Connecting;
+        self.last_error = None;
+        if let Err(e) = self.do_initialize().await {
+            self.set_error(e);
+            return Err(self.last_error.clone().unwrap());
+        }
+        self.status = McpConnectionStatus::Connected;
+        Ok(())
+    }
+
     pub fn disconnect(&mut self) {
         self.status = McpConnectionStatus::Disconnected;
         self.catalog = McpToolCatalog::default();
