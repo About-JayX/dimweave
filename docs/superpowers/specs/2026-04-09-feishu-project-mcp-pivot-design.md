@@ -11,6 +11,7 @@ The new direction is:
 - keep the **Bug Inbox UI**
 - keep the **Handle -> lead -> coder -> review -> CM** workflow
 - replace the **Feishu data access layer** with a **Feishu Project MCP client**
+- require the MCP integration to be **app-managed / project-bundled**, not a globally installed prerequisite
 
 ## Product Goal
 
@@ -52,6 +53,7 @@ That changes the architecture tradeoff:
   - Claude / Codex runtimes
   - MCP registration helpers in `src-tauri/src/mcp.rs`
   - OAuth-style launch/cancel patterns in `src-tauri/src/codex/oauth.rs`
+- Dimweave already knows how to ship and resolve app-managed helper binaries (`resolve_release_bridge_cmd()` in `src-tauri/src/mcp.rs`), so bundling an MCP-side helper is consistent with existing packaging patterns.
 
 ## Recommended Connection Strategy
 
@@ -72,10 +74,10 @@ That changes the architecture tradeoff:
 - Best fit for current Dimweave runtime model
 - Reuses existing subprocess lifecycle patterns
 - Avoids plugin token dependency immediately
-- Can be driven by a user-provided Feishu MCP stdio launch command
+- Can be driven by an app-managed bundled Feishu MCP stdio launch command
 
 **Cons**
-- Requires the user to supply or install the local Feishu Project MCP stdio endpoint
+- Requires us to prove the Feishu Project MCP stdio server can be bundled or vendored into the app/package
 - Less turnkey than OAuth
 
 ### Option C: Keep token/webhook as primary and add MCP as optional fallback
@@ -90,7 +92,7 @@ That changes the architecture tradeoff:
 
 ## Recommendation
 
-**Use Stdio-first MCP as the new V1 primary architecture, but only after we verify the real Feishu Project stdio launch contract and tool catalog.**
+**Use Stdio-first MCP as the new V1 primary architecture, but only after we verify the real Feishu Project stdio launch contract, bundling model, and live tool catalog.**
 
 Rationale:
 
@@ -99,7 +101,7 @@ Rationale:
 - it lets us preserve almost all of the existing Bug Inbox UI and task-launch workflow
 - it leaves room to add `HTTP OAuth` later as a better UX layer without changing the core inbox model
 
-This recommendation is an engineering inference from the current codebase and the user-provided Feishu Project MCP feature description. It is **not yet enough** to hardcode the stdio launch command or tool names. Those must be captured from a real Feishu Project MCP connection before implementation locks the adapter.
+This recommendation is an engineering inference from the current codebase and the user-provided Feishu Project MCP feature description. It is **not yet enough** to hardcode the stdio launch command or tool names. Those must be captured from a real Feishu Project MCP connection before implementation locks the adapter. It is also **not yet proven** that the stdio server can be shipped as an app-managed dependency instead of requiring global installation; that is now a hard validation gate.
 
 ## Scope
 
@@ -110,12 +112,14 @@ This recommendation is an engineering inference from the current codebase and th
 - preserving Bug Inbox rows, ignore state, and linked-task workflow
 - preserving task launch and lead handoff flow
 - adding MCP connection diagnostics and tool discovery
+- enforcing an app-managed MCP packaging model instead of a global install prerequisite
 
 ### Excluded
 
 - Feishu Project direct OpenAPI polling as the main path
 - Feishu Project webhook as the main path
 - HTTP OAuth implementation in this first pivot, unless the tool catalog proves stdio is unavailable
+- any final design that requires the user to globally install the Feishu Project MCP server by hand
 - Feishu write-back redesign beyond what the MCP path naturally enables later
 
 ## Design
@@ -136,7 +140,7 @@ This keeps protocol concerns away from the inbox store and preserves the ability
 
 New runtime responsibilities:
 
-- spawn/connect to the configured Feishu MCP transport
+- spawn/connect to the app-managed Feishu MCP transport
 - perform `initialize`
 - fetch and cache `tools/list`
 - expose a small internal API like:
@@ -186,14 +190,12 @@ The current left-rail icon and drawer pane should remain. Only the config and ba
 
 The new configuration card should ask for:
 
-- connection mode (`stdio` initially)
-- stdio command
-- stdio args
-- optional working directory / env JSON if required
+- connection mode (`stdio` initially, but app-managed)
 - target Feishu Project workspace selection or identifier
 - refresh interval
 - connection status
 - discovered tool status
+- auth / authorization status
 
 The old fields should be retired from the primary UI:
 
@@ -201,6 +203,9 @@ The old fields should be retired from the primary UI:
 - user key
 - webhook token
 - public webhook base URL
+- raw stdio command / path / args fields exposed to the user
+
+If the stdio transport requires internal launch metadata, it should live in app code or packaging config, not in user-facing settings.
 
 ### 5. Keep linked-task and handoff logic
 
@@ -262,6 +267,7 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - `src-tauri/src/commands_feishu_project.rs`
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/main.rs`
+- any app-bundled MCP binary wrapper or packaged helper needed to avoid global installation
 
 ### Remove from primary path
 
@@ -279,3 +285,4 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - lead still receives a Feishu-sourced handoff with snapshot attachment
 - If the MCP server is missing, disconnected, or lacks required tools, Dimweave surfaces a clear runtime error state in the Bug Inbox UI
 - The runtime can shut down cleanly without leaving orphan MCP subprocesses behind
+- The final shipped solution does not require the user to globally install the Feishu Project MCP server outside Dimweave
