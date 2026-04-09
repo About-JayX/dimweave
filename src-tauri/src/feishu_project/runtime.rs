@@ -39,6 +39,94 @@ pub async fn connect_and_discover(
     Ok(client)
 }
 
+/// Fetch distinct assignee names via MQL GROUP BY (single request).
+async fn fetch_team_members(client: &McpClient, workspace_hint: &str) -> Vec<String> {
+    if workspace_hint.is_empty() {
+        return Vec::new();
+    }
+    let mql = format!(
+        "SELECT current_status_operator FROM {ws}.issue \
+         GROUP BY current_status_operator LIMIT 50",
+        ws = workspace_hint,
+    );
+    let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
+    let Ok(result) = client.call_tool("search_by_mql", args).await else {
+        return Vec::new();
+    };
+    let Some(text) = extract_first_content_text(&result) else {
+        return Vec::new();
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Vec::new();
+    };
+    let Some(groups) = parsed.get("list").and_then(|l| l.as_array()) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = groups
+        .iter()
+        .filter_map(|g| {
+            g.get("group_infos")
+                .and_then(|gi| gi.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|info| info.get("group_name"))
+                .and_then(|n| n.as_str())
+                .filter(|n| !n.is_empty() && *n != "未知分组")
+                .map(String::from)
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+fn extract_first_content_text(result: &serde_json::Value) -> Option<String> {
+    result
+        .get("content")?
+        .as_array()?
+        .iter()
+        .find(|e| e.get("type").and_then(|t| t.as_str()) == Some("text"))?
+        .get("text")?
+        .as_str()
+        .map(String::from)
+}
+
+/// Lightweight connect: only initialize, skip tools/list.
+/// For use in load_more and other calls that don't need the catalog.
+pub async fn connect_lite(
+    cfg: &FeishuProjectConfig,
+    app: &AppHandle,
+) -> Result<McpClient, String> {
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
+    }
+    let mut client = McpClient::new(&cfg.domain, &cfg.mcp_user_token);
+    client.connect_lite().await.map_err(|e| {
+        gui::emit_system_log(app, "warn", &format!("[FeishuProject MCP] {e}"));
+        e
+    })?;
+    Ok(client)
+}
+
+/// Fetch the human-readable project name via `search_project_info`.
+async fn fetch_project_name(client: &McpClient, workspace_hint: &str) -> Option<String> {
+    if workspace_hint.is_empty() {
+        return None;
+    }
+    let args = serde_json::json!({"project_key": workspace_hint});
+    let result = client.call_tool("search_project_info", args).await.ok()?;
+    let text = result
+        .get("content")?
+        .as_array()?
+        .iter()
+        .find(|e| e.get("type").and_then(|t| t.as_str()) == Some("text"))?
+        .get("text")?
+        .as_str()?;
+    let parsed: serde_json::Value = serde_json::from_str(text).ok()?;
+    parsed
+        .get("name")
+        .and_then(|n| n.as_str())
+        .map(String::from)
+}
+
 /// Run a full MCP sync cycle: connect, discover, fetch items, upsert.
 pub async fn run_mcp_sync_cycle(
     cfg: &FeishuProjectConfig,
@@ -46,20 +134,18 @@ pub async fn run_mcp_sync_cycle(
     app: &AppHandle,
 ) -> Result<McpClient, String> {
     let client = connect_and_discover(cfg, app).await?;
-    match mcp_sync::run_mcp_sync(&client, &cfg.workspace_hint).await {
+    match mcp_sync::run_mcp_sync(&client, &cfg.workspace_hint, cfg.sync_mode).await {
         Ok(items) => {
             let count = items.len();
-            {
+            let new_item_ids: Vec<String> = {
                 let mut daemon = state.write().await;
-                for item in items {
-                    daemon.feishu_project_store.upsert(item);
-                }
-            }
+                daemon.feishu_project_store.sync_replace(items)
+            };
             persist_and_emit(state, app).await;
             gui::emit_system_log(
                 app,
                 "info",
-                &format!("[FeishuProject MCP] synced {count} items"),
+                &format!("[FeishuProject MCP] synced {count} items, {} new", new_item_ids.len()),
             );
         }
         Err(e) => {
@@ -68,7 +154,7 @@ pub async fn run_mcp_sync_cycle(
                 "warn",
                 &format!("[FeishuProject MCP] sync failed: {e}"),
             );
-            update_mcp_state(cfg, &client, Some(e.clone()), app).await;
+            update_mcp_state(cfg, &client, Some(e.clone()), state, app).await;
             return Err(e);
         }
     }
@@ -86,8 +172,8 @@ pub async fn start_mcp_runtime(
 
     tokio::spawn(async move {
         match run_mcp_sync_cycle(&cfg, &state, &app).await {
-            Ok(client) => update_mcp_state(&cfg, &client, None, &app).await,
-            Err(e) => update_mcp_state_error(&cfg, &e, &app).await,
+            Ok(client) => update_mcp_state(&cfg, &client, None, &state, &app).await,
+            Err(e) => update_mcp_state_error(&cfg, &e, &state, &app).await,
         }
         let interval = std::time::Duration::from_secs(interval_mins * 60);
         loop {
@@ -98,8 +184,8 @@ pub async fn start_mcp_runtime(
                 }
                 _ = tokio::time::sleep(interval) => {
                     match run_mcp_sync_cycle(&cfg, &state, &app).await {
-                        Ok(client) => update_mcp_state(&cfg, &client, None, &app).await,
-                        Err(e) => update_mcp_state_error(&cfg, &e, &app).await,
+                        Ok(client) => update_mcp_state(&cfg, &client, None, &state, &app).await,
+                        Err(e) => update_mcp_state_error(&cfg, &e, &state, &app).await,
                     }
                 }
             }
@@ -123,8 +209,11 @@ async fn update_mcp_state(
     cfg: &FeishuProjectConfig,
     client: &McpClient,
     error: Option<String>,
+    state: &SharedState,
     app: &AppHandle,
 ) {
+    let project_name = fetch_project_name(client, &cfg.workspace_hint).await;
+    let team_members = fetch_team_members(client, &cfg.workspace_hint).await;
     let now = chrono::Utc::now().timestamp_millis() as u64;
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
@@ -134,14 +223,22 @@ async fn update_mcp_state(
         }
     }
     let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
+    rs.project_name = project_name;
+    rs.team_members = team_members;
     rs.mcp_status = client.status;
     rs.discovered_tool_count = client.catalog.tool_count();
     rs.last_sync_at = Some(now);
     rs.last_error = error;
+    state.write().await.feishu_project_runtime = Some(rs.clone());
     gui::emit_feishu_project_state(app, &rs);
 }
 
-async fn update_mcp_state_error(cfg: &FeishuProjectConfig, error: &str, app: &AppHandle) {
+async fn update_mcp_state_error(
+    cfg: &FeishuProjectConfig,
+    error: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
             saved.last_error = Some(error.to_string());
@@ -151,5 +248,6 @@ async fn update_mcp_state_error(cfg: &FeishuProjectConfig, error: &str, app: &Ap
     let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
     rs.last_error = Some(error.to_string());
     rs.mcp_status = super::types::McpConnectionStatus::Error;
+    state.write().await.feishu_project_runtime = Some(rs.clone());
     gui::emit_feishu_project_state(app, &rs);
 }

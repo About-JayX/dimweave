@@ -9,7 +9,8 @@ pub struct FeishuProjectStore {
 
 impl FeishuProjectStore {
     /// Insert or update an item. Matches on `work_item_id`; updates in place if found.
-    pub fn upsert(&mut self, incoming: FeishuProjectInboxItem) {
+    /// Returns `true` if this was a new item (inserted), `false` if updated in place.
+    pub fn upsert(&mut self, incoming: FeishuProjectInboxItem) -> bool {
         if let Some(existing) = self
             .items
             .iter_mut()
@@ -24,8 +25,10 @@ impl FeishuProjectStore {
             existing.last_ingress = incoming.last_ingress;
             existing.last_event_uuid = incoming.last_event_uuid;
             // Preserve: record_id, ignored, linked_task_id
+            false
         } else {
             self.items.push(incoming);
+            true
         }
     }
 
@@ -35,6 +38,24 @@ impl FeishuProjectStore {
 
     pub fn find_by_work_item_id_mut(&mut self, id: &str) -> Option<&mut FeishuProjectInboxItem> {
         self.items.iter_mut().find(|i| i.work_item_id == id)
+    }
+
+    /// Full-refresh reconciliation: upsert all incoming items (preserving local
+    /// state like `ignored` / `linked_task_id`), then remove items absent from
+    /// the incoming set. Returns work_item_ids of newly inserted items.
+    pub fn sync_replace(&mut self, incoming: Vec<FeishuProjectInboxItem>) -> Vec<String> {
+        let incoming_ids: std::collections::HashSet<&str> =
+            incoming.iter().map(|i| i.work_item_id.as_str()).collect();
+        // Remove items no longer present in remote
+        self.items.retain(|i| incoming_ids.contains(i.work_item_id.as_str()));
+        // Upsert incoming (preserves ignored / linked_task_id for retained items)
+        incoming
+            .into_iter()
+            .filter_map(|item| {
+                let wid = item.work_item_id.clone();
+                if self.upsert(item) { Some(wid) } else { None }
+            })
+            .collect()
     }
 
     pub fn set_ignored(&mut self, work_item_id: &str, ignored: bool) -> bool {
@@ -157,6 +178,70 @@ mod tests {
     fn set_ignored_returns_false_for_unknown() {
         let mut store = FeishuProjectStore::default();
         assert!(!store.set_ignored("9999", true));
+    }
+
+    #[test]
+    fn sync_replace_preserves_local_state_for_retained_items() {
+        let mut store = FeishuProjectStore::default();
+        let mut item = sample_item();
+        item.ignored = true;
+        item.linked_task_id = Some("task_42".into());
+        store.upsert(item);
+
+        // Sync with updated title but same work_item_id
+        let refreshed = FeishuProjectInboxItem {
+            title: "Crash on launch v2".into(),
+            updated_at: 20,
+            ..sample_item()
+        };
+        let new_ids = store.sync_replace(vec![refreshed]);
+        assert!(new_ids.is_empty(), "existing item should not be 'new'");
+        assert_eq!(store.items.len(), 1);
+        assert!(store.items[0].ignored);
+        assert_eq!(store.items[0].linked_task_id.as_deref(), Some("task_42"));
+        assert_eq!(store.items[0].title, "Crash on launch v2");
+    }
+
+    #[test]
+    fn sync_replace_removes_absent_items() {
+        let mut store = FeishuProjectStore::default();
+        store.upsert(sample_item()); // work_item_id = "1001"
+        store.upsert(FeishuProjectInboxItem {
+            work_item_id: "1002".into(),
+            title: "Second bug".into(),
+            ..sample_item()
+        });
+        assert_eq!(store.items.len(), 2);
+
+        // Sync only returns "1002" — "1001" should be removed
+        let kept = FeishuProjectInboxItem {
+            work_item_id: "1002".into(),
+            title: "Second bug (updated)".into(),
+            ..sample_item()
+        };
+        let new_ids = store.sync_replace(vec![kept]);
+        assert!(new_ids.is_empty());
+        assert_eq!(store.items.len(), 1);
+        assert_eq!(store.items[0].work_item_id, "1002");
+        assert!(store.find_by_work_item_id("1001").is_none());
+    }
+
+    #[test]
+    fn sync_replace_adds_new_items() {
+        let mut store = FeishuProjectStore::default();
+        store.upsert(sample_item()); // "1001"
+
+        let existing = sample_item();
+        let new_item = FeishuProjectInboxItem {
+            work_item_id: "1003".into(),
+            title: "Brand new bug".into(),
+            ..sample_item()
+        };
+        let new_ids = store.sync_replace(vec![existing, new_item]);
+        assert_eq!(new_ids, vec!["1003"]);
+        assert_eq!(store.items.len(), 2);
+        assert!(store.find_by_work_item_id("1001").is_some());
+        assert!(store.find_by_work_item_id("1003").is_some());
     }
 
     #[test]
