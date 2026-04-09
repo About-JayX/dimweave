@@ -192,6 +192,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     providerHistoryError: {},
     bootstrapComplete: false,
     bootstrapError: null,
+    lastSave: null,
 
     createTask: async (workspace, title) => {
       const task = await invoke<TaskInfo>("daemon_create_task", {

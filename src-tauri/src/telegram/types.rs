@@ -10,6 +10,8 @@ pub struct TelegramConfig {
     pub last_update_id: Option<i64>,
     pub pending_pair_code: Option<String>,
     pub pending_pair_expires_at: Option<u64>,
+    #[serde(default)]
+    pub bot_username: Option<String>,
 }
 
 /// Masked runtime state safe for frontend display.
@@ -36,7 +38,7 @@ impl TelegramRuntimeState {
             connected: false,
             notifications_enabled: cfg.notifications_enabled,
             token_label: mask_token(&cfg.bot_token),
-            bot_username: None,
+            bot_username: cfg.bot_username.clone(),
             paired_chat_label: cfg.paired_chat_label.clone(),
             pending_pair_code: cfg.pending_pair_code.clone(),
             pending_pair_expires_at: cfg.pending_pair_expires_at,

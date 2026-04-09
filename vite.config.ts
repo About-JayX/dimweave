@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+const vitePort = Number(process.env.DIMWEAVE_VITE_PORT) || 1420;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -12,7 +14,7 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: vitePort,
     strictPort: true,
     hmr: true,
   },
