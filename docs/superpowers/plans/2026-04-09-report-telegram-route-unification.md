@@ -49,7 +49,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `2b255a06` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture` ✅ 6 passed; `git diff --check` ✅ | Codex dynamic `reply` must preserve the same routing metadata that Claude bridge `reply` already preserves. |
 | Task 2 | `bdbc9a95` | `manual review` | `cargo test --manifest-path src-tauri/Cargo.toml session_event -- --nocapture` ✅ 9 passed; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture` ✅ 34 passed; `git diff --check` ✅ | Prompt-originated user-target terminal messages must still go through `routing::route_message(...)`; direct GUI emission bypasses Telegram fan-out. |
-| Final | `PENDING` | `final deep review` | `cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml session_event -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `git diff --check` | The supported Telegram contract is: explicit prompt/tool intent in, unified routing path through daemon, Telegram hook decides fan-out. |
+| Final | `bfc16cac` | `final deep review` | `cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture` ✅ 4 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture` ✅ 6 passed; `cargo test --manifest-path src-tauri/Cargo.toml session_event -- --nocapture` ✅ 9 passed; `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture` ✅ 34 passed; `git diff --check` ✅ | The supported Telegram contract is: explicit prompt/tool intent in, unified routing path through daemon, Telegram hook decides fan-out. |
 
 ### Task 1: Preserve full `reply()` routing metadata in Codex dynamic tool handling
 
@@ -312,12 +312,12 @@ Replace the Task 2 placeholder row with the real commit and verification evidenc
 
 ## Final Review Checklist
 
-- [ ] Re-read this plan and verify Task 1 + Task 2 cover every confirmed bug:
+- [x] Re-read this plan and verify Task 1 + Task 2 cover every confirmed bug:
   - Codex dynamic `reply()` dropping `status`
   - Codex dynamic `reply()` dropping `report_telegram`
   - Codex structured-output `send_to="user"` bypassing `routing::route_message(...)`
-- [ ] Confirm no task tries to make Claude SDK direct fallback eligible for Telegram; that backup path lacks explicit prompt intent and is intentionally outside this fix
-- [ ] Run final verification:
+- [x] Confirm no task tries to make Claude SDK direct fallback eligible for Telegram; that backup path lacks explicit prompt intent and is intentionally outside this fix
+- [x] Run final verification:
 
 ```bash
 cargo test --manifest-path bridge/Cargo.toml report_telegram -- --nocapture
