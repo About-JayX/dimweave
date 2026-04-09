@@ -66,7 +66,7 @@ That changes the architecture tradeoff:
 - Requires implementing an MCP-over-HTTP client plus OAuth handshake
 - Harder to ship quickly in the current Rust/Tauri codebase
 
-### Option B: Stdio first, OAuth later (**recommended**)
+### Option B: Stdio first, OAuth later (**recommended, pending validation**) 
 
 **Pros**
 - Best fit for current Dimweave runtime model
@@ -90,7 +90,7 @@ That changes the architecture tradeoff:
 
 ## Recommendation
 
-**Use Stdio-first MCP as the new V1 primary architecture.**
+**Use Stdio-first MCP as the new V1 primary architecture, but only after we verify the real Feishu Project stdio launch contract and tool catalog.**
 
 Rationale:
 
@@ -99,7 +99,7 @@ Rationale:
 - it lets us preserve almost all of the existing Bug Inbox UI and task-launch workflow
 - it leaves room to add `HTTP OAuth` later as a better UX layer without changing the core inbox model
 
-This recommendation is an engineering inference from the current codebase and the user-provided Feishu Project MCP feature description.
+This recommendation is an engineering inference from the current codebase and the user-provided Feishu Project MCP feature description. It is **not yet enough** to hardcode the stdio launch command or tool names. Those must be captured from a real Feishu Project MCP connection before implementation locks the adapter.
 
 ## Scope
 
@@ -147,6 +147,17 @@ New runtime responsibilities:
 
 This is the real architectural replacement for the old `api.rs + runtime.rs` token path.
 
+This client is materially more complex than the old REST poller. It must own:
+
+- a bidirectional stdio pump loop
+- JSON-RPC request/response correlation by `id`
+- serialized writes to child stdin
+- notification handling
+- child-process health monitoring
+- reconnect / shutdown cleanup behavior
+
+It should be treated as a first-class runtime subsystem, closer to the existing Codex WS client lifecycle than to a simple helper module.
+
 ### 3. Add a capability adapter on top of tool discovery
 
 Because the user-provided help center excerpt describes Feishu Project MCP capabilities semantically rather than giving us exact tool IDs and JSON schemas, the implementation should not hardcode all final tool names before connection.
@@ -156,6 +167,12 @@ Instead:
 - first connect and read `tools/list`
 - resolve required inbox capabilities from the discovered catalog
 - then bind the inbox sync path to the actual tool names/schemas present
+
+The adapter must not guess tool names purely from optimism. Before implementation, we need a captured real tool catalog artifact and an explicit matching strategy. The matching strategy should be one of:
+
+- exact known tool IDs from the captured catalog
+- schema-backed matching with tool name fallback
+- user-assisted mapping if the catalog is unexpectedly ambiguous
 
 Required capability classes for Bug Inbox:
 
@@ -236,10 +253,21 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - `src-tauri/src/feishu_project/runtime.rs`
 - `src-tauri/src/daemon/feishu_project_lifecycle.rs`
 
+### Add
+
+- `src-tauri/src/feishu_project/mcp_client.rs`
+- `src-tauri/src/feishu_project/mcp_stdio.rs`
+- `src-tauri/src/feishu_project/tool_catalog.rs`
+- `src-tauri/src/feishu_project/mcp_sync.rs`
+- `src-tauri/src/commands_feishu_project.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/main.rs`
+
 ### Remove from primary path
 
 - `src-tauri/src/feishu_project/api.rs`
 - `src-tauri/src/daemon/control/feishu_project_webhook.rs`
+- `src-tauri/src/daemon/control/server.rs` route registration for Feishu webhook
 
 ## Acceptance Criteria
 
@@ -249,4 +277,5 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - Bug Inbox can populate from MCP-fetched work items
 - Existing `Handle` / `Open task` behavior still works
 - lead still receives a Feishu-sourced handoff with snapshot attachment
-
+- If the MCP server is missing, disconnected, or lacks required tools, Dimweave surfaces a clear runtime error state in the Bug Inbox UI
+- The runtime can shut down cleanly without leaving orphan MCP subprocesses behind

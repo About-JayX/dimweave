@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current token/webhook-first Feishu Project data-access layer with an MCP-first integration while preserving the existing Bug Inbox UI and linked task-handling workflow.
 
-**Architecture:** Add a Feishu Project MCP client runtime in Tauri, start with `stdio` transport as the primary MVP path, discover the actual tool catalog at runtime, and map the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
+**Architecture:** Add a Feishu Project MCP client runtime in Tauri, start with `stdio` transport as the primary MVP path after validating the real stdio launch contract and live tool catalog, and map the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
 
 **Tech Stack:** React 19, TypeScript, Zustand, Tauri 2, Rust, tokio, subprocess stdio, serde_json, Bun, Cargo
 
@@ -14,7 +14,10 @@
 
 - The current token/webhook implementation is already committed and working, but it is not a good fit for this user because they cannot obtain project-space tokens.
 - The Bug Inbox UI and task-link path should be preserved as much as possible.
-- The new unknown is the exact Feishu Project MCP tool schema; the implementation must therefore include an explicit discovery/diagnostics stage instead of hardcoding all tool names up front.
+- The new unknowns are:
+  - the exact Feishu Project MCP stdio launch command and authentication behavior
+  - the exact `tools/list` catalog and JSON schemas
+- The implementation must therefore include an explicit discovery/diagnostics stage instead of hardcoding all tool names up front.
 
 ## Scope
 
@@ -45,10 +48,14 @@
 
 ### Rust
 
+- Modify: `src-tauri/src/main.rs`
+- Modify: `src-tauri/src/daemon/cmd.rs`
 - Modify: `src-tauri/src/commands_feishu_project.rs`
+- Modify: `src-tauri/src/daemon/mod.rs`
+- Modify: `src-tauri/src/daemon/control/server.rs`
 - Modify: `src-tauri/src/feishu_project/types.rs`
 - Modify: `src-tauri/src/feishu_project/config.rs`
-- Modify: `src-tauri/src/feishu_project/runtime.rs`
+- Replace: `src-tauri/src/feishu_project/runtime.rs`
 - Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`
 - Create: `src-tauri/src/feishu_project/mcp_client.rs`
 - Create: `src-tauri/src/feishu_project/mcp_stdio.rs`
@@ -59,17 +66,57 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
+| Task 0 | `docs: capture feishu project mcp catalog` | `git diff --check`; saved artifact with real `tools/list` response | The pivot must start from a real catalog and validated stdio launch contract, not guesses. |
 | Task 1 | `feat: add feishu project mcp stdio runtime` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp`; `git diff --check` | The pivot must first prove we can connect, initialize, and list tools before we rewrite the inbox sync path. |
-| Task 2 | `feat: source bug inbox from feishu mcp` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync`; `cargo test --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Tool discovery should drive the adapter; do not hardcode final tool IDs before seeing the real catalog. |
-| Task 3 | `feat: switch bug inbox config to mcp connection` | `bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts`; `bun run build`; `git diff --check` | The UI must stop asking for inaccessible tokens and instead expose MCP connection status and controls. |
+| Task 2 | `feat: switch bug inbox config to mcp connection` | `bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts`; `bun run build`; `git diff --check` | The UI must stop asking for inaccessible tokens and instead expose MCP connection status and controls. |
+| Task 3 | `feat: source bug inbox from feishu mcp` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync`; `cargo test --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Tool discovery should drive the adapter; do not hardcode final tool IDs before seeing the real catalog. |
 | Task 4 | `refactor: retire legacy feishu token sync path` | `cargo test --manifest-path src-tauri/Cargo.toml`; `bun run build`; `git diff --check` | The old path should be clearly demoted or removed so we do not maintain two conflicting primary architectures. |
+
+## Task 0: Capture the real Feishu Project MCP stdio launch contract and tool catalog
+
+**Files:**
+- Create: `docs/agents/feishu-project-mcp-tool-catalog.json`
+- Create: `docs/agents/feishu-project-mcp-notes.md`
+
+- [ ] **Step 1: Connect manually to the real Feishu Project MCP server**
+
+Use the real Feishu Project MCP stdio launch command and capture:
+
+- how it is launched
+- whether it requires an interactive login step
+- the raw `initialize` response
+- the raw `tools/list` response
+
+- [ ] **Step 2: Save the evidence artifact**
+
+Write the raw catalog JSON to:
+
+```bash
+docs/agents/feishu-project-mcp-tool-catalog.json
+```
+
+and record the launch/auth notes in:
+
+```bash
+docs/agents/feishu-project-mcp-notes.md
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docs/agents/feishu-project-mcp-tool-catalog.json docs/agents/feishu-project-mcp-notes.md
+git commit -m "docs: capture feishu project mcp catalog"
+```
 
 ## Task 1: Add Feishu Project MCP stdio runtime and tool discovery
 
 **Files:**
+- Modify: `src-tauri/src/main.rs`
+- Modify: `src-tauri/src/daemon/cmd.rs`
+- Modify: `src-tauri/src/daemon/mod.rs`
 - Modify: `src-tauri/src/feishu_project/types.rs`
 - Modify: `src-tauri/src/feishu_project/config.rs`
-- Modify: `src-tauri/src/feishu_project/runtime.rs`
+- Replace: `src-tauri/src/feishu_project/runtime.rs`
 - Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`
 - Create: `src-tauri/src/feishu_project/mcp_client.rs`
 - Create: `src-tauri/src/feishu_project/mcp_stdio.rs`
@@ -96,26 +143,45 @@ pub struct FeishuProjectConfig {
 }
 ```
 
-- [ ] **Step 2: Write failing tests for stdio client handshake**
+- [ ] **Step 2: Write failing tests for stdio client handshake and runtime state**
 
 Add tests that prove:
 
 - initialize request formatting
 - parsing `tools/list` results
+- request/response correlation by `id`
+- EOF / child exit surfaces a disconnected state
 - runtime state reflects connection failure
 
-- [ ] **Step 3: Implement minimal MCP stdio client**
+- [ ] **Step 3: Implement MCP stdio transport**
 
-The client only needs this subset first:
+The transport needs these pieces first:
 
 - spawn configured command
-- send `initialize`
-- send `tools/list`
-- collect the tool catalog
+- continuously read child stdout in a pump loop
+- continuously serialize writes to child stdin
+- match JSON-RPC responses by `id`
+- surface child exit / EOF
 
-Do not implement all downstream inbox sync yet.
+Do not collapse this into a single helper function.
 
-- [ ] **Step 4: Add a diagnostics surface in runtime state**
+- [ ] **Step 4: Implement MCP client request lifecycle**
+
+Layer a client API on top of the transport:
+
+- `connect()`
+- `disconnect()`
+- `initialize()`
+- `list_tools()`
+- `call_tool()`
+
+with:
+
+- timeouts
+- inflight request map
+- clean shutdown
+
+- [ ] **Step 5: Add diagnostics surface in runtime state**
 
 Expose:
 
@@ -124,7 +190,7 @@ Expose:
 - discovered tool count
 - maybe tool names preview
 
-- [ ] **Step 5: Verify**
+- [ ] **Step 6: Verify**
 
 Run:
 
@@ -133,23 +199,70 @@ cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp
 git diff --check
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/feishu_project/types.rs src-tauri/src/feishu_project/config.rs src-tauri/src/feishu_project/runtime.rs src-tauri/src/daemon/feishu_project_lifecycle.rs src-tauri/src/feishu_project/mcp_client.rs src-tauri/src/feishu_project/mcp_stdio.rs src-tauri/src/feishu_project/tool_catalog.rs
 git commit -m "feat: add feishu project mcp stdio runtime"
 ```
 
-## Task 2: Source Bug Inbox from Feishu MCP
+## Task 2: Switch Bug Inbox config UI to MCP connection
+
+**Files:**
+- Modify: `src/components/BugInboxPanel/ConfigCard.tsx`
+- Modify: `src/stores/feishu-project-store.ts`
+- Modify: `src/components/BugInboxPanel/index.tsx`
+- Modify: `src/components/BugInboxPanel/index.test.tsx`
+- Modify: `src/stores/feishu-project-store.test.ts`
+
+- [ ] **Step 1: Replace token fields with MCP connection fields**
+
+For the first MCP pivot pass, support:
+
+- enabled
+- connection mode (default `stdio`)
+- stdio command
+- stdio args
+- workspace hint
+- refresh interval
+
+- [ ] **Step 2: Show connection and catalog status**
+
+The card should show:
+
+- connected/disconnected
+- discovered tools count
+- last error
+- last sync
+- clear error when the connection recovers
+
+- [ ] **Step 3: Verify**
+
+Run:
+
+```bash
+bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts
+bun run build
+git diff --check
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/BugInboxPanel/ConfigCard.tsx src/stores/feishu-project-store.ts src/components/BugInboxPanel/index.tsx src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts
+git commit -m "feat: switch bug inbox config to mcp connection"
+```
+
+## Task 3: Source Bug Inbox from Feishu MCP
 
 **Files:**
 - Modify: `src-tauri/src/feishu_project/runtime.rs`
 - Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`
 - Create: `src-tauri/src/feishu_project/mcp_sync.rs`
 
-- [ ] **Step 1: Discover the actual required tools**
+- [ ] **Step 1: Bind the adapter to the captured real tool catalog**
 
-Use the live tool catalog from Task 1 and record which tool(s) provide:
+Use the saved catalog from Task 0 and record which tool(s) provide:
 
 - workspace metadata
 - work-item listing
@@ -162,6 +275,7 @@ Tests should prove:
 - MCP result rows map into `FeishuProjectInboxItem`
 - repeated sync still preserves `ignored` and `linkedTaskId`
 - missing required tools becomes a surfaced runtime error
+- malformed or partial MCP tool output produces a surfaced runtime error
 
 - [ ] **Step 3: Implement MCP-based sync**
 
@@ -193,55 +307,12 @@ git add src-tauri/src/feishu_project/runtime.rs src-tauri/src/daemon/feishu_proj
 git commit -m "feat: source bug inbox from feishu mcp"
 ```
 
-## Task 3: Switch Bug Inbox config UI to MCP connection
-
-**Files:**
-- Modify: `src/components/BugInboxPanel/ConfigCard.tsx`
-- Modify: `src/stores/feishu-project-store.ts`
-- Modify: `src/components/BugInboxPanel/index.tsx`
-- Modify: `src/components/BugInboxPanel/index.test.tsx`
-- Modify: `src/stores/feishu-project-store.test.ts`
-
-- [ ] **Step 1: Replace token fields with MCP connection fields**
-
-For the first MCP pivot pass, support:
-
-- enabled
-- connection mode (default `stdio`)
-- stdio command
-- stdio args
-- workspace hint
-- refresh interval
-
-- [ ] **Step 2: Show connection and catalog status**
-
-The card should show:
-
-- connected/disconnected
-- discovered tools count
-- last error
-- last sync
-
-- [ ] **Step 3: Verify**
-
-Run:
-
-```bash
-bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts
-bun run build
-git diff --check
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/components/BugInboxPanel/ConfigCard.tsx src/stores/feishu-project-store.ts src/components/BugInboxPanel/index.tsx src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts
-git commit -m "feat: switch bug inbox config to mcp connection"
-```
-
 ## Task 4: Retire the legacy Feishu token sync path
 
 **Files:**
+- Modify: `src-tauri/src/feishu_project/api.rs`
+- Modify: `src-tauri/src/daemon/control/server.rs`
+- Modify: `src-tauri/src/daemon/control/feishu_project_webhook.rs`
 - Modify: `docs/superpowers/specs/2026-04-09-feishu-project-bug-inbox-design.md`
 - Modify: `docs/superpowers/plans/2026-04-09-feishu-project-bug-inbox.md`
 - Modify: any obsolete runtime files as needed
@@ -252,6 +323,8 @@ Do one of:
 
 - remove the old path entirely if the MCP path is proven stable, or
 - clearly mark it as legacy/fallback and keep it out of the main UI
+
+Also explicitly remove the Feishu webhook route from `control/server.rs` if it is no longer part of the primary product path.
 
 - [ ] **Step 2: Verify**
 
