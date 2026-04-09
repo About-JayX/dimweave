@@ -27,7 +27,7 @@
 |------|--------|--------|--------------|--------|
 | Task 1 | `47348e28` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-09-message-search-scroll-stability-design.md docs/superpowers/plans/2026-04-09-message-search-scroll-stability.md` ✅ | The approved scroll policy must be documented before code changes so implementation and review use the same definition of "search-stable". |
 | Task 2 | `0cdeb12c` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts` ✅ 15 pass; `git diff --check` ✅ | Search-active scroll policy belongs in testable helpers, not inline conditionals scattered through JSX. |
-| Task 3 | `PENDING` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Active search is an inspection mode: freeze auto-follow until the user clears the query or explicitly scrolls back down. |
+| Task 3 | `51497e5e` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 31 pass; `bun run build` ✅; `git diff --check` ✅ | Active search is an inspection mode: freeze auto-follow until the user clears the query or explicitly scrolls back down. |
 
 ## Baseline Notes
 
@@ -191,7 +191,7 @@ Replace the Task 2 placeholders with the real commit hash and verification evide
 - Modify: `src/components/MessagePanel/MessageList.tsx`
 - Modify: `src/components/MessagePanel/MessageList.test.tsx`
 
-- [ ] **Step 1: Write the failing wiring regression test**
+- [x] **Step 1: Write the failing wiring regression test**
 
 Extend `src/components/MessagePanel/MessageList.test.tsx` so the mocked `Virtuoso` captures the latest props:
 
@@ -227,7 +227,7 @@ bun test src/components/MessagePanel/MessageList.test.tsx
 
 Expected: FAIL because `MessageList` does not yet accept `searchActive`.
 
-- [ ] **Step 2: Implement the wiring**
+- [x] **Step 2: Implement the wiring**
 
 Update `src/components/MessagePanel/index.tsx`:
 
@@ -270,7 +270,7 @@ useEffect(() => {
 <Virtuoso followOutput={followOutput} ... />
 ```
 
-- [ ] **Step 3: Re-run the focused regressions**
+- [x] **Step 3: Re-run the focused regressions**
 
 Run:
 
@@ -280,7 +280,7 @@ bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePa
 
 Expected: PASS.
 
-- [ ] **Step 4: Re-run build and diff verification**
+- [x] **Step 4: Re-run build and diff verification**
 
 Run:
 
@@ -291,13 +291,13 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MessagePanel/index.tsx src/components/MessagePanel/MessageList.tsx src/components/MessagePanel/MessageList.test.tsx
 git commit -m "fix: freeze message auto-scroll during active search"
 ```
 
-- [ ] **Step 6: Update `## CM Memory`**
+- [x] **Step 6: Update `## CM Memory`**
 
 Replace the Task 3 placeholders with the real commit hash and verification evidence.
