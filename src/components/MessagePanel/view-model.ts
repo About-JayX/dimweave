@@ -141,6 +141,24 @@ export function getCodexStreamIndicatorViewModel(
   };
 }
 
+export function isMessageSearchActive(searchQuery: string): boolean {
+  return searchQuery.trim().length > 0;
+}
+
+export function getMessageListFollowOutputMode(
+  searchActive: boolean,
+  atBottom: boolean,
+): false | "smooth" {
+  return searchActive ? false : atBottom ? "smooth" : false;
+}
+
+export function shouldResetMessageListInitialScroll(
+  searchActive: boolean,
+  totalCount: number,
+): boolean {
+  return !searchActive && totalCount === 0;
+}
+
 export function getClaudeAttentionResolution(
   tab: MessagePanelTab,
   needsAttention: boolean,

@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   getSearchQueryForDisclosure,
   getMessageListDisplayState,
+  isMessageSearchActive,
+  getMessageListFollowOutputMode,
+  shouldResetMessageListInitialScroll,
 } from "./view-model";
 
 describe("getSearchQueryForDisclosure", () => {
@@ -35,5 +38,55 @@ describe("getMessageListDisplayState", () => {
     });
 
     expect(state.timelineCount).toBe(2);
+  });
+});
+
+describe("isMessageSearchActive", () => {
+  test("non-empty trimmed query is active", () => {
+    expect(isMessageSearchActive("error")).toBe(true);
+  });
+
+  test("whitespace-only query is not active", () => {
+    expect(isMessageSearchActive("   ")).toBe(false);
+  });
+
+  test("empty string is not active", () => {
+    expect(isMessageSearchActive("")).toBe(false);
+  });
+});
+
+describe("getMessageListFollowOutputMode", () => {
+  test("active search disables message-list follow output", () => {
+    expect(getMessageListFollowOutputMode(true, true)).toBe(false);
+  });
+
+  test("active search disables follow even when not at bottom", () => {
+    expect(getMessageListFollowOutputMode(true, false)).toBe(false);
+  });
+
+  test("inactive search at bottom enables smooth follow", () => {
+    expect(getMessageListFollowOutputMode(false, true)).toBe("smooth");
+  });
+
+  test("inactive search not at bottom disables follow", () => {
+    expect(getMessageListFollowOutputMode(false, false)).toBe(false);
+  });
+});
+
+describe("shouldResetMessageListInitialScroll", () => {
+  test("zero-result search does not reset initial scroll state", () => {
+    expect(shouldResetMessageListInitialScroll(true, 0)).toBe(false);
+  });
+
+  test("inactive search with zero results resets initial scroll", () => {
+    expect(shouldResetMessageListInitialScroll(false, 0)).toBe(true);
+  });
+
+  test("inactive search with messages does not reset", () => {
+    expect(shouldResetMessageListInitialScroll(false, 5)).toBe(false);
+  });
+
+  test("active search with messages does not reset", () => {
+    expect(shouldResetMessageListInitialScroll(true, 5)).toBe(false);
   });
 });
