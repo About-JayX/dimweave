@@ -2,19 +2,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { create } from "zustand";
 
+export type McpConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "unauthorized"
+  | "error";
+
 export interface FeishuProjectRuntimeState {
   enabled: boolean;
-  projectKey?: string | null;
-  tokenLabel?: string | null;
-  userKey?: string | null;
-  pollIntervalMinutes: number;
-  publicWebhookBaseUrl?: string | null;
-  localWebhookPath: string;
-  lastPollAt?: number | null;
-  lastWebhookAt?: number | null;
+  domain?: string | null;
+  workspaceHint?: string | null;
+  refreshIntervalMinutes: number;
+  mcpStatus: McpConnectionStatus;
+  discoveredToolCount: number;
   lastSyncAt?: number | null;
   lastError?: string | null;
-  webhookEnabled: boolean;
+  tokenLabel?: string | null;
 }
 
 export interface FeishuProjectInboxItem {
@@ -30,18 +34,16 @@ export interface FeishuProjectInboxItem {
   rawSnapshotRef: string;
   ignored: boolean;
   linkedTaskId?: string | null;
-  lastIngress: "poll" | "webhook";
+  lastIngress: "poll" | "webhook" | "mcp";
   lastEventUuid?: string | null;
 }
 
 export interface FeishuProjectConfigInput {
   enabled: boolean;
-  project_key: string;
-  plugin_token: string;
-  user_key: string;
-  webhook_token: string;
-  poll_interval_minutes: number;
-  public_webhook_base_url?: string | null;
+  domain: string;
+  mcp_user_token: string;
+  workspace_hint: string;
+  refresh_interval_minutes: number;
 }
 
 interface FeishuProjectStore {

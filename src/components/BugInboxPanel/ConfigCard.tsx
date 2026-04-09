@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type {
   FeishuProjectRuntimeState,
   FeishuProjectConfigInput,
+  McpConnectionStatus,
 } from "@/stores/feishu-project-store";
 import { ConfigInput } from "./ConfigInput";
 import { formatSyncTime } from "./view-model";
@@ -13,6 +14,21 @@ interface ConfigCardProps {
   onSync: () => void;
 }
 
+function statusLabel(s: McpConnectionStatus | undefined): string {
+  if (!s || s === "disconnected") return "Disconnected";
+  if (s === "connecting") return "Connecting...";
+  if (s === "connected") return "Connected";
+  if (s === "unauthorized") return "Unauthorized";
+  return "Error";
+}
+
+function statusColor(s: McpConnectionStatus | undefined): string {
+  if (s === "connected") return "text-emerald-400";
+  if (s === "unauthorized" || s === "error") return "text-rose-400";
+  if (s === "connecting") return "text-amber-400";
+  return "text-muted-foreground";
+}
+
 export function ConfigCard({
   runtimeState,
   loading,
@@ -20,62 +36,46 @@ export function ConfigCard({
   onSync,
 }: ConfigCardProps) {
   const [editing, setEditing] = useState(false);
-  const [projectKey, setProjectKey] = useState("");
-  const [pluginToken, setPluginToken] = useState("");
-  const [userKey, setUserKey] = useState("");
-  const [webhookToken, setWebhookToken] = useState("");
-  const [pollInterval, setPollInterval] = useState("10");
-  const [webhookBaseUrl, setWebhookBaseUrl] = useState("");
+  const [domain, setDomain] = useState("https://project.feishu.cn");
+  const [mcpToken, setMcpToken] = useState("");
+  const [workspaceHint, setWorkspaceHint] = useState("");
+  const [refreshInterval, setRefreshInterval] = useState("10");
 
   const enterEdit = useCallback(() => {
-    setProjectKey(runtimeState?.projectKey ?? "");
-    setUserKey(runtimeState?.userKey ?? "");
-    setPollInterval(String(runtimeState?.pollIntervalMinutes || 10));
-    setWebhookBaseUrl(runtimeState?.publicWebhookBaseUrl ?? "");
-    setPluginToken("");
-    setWebhookToken("");
+    setDomain(runtimeState?.domain ?? "https://project.feishu.cn");
+    setWorkspaceHint(runtimeState?.workspaceHint ?? "");
+    setRefreshInterval(String(runtimeState?.refreshIntervalMinutes || 10));
+    setMcpToken("");
     setEditing(true);
   }, [runtimeState]);
 
   const handleSave = useCallback(() => {
-    const interval = Math.max(1, Number(pollInterval) || 10);
-    const baseUrl = webhookBaseUrl.trim() || null;
     onSave({
       enabled: true,
-      project_key: projectKey.trim(),
-      plugin_token: pluginToken.trim(),
-      user_key: userKey.trim(),
-      webhook_token: webhookToken.trim(),
-      poll_interval_minutes: interval,
-      public_webhook_base_url: baseUrl,
+      domain: domain.trim() || "https://project.feishu.cn",
+      mcp_user_token: mcpToken.trim(),
+      workspace_hint: workspaceHint.trim(),
+      refresh_interval_minutes: Math.max(1, Number(refreshInterval) || 10),
     });
     setEditing(false);
-    setPluginToken("");
-    setWebhookToken("");
-  }, [
-    projectKey,
-    pluginToken,
-    userKey,
-    webhookToken,
-    pollInterval,
-    webhookBaseUrl,
-    onSave,
-  ]);
+    setMcpToken("");
+  }, [domain, mcpToken, workspaceHint, refreshInterval, onSave]);
 
   const handleDisable = useCallback(
     () =>
       onSave({
         enabled: false,
-        project_key: "",
-        plugin_token: "",
-        user_key: "",
-        webhook_token: "",
-        poll_interval_minutes: 10,
+        domain: "https://project.feishu.cn",
+        mcp_user_token: "",
+        workspace_hint: "",
+        refresh_interval_minutes: 10,
       }),
     [onSave],
   );
 
-  if (!runtimeState?.projectKey && !editing) {
+  const isConfigured = runtimeState?.tokenLabel || runtimeState?.enabled;
+
+  if (!isConfigured && !editing) {
     return (
       <div className="rounded-xl border border-border/40 bg-card/45 px-3 py-2.5">
         <div className="flex items-center justify-between">
@@ -96,40 +96,30 @@ export function ConfigCard({
   if (editing) {
     return (
       <div className="space-y-2 rounded-xl border border-border/40 bg-card/45 px-3 py-2.5">
+        <ConfigInput label="Domain" value={domain} onChange={setDomain} />
         <ConfigInput
-          label="Project key"
-          value={projectKey}
-          onChange={setProjectKey}
-        />
-        <ConfigInput
-          label="Plugin token"
-          value={pluginToken}
-          onChange={setPluginToken}
+          label="MCP User Token"
+          value={mcpToken}
+          onChange={setMcpToken}
           type="password"
-        />
-        <ConfigInput label="User key" value={userKey} onChange={setUserKey} />
-        <ConfigInput
-          label="Webhook token"
-          value={webhookToken}
-          onChange={setWebhookToken}
-          type="password"
+          placeholder={runtimeState?.tokenLabel ?? ""}
         />
         <ConfigInput
-          label="Poll interval (minutes)"
-          value={pollInterval}
-          onChange={setPollInterval}
+          label="Workspace hint"
+          value={workspaceHint}
+          onChange={setWorkspaceHint}
+          placeholder="optional"
         />
         <ConfigInput
-          label="Public webhook base URL"
-          value={webhookBaseUrl}
-          onChange={setWebhookBaseUrl}
-          placeholder="https://abc.ngrok.app"
+          label="Refresh interval (minutes)"
+          value={refreshInterval}
+          onChange={setRefreshInterval}
         />
         <div className="flex gap-1">
           <button
             className="rounded-md border border-primary/50 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10 active:bg-primary/20 focus-visible:ring-1 focus-visible:ring-primary/40"
             onClick={handleSave}
-            disabled={loading || !projectKey.trim() || !pluginToken.trim()}
+            disabled={loading}
           >
             Save
           </button>
@@ -147,13 +137,20 @@ export function ConfigCard({
   return (
     <div className="space-y-1 rounded-xl border border-border/40 bg-card/45 px-3 py-2.5">
       <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-card-foreground">
-          {runtimeState?.projectKey}
+        <span
+          className={`text-[11px] font-medium ${statusColor(runtimeState?.mcpStatus)}`}
+        >
+          {statusLabel(runtimeState?.mcpStatus)}
         </span>
         <span className="font-mono text-[10px] text-muted-foreground">
           {runtimeState?.tokenLabel ?? "no token"}
         </span>
       </div>
+      {runtimeState?.mcpStatus === "connected" && (
+        <div className="text-[10px] text-muted-foreground">
+          {runtimeState.discoveredToolCount} tools discovered
+        </div>
+      )}
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <span>Synced: {formatSyncTime(runtimeState?.lastSyncAt)}</span>
         {runtimeState?.lastError && (

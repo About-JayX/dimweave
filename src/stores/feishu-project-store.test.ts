@@ -12,12 +12,12 @@ function installTauriStub() {
           if (cmd === "feishu_project_get_state") {
             return {
               enabled: true,
-              projectKey: "proj",
-              tokenLabel: "plugi***",
-              userKey: "u_1",
-              pollIntervalMinutes: 10,
-              localWebhookPath: "/integrations/feishu-project/webhook",
-              webhookEnabled: false,
+              domain: "https://project.feishu.cn",
+              workspaceHint: "myspace",
+              refreshIntervalMinutes: 10,
+              mcpStatus: "connected",
+              discoveredToolCount: 5,
+              tokenLabel: "tok_a***",
             };
           }
           if (cmd === "feishu_project_list_items") {
@@ -32,7 +32,7 @@ function installTauriStub() {
                 sourceUrl: "https://example.com",
                 rawSnapshotRef: "",
                 ignored: false,
-                lastIngress: "poll",
+                lastIngress: "mcp",
               },
             ];
           }
@@ -64,7 +64,6 @@ describe("feishu-project-store", () => {
   });
 
   test("types match Rust camelCase serde output", () => {
-    // Verify the TS interface shape matches what Rust emits via #[serde(rename_all = "camelCase")]
     const item = {
       recordId: "proj_1",
       projectKey: "proj",
@@ -75,9 +74,9 @@ describe("feishu-project-store", () => {
       sourceUrl: "",
       rawSnapshotRef: "",
       ignored: false,
-      lastIngress: "poll" as const,
+      lastIngress: "mcp" as const,
     };
     expect(item.workItemId).toBe("1");
-    expect(item.lastIngress).toBe("poll");
+    expect(item.lastIngress).toBe("mcp");
   });
 });

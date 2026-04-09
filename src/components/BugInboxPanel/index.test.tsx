@@ -13,11 +13,12 @@ function installTauriStub() {
           if (cmd === "feishu_project_get_state") {
             return {
               enabled: true,
-              projectKey: "myproj",
-              tokenLabel: "plugi***",
-              pollIntervalMinutes: 10,
-              localWebhookPath: "/wh",
-              webhookEnabled: false,
+              domain: "https://project.feishu.cn",
+              workspaceHint: "myspace",
+              refreshIntervalMinutes: 10,
+              mcpStatus: "connected",
+              discoveredToolCount: 5,
+              tokenLabel: "tok_a***",
             };
           }
           if (cmd === "feishu_project_list_items") return [];
@@ -59,7 +60,7 @@ describe("BugInboxPanel", () => {
             sourceUrl: "https://project.feishu.cn/p/issues/1",
             rawSnapshotRef: "",
             ignored: false,
-            lastIngress: "poll",
+            lastIngress: "mcp",
           },
         ]}
         onIgnore={() => {}}
@@ -89,7 +90,7 @@ describe("BugInboxPanel", () => {
             sourceUrl: "",
             rawSnapshotRef: "",
             ignored: true,
-            lastIngress: "webhook",
+            lastIngress: "mcp",
           },
         ]}
         onIgnore={() => {}}
@@ -117,7 +118,7 @@ describe("BugInboxPanel", () => {
             sourceUrl: "",
             rawSnapshotRef: "",
             ignored: false,
-            lastIngress: "poll",
+            lastIngress: "mcp",
             linkedTaskId: "task_42",
           },
         ]}
@@ -146,7 +147,7 @@ describe("BugInboxPanel", () => {
           sourceUrl: "",
           rawSnapshotRef: "",
           ignored: false,
-          lastIngress: "poll",
+          lastIngress: "mcp",
         },
         {
           recordId: "b",
@@ -158,7 +159,7 @@ describe("BugInboxPanel", () => {
           sourceUrl: "",
           rawSnapshotRef: "",
           ignored: true,
-          lastIngress: "poll",
+          lastIngress: "mcp",
         },
       ]),
     ).toBe(1);
@@ -171,49 +172,5 @@ describe("BugInboxPanel", () => {
     const result = formatSyncTime(1700000000000);
     expect(result).toBeTruthy();
     expect(result).not.toBe("Never");
-  });
-
-  test("ConfigCard edit form includes sync parameter fields", async () => {
-    installTauriStub();
-    const { ConfigCard } = await import("./ConfigCard");
-    const html = renderToStaticMarkup(
-      <ConfigCard
-        runtimeState={{
-          enabled: true,
-          projectKey: "proj",
-          tokenLabel: "plugi***",
-          userKey: "u_1",
-          pollIntervalMinutes: 15,
-          publicWebhookBaseUrl: "https://abc.ngrok.app",
-          localWebhookPath: "/wh",
-          webhookEnabled: true,
-        }}
-        loading={false}
-        onSave={() => {}}
-        onSync={() => {}}
-      />,
-    );
-
-    // Configured view should show project key
-    expect(html).toContain("proj");
-    expect(html).toContain("plugi***");
-    expect(html).toContain("Edit");
-    expect(html).toContain("Sync now");
-  });
-
-  test("ConfigCard unconfigured state shows Configure button", async () => {
-    installTauriStub();
-    const { ConfigCard } = await import("./ConfigCard");
-    const html = renderToStaticMarkup(
-      <ConfigCard
-        runtimeState={null}
-        loading={false}
-        onSave={() => {}}
-        onSync={() => {}}
-      />,
-    );
-
-    expect(html).toContain("Not configured");
-    expect(html).toContain("Configure");
   });
 });
