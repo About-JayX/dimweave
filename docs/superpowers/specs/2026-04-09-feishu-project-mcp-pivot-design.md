@@ -34,6 +34,11 @@ The user provided the following verified product facts from Feishu Project help 
 - It works **within the user's personal permission scope**
 - It supports `HTTP OAuth`, `HTTP Header`, and `stdio`
 - It exposes read/write operations for work items, spaces, flows, comments, views, and related metadata
+- The “connect MCP in AI tools” page includes a concrete **Claude Code stdio example**:
+  - `command: "npx"`
+  - `args: ["-y", "@lark-project/mcp", "--domain", "{domain}"]`
+  - `env: { "MCP_USER_TOKEN": "" }`
+- The same page shows Codex CLI can scope MCP config at the **project level** via `.codex/config.toml`
 
 That changes the architecture tradeoff:
 
@@ -54,6 +59,7 @@ That changes the architecture tradeoff:
   - MCP registration helpers in `src-tauri/src/mcp.rs`
   - OAuth-style launch/cancel patterns in `src-tauri/src/codex/oauth.rs`
 - Dimweave already knows how to ship and resolve app-managed helper binaries (`resolve_release_bridge_cmd()` in `src-tauri/src/mcp.rs`), so bundling an MCP-side helper is consistent with existing packaging patterns.
+- Dimweave also already has PATH enrichment and local process launch patterns (`claude_cli.rs`, Codex runtime lifecycle), which makes **app-managed npm package execution** more realistic than a user-managed global install.
 
 ## Recommended Connection Strategy
 
@@ -74,10 +80,14 @@ That changes the architecture tradeoff:
 - Best fit for current Dimweave runtime model
 - Reuses existing subprocess lifecycle patterns
 - Avoids plugin token dependency immediately
-- Can be driven by an app-managed bundled Feishu MCP stdio launch command
+- We now know the concrete stdio shape Feishu documents for Claude Code:
+  - `npx -y @lark-project/mcp --domain {domain}`
+  - `MCP_USER_TOKEN` in env
+- This makes an **app-managed npm package + stdio** design plausible
 
 **Cons**
-- Requires us to prove the Feishu Project MCP stdio server can be bundled or vendored into the app/package
+- We still need to prove we can manage `@lark-project/mcp` ourselves inside the app/project without requiring a user-level global install
+- Stdio still uses `MCP_USER_TOKEN`, so “no plugin token” does **not** mean “no credentials at all”
 - Less turnkey than OAuth
 
 ### Option C: Keep token/webhook as primary and add MCP as optional fallback
@@ -92,7 +102,7 @@ That changes the architecture tradeoff:
 
 ## Recommendation
 
-**Use Stdio-first MCP as the new V1 primary architecture, but only after we verify the real Feishu Project stdio launch contract, bundling model, and live tool catalog.**
+**Use app-managed npm-package stdio as the new V1 primary architecture, but only after we verify the managed install model, token acquisition flow, and live tool catalog.**
 
 Rationale:
 
@@ -101,7 +111,11 @@ Rationale:
 - it lets us preserve almost all of the existing Bug Inbox UI and task-launch workflow
 - it leaves room to add `HTTP OAuth` later as a better UX layer without changing the core inbox model
 
-This recommendation is an engineering inference from the current codebase and the user-provided Feishu Project MCP feature description. It is **not yet enough** to hardcode the stdio launch command or tool names. Those must be captured from a real Feishu Project MCP connection before implementation locks the adapter. It is also **not yet proven** that the stdio server can be shipped as an app-managed dependency instead of requiring global installation; that is now a hard validation gate.
+This recommendation is now grounded in the concrete Feishu help-center stdio example, but it is still **not enough** to start coding the final adapter. We must still verify:
+
+- whether `@lark-project/mcp` can be app-managed inside Dimweave without global install
+- how `domain` and `MCP_USER_TOKEN` are obtained from the Feishu Project MCP settings UI
+- the real live `tools/list` catalog
 
 ## Scope
 
@@ -205,7 +219,19 @@ The old fields should be retired from the primary UI:
 - public webhook base URL
 - raw stdio command / path / args fields exposed to the user
 
-If the stdio transport requires internal launch metadata, it should live in app code or packaging config, not in user-facing settings.
+If the stdio transport requires internal launch metadata, it should live in app code or packaging config, not in user-facing settings. In practice, the likely hidden launch shape is the documented Feishu command:
+
+```bash
+npx -y @lark-project/mcp --domain {domain}
+```
+
+with:
+
+```bash
+MCP_USER_TOKEN=<value>
+```
+
+managed by Dimweave, not typed by the user into a raw command box.
 
 ### 5. Keep linked-task and handoff logic
 

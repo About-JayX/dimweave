@@ -4,7 +4,7 @@
 
 **Goal:** Replace the current token/webhook-first Feishu Project data-access layer with an MCP-first integration while preserving the existing Bug Inbox UI and linked task-handling workflow.
 
-**Architecture:** Add a Feishu Project MCP client runtime in Tauri, start with `stdio` transport as the primary MVP path after validating the real stdio launch contract, app-bundled packaging model, and live tool catalog, and map the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
+**Architecture:** Add a Feishu Project MCP client runtime in Tauri, start with an app-managed npm-package `stdio` transport after validating the managed install model, the `MCP_USER_TOKEN` acquisition flow, and the live tool catalog, and map the discovered read capabilities into the existing Bug Inbox domain store. Retain the current Bug Inbox UI shell and task-link workflow, but replace the config model and remote sync path.
 
 **Tech Stack:** React 19, TypeScript, Zustand, Tauri 2, Rust, tokio, subprocess stdio, serde_json, Bun, Cargo
 
@@ -15,11 +15,37 @@
 - The current token/webhook implementation is already committed and working, but it is not a good fit for this user because they cannot obtain project-space tokens.
 - The Bug Inbox UI and task-link path should be preserved as much as possible.
 - The new unknowns are:
-  - the exact Feishu Project MCP stdio launch command and authentication behavior
-  - whether the stdio server can be bundled / vendored into the app instead of requiring a global install
+  - whether the documented Feishu stdio package `@lark-project/mcp` can be app-managed without global install
+  - how `domain` and `MCP_USER_TOKEN` are obtained from the Feishu Project MCP settings UI in practice
   - the exact `tools/list` catalog and JSON schemas
 - The implementation must therefore include an explicit discovery/diagnostics stage instead of hardcoding all tool names up front.
 - New hard requirement from the user: **MCP must be project-bundled / app-managed, not globally installed by the user.**
+
+## Concrete Feishu evidence already captured
+
+From the Feishu Project help-center page “在 AI 工具中连接 MCP”:
+
+- Claude Code `stdio` example uses:
+
+```json
+{
+  "mcpServers": {
+    "FeishuProjectMcp": {
+      "command": "npx",
+      "args": ["-y", "@lark-project/mcp", "--domain", "{domain}"],
+      "env": { "MCP_USER_TOKEN": "" }
+    }
+  }
+}
+```
+
+- Codex CLI supports project-scoped MCP config via:
+
+```toml
+.codex/config.toml
+```
+
+Implication: the most realistic non-global-install path is **app-managed npm package + stdio**, not a prebuilt bundled native binary.
 
 ## Scope
 
@@ -63,7 +89,7 @@
 - Create: `src-tauri/src/feishu_project/mcp_stdio.rs`
 - Create: `src-tauri/src/feishu_project/tool_catalog.rs`
 - Create: `src-tauri/src/feishu_project/mcp_sync.rs`
-- Create or package: app-managed Feishu MCP helper/binary if the official stdio server cannot be directly vendored as-is
+- Create or package: app-managed Feishu MCP npm runtime / wrapper if `@lark-project/mcp` cannot be directly vendored as-is
 
 ## CM Memory
 
@@ -85,9 +111,11 @@
 
 Use the real Feishu Project MCP stdio launch command and capture:
 
-- how it is launched
+- how `@lark-project/mcp` is launched in practice
 - whether it requires an interactive login step
-- whether it can be invoked from a project-local / app-bundled path instead of a global install
+- whether it can be installed and invoked from an app-managed local directory instead of a global install
+- where `domain` is obtained
+- where `MCP_USER_TOKEN` is obtained
 - the raw `initialize` response
 - the raw `tools/list` response
 
@@ -108,6 +136,7 @@ docs/agents/feishu-project-mcp-notes.md
 The notes must explicitly answer:
 
 - Can Dimweave ship this as an app-managed dependency?
+- Can Dimweave install `@lark-project/mcp` into app data / project-local storage and run it without global npm install?
 - If not, is `HTTP OAuth` the required fallback primary path?
 
 - [ ] **Step 3: Commit**
@@ -136,7 +165,7 @@ Move from REST-token config to MCP connection config, but do **not** expose raw 
 
 ```rust
 pub enum FeishuProjectConnectionMode {
-    StdioBundled,
+    StdioManaged,
     HttpOAuth,
 }
 ```
@@ -160,7 +189,7 @@ Tests should prove:
 
 The transport needs:
 
-- app-managed process spawn
+- app-managed process spawn of the documented Feishu MCP package/runtime
 - bidirectional stdout pump loop
 - serialized stdin writes
 - pending-request correlation
@@ -258,7 +287,7 @@ git commit -m "feat: add feishu project mcp client runtime"
 For the first MCP pivot pass, support:
 
 - enabled
-- connection mode (default `StdioBundled`)
+- connection mode (default `StdioManaged`)
 - workspace hint
 - refresh interval
 
