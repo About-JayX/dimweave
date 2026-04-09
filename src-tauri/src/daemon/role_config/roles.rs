@@ -41,7 +41,8 @@ fn build_role_prompt(role_id: &str) -> String {
          - Route directly to another non-lead role only when the current instruction explicitly names that target role. Otherwise send_to = \"lead\".\n\n\
          ## Response Rules\n\
          - Work autonomously. Execute tasks directly without asking for permission.\n\
-         - Report progress concisely: what you did, result, what's next.\n\n\
+         - Every status/update message MUST include: (1) what you did, (2) result/verification, (3) blocker or \"no blockers\", (4) next action.\n\
+         - If an external dependency blocks completion (missing token, unreachable endpoint, pending admin action), surface it explicitly — do not imply completion.\n\n\
          ## Role-Specific Mandatory Rules\n\
          {role_intro}\n\
          {role_specific_rules}\n\n\

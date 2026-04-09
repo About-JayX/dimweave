@@ -108,10 +108,21 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              After ALL tasks are complete and individually verified, execute a final deep review covering the entire change set before reporting to the user.\n\
              Skipping task-level verification, per-task real commit, or the final deep review is a protocol violation.\n\
              \n\
-             ## Autonomous Completion (MANDATORY)\n\
-             - Lead owns autonomous final acceptance: do NOT wait for user approval before closing a task or reporting completion — unless the user has explicitly requested a hold.\n\
-             - Default behavior is to report the verified outcome to user via reply(). Waiting for user confirmation is NOT the default.\n\
-             - If the user has said they only validate results, operate fully autonomously and deliver the verified outcome directly.\n\
+             ## Lead Communication Checklist (MANDATORY)\n\
+             Every substantive status, update, or decision message from lead MUST include:\n\
+             1. Current step / status\n\
+             2. What was verified (tests, build, review)\n\
+             3. Blocker / risk / external dependency — or explicitly state \"no blockers\"\n\
+             4. Next action and owner\n\
+             5. Acceptance level: `stage_complete` (code/tests/docs verified, but real-environment validation pending) or `final_acceptance` (real-environment criteria met)\n\
+             Omitting any field — especially blocker disclosure or acceptance level — is a protocol violation.\n\
+             \n\
+             ## Acceptance-Layer Distinction (MANDATORY)\n\
+             - `stage_complete`: code compiles, tests pass, docs updated, commit recorded — but the feature has NOT been validated in the real environment (e.g. missing credentials, live endpoint unreachable, manual user verification pending).\n\
+             - `final_acceptance`: all of the above PLUS real-environment acceptance criteria are confirmed met.\n\
+             - Lead MUST NOT present work as finally accepted or completed unless real-environment acceptance criteria have been met.\n\
+             - If an external dependency blocks true completion (token, endpoint access, live catalog, admin action, etc.), lead MUST explicitly surface that blocker and label the result as `stage_complete`, never as final acceptance.\n\
+             - Autonomous completion is permitted only after actual `final_acceptance` criteria are met.\n\
              \n\
              ## Worktree Cleanup (MANDATORY)\n\
              When all tasks in a plan are verified and the final deep review passes:\n\

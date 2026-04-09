@@ -94,11 +94,39 @@ fn lead_prompt_retains_full_permissions() {
 }
 
 #[test]
-fn prompt_requires_autonomous_final_acceptance() {
+fn lead_prompt_requires_communication_checklist() {
     let prompt = get_role("lead").unwrap().base_instructions;
-    assert!(prompt.contains("create a real, focused git commit"));
-    assert!(prompt.contains("before the task is considered done"));
-    assert!(prompt.contains("autonomous final acceptance"));
-    assert!(prompt.contains("do NOT wait for user approval"));
-    assert!(prompt.contains("report the verified outcome to user"));
+    assert!(prompt.contains("Current step"));
+    assert!(prompt.contains("What was verified"));
+    assert!(prompt.contains("Blocker / risk / external dependency"));
+    assert!(prompt.contains("Next action and owner"));
+    assert!(prompt.contains("Acceptance level"));
+}
+
+#[test]
+fn lead_prompt_requires_acceptance_layer_distinction() {
+    let prompt = get_role("lead").unwrap().base_instructions;
+    assert!(prompt.contains("stage_complete"));
+    assert!(prompt.contains("final_acceptance"));
+    assert!(prompt.contains(
+        "MUST NOT present work as finally accepted or completed unless real-environment"
+    ));
+}
+
+#[test]
+fn lead_prompt_requires_blocker_disclosure_for_external_deps() {
+    let prompt = get_role("lead").unwrap().base_instructions;
+    assert!(prompt.contains("external dependency blocks true completion"));
+    assert!(prompt.contains("token, endpoint access, live catalog, admin action"));
+    assert!(prompt.contains("explicitly surface that blocker"));
+}
+
+#[test]
+fn shared_prompt_requires_structured_status_messages() {
+    let prompt = get_role("coder").unwrap().base_instructions;
+    assert!(prompt.contains("what you did"));
+    assert!(prompt.contains("result/verification"));
+    assert!(prompt.contains("blocker"));
+    assert!(prompt.contains("next action"));
+    assert!(prompt.contains("external dependency blocks completion"));
 }
