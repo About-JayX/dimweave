@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, Workflow } from "lucide-react";
+import { AlertTriangle, Bot, Bug, Workflow } from "lucide-react";
 import { AgentStatusPanel } from "./AgentStatus";
+import { BugInboxPanel } from "./BugInboxPanel";
 import { TaskPanel } from "./TaskPanel";
 import { PermissionQueue } from "./MessagePanel/PermissionQueue";
 import { useBridgeStore } from "@/stores/bridge-store";
@@ -132,6 +133,11 @@ export function TaskContextPopover({
       title: "Permission queue",
       icon: AlertTriangle,
     },
+    bugs: {
+      eyebrow: "Bug Inbox",
+      title: "Feishu Project",
+      icon: Bug,
+    },
   } satisfies Record<
     ShellSidebarPane,
     { eyebrow: string; title: string; icon: typeof Workflow }
@@ -210,6 +216,17 @@ export function TaskContextPopover({
                 prompts={permissionPrompts}
                 onResolve={respondToPermission}
               />
+            </div>
+          )}
+
+          {mountedPanes.includes("bugs") && (
+            <div
+              className={cn(
+                "h-full overflow-y-auto px-4 py-4 text-[12px] text-muted-foreground/78",
+                activePane === "bugs" ? "block" : "hidden",
+              )}
+            >
+              <BugInboxPanel />
             </div>
           )}
         </div>

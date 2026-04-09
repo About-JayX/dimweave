@@ -14,6 +14,15 @@ function installTauriStub() {
             return { agents: [], claudeRole: "lead", codexRole: "coder" };
           }
           if (cmd === "daemon_get_task_snapshot") return null;
+          if (cmd === "feishu_project_get_state") {
+            return {
+              enabled: false,
+              pollIntervalMinutes: 10,
+              localWebhookPath: "/wh",
+              webhookEnabled: false,
+            };
+          }
+          if (cmd === "feishu_project_list_items") return [];
           return null;
         },
       },
@@ -104,5 +113,17 @@ describe("TaskContextPopover", () => {
     expect(html).toContain("Approvals");
     expect(html).toContain("Permission queue");
     expect(html).toContain("No pending approvals.");
+  });
+
+  test("renders bugs pane inside the shared shell drawer", async () => {
+    installTauriStub();
+    const { TaskContextPopover } = await import("./TaskContextPopover");
+    const html = renderToStaticMarkup(
+      <TaskContextPopover activePane="bugs" onClose={() => {}} task={null} />,
+    );
+
+    expect(html).toContain("Bug Inbox");
+    expect(html).toContain("Feishu Project");
+    expect(html).toContain("No items in inbox");
   });
 });

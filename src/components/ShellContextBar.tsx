@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import {
   AlertTriangle,
   Bot,
+  Bug,
   MessageSquare,
   Moon,
   Sun,
@@ -19,6 +20,7 @@ import type { RadiusMode } from "./use-border-radius";
 interface ShellContextBarProps {
   activeItem: ShellNavItem | null;
   approvalCount: number;
+  bugCount: number;
   messageCount: number;
   runtimeHealth: RuntimeHealthInfo | null;
   themeMode: ThemeMode;
@@ -36,6 +38,7 @@ const NAV_ITEMS: Array<{
   { id: "task", label: "Task context", icon: Workflow },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "approvals", label: "Approvals", icon: AlertTriangle },
+  { id: "bugs", label: "Bug Inbox", icon: Bug },
   { id: "logs", label: "Logs", icon: TerminalSquare },
 ];
 
@@ -52,6 +55,7 @@ const THEME_OPTIONS: Array<{
 export function ShellContextBar({
   activeItem,
   approvalCount,
+  bugCount,
   messageCount,
   runtimeHealth,
   themeMode,
@@ -92,6 +96,11 @@ export function ShellContextBar({
             {id === "approvals" && approvalCount > 0 ? (
               <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-500 px-1 text-[9px] font-semibold leading-4 text-background">
                 {approvalCount > 9 ? "9+" : approvalCount}
+              </span>
+            ) : null}
+            {id === "bugs" && bugCount > 0 ? (
+              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-500 px-1 text-[9px] font-semibold leading-4 text-background">
+                {bugCount > 9 ? "9+" : bugCount}
               </span>
             ) : null}
             {activeItem === id && (

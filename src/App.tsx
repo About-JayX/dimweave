@@ -17,6 +17,8 @@ import {
   selectMessages,
   selectPermissionPromptCount,
 } from "./stores/bridge-store/selectors";
+import { useFeishuProjectStore } from "./stores/feishu-project-store";
+import { activeItemCount } from "./components/BugInboxPanel/view-model";
 import { useTaskStore } from "./stores/task-store";
 import { selectActiveTask } from "./stores/task-store/selectors";
 import { filterRenderableChatMessages } from "./components/MessagePanel/view-model";
@@ -41,9 +43,9 @@ export default function App() {
   const [selectedWorkspace, setSelectedWorkspace] =
     useState<WorkspaceCandidate | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(
-    null,
-  );
+  const [workspaceActionError, setWorkspaceActionError] = useState<
+    string | null
+  >(null);
   const activeTask = useTaskStore(selectActiveTask);
   const bootstrapComplete = useTaskStore((s) => s.bootstrapComplete);
   const bootstrapError = useTaskStore((s) => s.bootstrapError);
@@ -53,6 +55,8 @@ export default function App() {
 
   const messages = useBridgeStore(selectMessages);
   const approvalCount = useBridgeStore(selectPermissionPromptCount);
+  const bugItems = useFeishuProjectStore((s) => s.items);
+  const bugCount = useMemo(() => activeItemCount(bugItems), [bugItems]);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
@@ -72,7 +76,9 @@ export default function App() {
 
     try {
       setRecentWorkspaces(
-        loadRecentWorkspaces(localStorage.getItem(RECENT_WORKSPACES_STORAGE_KEY)),
+        loadRecentWorkspaces(
+          localStorage.getItem(RECENT_WORKSPACES_STORAGE_KEY),
+        ),
       );
     } catch {
       setRecentWorkspaces([]);
@@ -103,7 +109,9 @@ export default function App() {
   const handleSelectRecentWorkspace = useCallback(
     (next: WorkspaceCandidate) => {
       setWorkspaceActionError(null);
-      setSelectedWorkspace((current) => selectWorkspaceCandidate(next, current));
+      setSelectedWorkspace((current) =>
+        selectWorkspaceCandidate(next, current),
+      );
     },
     [],
   );
@@ -147,6 +155,7 @@ export default function App() {
         <ShellContextBar
           activeItem={shellLayout.activeItem}
           approvalCount={approvalCount}
+          bugCount={bugCount}
           messageCount={chatMessages.length}
           runtimeHealth={runtimeHealth}
           themeMode={theme.mode}

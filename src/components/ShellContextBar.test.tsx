@@ -31,6 +31,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         approvalCount={0}
+        bugCount={0}
         messageCount={0}
         runtimeHealth={null}
         themeMode="auto"
@@ -56,6 +57,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         approvalCount={0}
+        bugCount={0}
         messageCount={0}
         runtimeHealth={{
           level: "error",
@@ -81,6 +83,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         approvalCount={0}
+        bugCount={0}
         messageCount={0}
         runtimeHealth={{
           level: "warning",
@@ -98,6 +101,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         approvalCount={0}
+        bugCount={0}
         messageCount={0}
         runtimeHealth={null}
         themeMode="auto"
@@ -119,6 +123,7 @@ describe("ShellContextBar", () => {
       <ShellContextBar
         activeItem={null}
         approvalCount={3}
+        bugCount={0}
         messageCount={0}
         runtimeHealth={null}
         themeMode="auto"
@@ -131,5 +136,27 @@ describe("ShellContextBar", () => {
 
     expect(html).toContain("3");
     expect(html).toContain("Open approvals");
+  });
+
+  test("renders Bug Inbox rail item and badge", async () => {
+    installTauriStub();
+    const { ShellContextBar } = await import("./ShellContextBar");
+    const html = renderToStaticMarkup(
+      <ShellContextBar
+        activeItem={null}
+        approvalCount={0}
+        bugCount={5}
+        messageCount={0}
+        runtimeHealth={null}
+        themeMode="auto"
+        radiusMode="rounded"
+        onToggle={() => {}}
+        onThemeChange={() => {}}
+        onRadiusToggle={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Bug Inbox");
+    expect(html).toContain("5");
   });
 });

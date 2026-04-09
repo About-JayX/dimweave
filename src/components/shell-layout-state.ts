@@ -1,6 +1,6 @@
 import { shortenPath } from "@/lib/utils";
 
-export type ShellSidebarPane = "task" | "agents" | "approvals";
+export type ShellSidebarPane = "task" | "agents" | "approvals" | "bugs";
 export type ShellNavItem = ShellSidebarPane | "logs";
 export type ShellMainSurface = "chat" | "logs";
 
