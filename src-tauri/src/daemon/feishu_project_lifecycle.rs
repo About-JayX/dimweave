@@ -117,6 +117,37 @@ pub async fn set_ignored(
     Ok(())
 }
 
+/// Ingest a single item received via webhook: upsert, persist, emit, update timestamps.
+pub async fn ingest_webhook_item(
+    state: &SharedState,
+    app: &AppHandle,
+    item: crate::feishu_project::types::FeishuProjectInboxItem,
+) {
+    {
+        let mut daemon = state.write().await;
+        daemon.feishu_project_store.upsert(item);
+    }
+    crate::feishu_project::runtime::persist_and_emit(state, app).await;
+    update_config_after_webhook(app).await;
+}
+
+async fn update_config_after_webhook(app: &AppHandle) {
+    let now = chrono::Utc::now().timestamp_millis() as u64;
+    if let Ok(path) = crate::feishu_project::config::default_config_path() {
+        if let Ok(mut saved) = crate::feishu_project::config::load_config(&path) {
+            saved.last_webhook_at = Some(now);
+            saved.last_sync_at = Some(now);
+            saved.last_error = None;
+            let _ = crate::feishu_project::config::save_config(&path, &saved);
+            let rs = crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
+                &saved,
+                WEBHOOK_PATH,
+            );
+            gui::emit_feishu_project_state(app, &rs);
+        }
+    }
+}
+
 /// Load persisted inbox store into DaemonState on startup.
 pub async fn hydrate_store(state: &SharedState) {
     if let Ok(path) = crate::feishu_project::store::default_store_path() {

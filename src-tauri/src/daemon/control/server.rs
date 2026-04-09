@@ -1,4 +1,7 @@
-use crate::daemon::{control::claude_sdk_handler, control::handler, SharedState};
+use crate::daemon::{
+    control::claude_sdk_handler, control::feishu_project_webhook, control::handler,
+    feishu_project_lifecycle, SharedState,
+};
 use axum::{
     extract::{State, WebSocketUpgrade},
     response::IntoResponse,
@@ -14,6 +17,10 @@ pub async fn start(port: u16, state: SharedState, app: AppHandle) -> anyhow::Res
         .route("/ws", get(ws_handler))
         .route("/claude", get(claude_sdk_handler::ws_handler))
         .route("/claude/events", post(claude_sdk_handler::events_handler))
+        .route(
+            feishu_project_lifecycle::WEBHOOK_PATH,
+            post(feishu_project_webhook::webhook_handler),
+        )
         .with_state(shared);
 
     let addr = format!("127.0.0.1:{port}");

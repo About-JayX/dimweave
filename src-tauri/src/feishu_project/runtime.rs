@@ -116,7 +116,7 @@ pub async fn start_polling(
     })
 }
 
-async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
+pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
     let store = state.read().await.feishu_project_store.clone();
     if let Ok(path) = store::default_store_path() {
         let _ = store::save_store(&path, &store);
