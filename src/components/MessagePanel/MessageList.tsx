@@ -9,12 +9,15 @@ import { BackToBottomButton } from "./search-chrome";
 import {
   getCodexStreamIndicatorViewModel,
   getMessageListDisplayState,
+  getMessageListFollowOutputMode,
+  shouldResetMessageListInitialScroll,
   type StreamIndicatorId,
 } from "./view-model";
 
 interface Props {
   emptyStateMessage?: string;
   messages: BridgeMessage[];
+  searchActive?: boolean;
   onOpenImage?: (attachment: Attachment) => void;
 }
 
@@ -35,6 +38,7 @@ export function StreamTailFooter({ context }: { context?: FooterContext }) {
 export function MessageList({
   emptyStateMessage,
   messages,
+  searchActive = false,
   onOpenImage,
 }: Props) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -84,17 +88,17 @@ export function MessageList({
   }, []);
 
   useEffect(() => {
-    if (totalCount === 0) {
+    if (shouldResetMessageListInitialScroll(searchActive, totalCount)) {
       didInitialScrollRef.current = false;
       return;
     }
-    if (didInitialScrollRef.current) return;
+    if (searchActive || totalCount === 0 || didInitialScrollRef.current) return;
     didInitialScrollRef.current = true;
     const raf = window.requestAnimationFrame(() => {
       virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [totalCount]);
+  }, [searchActive, totalCount]);
 
   if (!displayState.hasContent) {
     return (
@@ -118,7 +122,7 @@ export function MessageList({
           totalCount={totalCount}
           atBottomStateChange={handleAtBottomChange}
           atBottomThreshold={80}
-          followOutput="smooth"
+          followOutput={getMessageListFollowOutputMode(searchActive, atBottom)}
           className="h-full"
           increaseViewportBy={200}
           context={footerContext}

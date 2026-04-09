@@ -28,13 +28,19 @@ const _store = Object.assign((sel: (s: typeof _bs) => unknown) => sel(_bs), {
 mock.module("@/stores/bridge-store", () => ({ useBridgeStore: _store }));
 
 // 2. Fake Virtuoso: renders all items synchronously (bypasses SSR item-skip)
+//    Also captures the latest props so tests can assert on followOutput, etc.
+let lastVirtuosoProps: Record<string, unknown> | null = null;
 mock.module("react-virtuoso", () => ({
-  Virtuoso: ({ totalCount, itemContent, components, context }: {
+  Virtuoso: (props: {
     totalCount: number;
     itemContent: (i: number) => unknown;
     components?: { Footer?: React.ComponentType<{ context?: unknown }> };
     context?: unknown;
+    followOutput?: unknown;
+    [key: string]: unknown;
   }) => {
+    lastVirtuosoProps = props;
+    const { totalCount, itemContent, components, context } = props;
     const Footer = components?.Footer;
     return createElement(
       "div", null,
@@ -244,5 +250,71 @@ describe("MessageList", () => {
     );
 
     expect(html).toContain("No messages match rollout.");
+  });
+
+  test("disables followOutput while search is active", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: false, previewText: "", thinkingText: "",
+        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+      },
+      codexStream: {
+        thinking: false, currentDelta: "", lastMessage: "",
+        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+      },
+    }));
+
+    lastVirtuosoProps = null;
+    renderToStaticMarkup(
+      <MessageList
+        messages={[{
+          id: "msg_1", from: "claude", to: "user",
+          content: "Found the root cause", timestamp: 1,
+        }]}
+        searchActive={true}
+      />,
+    );
+
+    expect(lastVirtuosoProps).not.toBeNull();
+    expect(lastVirtuosoProps!.followOutput).toBe(false);
+  });
+
+  test("enables smooth followOutput when search is inactive", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: false, previewText: "", thinkingText: "",
+        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+      },
+      codexStream: {
+        thinking: false, currentDelta: "", lastMessage: "",
+        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+      },
+    }));
+
+    lastVirtuosoProps = null;
+    renderToStaticMarkup(
+      <MessageList
+        messages={[{
+          id: "msg_1", from: "claude", to: "user",
+          content: "Found the root cause", timestamp: 1,
+        }]}
+        searchActive={false}
+      />,
+    );
+
+    expect(lastVirtuosoProps).not.toBeNull();
+    expect(lastVirtuosoProps!.followOutput).toBe("smooth");
   });
 });

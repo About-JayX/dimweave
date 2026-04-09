@@ -19,6 +19,7 @@ import {
   getLogsFollowOutputMode,
   getMessageSearchSummary,
   getSearchQueryForDisclosure,
+  isMessageSearchActive,
   shouldAutoScrollLogsOnSurfaceChange,
 } from "./view-model";
 import type { ShellMainSurface } from "@/components/shell-layout-state";
@@ -42,6 +43,7 @@ export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: Message
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
   const deferredSearchQuery = useDeferredValue(effectiveSearchQuery);
+  const searchActive = isMessageSearchActive(deferredSearchQuery);
   const logsVirtuosoRef = useRef<VirtuosoHandle>(null);
   const previousSurfaceModeRef = useRef<ShellMainSurface | null>(surfaceMode);
   const [logsAtBottom, setLogsAtBottom] = useState(true);
@@ -113,6 +115,7 @@ export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: Message
           />
           <MessageList
             messages={filteredMessages}
+            searchActive={searchActive}
             emptyStateMessage={searchSummary ?? undefined}
             onOpenImage={setLightboxAttachment}
           />
