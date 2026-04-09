@@ -104,7 +104,7 @@ Implication: the most realistic non-global-install path is now **direct HTTP MCP
 | Task 1 | `feat: add feishu project mcp http runtime` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp`; `git diff --check` | `e8ea3881` — Direct HTTP MCP runtime skeleton is in place: endpoint config, transport, client, tool catalog parsing, runtime state diagnostics, and lifecycle integration now work without Node/npm subprocess dependency. |
 | Task 2 | `feat: switch bug inbox config to mcp connection` | `bun test src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts`; `bun run build`; `git diff --check` | `6e8c79ed` — The Bug Inbox config UI now uses MCP fields (`domain`, `MCP_USER_TOKEN`, `workspace_hint`, `refresh_interval_minutes`) and surfaces MCP connection status, tool count, last sync, and error state. |
 | Task 3 | `feat: source bug inbox from feishu mcp` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync`; `cargo test --manifest-path src-tauri/Cargo.toml`; `git diff --check` | `0464a56a` — Bug Inbox sync now runs through the direct HTTP MCP client, surfaces missing/unknown tool catalogs as explicit errors, and preserves local inbox workflow state via upsert. |
-| Task 4 | `refactor: retire legacy feishu token sync path` | `cargo test --manifest-path src-tauri/Cargo.toml`; `bun run build`; `git diff --check` | The old path should be clearly demoted or removed so we do not maintain two conflicting primary architectures. |
+| Task 4 | `refactor: retire legacy feishu token sync path` | `cargo test --manifest-path src-tauri/Cargo.toml`; `bun run build`; `git diff --check` | Webhook handler + route deleted. `api.rs` deprecated in-place (serde compat). Legacy config fields marked deprecated. Legacy runtime state fields (`project_key`, `local_webhook_path`, `webhook_enabled`) removed from `FeishuProjectRuntimeState`. |
 
 ## Task 0: Capture the real Feishu Project MCP transport shape and tool-catalog blocker
 
@@ -337,16 +337,18 @@ git commit -m "feat: source bug inbox from feishu mcp"
 - Modify: `docs/superpowers/plans/2026-04-09-feishu-project-bug-inbox.md`
 - Modify: any obsolete runtime files as needed
 
-- [ ] **Step 1: Remove or clearly demote the old REST/webhook path**
+- [x] **Step 1: Remove or clearly demote the old REST/webhook path**
 
-Do one of:
+Done:
+- Deleted `feishu_project_webhook.rs` + tests (webhook handler removed entirely)
+- Removed webhook route from `control/server.rs` and module registration from `control/mod.rs`
+- Removed `WEBHOOK_PATH` constant and `ingest_webhook_item()` from `feishu_project_lifecycle.rs`
+- Deprecated `api.rs` in-place with module-level doc comment (kept for serde compat + pagination test coverage)
+- Removed legacy runtime state fields (`project_key`, `local_webhook_path`, `webhook_enabled`) from `FeishuProjectRuntimeState`
+- Marked legacy config fields as deprecated with clear comments
+- Updated design and plan docs
 
-- remove the old path entirely if the MCP path is proven stable, or
-- clearly mark it as legacy/fallback and keep it out of the main UI
-
-Also explicitly remove the Feishu webhook route from `control/server.rs` if it is no longer part of the primary product path, and remove the legacy token/webhook fields from the primary config model.
-
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run:
 

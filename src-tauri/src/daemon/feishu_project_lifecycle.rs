@@ -2,8 +2,6 @@ use super::gui;
 use super::SharedState;
 use tauri::AppHandle;
 
-pub const WEBHOOK_PATH: &str = "/integrations/feishu-project/webhook";
-
 fn load_cfg() -> crate::feishu_project::types::FeishuProjectConfig {
     crate::feishu_project::config::default_config_path()
         .and_then(|p| crate::feishu_project::config::load_config(&p))
@@ -105,35 +103,6 @@ pub async fn set_ignored(
     let items = state.read().await.feishu_project_store.items.clone();
     gui::emit_feishu_project_items(app, &items);
     Ok(())
-}
-
-/// Ingest a single item received via webhook (legacy, kept for Task 4).
-pub async fn ingest_webhook_item(
-    state: &SharedState,
-    app: &AppHandle,
-    item: crate::feishu_project::types::FeishuProjectInboxItem,
-) {
-    {
-        let mut daemon = state.write().await;
-        daemon.feishu_project_store.upsert(item);
-    }
-    crate::feishu_project::runtime::persist_and_emit(state, app).await;
-    update_config_after_webhook(app).await;
-}
-
-async fn update_config_after_webhook(app: &AppHandle) {
-    let now = chrono::Utc::now().timestamp_millis() as u64;
-    if let Ok(path) = crate::feishu_project::config::default_config_path() {
-        if let Ok(mut saved) = crate::feishu_project::config::load_config(&path) {
-            saved.last_webhook_at = Some(now);
-            saved.last_sync_at = Some(now);
-            saved.last_error = None;
-            let _ = crate::feishu_project::config::save_config(&path, &saved);
-            let rs =
-                crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&saved);
-            gui::emit_feishu_project_state(app, &rs);
-        }
-    }
 }
 
 /// Load persisted inbox store into DaemonState on startup.

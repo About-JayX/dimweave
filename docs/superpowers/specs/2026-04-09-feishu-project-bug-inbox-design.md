@@ -12,7 +12,7 @@ The agreed V1 product choices are:
 - launch model: half-automatic (`Start handling` is user-triggered)
 - Dimweave task reuse: repeated starts reopen the existing linked task instead of creating duplicates
 - Feishu write-back: excluded from V1
-- ingress model: polling baseline with webhook fast path
+- ingress model: ~~polling baseline with webhook fast path~~ → **direct HTTP MCP** (see [MCP pivot design](2026-04-09-feishu-project-mcp-pivot-design.md))
 
 ## Product Goal
 

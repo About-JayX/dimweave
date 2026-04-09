@@ -4,7 +4,7 @@
 
 **Goal:** Add a Dimweave Bug Inbox tool that ingests one Feishu Project workspace, lists all work items, and lets the user start an idempotent lead-driven repair workflow from any row.
 
-**Architecture:** Implement a new Feishu Project integration runtime inside Tauri using polling as the guaranteed baseline and webhook ingestion as the optional fast path. Surface the integration through a new shell drawer pane, persist one inbox record per work item, and create/reuse linked Dimweave tasks from inbox rows. Seed lead with a system-sourced Feishu handoff message plus an attached issue snapshot file; do not create task artifacts before a real task session exists.
+**Architecture:** ~~Implement a new Feishu Project integration runtime inside Tauri using polling as the guaranteed baseline and webhook ingestion as the optional fast path.~~ **Superseded by [MCP pivot](2026-04-09-feishu-project-mcp-pivot.md)**: the active data path is now direct HTTP MCP via `mcp_sync.rs`. The polling/webhook path (`api.rs`, `feishu_project_webhook.rs`) is deprecated/removed. Surface the integration through a new shell drawer pane, persist one inbox record per work item, and create/reuse linked Dimweave tasks from inbox rows. Seed lead with a system-sourced Feishu handoff message plus an attached issue snapshot file; do not create task artifacts before a real task session exists.
 
 **Tech Stack:** React 19, TypeScript, Zustand, Tauri 2, Rust, axum, reqwest, tokio, Bun, Cargo
 

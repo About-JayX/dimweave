@@ -23,7 +23,9 @@ pub struct FeishuProjectConfig {
     pub workspace_hint: String,
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval_minutes: u64,
-    // ── Legacy fields (kept for api.rs compat, Task 4 removes) ──
+    // ── DEPRECATED: legacy token/webhook fields ──────────────────
+    // Kept only for serde backwards compat with persisted config.
+    // Not used by the active MCP path. Do not add new references.
     #[serde(default)]
     pub project_key: String,
     #[serde(default)]
@@ -88,15 +90,7 @@ pub struct FeishuProjectRuntimeState {
     pub discovered_tool_count: usize,
     pub last_sync_at: Option<u64>,
     pub last_error: Option<String>,
-    // Legacy fields kept for frontend compat until Task 2 updates UI
-    #[serde(default)]
-    pub project_key: Option<String>,
-    #[serde(default)]
     pub token_label: Option<String>,
-    #[serde(default)]
-    pub local_webhook_path: String,
-    #[serde(default)]
-    pub webhook_enabled: bool,
 }
 
 impl FeishuProjectRuntimeState {
@@ -118,15 +112,7 @@ impl FeishuProjectRuntimeState {
             discovered_tool_count: 0,
             last_sync_at: cfg.last_sync_at,
             last_error: cfg.last_error.clone(),
-            // Legacy compat
-            project_key: if cfg.project_key.is_empty() {
-                None
-            } else {
-                Some(cfg.project_key.clone())
-            },
             token_label: mask_token(&cfg.mcp_user_token),
-            local_webhook_path: String::new(),
-            webhook_enabled: false,
         }
     }
 }

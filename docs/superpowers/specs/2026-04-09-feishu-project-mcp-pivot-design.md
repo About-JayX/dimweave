@@ -286,11 +286,11 @@ Only the **source of remote truth** changes from OpenAPI/webhook to MCP.
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/main.rs`
 
-### Remove from primary path
+### Removed from primary path (completed Task 4)
 
-- `src-tauri/src/feishu_project/api.rs`
-- `src-tauri/src/daemon/control/feishu_project_webhook.rs`
-- `src-tauri/src/daemon/control/server.rs` route registration for Feishu webhook
+- `src-tauri/src/feishu_project/api.rs` — deprecated in-place; kept for serde compat and test coverage of pagination logic
+- `src-tauri/src/daemon/control/feishu_project_webhook.rs` — **deleted**; webhook route removed from `control/server.rs`
+- `src-tauri/src/daemon/control/server.rs` — webhook route registration removed
 
 ## Acceptance Criteria
 

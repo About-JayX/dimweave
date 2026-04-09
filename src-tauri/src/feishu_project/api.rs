@@ -1,3 +1,10 @@
+//! **DEPRECATED** — Legacy Feishu Project OpenAPI polling client.
+//!
+//! This module used the old plugin-token / user-key REST API path.
+//! The active data path is now `mcp_sync.rs` via direct HTTP MCP.
+//! Kept only for backwards-compatible deserialization of persisted
+//! config/store data and for existing test coverage of pagination logic.
+
 use super::types::{FeishuProjectConfig, FeishuProjectInboxItem, IngressSource};
 use reqwest::Client;
 use serde::Deserialize;
