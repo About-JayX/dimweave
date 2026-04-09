@@ -64,7 +64,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `feat: add feishu project inbox runtime model` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::`; `git diff --check` | The integration must mirror Telegram’s config/runtime split so secrets stay Rust-side and the frontend only sees masked state. |
+| Task 1 | `feat: add feishu project inbox runtime model` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::`; `git diff --check` | `3876d21a` — The integration mirrors Telegram’s config/runtime split so secrets stay Rust-side and the frontend only sees masked state. |
 | Task 2 | `feat: poll feishu project work items into inbox` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::polling`; `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::store`; `git diff --check` | Polling is the guaranteed baseline; the API client must page through the full workspace and merge rows in place. |
 | Task 3 | `feat: accept feishu project webhooks into inbox` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project_webhook`; `cargo test --manifest-path src-tauri/Cargo.toml`; `git diff --check` | Webhook is an optional fast path and must validate the configured token, dedupe on `header.uuid`, and return quickly. |
 | Task 4 | `feat: add bug inbox shell panel` | `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx src/components/BugInboxPanel/index.test.tsx src/stores/feishu-project-store.test.ts`; `bun run build`; `git diff --check` | The Bug Inbox must feel like a native shell tool, not a separate modal or hidden settings screen. |
@@ -240,7 +240,7 @@ SaveFeishuProjectConfig {
     reply: oneshot::Sender<Result<crate::feishu_project::types::FeishuProjectRuntimeState, String>>,
 },
 SyncFeishuProjectNow {
-    reply: oneshot::Sender<Result<crate::feishu_project::types::FeishuProjectRuntimeState, String>>,
+    reply: oneshot::Sender<Result<(), String>>,
 },
 ListFeishuProjectItems {
     reply: oneshot::Sender<Vec<crate::feishu_project::types::FeishuProjectInboxItem>>,
@@ -252,7 +252,7 @@ StartFeishuProjectHandling {
 SetFeishuProjectIgnored {
     work_item_id: String,
     ignored: bool,
-    reply: oneshot::Sender<Result<Vec<crate::feishu_project::types::FeishuProjectInboxItem>, String>>,
+    reply: oneshot::Sender<Result<(), String>>,
 },
 ```
 
