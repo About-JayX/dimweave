@@ -205,7 +205,7 @@ pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
     gui::emit_feishu_project_items(app, &store.items);
 }
 
-async fn update_mcp_state(
+pub(crate) async fn update_mcp_state(
     cfg: &FeishuProjectConfig,
     client: &McpClient,
     error: Option<String>,

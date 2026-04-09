@@ -89,6 +89,8 @@ pub async fn list_items(
 }
 
 /// Trigger an immediate MCP sync cycle (manual "Sync now").
+/// Updates runtime state (last_sync_at, mcp_status, project_name, team_members)
+/// on both success and failure paths.
 pub async fn sync_now(
     state: &SharedState,
     app: &AppHandle,
@@ -97,9 +99,10 @@ pub async fn sync_now(
     if cfg.mcp_user_token.is_empty() {
         return Err("MCP user token not configured".into());
     }
-    crate::feishu_project::runtime::run_mcp_sync_cycle(&cfg, state, app)
-        .await
-        .map(|_| ())
+    let client = crate::feishu_project::runtime::run_mcp_sync_cycle(&cfg, state, app).await?;
+    // Refresh runtime state so frontend sees updated last_sync_at / project_name / etc.
+    crate::feishu_project::runtime::update_mcp_state(&cfg, &client, None, state, app).await;
+    Ok(())
 }
 
 /// Load next page of issues (append to existing store).
