@@ -1,6 +1,6 @@
 use crate::daemon::codex::handler;
 use crate::daemon::codex::structured_output::{
-    parse_structured_output, should_emit_final_message, StreamPreviewState,
+    parse_structured_output, should_emit_final_message, ParsedOutput, StreamPreviewState,
 };
 use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::gui::{self, CodexStreamPayload};
@@ -117,6 +117,34 @@ async fn handle_tool_call(
     }
 }
 
+fn build_completed_output_message(
+    role_id: &str,
+    parsed: &ParsedOutput,
+    schema_route_enabled: bool,
+) -> Option<BridgeMessage> {
+    if !should_emit_final_message(&parsed.message) {
+        return None;
+    }
+
+    let target = if schema_route_enabled {
+        parsed
+            .send_to
+            .as_deref()
+            .filter(|t| matches!(*t, "user" | "lead" | "coder"))
+            .unwrap_or("user")
+    } else {
+        "user"
+    };
+
+    let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
+    msg.report_telegram = if parsed.report_telegram {
+        Some(true)
+    } else {
+        None
+    };
+    Some(msg)
+}
+
 async fn handle_completed_agent_message(
     v: &Value,
     role_id: &str,
@@ -143,35 +171,19 @@ async fn handle_completed_agent_message(
             return;
         }
     };
-    if !should_emit_final_message(&parsed.message) {
+    let Some(mut msg) = build_completed_output_message(role_id, &parsed, schema_route_enabled)
+    else {
         return;
-    }
+    };
     gui::emit_codex_stream(
         app,
         CodexStreamPayload::Message {
             text: parsed.message.clone(),
         },
     );
-    let valid_target = if schema_route_enabled {
-        parsed
-            .send_to
-            .as_deref()
-            .filter(|target| matches!(*target, "lead" | "coder"))
-    } else {
-        None
-    };
-    if let Some(target) = valid_target {
-        let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
-        msg.report_telegram = parsed.report_telegram.then_some(true);
-        state.read().await.stamp_message_context(role_id, &mut msg);
-        eprintln!("[Codex] schema-route {} → {}", role_id, target);
-        routing::route_message(state, app, msg).await;
-    } else {
-        let mut msg = build_msg_with_status(role_id, "user", &parsed.message, parsed.status);
-        msg.report_telegram = parsed.report_telegram.then_some(true);
-        state.read().await.stamp_message_context(role_id, &mut msg);
-        gui::emit_agent_message(app, &msg);
-    }
+    state.read().await.stamp_message_context(role_id, &mut msg);
+    eprintln!("[Codex] route {} → {}", role_id, msg.to);
+    routing::route_message(state, app, msg).await;
 }
 
 fn emit_activity_from_item(v: &Value, app: &AppHandle) {
@@ -342,6 +354,61 @@ fn build_msg_with_status(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn completed_output_builder_preserves_user_target_and_report_flag() {
+        let parsed = ParsedOutput {
+            message: "final review result".into(),
+            send_to: Some("user".into()),
+            status: MessageStatus::Done,
+            report_telegram: true,
+        };
+
+        let msg = build_completed_output_message("lead", &parsed, true).expect("message");
+        assert_eq!(msg.to, "user");
+        assert_eq!(msg.status, Some(MessageStatus::Done));
+        assert_eq!(msg.report_telegram, Some(true));
+    }
+
+    #[test]
+    fn completed_output_builder_restricts_schema_routes_to_known_roles() {
+        let parsed = ParsedOutput {
+            message: "final review result".into(),
+            send_to: Some("reviewer".into()),
+            status: MessageStatus::Done,
+            report_telegram: true,
+        };
+
+        let msg = build_completed_output_message("lead", &parsed, true).expect("message");
+        assert_eq!(msg.to, "user");
+        assert_eq!(msg.report_telegram, Some(true));
+    }
+
+    #[test]
+    fn completed_output_builder_defaults_to_user_when_schema_disabled() {
+        let parsed = ParsedOutput {
+            message: "status update".into(),
+            send_to: Some("lead".into()),
+            status: MessageStatus::InProgress,
+            report_telegram: false,
+        };
+
+        let msg = build_completed_output_message("coder", &parsed, false).expect("message");
+        assert_eq!(msg.to, "user");
+        assert_eq!(msg.report_telegram, None);
+    }
+
+    #[test]
+    fn completed_output_builder_rejects_empty_message() {
+        let parsed = ParsedOutput {
+            message: "   ".into(),
+            send_to: Some("user".into()),
+            status: MessageStatus::Done,
+            report_telegram: true,
+        };
+
+        assert!(build_completed_output_message("lead", &parsed, true).is_none());
+    }
 
     #[test]
     fn activity_label_formats_command_execution() {
