@@ -25,7 +25,7 @@
 
 | Task | Commit | Review | Verification | Memory |
 |------|--------|--------|--------------|--------|
-| Task 1 | `36cb7ad5` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-09-message-search-scroll-stability-design.md docs/superpowers/plans/2026-04-09-message-search-scroll-stability.md` ✅ | The approved scroll policy must be documented before code changes so implementation and review use the same definition of "search-stable". |
+| Task 1 | `47348e28` | `self-review` | `git diff --check -- docs/superpowers/specs/2026-04-09-message-search-scroll-stability-design.md docs/superpowers/plans/2026-04-09-message-search-scroll-stability.md` ✅ | The approved scroll policy must be documented before code changes so implementation and review use the same definition of "search-stable". |
 | Task 2 | `PENDING` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts`; `git diff --check` | Search-active scroll policy belongs in testable helpers, not inline conditionals scattered through JSX. |
 | Task 3 | `PENDING` | `manual review` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build`; `git diff --check` | Active search is an inspection mode: freeze auto-follow until the user clears the query or explicitly scrolls back down. |
 
