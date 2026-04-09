@@ -38,14 +38,20 @@ pub async fn handle_dynamic_tool(
     }
 }
 
-async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHandle) -> String {
+fn build_reply_message(args: &Value, from: &str) -> Option<BridgeMessage> {
     let to = args["to"].as_str().unwrap_or("user");
     let text = args["text"].as_str().unwrap_or("");
     if text.trim().is_empty() {
-        return format!("Ignored empty message to {to}");
+        return None;
     }
 
-    let mut msg = BridgeMessage {
+    let status = args["status"]
+        .as_str()
+        .and_then(MessageStatus::parse)
+        .unwrap_or(MessageStatus::Done);
+    let report_telegram = args.get("report_telegram").and_then(|v| v.as_bool());
+
+    Some(BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
         display_source: Some("codex".into()),
@@ -54,11 +60,19 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
-        status: Some(MessageStatus::Done),
+        status: Some(status),
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
-        attachments: None, report_telegram: None,
+        attachments: None,
+        report_telegram,
+    })
+}
+
+async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHandle) -> String {
+    let to = args["to"].as_str().unwrap_or("user");
+    let Some(mut msg) = build_reply_message(args, from) else {
+        return format!("Ignored empty message to {to}");
     };
     state.read().await.stamp_message_context(from, &mut msg);
 
@@ -95,6 +109,43 @@ mod tests {
     use crate::daemon::state::DaemonState;
     use std::sync::Arc;
     use tokio::sync::{mpsc, RwLock};
+
+    #[test]
+    fn reply_builder_preserves_status_and_report_telegram() {
+        let args = serde_json::json!({
+            "to": "user",
+            "text": "final review result",
+            "status": "error",
+            "report_telegram": true
+        });
+
+        let msg = build_reply_message(&args, "lead").expect("message");
+        assert_eq!(msg.to, "user");
+        assert_eq!(msg.status, Some(MessageStatus::Error));
+        assert_eq!(msg.report_telegram, Some(true));
+    }
+
+    #[test]
+    fn reply_builder_defaults_status_to_done_and_flag_to_none() {
+        let args = serde_json::json!({
+            "to": "coder",
+            "text": "take task 2"
+        });
+
+        let msg = build_reply_message(&args, "lead").expect("message");
+        assert_eq!(msg.status, Some(MessageStatus::Done));
+        assert_eq!(msg.report_telegram, None);
+    }
+
+    #[test]
+    fn reply_builder_rejects_empty_text() {
+        let args = serde_json::json!({
+            "to": "user",
+            "text": "   "
+        });
+
+        assert!(build_reply_message(&args, "lead").is_none());
+    }
 
     #[tokio::test]
     async fn get_status_returns_valid_json() {
