@@ -114,3 +114,44 @@ fn relink_same_item_selects_existing_task() {
     state.select_task(&task_id).unwrap();
     assert_eq!(state.active_task_id.as_deref(), Some(task_id.as_str()));
 }
+
+#[test]
+fn handoff_description_from_plain_string() {
+    let item = sample_item();
+    let context = json!({
+        "work_item_id": "1001",
+        "name": "Crash on launch",
+        "description": "App crashes on cold start",
+    });
+    let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
+    assert!(msg.content.contains("App crashes on cold start"));
+    assert!(!msg.content.contains("(no description)"));
+}
+
+#[test]
+fn handoff_description_from_rich_text_object() {
+    let item = sample_item();
+    let context = json!({
+        "work_item_id": "1001",
+        "name": "Crash on launch",
+        "description": {
+            "doc_text": "Steps to reproduce:\n1. Open app\n2. Crash",
+            "doc_type": 12,
+            "content": [{"type": "paragraph"}]
+        },
+    });
+    let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
+    assert!(msg.content.contains("Steps to reproduce:"));
+    assert!(!msg.content.contains("(no description)"));
+}
+
+#[test]
+fn handoff_description_fallback_when_missing() {
+    let item = sample_item();
+    let context = json!({
+        "work_item_id": "1001",
+        "name": "Crash on launch",
+    });
+    let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
+    assert!(msg.content.contains("(no description)"));
+}
