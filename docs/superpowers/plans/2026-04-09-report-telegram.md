@@ -593,3 +593,11 @@ No alternate spellings are introduced.
   - Telegram routing no longer depends on `to == "user"`
   - `report_telegram` remains optional everywhere
   - `notifications_enabled` remains a hard gate
+
+## Post-Release Addendum
+
+- 2026-04-09 发生一轮 Codex 发送链路事故：连接显示 `active`，但首条消息在 `turn/start` 阶段失败。
+- 根因不是连接链路，而是 Task 1 引入的 Codex `outputSchema` 变更只新增了 `report_telegram` property，没有同步更新 `required`。
+- 该问题由提交 `3e2c95a7`（`feat: add report_telegram to message protocol`）引入。
+- 独立修复记录见：
+  - [2026-04-09-codex-output-schema-hotfix.md](/Users/jason/floder/agent-bridge/docs/superpowers/plans/2026-04-09-codex-output-schema-hotfix.md)

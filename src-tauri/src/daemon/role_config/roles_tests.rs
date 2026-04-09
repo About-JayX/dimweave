@@ -5,7 +5,7 @@ fn output_schema_requires_status_enum() {
     let schema = output_schema();
     assert_eq!(
         schema["required"],
-        serde_json::json!(["message", "send_to", "status"])
+        serde_json::json!(["message", "send_to", "status", "report_telegram"])
     );
     assert_eq!(
         schema["properties"]["status"]["enum"],
@@ -143,10 +143,10 @@ fn lead_prompt_documents_report_telegram_usage() {
 }
 
 #[test]
-fn output_schema_allows_optional_report_telegram_boolean() {
+fn output_schema_requires_report_telegram_boolean() {
     let schema = output_schema();
     assert_eq!(schema["properties"]["report_telegram"]["type"], "boolean");
-    assert!(!schema["required"]
+    assert!(schema["required"]
         .as_array()
         .unwrap()
         .iter()

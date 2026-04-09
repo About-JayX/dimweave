@@ -133,7 +133,7 @@ pub fn output_schema() -> serde_json::Value {
                 "description": "When true, fan out this terminal lead message to Telegram"
             }
         },
-        "required": ["message", "send_to", "status"],
+        "required": ["message", "send_to", "status", "report_telegram"],
         "additionalProperties": false
     })
 }
