@@ -96,6 +96,29 @@ pub enum DaemonCmd {
         role: SessionRole,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    // ── Feishu Project ────────────────────────────────────────
+    GetFeishuProjectState {
+        reply: oneshot::Sender<crate::feishu_project::types::FeishuProjectRuntimeState>,
+    },
+    SaveFeishuProjectConfig {
+        config: crate::feishu_project::types::FeishuProjectConfig,
+        reply: oneshot::Sender<Result<crate::feishu_project::types::FeishuProjectRuntimeState, String>>,
+    },
+    FeishuProjectSyncNow {
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    FeishuProjectListItems {
+        reply: oneshot::Sender<Vec<crate::feishu_project::types::FeishuProjectInboxItem>>,
+    },
+    FeishuProjectStartHandling {
+        work_item_id: String,
+        reply: oneshot::Sender<Result<String, String>>,
+    },
+    FeishuProjectSetIgnored {
+        work_item_id: String,
+        ignored: bool,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     // ── Telegram ─────────────────────────────────────────────
     GetTelegramState {
         reply: oneshot::Sender<crate::telegram::types::TelegramRuntimeState>,

@@ -22,6 +22,8 @@ mod mcp;
 mod paste_attachments;
 mod telegram;
 mod commands_telegram;
+mod feishu_project;
+mod commands_feishu_project;
 
 use codex::auth::CodexProfile;
 use codex::models::CodexModel;
@@ -161,6 +163,12 @@ fn main() {
             commands_telegram::telegram_save_config,
             commands_telegram::telegram_generate_pair_code,
             commands_telegram::telegram_clear_pairing,
+            commands_feishu_project::feishu_project_get_state,
+            commands_feishu_project::feishu_project_save_config,
+            commands_feishu_project::feishu_project_sync_now,
+            commands_feishu_project::feishu_project_list_items,
+            commands_feishu_project::feishu_project_start_handling,
+            commands_feishu_project::feishu_project_set_ignored,
             paste_attachments::read_paste_attachments,
         ])
         .build(tauri::generate_context!())

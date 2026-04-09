@@ -17,6 +17,7 @@ pub mod routing_format;
 pub mod routing_target_session;
 pub mod routing_user_input;
 pub mod session_manager;
+pub mod feishu_project_lifecycle;
 mod telegram_lifecycle;
 pub mod state;
 pub mod task_graph;
@@ -299,6 +300,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             }
         });
     }
+    // Hydrate persisted Feishu Project inbox store
+    feishu_project_lifecycle::hydrate_store(&state).await;
     let mut codex_handle: Option<codex::CodexHandle> = None;
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> = None;
@@ -713,6 +716,42 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     emit_task_context_events(&state, &app, task_id).await;
                 }
                 let _ = reply.send(result.map(|_| ()));
+            }
+            // ── Feishu Project ────────────────────────────────────
+            DaemonCmd::GetFeishuProjectState { reply } => {
+                let rs = feishu_project_lifecycle::get_runtime_state(&state).await;
+                let _ = reply.send(rs);
+            }
+            DaemonCmd::SaveFeishuProjectConfig { config, reply } => {
+                let result =
+                    feishu_project_lifecycle::save_config(&state, &app, config).await;
+                let _ = reply.send(result);
+            }
+            DaemonCmd::FeishuProjectSyncNow { reply } => {
+                let result = feishu_project_lifecycle::sync_now(&state, &app).await;
+                let _ = reply.send(result);
+            }
+            DaemonCmd::FeishuProjectListItems { reply } => {
+                let items = feishu_project_lifecycle::list_items(&state).await;
+                let _ = reply.send(items);
+            }
+            DaemonCmd::FeishuProjectStartHandling {
+                work_item_id,
+                reply,
+            } => {
+                let result =
+                    feishu_project_lifecycle::start_handling(&state, &app, &work_item_id).await;
+                let _ = reply.send(result);
+            }
+            DaemonCmd::FeishuProjectSetIgnored {
+                work_item_id,
+                ignored,
+                reply,
+            } => {
+                let result =
+                    feishu_project_lifecycle::set_ignored(&state, &app, &work_item_id, ignored)
+                        .await;
+                let _ = reply.send(result);
             }
             // ── Telegram ─────────────────────────────────────────
             DaemonCmd::GetTelegramState { reply } => {

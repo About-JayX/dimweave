@@ -193,6 +193,20 @@ pub fn emit_telegram_state(app: &AppHandle, state: &crate::telegram::types::Tele
     let _ = app.emit("telegram_state", state.clone());
 }
 
+pub fn emit_feishu_project_state(
+    app: &AppHandle,
+    state: &crate::feishu_project::types::FeishuProjectRuntimeState,
+) {
+    let _ = app.emit("feishu_project_state", state.clone());
+}
+
+pub fn emit_feishu_project_items(
+    app: &AppHandle,
+    items: &[crate::feishu_project::types::FeishuProjectInboxItem],
+) {
+    let _ = app.emit("feishu_project_items", items.to_vec());
+}
+
 #[cfg(test)]
 mod tests {
     use super::{should_auto_finish_idle_claude_thinking, ClaudeStreamPayload};
