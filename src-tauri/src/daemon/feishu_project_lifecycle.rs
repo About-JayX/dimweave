@@ -13,10 +13,7 @@ fn load_cfg() -> crate::feishu_project::types::FeishuProjectConfig {
 pub async fn get_runtime_state(
     _state: &SharedState,
 ) -> crate::feishu_project::types::FeishuProjectRuntimeState {
-    crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
-        &load_cfg(),
-        WEBHOOK_PATH,
-    )
+    crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&load_cfg())
 }
 
 pub async fn save_and_restart(
@@ -25,7 +22,6 @@ pub async fn save_and_restart(
     handle: &mut Option<crate::feishu_project::runtime::FeishuProjectHandle>,
     incoming: crate::feishu_project::types::FeishuProjectConfig,
 ) -> Result<crate::feishu_project::types::FeishuProjectRuntimeState, String> {
-    // Stop existing poller
     if let Some(h) = handle.take() {
         let mut h = h;
         h.stop().await;
@@ -34,9 +30,9 @@ pub async fn save_and_restart(
         crate::feishu_project::config::default_config_path().map_err(|e| e.to_string())?;
     crate::feishu_project::config::save_config(&config_path, &incoming)
         .map_err(|e| e.to_string())?;
-    // Restart poller if enabled
-    if incoming.enabled && !incoming.plugin_token.is_empty() && !incoming.project_key.is_empty() {
-        match crate::feishu_project::runtime::start_polling(
+    // Start MCP runtime if enabled and token is configured
+    if incoming.enabled && !incoming.mcp_user_token.is_empty() {
+        match crate::feishu_project::runtime::start_mcp_runtime(
             state.clone(),
             app.clone(),
             incoming.clone(),
@@ -46,7 +42,6 @@ pub async fn save_and_restart(
             Ok(h) => *handle = Some(h),
             Err(e) => {
                 gui::emit_system_log(app, "error", &format!("[FeishuProject] start failed: {e}"));
-                // Persist error into config so it survives app reload
                 if let Ok(mut saved) = crate::feishu_project::config::load_config(&config_path) {
                     saved.last_error = Some(e.to_string());
                     let _ = crate::feishu_project::config::save_config(&config_path, &saved);
@@ -68,22 +63,25 @@ pub async fn list_items(
     state.read().await.feishu_project_store.items.clone()
 }
 
-/// Trigger an immediate poll cycle (manual "Sync now").
+/// Trigger an immediate MCP connect + discover cycle (manual "Sync now").
 pub async fn sync_now(
     state: &SharedState,
     app: &AppHandle,
 ) -> Result<(), String> {
     let cfg = load_cfg();
-    if cfg.project_key.is_empty() || cfg.plugin_token.is_empty() {
-        return Err("feishu project not configured".into());
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
     }
-    let client = reqwest::Client::new();
-    crate::feishu_project::runtime::run_poll_cycle(&client, &cfg, state, app)
-        .await
-        .map(|n| {
-            gui::emit_system_log(app, "info", &format!("[FeishuProject] sync: {n} items"));
-        })
-        .map_err(|e| e.to_string())
+    let client = crate::feishu_project::runtime::connect_and_discover(&cfg, app).await?;
+    gui::emit_system_log(
+        app,
+        "info",
+        &format!(
+            "[FeishuProject MCP] sync: {} tools discovered",
+            client.catalog.tool_count()
+        ),
+    );
+    Ok(())
 }
 
 pub async fn start_handling(
@@ -116,7 +114,7 @@ pub async fn set_ignored(
     Ok(())
 }
 
-/// Ingest a single item received via webhook: upsert, persist, emit, update timestamps.
+/// Ingest a single item received via webhook (legacy, kept for Task 4).
 pub async fn ingest_webhook_item(
     state: &SharedState,
     app: &AppHandle,
@@ -138,10 +136,8 @@ async fn update_config_after_webhook(app: &AppHandle) {
             saved.last_sync_at = Some(now);
             saved.last_error = None;
             let _ = crate::feishu_project::config::save_config(&path, &saved);
-            let rs = crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
-                &saved,
-                WEBHOOK_PATH,
-            );
+            let rs =
+                crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&saved);
             gui::emit_feishu_project_state(app, &rs);
         }
     }
@@ -156,26 +152,20 @@ pub async fn hydrate_store(state: &SharedState) {
     }
 }
 
-/// Auto-start polling on daemon boot if config is enabled.
+/// Auto-start MCP runtime on daemon boot if config is enabled.
 pub async fn auto_start(
     state: &SharedState,
     app: &AppHandle,
 ) -> Option<crate::feishu_project::runtime::FeishuProjectHandle> {
     let cfg = load_cfg();
-    if !cfg.enabled || cfg.plugin_token.is_empty() || cfg.project_key.is_empty() {
+    if !cfg.enabled || cfg.mcp_user_token.is_empty() {
         return None;
     }
-    match crate::feishu_project::runtime::start_polling(
-        state.clone(),
-        app.clone(),
-        cfg,
-    )
-    .await
+    match crate::feishu_project::runtime::start_mcp_runtime(state.clone(), app.clone(), cfg).await
     {
         Ok(h) => Some(h),
         Err(e) => {
             gui::emit_system_log(app, "warn", &format!("[FeishuProject] auto-start failed: {e}"));
-            // Persist error into config so it survives app reload
             if let Ok(path) = crate::feishu_project::config::default_config_path() {
                 if let Ok(mut saved) = crate::feishu_project::config::load_config(&path) {
                     saved.last_error = Some(e.to_string());

@@ -1,6 +1,5 @@
-use super::{api, config, store, types::FeishuProjectConfig};
+use super::{config, mcp_client::McpClient, store, types::FeishuProjectConfig};
 use crate::daemon::{gui, SharedState};
-use reqwest::Client;
 use tauri::AppHandle;
 use tokio::sync::oneshot;
 
@@ -16,94 +15,64 @@ impl FeishuProjectHandle {
     }
 }
 
-/// Run a single poll cycle: fetch all work items, upsert into store, persist, emit.
-pub async fn run_poll_cycle(
-    client: &Client,
+/// Connect MCP client, discover tools, update runtime state.
+pub async fn connect_and_discover(
     cfg: &FeishuProjectConfig,
-    state: &SharedState,
     app: &AppHandle,
-) -> anyhow::Result<usize> {
-    let result = api::poll_all_work_items(client, cfg).await?;
-    if result.truncated {
-        gui::emit_system_log(
-            app,
-            "warn",
-            &format!(
-                "[FeishuProject] workspace has {} items but filter API caps at 2000; results truncated",
-                result.api_total
-            ),
-        );
+) -> Result<McpClient, String> {
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
     }
-    let count = result.items.len();
-    {
-        let mut daemon = state.write().await;
-        for item in result.items {
-            daemon.feishu_project_store.upsert(item);
-        }
-    }
-    persist_and_emit(state, app).await;
-    let truncation_warning = if result.truncated {
-        Some(format!("truncated: {} items but API cap is 2000", result.api_total))
-    } else {
-        None
-    };
-    update_config_after_poll(true, truncation_warning, app).await;
-    Ok(count)
+    let mut client = McpClient::new(&cfg.domain, &cfg.mcp_user_token);
+    client.connect().await.map_err(|e| {
+        gui::emit_system_log(app, "warn", &format!("[FeishuProject MCP] {e}"));
+        e
+    })?;
+    gui::emit_system_log(
+        app,
+        "info",
+        &format!(
+            "[FeishuProject MCP] connected, {} tools discovered",
+            client.catalog.tool_count()
+        ),
+    );
+    Ok(client)
 }
 
-/// Start a background polling loop. Returns a handle to stop it.
-pub async fn start_polling(
+/// Start the MCP runtime loop. Connects on start, then reconnects on each
+/// refresh interval. Returns a handle to stop the loop.
+pub async fn start_mcp_runtime(
     state: SharedState,
     app: AppHandle,
     cfg: FeishuProjectConfig,
-) -> anyhow::Result<FeishuProjectHandle> {
-    let interval_mins = cfg.poll_interval_minutes.max(1);
+) -> Result<FeishuProjectHandle, anyhow::Error> {
+    let interval_mins = cfg.refresh_interval_minutes.max(1);
     let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
-    let client = Client::new();
 
     tokio::spawn(async move {
-        // Run an initial poll immediately
-        match run_poll_cycle(&client, &cfg, &state, &app).await {
-            Ok(n) => {
-                gui::emit_system_log(
-                    &app,
-                    "info",
-                    &format!("[FeishuProject] initial poll: {n} items"),
-                );
+        // Initial connect
+        match connect_and_discover(&cfg, &app).await {
+            Ok(client) => {
+                update_mcp_state(&cfg, &client, None, &app).await;
             }
             Err(e) => {
-                update_config_after_poll(false, Some(e.to_string()), &app).await;
-                gui::emit_system_log(
-                    &app,
-                    "warn",
-                    &format!("[FeishuProject] initial poll failed: {e}"),
-                );
+                update_mcp_state_error(&cfg, &e, &app).await;
             }
         }
-
         let interval = std::time::Duration::from_secs(interval_mins * 60);
         loop {
             tokio::select! {
                 _ = &mut shutdown_rx => {
-                    gui::emit_system_log(&app, "info", "[FeishuProject] polling stopped");
+                    gui::emit_system_log(&app, "info", "[FeishuProject MCP] stopped");
                     return;
                 }
                 _ = tokio::time::sleep(interval) => {
-                    match run_poll_cycle(&client, &cfg, &state, &app).await {
-                        Ok(n) => {
-                            gui::emit_system_log(
-                                &app,
-                                "info",
-                                &format!("[FeishuProject] poll: {n} items"),
-                            );
+                    match connect_and_discover(&cfg, &app).await {
+                        Ok(client) => {
+                            update_mcp_state(&cfg, &client, None, &app).await;
                         }
                         Err(e) => {
-                            update_config_after_poll(false, Some(e.to_string()), &app).await;
-                            gui::emit_system_log(
-                                &app,
-                                "warn",
-                                &format!("[FeishuProject] poll failed: {e}"),
-                            );
+                            update_mcp_state_error(&cfg, &e, &app).await;
                         }
                     }
                 }
@@ -124,24 +93,42 @@ pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
     gui::emit_feishu_project_items(app, &store.items);
 }
 
-/// Update config timestamps/error after a poll attempt and emit fresh runtime state.
-async fn update_config_after_poll(success: bool, error: Option<String>, app: &AppHandle) {
+/// Emit updated runtime state after successful MCP connection.
+async fn update_mcp_state(
+    cfg: &FeishuProjectConfig,
+    client: &McpClient,
+    error: Option<String>,
+    app: &AppHandle,
+) {
     let now = chrono::Utc::now().timestamp_millis() as u64;
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
-            if success {
-                saved.last_poll_at = Some(now);
-                saved.last_sync_at = Some(now);
-                saved.last_error = error; // truncation warning if any
-            } else {
-                saved.last_error = error;
-            }
+            saved.last_sync_at = Some(now);
+            saved.last_error = error;
             let _ = config::save_config(&path, &saved);
-            let rs = crate::feishu_project::types::FeishuProjectRuntimeState::from_config(
-                &saved,
-                crate::daemon::feishu_project_lifecycle::WEBHOOK_PATH,
-            );
-            gui::emit_feishu_project_state(app, &rs);
         }
     }
+    let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
+    rs.mcp_status = client.status;
+    rs.discovered_tool_count = client.catalog.tool_count();
+    rs.last_sync_at = Some(now);
+    gui::emit_feishu_project_state(app, &rs);
+}
+
+/// Emit error state when MCP connection fails.
+async fn update_mcp_state_error(
+    cfg: &FeishuProjectConfig,
+    error: &str,
+    app: &AppHandle,
+) {
+    if let Ok(path) = config::default_config_path() {
+        if let Ok(mut saved) = config::load_config(&path) {
+            saved.last_error = Some(error.to_string());
+            let _ = config::save_config(&path, &saved);
+        }
+    }
+    let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
+    rs.last_error = Some(error.to_string());
+    rs.mcp_status = super::types::McpConnectionStatus::Error;
+    gui::emit_feishu_project_state(app, &rs);
 }

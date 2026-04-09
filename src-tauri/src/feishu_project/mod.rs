@@ -1,7 +1,10 @@
 pub mod api;
 pub mod config;
+pub mod mcp_client;
+pub mod mcp_http;
 pub mod runtime;
 pub mod store;
+pub mod tool_catalog;
 pub mod types;
 
 #[cfg(test)]
