@@ -23,6 +23,12 @@ fn claude_role_is_unselected_by_default() {
 }
 
 #[test]
+fn codex_role_is_unselected_by_default() {
+    let s = DaemonState::new();
+    assert_eq!(s.codex_role, "");
+}
+
+#[test]
 fn flush_clears_buffer() {
     let mut s = DaemonState::new();
     s.buffer_message(BridgeMessage::system("hello", "lead"));
@@ -98,6 +104,7 @@ fn status_snapshot_reports_current_online_agents() {
     let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
     let epoch = s.begin_claude_sdk_launch("nonce-a".into());
     s.claude_role = "lead".into();
+    s.codex_role = "coder".into();
     assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
 
@@ -142,6 +149,7 @@ fn status_snapshot_includes_provider_session_metadata() {
         "claude".into(),
         crate::daemon::state::AgentSender::new(claude_tx, 0),
     );
+    s.codex_role = "coder".into();
     s.codex_inject_tx = Some(codex_tx);
     s.set_provider_connection(
         "claude",

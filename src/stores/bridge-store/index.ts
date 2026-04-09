@@ -33,7 +33,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     runtimeHealth: null,
     claudeNeedsAttention: false,
     claudeRole: "",
-    codexRole: "coder",
+    codexRole: "",
     claudeStream: {
       thinking: false,
       previewText: "",
@@ -107,6 +107,11 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       const { codexRole } = get();
       if (!config.cwd?.trim()) {
         const error = new Error("Select a project before connecting Codex");
+        logError(set)(error);
+        throw error;
+      }
+      if (!codexRole.trim()) {
+        const error = new Error("Select Codex role before connecting");
         logError(set)(error);
         throw error;
       }

@@ -45,6 +45,7 @@ fn online_agents_snapshot_excludes_bridge_only_claude() {
 fn online_agents_snapshot_only_codex() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.codex_role = "coder".into();
     s.codex_inject_tx = Some(tx);
 
     let snapshot = s.online_agents_snapshot();

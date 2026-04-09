@@ -96,7 +96,7 @@ impl Default for DaemonState {
             claude_preview_buffer: String::new(),
             claude_preview_flush_scheduled: false,
             claude_role: "".into(),
-            codex_role: "coder".into(),
+            codex_role: "".into(),
             claude_connection: None,
             codex_connection: None,
             runtime_health: None,

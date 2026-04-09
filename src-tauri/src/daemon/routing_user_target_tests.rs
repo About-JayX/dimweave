@@ -42,6 +42,7 @@ fn auto_with_claude_sdk_only() {
 fn auto_with_codex_only() {
     let mut s = DaemonState::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    s.codex_role = "coder".into();
     s.codex_inject_tx = Some(tx);
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder"]);
 }
@@ -53,6 +54,7 @@ fn auto_with_both_agents_returns_two_roles() {
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
     let epoch = s.begin_claude_sdk_launch("nonce-a".into());
     s.claude_role = "lead".into();
+    s.codex_role = "coder".into();
     assert!(s.attach_claude_sdk_ws(epoch, "nonce-a", claude_tx).is_some());
     s.codex_inject_tx = Some(codex_tx);
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["lead", "coder"]);

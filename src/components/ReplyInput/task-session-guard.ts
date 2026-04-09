@@ -18,7 +18,9 @@ function resolveTargetRoles(
     return [target];
   }
 
-  const roles = [claudeRole, codexRole].filter((role) => role !== "user");
+  const roles = [claudeRole, codexRole].filter(
+    (role) => role !== "user" && role.trim().length > 0,
+  );
   return Array.from(new Set(roles));
 }
 

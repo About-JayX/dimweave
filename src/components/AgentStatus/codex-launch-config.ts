@@ -5,6 +5,7 @@ interface ReasoningModelLike {
 
 interface ConnectState {
   cwd: string;
+  role: string;
   connecting: boolean;
   running: boolean;
 }
@@ -36,10 +37,16 @@ export function getDefaultReasoningEffort(
 
 export function canConnectCodex({
   cwd,
+  role,
   connecting,
   running,
 }: ConnectState): boolean {
-  return cwd.trim().length > 0 && !connecting && !running;
+  return (
+    cwd.trim().length > 0 &&
+    role.trim().length > 0 &&
+    !connecting &&
+    !running
+  );
 }
 
 export function buildCodexLaunchConfig({

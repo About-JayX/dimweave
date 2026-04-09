@@ -40,7 +40,7 @@ export function RoleSelect({
       options={options}
       onChange={(v) => setRole(agent, v)}
       disabled={disabled}
-      placeholder={agent === "claude" && !role ? "Select role" : undefined}
+      placeholder={!role ? "Select role" : undefined}
     />
   );
 }

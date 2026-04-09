@@ -56,6 +56,7 @@ export function CodexPanel({
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
+  const codexRole = useBridgeStore((s) => s.codexRole);
   const activeTask = useTaskStore(selectActiveTask);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
   const resumeSession = useTaskStore((s) => s.resumeSession);
@@ -303,6 +304,7 @@ export function CodexPanel({
               !connecting &&
               !canConnectCodex({
                 cwd: effectiveCwd,
+                role: codexRole,
                 connecting: false,
                 running: !!codexTuiRunning,
               })
