@@ -1,6 +1,7 @@
 use super::*;
 use crate::daemon::state::DaemonState;
 use crate::feishu_project::types::{FeishuProjectInboxItem, IngressSource};
+use serde_json::json;
 
 fn sample_item() -> FeishuProjectInboxItem {
     FeishuProjectInboxItem {
@@ -21,23 +22,38 @@ fn sample_item() -> FeishuProjectInboxItem {
     }
 }
 
+fn sample_context() -> Value {
+    json!({
+        "work_item_id": "1001",
+        "name": "Crash on launch",
+        "type": "bug",
+        "priority": "Open",
+        "assignee": "alice",
+        "source_url": "https://project.feishu.cn/proj/issues/1001",
+        "status": "Open",
+        "description": "App crashes on cold start",
+    })
+}
+
 #[test]
-fn write_snapshot_creates_json_file() {
-    let item = sample_item();
+fn write_context_snapshot_creates_json_file() {
+    let context = sample_context();
     let task_id = format!("test_snap_{}", chrono::Utc::now().timestamp_millis());
-    let path = write_snapshot(&item, &task_id).unwrap();
+    let path = write_context_snapshot(&context, &task_id).unwrap();
     assert!(std::path::Path::new(&path).exists());
     let content = std::fs::read_to_string(&path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed["workItemId"], "1001");
-    assert_eq!(parsed["title"], "Crash on launch");
+    assert_eq!(parsed["work_item_id"], "1001");
+    assert_eq!(parsed["name"], "Crash on launch");
+    assert_eq!(parsed["description"], "App crashes on cold start");
     let _ = std::fs::remove_file(path);
 }
 
 #[test]
 fn build_handoff_message_has_correct_fields() {
     let item = sample_item();
-    let msg = build_handoff_message(&item, "task_42", "/tmp/snap.json");
+    let context = sample_context();
+    let msg = build_handoff_message(&item, &context, "task_42", "/tmp/snap.json");
     assert_eq!(msg.from, "system");
     assert_eq!(msg.display_source.as_deref(), Some("feishu_project"));
     assert_eq!(msg.to, "lead");
@@ -54,9 +70,10 @@ fn build_handoff_message_has_correct_fields() {
 #[test]
 fn handoff_message_includes_repair_workflow_instructions() {
     let item = sample_item();
-    let msg = build_handoff_message(&item, "task_42", "/tmp/snap.json");
+    let context = sample_context();
+    let msg = build_handoff_message(&item, &context, "task_42", "/tmp/snap.json");
     assert!(msg.content.contains("repair plan"));
-    assert!(msg.content.contains("plan → execute → review → CM flow"));
+    assert!(msg.content.contains("plan \u{2192} execute \u{2192} review \u{2192} CM flow"));
     assert!(msg.content.contains("Feishu Project"));
 }
 
