@@ -9,8 +9,11 @@ fn load_cfg() -> crate::feishu_project::types::FeishuProjectConfig {
 }
 
 pub async fn get_runtime_state(
-    _state: &SharedState,
+    state: &SharedState,
 ) -> crate::feishu_project::types::FeishuProjectRuntimeState {
+    if let Some(rs) = &state.read().await.feishu_project_runtime {
+        return rs.clone();
+    }
     crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&load_cfg())
 }
 
@@ -24,16 +27,28 @@ pub async fn save_and_restart(
         let mut h = h;
         h.stop().await;
     }
+    // Clear stale runtime cache so get_runtime_state() rebuilds from fresh config
+    state.write().await.feishu_project_runtime = None;
     let config_path =
         crate::feishu_project::config::default_config_path().map_err(|e| e.to_string())?;
-    crate::feishu_project::config::save_config(&config_path, &incoming)
+    // Merge: preserve existing values for fields the UI left empty
+    let mut merged = incoming;
+    if let Ok(existing) = crate::feishu_project::config::load_config(&config_path) {
+        if merged.mcp_user_token.trim().is_empty() {
+            merged.mcp_user_token = existing.mcp_user_token;
+        }
+        if merged.workspace_hint.trim().is_empty() {
+            merged.workspace_hint = existing.workspace_hint;
+        }
+    }
+    crate::feishu_project::config::save_config(&config_path, &merged)
         .map_err(|e| e.to_string())?;
     // Start MCP runtime if enabled and token is configured
-    if incoming.enabled && !incoming.mcp_user_token.is_empty() {
+    if merged.enabled && !merged.mcp_user_token.is_empty() {
         match crate::feishu_project::runtime::start_mcp_runtime(
             state.clone(),
             app.clone(),
-            incoming.clone(),
+            merged.clone(),
         )
         .await
         {
@@ -73,6 +88,43 @@ pub async fn sync_now(
     crate::feishu_project::runtime::run_mcp_sync_cycle(&cfg, state, app)
         .await
         .map(|_| ())
+}
+
+/// Load next page of issues (append to existing store).
+pub async fn load_more(
+    state: &SharedState,
+    app: &AppHandle,
+) -> Result<usize, String> {
+    let cfg = load_cfg();
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
+    }
+    if cfg.sync_mode != crate::feishu_project::types::FeishuSyncMode::Issues {
+        return Err("load_more only available in issues mode".into());
+    }
+    let offset = state.read().await.feishu_project_store.items.len() as u32;
+    let client =
+        crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
+    let items = crate::feishu_project::mcp_sync::sync_issues_page(
+        &client,
+        &cfg.workspace_hint,
+        offset,
+    )
+    .await?;
+    let count = items.len();
+    {
+        let mut daemon = state.write().await;
+        for item in items {
+            daemon.feishu_project_store.upsert(item);
+        }
+    }
+    crate::feishu_project::runtime::persist_and_emit(state, app).await;
+    gui::emit_system_log(
+        app,
+        "info",
+        &format!("[FeishuProject] loaded {count} more items (offset {offset})"),
+    );
+    Ok(count)
 }
 
 pub async fn start_handling(
@@ -138,3 +190,7 @@ pub async fn auto_start(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "feishu_project_lifecycle_tests.rs"]
+mod tests;
