@@ -21,12 +21,10 @@ fn resolve_listing_tool_exact_match() {
 }
 
 #[test]
-fn resolve_listing_tool_substring_match() {
+fn resolve_listing_tool_no_substring_fallback() {
+    // find_tool is exact-match only; substring names do not match
     let cat = catalog_with(&["get_spaces", "search_project_work_items", "add_comment"]);
-    assert_eq!(
-        resolve_listing_tool(&cat).unwrap(),
-        "search_project_work_items"
-    );
+    assert!(resolve_listing_tool(&cat).is_err());
 }
 
 #[test]
@@ -40,8 +38,8 @@ fn resolve_listing_tool_empty_catalog_error() {
 fn resolve_listing_tool_no_match_error() {
     let cat = catalog_with(&["get_spaces", "add_comment"]);
     let err = resolve_listing_tool(&cat).unwrap_err();
-    assert!(err.contains("no work-item listing tool"));
-    assert!(err.contains("get_spaces"));
+    assert!(err.contains("no listing tool found"));
+    assert!(err.contains("2 tools"));
 }
 
 #[test]
