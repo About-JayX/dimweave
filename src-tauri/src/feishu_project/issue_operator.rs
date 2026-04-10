@@ -28,7 +28,11 @@ pub fn parse_operator_names(detail: &Value) -> Vec<String> {
     };
     members
         .iter()
-        .filter_map(|u| u.get("name_cn").and_then(|n| n.as_str()))
+        .filter_map(|u| {
+            u.get("name")
+                .or_else(|| u.get("name_cn"))
+                .and_then(|n| n.as_str())
+        })
         .filter(|n| !n.is_empty())
         .map(String::from)
         .collect()

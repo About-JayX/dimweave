@@ -151,22 +151,37 @@ fn detail_args_sends_string_work_item_id() {
 #[test]
 fn parse_operator_names_from_detail() {
     use crate::feishu_project::issue_operator;
-    // Real Feishu shape: role_members is an array of {key, members} objects
+    // Real Feishu shape: members use `name` (not `name_cn`)
     let detail = serde_json::json!({
         "work_item_attribute": {
             "role_members": [
-                {"key": "reporter", "members": [
-                    {"name_cn": "Charlie", "user_key": "u3"}
+                {"key": "reporter", "name": "报告人", "members": [
+                    {"key": "u3", "name": "Charlie"}
                 ]},
-                {"key": "operator", "members": [
-                    {"name_cn": "Alice", "user_key": "u1"},
-                    {"name_cn": "Bob", "user_key": "u2"}
+                {"key": "operator", "name": "经办人", "members": [
+                    {"key": "u1", "name": "Alice"},
+                    {"key": "u2", "name": "Grape"}
                 ]}
             ]
         }
     });
     let names = issue_operator::parse_operator_names(&detail);
-    assert_eq!(names, vec!["Alice", "Bob"]);
+    assert_eq!(names, vec!["Alice", "Grape"]);
+}
+
+#[test]
+fn parse_operator_names_falls_back_to_name_cn() {
+    use crate::feishu_project::issue_operator;
+    let detail = serde_json::json!({
+        "work_item_attribute": {
+            "role_members": [
+                {"key": "operator", "members": [
+                    {"name_cn": "Bob"}
+                ]}
+            ]
+        }
+    });
+    assert_eq!(issue_operator::parse_operator_names(&detail), vec!["Bob"]);
 }
 
 #[test]
@@ -196,9 +211,9 @@ fn parse_operator_names_skips_empty_names() {
         "work_item_attribute": {
             "role_members": [
                 {"key": "operator", "members": [
-                    {"name_cn": "Alice"},
-                    {"name_cn": ""},
-                    {"user_key": "no_name"}
+                    {"key": "u1", "name": "Alice"},
+                    {"key": "u2", "name": ""},
+                    {"key": "u3"}
                 ]}
             ]
         }
