@@ -65,7 +65,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `feat: regroup telegram and feishu under tools drawer` | `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx src/components/ToolsPanel/index.test.tsx src/components/BugInboxPanel/index.test.tsx`; `bun run build`; `git diff --check` | Keep the existing `bugs` pane identity and Feishu badge path from `de6fcb99`; keep Telegram behavior intact per `c3b18acc`; keep Feishu MCP surface wording aligned with `6e8c79ed` and `9ef63dfb`. |
+| Task 1 | `feat: regroup telegram and feishu under tools drawer` | `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx src/components/ToolsPanel/index.test.tsx src/components/BugInboxPanel/index.test.tsx`; `bun run build`; `git diff --check` | `db31587d` — Keeps the existing `bugs` pane identity and Feishu badge path from `de6fcb99`; keeps Telegram behavior intact per `c3b18acc`; keeps Feishu MCP surface wording aligned with `6e8c79ed` and `9ef63dfb`. Lead review re-ran the verification set successfully on 2026-04-10. |
 
 ---
 
