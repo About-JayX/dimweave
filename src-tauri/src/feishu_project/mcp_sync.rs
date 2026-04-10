@@ -32,8 +32,7 @@ async fn sync_todo(
 
 const MQL_PAGE_SIZE: u32 = 50;
 
-/// Build the MQL SELECT for issue listing.
-/// Prefers `operator` (actual assignee) over `current_status_operator` (reporter).
+/// Build issue-list MQL preferring `operator` over `current_status_operator`.
 pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
     format!(
         "SELECT work_item_id, name, priority, operator, bug_classification \
@@ -44,12 +43,31 @@ pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
     )
 }
 
-/// Build the MQL GROUP BY for team-member discovery.
-/// Prefers `operator` for accurate assignee grouping.
+/// Build team-member GROUP BY MQL preferring `operator`.
 pub fn build_team_members_mql(workspace: &str) -> String {
     format!(
         "SELECT operator FROM {ws}.issue \
          GROUP BY operator LIMIT 50",
+        ws = workspace,
+    )
+}
+
+/// Legacy issue-list MQL using `current_status_operator` as fallback.
+pub fn build_issues_mql_legacy(workspace: &str, offset: u32) -> String {
+    format!(
+        "SELECT work_item_id, name, priority, current_status_operator, bug_classification \
+         FROM {ws}.issue LIMIT {offset}, {limit}",
+        ws = workspace,
+        offset = offset,
+        limit = MQL_PAGE_SIZE,
+    )
+}
+
+/// Legacy team-member GROUP BY MQL using `current_status_operator`.
+pub fn build_team_members_mql_legacy(workspace: &str) -> String {
+    format!(
+        "SELECT current_status_operator FROM {ws}.issue \
+         GROUP BY current_status_operator LIMIT 50",
         ws = workspace,
     )
 }
@@ -62,6 +80,7 @@ async fn sync_issues(
 }
 
 /// Fetch a single page of issues at the given offset.
+/// Tries `operator` first; falls back to `current_status_operator` on query failure.
 pub async fn sync_issues_page(
     client: &McpClient,
     workspace_hint: &str,
@@ -71,11 +90,15 @@ pub async fn sync_issues_page(
         return Err("workspace_hint required for issue sync".into());
     }
     let mql = build_issues_mql(workspace_hint, offset);
-    let args = serde_json::json!({
-        "project_key": workspace_hint,
-        "mql": mql,
-    });
-    let result = client.call_tool("search_by_mql", args).await?;
+    let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
+    let result = match client.call_tool("search_by_mql", args).await {
+        Ok(r) => r,
+        Err(_) => {
+            let legacy = build_issues_mql_legacy(workspace_hint, offset);
+            let args = serde_json::json!({"project_key": workspace_hint, "mql": legacy});
+            client.call_tool("search_by_mql", args).await?
+        }
+    };
     parse_mql_items(&result, workspace_hint)
 }
 

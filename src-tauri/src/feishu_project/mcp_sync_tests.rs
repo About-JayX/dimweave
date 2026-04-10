@@ -99,70 +99,57 @@ fn try_parse_item_skips_missing_id() {
     assert!(try_parse_item(&raw, "proj").is_none());
 }
 
-// ── Operator-first assignee tests ─────────────────────────────
+// ── Operator-first assignee + query-level fallback tests ──────
 
-/// When both `operator` and `current_status_operator` exist in MQL fields,
-/// the parser must prefer `operator`.
+fn mql_user_field(key: &str, name: &str) -> serde_json::Value {
+    serde_json::json!({"key": key, "value": {"user_value_list": [{"name_cn": name}]}})
+}
+
 #[test]
 fn parse_mql_item_prefers_operator_over_current_status_operator() {
-    let raw = serde_json::json!({
-        "moql_field_list": [
-            {"key": "work_item_id", "value": {"long_value": 100}},
-            {"key": "name", "value": {"string_value": "Bug X"}},
-            {"key": "operator", "value": {"user_value_list": [
-                {"name_cn": "Alice"}
-            ]}},
-            {"key": "current_status_operator", "value": {"user_value_list": [
-                {"name_cn": "Bob"}
-            ]}}
-        ]
-    });
-    let item = parse_mql_item(&raw, "proj").expect("should parse");
+    let raw = serde_json::json!({"moql_field_list": [
+        {"key": "work_item_id", "value": {"long_value": 100}},
+        {"key": "name", "value": {"string_value": "Bug X"}},
+        mql_user_field("operator", "Alice"),
+        mql_user_field("current_status_operator", "Bob"),
+    ]});
+    let item = parse_mql_item(&raw, "proj").unwrap();
     assert_eq!(item.assignee_label.as_deref(), Some("Alice"));
 }
 
-/// When only `current_status_operator` is present (no `operator`),
-/// it must be used as fallback.
 #[test]
 fn parse_mql_item_falls_back_to_current_status_operator() {
-    let raw = serde_json::json!({
-        "moql_field_list": [
-            {"key": "work_item_id", "value": {"long_value": 200}},
-            {"key": "name", "value": {"string_value": "Bug Y"}},
-            {"key": "current_status_operator", "value": {"user_value_list": [
-                {"name_cn": "Bob"}
-            ]}}
-        ]
-    });
-    let item = parse_mql_item(&raw, "proj").expect("should parse");
+    let raw = serde_json::json!({"moql_field_list": [
+        {"key": "work_item_id", "value": {"long_value": 200}},
+        {"key": "name", "value": {"string_value": "Bug Y"}},
+        mql_user_field("current_status_operator", "Bob"),
+    ]});
+    let item = parse_mql_item(&raw, "proj").unwrap();
     assert_eq!(item.assignee_label.as_deref(), Some("Bob"));
 }
 
-/// The issue-list MQL query must SELECT `operator` (not `current_status_operator`).
 #[test]
 fn sync_issues_mql_selects_operator() {
     let mql = build_issues_mql("PROJ", 0);
-    assert!(
-        mql.contains("operator"),
-        "MQL should contain 'operator': {mql}"
-    );
-    // Must NOT use current_status_operator as the primary field
-    assert!(
-        !mql.contains("current_status_operator"),
-        "MQL should not contain 'current_status_operator': {mql}"
-    );
+    assert!(mql.contains("operator"), "{mql}");
+    assert!(!mql.contains("current_status_operator"), "{mql}");
 }
 
-/// The team-member MQL query must GROUP BY `operator`.
 #[test]
 fn team_member_mql_groups_by_operator() {
     let mql = build_team_members_mql("PROJ");
-    assert!(
-        mql.contains("operator"),
-        "team MQL should contain 'operator': {mql}"
-    );
-    assert!(
-        !mql.contains("current_status_operator"),
-        "team MQL should not contain 'current_status_operator': {mql}"
-    );
+    assert!(mql.contains("operator"), "{mql}");
+    assert!(!mql.contains("current_status_operator"), "{mql}");
+}
+
+#[test]
+fn legacy_issues_mql_uses_current_status_operator() {
+    let mql = build_issues_mql_legacy("PROJ", 0);
+    assert!(mql.contains("current_status_operator"), "{mql}");
+}
+
+#[test]
+fn legacy_team_member_mql_uses_current_status_operator() {
+    let mql = build_team_members_mql_legacy("PROJ");
+    assert!(mql.contains("GROUP BY current_status_operator"), "{mql}");
 }
