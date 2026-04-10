@@ -120,12 +120,15 @@ pub async fn load_more(
     let offset = state.read().await.feishu_project_store.items.len() as u32;
     let client =
         crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
-    let items = crate::feishu_project::mcp_sync::sync_issues_page(
+    let mut items = crate::feishu_project::mcp_sync::sync_issues_page(
         &client,
         &cfg.workspace_hint,
         offset,
     )
     .await?;
+    crate::feishu_project::mcp_sync::enrich_issues_with_operators(
+        &client, &cfg.workspace_hint, &mut items,
+    ).await;
     let count = items.len();
     {
         let mut daemon = state.write().await;
@@ -134,6 +137,20 @@ pub async fn load_more(
         }
     }
     crate::feishu_project::runtime::persist_and_emit(state, app).await;
+    // Refresh runtime team_members from the full enriched store
+    let team_members = {
+        let d = state.read().await;
+        crate::feishu_project::issue_operator::derive_team_members(
+            &d.feishu_project_store.items,
+        )
+    };
+    {
+        let mut d = state.write().await;
+        if let Some(rs) = &mut d.feishu_project_runtime {
+            rs.team_members = team_members;
+            gui::emit_feishu_project_state(app, rs);
+        }
+    }
     gui::emit_system_log(
         app,
         "info",
