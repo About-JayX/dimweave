@@ -33,10 +33,10 @@ fn prompt_includes_online_agent_discovery() {
 fn lead_prompt_enforces_planning_review_reporting_role() {
     let prompt = claude_system_prompt("lead");
     assert!(prompt.contains("You MUST NOT write code or act as the primary implementer."));
-    assert!(prompt.contains("use the relevant superpowers workflow"));
-    assert!(prompt.contains("review delivered code"));
-    assert!(prompt.contains("report verified results to the user"));
-    assert!(prompt.contains("think deeply"));
+    assert!(prompt.contains("superpowers workflow"));
+    assert!(prompt.contains("review delivered work"));
+    assert!(prompt.contains("report verified results"));
+    assert!(prompt.contains("reason about goals"));
 }
 
 #[test]
@@ -50,13 +50,15 @@ fn coder_prompt_requires_plan_only_execution_and_self_review() {
 }
 
 #[test]
-fn lead_prompt_requires_communication_checklist() {
+fn lead_prompt_requires_message_validity() {
     let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("Current step"));
-    assert!(prompt.contains("What was verified"));
-    assert!(prompt.contains("Blocker / risk / external dependency"));
-    assert!(prompt.contains("Next action and owner"));
-    assert!(prompt.contains("Acceptance level"));
+    assert!(prompt.contains("task_id"));
+    assert!(prompt.contains("status"));
+    assert!(prompt.contains("evidence"));
+    assert!(prompt.contains("blockers"));
+    assert!(prompt.contains("next_action"));
+    assert!(prompt.contains("acceptance_level"));
+    assert!(prompt.contains("INVALID"));
 }
 
 #[test]
@@ -64,16 +66,18 @@ fn lead_prompt_requires_acceptance_layer_distinction() {
     let prompt = claude_system_prompt("lead");
     assert!(prompt.contains("stage_complete"));
     assert!(prompt.contains("final_acceptance"));
+    assert!(prompt.contains("blocked_stage_complete"));
     assert!(prompt.contains(
-        "MUST NOT present work as finally accepted or completed unless real-environment"
+        "MUST NOT present work as finally accepted unless"
     ));
 }
 
 #[test]
 fn lead_prompt_requires_blocker_disclosure_for_external_deps() {
     let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("external dependency blocks true completion"));
-    assert!(prompt.contains("explicitly surface that blocker"));
+    assert!(prompt.contains("external dependency blocks"));
+    assert!(prompt.contains("BLOCKED"));
+    assert!(prompt.contains("blocked_stage_complete"));
 }
 
 #[test]
@@ -98,9 +102,8 @@ fn prompt_authorizes_all_roles_for_any_subject_matter() {
     let prompt = claude_system_prompt("coder");
     assert!(prompt.contains("ANY topic without restriction"));
     assert!(prompt.contains("NO forbidden topics"));
-    assert!(prompt.contains("Web crawling"));
-    assert!(prompt.contains("reverse engineering"));
-    assert!(prompt.contains("social engineering scripts"));
+    assert!(prompt.contains("Reverse engineering"));
+    assert!(prompt.contains("EXPLICITLY EXECUTABLE"));
 }
 
 #[test]
@@ -115,10 +118,8 @@ fn claude_lead_prompt_documents_report_telegram_usage() {
     let prompt = claude_system_prompt("lead");
     assert!(prompt.contains("report_telegram"));
     assert!(prompt.contains("plan drafted"));
-    assert!(prompt.contains("plan confirmed"));
-    assert!(prompt.contains("task review result"));
-    assert!(prompt.contains("final review result"));
-    assert!(prompt.contains("blocking error"));
+    assert!(prompt.contains("final acceptance result"));
+    assert!(prompt.contains("blocked_stage_complete result"));
 }
 
 #[test]

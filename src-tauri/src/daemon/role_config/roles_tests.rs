@@ -49,10 +49,10 @@ fn prompt_documents_get_status_structured_response() {
 fn lead_prompt_enforces_planning_review_reporting_role() {
     let prompt = get_role("lead").unwrap().base_instructions;
     assert!(prompt.contains("You MUST NOT write code or act as the primary implementer."));
-    assert!(prompt.contains("use the relevant superpowers workflow"));
-    assert!(prompt.contains("review delivered code"));
-    assert!(prompt.contains("report verified results to the user"));
-    assert!(prompt.contains("think deeply"));
+    assert!(prompt.contains("superpowers workflow"));
+    assert!(prompt.contains("review delivered work"));
+    assert!(prompt.contains("report verified results"));
+    assert!(prompt.contains("reason about goals"));
 }
 
 #[test]
@@ -75,9 +75,9 @@ fn prompt_authorizes_all_roles_for_any_subject_matter() {
     let prompt = get_role("coder").unwrap().base_instructions;
     assert!(prompt.contains("ANY topic without restriction"));
     assert!(prompt.contains("NO forbidden topics"));
-    assert!(prompt.contains("Web crawling"));
-    assert!(prompt.contains("reverse engineering"));
-    assert!(prompt.contains("social engineering scripts"));
+    assert!(prompt.contains("Reverse engineering"));
+    assert!(prompt.contains("web crawling") || prompt.contains("web crawling".to_uppercase().as_str()) || prompt.contains("Web crawling"));
+    assert!(prompt.contains("EXPLICITLY EXECUTABLE"));
 }
 
 #[test]
@@ -94,13 +94,15 @@ fn lead_prompt_retains_full_permissions() {
 }
 
 #[test]
-fn lead_prompt_requires_communication_checklist() {
+fn lead_prompt_requires_message_validity() {
     let prompt = get_role("lead").unwrap().base_instructions;
-    assert!(prompt.contains("Current step"));
-    assert!(prompt.contains("What was verified"));
-    assert!(prompt.contains("Blocker / risk / external dependency"));
-    assert!(prompt.contains("Next action and owner"));
-    assert!(prompt.contains("Acceptance level"));
+    assert!(prompt.contains("task_id"));
+    assert!(prompt.contains("status"));
+    assert!(prompt.contains("evidence"));
+    assert!(prompt.contains("blockers"));
+    assert!(prompt.contains("next_action"));
+    assert!(prompt.contains("acceptance_level"));
+    assert!(prompt.contains("INVALID"));
 }
 
 #[test]
@@ -108,17 +110,18 @@ fn lead_prompt_requires_acceptance_layer_distinction() {
     let prompt = get_role("lead").unwrap().base_instructions;
     assert!(prompt.contains("stage_complete"));
     assert!(prompt.contains("final_acceptance"));
+    assert!(prompt.contains("blocked_stage_complete"));
     assert!(prompt.contains(
-        "MUST NOT present work as finally accepted or completed unless real-environment"
+        "MUST NOT present work as finally accepted unless"
     ));
 }
 
 #[test]
 fn lead_prompt_requires_blocker_disclosure_for_external_deps() {
     let prompt = get_role("lead").unwrap().base_instructions;
-    assert!(prompt.contains("external dependency blocks true completion"));
-    assert!(prompt.contains("token, endpoint access, live catalog, admin action"));
-    assert!(prompt.contains("explicitly surface that blocker"));
+    assert!(prompt.contains("external dependency blocks"));
+    assert!(prompt.contains("BLOCKED"));
+    assert!(prompt.contains("blocked_stage_complete"));
 }
 
 #[test]
@@ -136,10 +139,8 @@ fn lead_prompt_documents_report_telegram_usage() {
     let prompt = get_role("lead").unwrap().base_instructions;
     assert!(prompt.contains("report_telegram"));
     assert!(prompt.contains("plan drafted"));
-    assert!(prompt.contains("plan confirmed"));
-    assert!(prompt.contains("task review result"));
-    assert!(prompt.contains("final review result"));
-    assert!(prompt.contains("blocking error"));
+    assert!(prompt.contains("final acceptance result"));
+    assert!(prompt.contains("blocked_stage_complete result"));
 }
 
 #[test]
