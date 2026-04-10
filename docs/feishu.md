@@ -421,6 +421,29 @@ WHERE conditionExpression
 
 当前实现策略：MQL 仅用于 issue 列表发现（ID/标题/状态），assignee 从 `get_workitem_brief` 详情的 `role_members.operator` 获取，team_members 从已充实的 assignee 聚合派生。
 
+### 服务端过滤实现（2026-04-10 实测）
+
+#### 状态过滤：`work_item_status` 标签值 MQL
+
+`work_item_status` 是合法的 MQL `field_key`，可用于 WHERE 条件：
+
+```
+work_item_type_key = "bug" AND work_item_status = "已关闭"
+```
+
+**关键发现：** MQL 中 `work_item_status` 的值必须使用**状态标签**（如 `已关闭`、`处理中`），而非内部 key（如 `CLOSED`）。标签值来源于 `group_by(work_item_status)` 返回的 `display_value`。
+
+当前实现通过 `fetch_status_options()` 调用 `group_by(work_item_status)` 获取可用状态标签列表，前端下拉菜单直接使用这些标签值构建 MQL WHERE 子句。
+
+#### 经办人过滤：团队成员 API + 详情匹配
+
+经办人（`operator`）**不是** MQL `field_key`，无法在 MQL WHERE 中过滤。当前实现采用两阶段方案：
+
+1. **全局经办人选项**：通过 `list_project_team` → `list_team_members(page_token)` → `search_user_info(user_keys)` 获取项目团队成员名称列表，而非从已加载的 issue 中聚合。这样即使 issue 列表为空或仅加载了部分页，经办人下拉也能显示完整选项。
+2. **逐页匹配过滤**：`scan_assignee_page()` 从 MQL 查询结果中逐页加载 issue，对每条 issue 调用 `get_workitem_brief` 获取详情中的 `role_members.operator`，与目标经办人比较。匹配项累积到一页（50 条）后返回，未匹配的 issue 被跳过但游标继续前进。
+
+游标状态（`IssueQueryCursor`）保存当前过滤条件和原始偏移量：当过滤条件变化时游标重置，条件不变时继续上次扫描位置。
+
 ---
 
 ## 资源库
