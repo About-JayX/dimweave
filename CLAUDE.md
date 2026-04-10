@@ -22,7 +22,7 @@
 | 当前运行时无 Bun daemon | Bun 只保留为前端包管理/脚本运行器，不再承载后端常驻进程 |
 | Source of Truth 只认当前代码 | 以 `src-tauri/src/daemon/`、`bridge/`、`src/`、`.claude/rules/` 为准 |
 | 历史设计文档不当现状 | `docs/superpowers/**` 主要是迁移记录，不代表当前实现 |
-| 每个源码文件最多 200 行 | 超过必须拆分模块（此限制不适用于 CLAUDE.md 等文档文件） |
+| 每个源码文件最多 200 行 | 超过必须拆分模块；但承载 prompt / 协议长字符串定义的源码文件（如 `src-tauri/src/daemon/role_config/**`、`bridge/src/mcp_protocol.rs`）不受此限制 |
 
 ## 技术栈
 
@@ -255,7 +255,7 @@ cargo test          # 运行 Rust 测试
 
 - 遇到 bug 或设计问题，修复后必须把根因和解法写入对应 rules 文件和踩坑记录
 - 每次架构变更必须同步更新本文件的架构图和 `UPDATE.md`
-- **每个源码文件最多 200 行**，超过必须拆分模块（文档文件不受此限制）
+- **每个源码文件最多 200 行**，超过必须拆分模块；但承载 prompt / 协议长字符串定义的源码文件（如 `src-tauri/src/daemon/role_config/**`、`bridge/src/mcp_protocol.rs`）不受此限制
 - 完成功能后必须补充对应 UI 或可见状态
 - 执行完任务后必须调用 superpowers 代码审计（`superpowers:requesting-code-review`）
 - Rust 改动后必须重新运行 Tauri / Cargo 校验，前端改动后至少跑一次 TS / build 校验
