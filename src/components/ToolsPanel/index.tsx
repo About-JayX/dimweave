@@ -1,13 +1,16 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { TelegramPanel } from "@/components/AgentStatus/TelegramPanel";
 import { BugInboxPanel } from "@/components/BugInboxPanel";
 import { TelegramIcon, FeishuIcon } from "@/components/AgentStatus/BrandIcons";
+import { useFeishuProjectStore } from "@/stores/feishu-project-store";
+import { activeItemCount } from "@/components/BugInboxPanel/view-model";
 import { cn } from "@/lib/utils";
 
 interface DisclosureSectionProps {
   title: string;
   icon?: ReactNode;
+  badge?: number;
   defaultOpen: boolean;
   children: ReactNode;
 }
@@ -15,6 +18,7 @@ interface DisclosureSectionProps {
 function DisclosureSection({
   title,
   icon,
+  badge,
   defaultOpen,
   children,
 }: DisclosureSectionProps) {
@@ -35,6 +39,11 @@ function DisclosureSection({
         />
         {icon}
         {title}
+        {badge != null && badge > 0 && (
+          <span className="ml-auto min-w-4 rounded-full bg-rose-500 px-1 text-center text-[9px] font-semibold leading-4 text-background">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
       </button>
       {open && <div className="px-4 pb-3">{children}</div>}
     </div>
@@ -42,6 +51,9 @@ function DisclosureSection({
 }
 
 export function ToolsPanel() {
+  const bugItems = useFeishuProjectStore((s) => s.items);
+  const bugCount = useMemo(() => activeItemCount(bugItems), [bugItems]);
+
   return (
     <section className="flex h-full flex-col -mx-4 -my-4 overflow-y-auto">
       <DisclosureSection
@@ -54,6 +66,7 @@ export function ToolsPanel() {
       <DisclosureSection
         title="飞书"
         icon={<FeishuIcon className="size-3.5 shrink-0" />}
+        badge={bugCount}
         defaultOpen
       >
         <BugInboxPanel />

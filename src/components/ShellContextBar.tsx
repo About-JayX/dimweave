@@ -98,11 +98,7 @@ export function ShellContextBar({
                 {approvalCount > 9 ? "9+" : approvalCount}
               </span>
             ) : null}
-            {id === "bugs" && bugCount > 0 ? (
-              <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-500 px-1 text-[9px] font-semibold leading-4 text-background">
-                {bugCount > 9 ? "9+" : bugCount}
-              </span>
-            ) : null}
+            {null}
             {activeItem === id && (
               <span className="absolute -left-2 h-5 w-0.5 rounded-full radius-keep bg-primary" />
             )}
