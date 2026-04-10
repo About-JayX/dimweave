@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import * as feishuApi from "./feishu-project-api";
 
 export type McpConnectionStatus =
   | "disconnected"
@@ -19,6 +20,8 @@ export interface FeishuProjectRuntimeState {
   syncMode: FeishuSyncMode;
   projectName?: string | null;
   teamMembers: string[];
+  statusOptions: string[];
+  assigneeOptions: string[];
   mcpStatus: McpConnectionStatus;
   discoveredToolCount: number;
   lastSyncAt?: number | null;
@@ -52,17 +55,26 @@ export interface FeishuProjectConfigInput {
   sync_mode: FeishuSyncMode;
 }
 
+export interface IssueFilter {
+  status?: string | null;
+  assignee?: string | null;
+}
+
 interface FeishuProjectStore {
   runtimeState: FeishuProjectRuntimeState | null;
   items: FeishuProjectInboxItem[];
   loading: boolean;
   loadingMore: boolean;
   error: string | null;
+  activeFilter: IssueFilter;
   fetchState: () => Promise<void>;
   fetchItems: () => Promise<void>;
   saveConfig: (config: FeishuProjectConfigInput) => Promise<void>;
   syncNow: () => Promise<void>;
   loadMore: () => Promise<void>;
+  loadMoreFiltered: () => Promise<void>;
+  fetchFilterOptions: () => Promise<void>;
+  setFilter: (filter: IssueFilter) => void;
   hasMore: boolean;
   setIgnored: (workItemId: string, ignored: boolean) => Promise<void>;
   startHandling: (workItemId: string) => Promise<void>;
@@ -72,13 +84,14 @@ interface FeishuProjectStore {
 let unlistenState: UnlistenFn | null = null;
 let unlistenItems: UnlistenFn | null = null;
 
-export const useFeishuProjectStore = create<FeishuProjectStore>((set) => ({
+export const useFeishuProjectStore = create<FeishuProjectStore>((set, get) => ({
   runtimeState: null,
   items: [],
   loading: false,
   loadingMore: false,
   error: null,
   hasMore: true,
+  activeFilter: {},
 
   fetchState: async () => {
     set({ loading: true, error: null });
@@ -141,6 +154,30 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set) => ({
     } catch (e) {
       set({ error: String(e), loadingMore: false });
     }
+  },
+
+  loadMoreFiltered: async () => {
+    const filter = get().activeFilter;
+    set({ loadingMore: true, error: null });
+    try {
+      const count = await feishuApi.loadMoreFiltered(filter);
+      const items = await feishuApi.listItems();
+      set({ items, loadingMore: false, hasMore: count >= 50 });
+    } catch (e) {
+      set({ error: String(e), loadingMore: false });
+    }
+  },
+
+  fetchFilterOptions: async () => {
+    try {
+      await feishuApi.fetchFilterOptions();
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  setFilter: (filter) => {
+    set({ activeFilter: filter, items: [], hasMore: true });
   },
 
   setIgnored: async (workItemId, ignored) => {

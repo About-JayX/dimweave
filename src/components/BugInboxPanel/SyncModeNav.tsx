@@ -12,6 +12,9 @@ interface SyncModeNavProps {
   teamMembers: string[];
   assigneeFilter: string;
   onAssigneeChange: (assignee: string) => void;
+  statusOptions?: string[];
+  statusFilter?: string;
+  onStatusChange?: (status: string) => void;
 }
 
 const MODE_LABELS: Record<FeishuSyncMode, string> = {
@@ -46,6 +49,9 @@ export function SyncModeNav({
   teamMembers,
   assigneeFilter,
   onAssigneeChange,
+  statusOptions = [],
+  statusFilter = "",
+  onStatusChange,
 }: SyncModeNavProps) {
   const modeMenu: ActionMenuItem[] = (
     Object.entries(MODE_LABELS) as [FeishuSyncMode, string][]
@@ -70,12 +76,30 @@ export function SyncModeNav({
       })),
   ];
 
+  const statusMenu: ActionMenuItem[] = [
+    ...(statusFilter
+      ? [{ label: "全部状态", onClick: () => onStatusChange?.("") }]
+      : []),
+    ...statusOptions
+      .filter((s) => s !== statusFilter)
+      .map((s) => ({
+        label: s,
+        onClick: () => onStatusChange?.(s),
+      })),
+  ];
+
   return (
     <div className={`flex items-center gap-1.5 ${className ?? ""}`}>
       <ActionMenu
         items={modeMenu}
         trigger={<DropdownTrigger label={MODE_LABELS[value]} />}
       />
+      {statusOptions.length > 0 && (
+        <ActionMenu
+          items={statusMenu}
+          trigger={<DropdownTrigger label={statusFilter || "全部状态"} />}
+        />
+      )}
       {teamMembers.length > 0 && (
         <ActionMenu
           items={assigneeMenu}

@@ -257,4 +257,50 @@ describe("BugInboxPanel", () => {
     expect(result).toBeTruthy();
     expect(result).not.toBe("Never");
   });
+
+  test("SyncModeNav renders status dropdown when statusOptions provided", async () => {
+    installTauriStub();
+    const { SyncModeNav } = await import("./SyncModeNav");
+    const html = renderToStaticMarkup(
+      <SyncModeNav
+        value="issues"
+        onChange={() => {}}
+        teamMembers={["Alice"]}
+        assigneeFilter=""
+        onAssigneeChange={() => {}}
+        statusOptions={["处理中", "已关闭"]}
+        statusFilter=""
+        onStatusChange={() => {}}
+      />,
+    );
+    expect(html).toContain("全部状态");
+  });
+
+  test("SyncModeNav shows active status label when filter set", async () => {
+    installTauriStub();
+    const { SyncModeNav } = await import("./SyncModeNav");
+    const html = renderToStaticMarkup(
+      <SyncModeNav
+        value="issues"
+        onChange={() => {}}
+        teamMembers={[]}
+        assigneeFilter=""
+        onAssigneeChange={() => {}}
+        statusOptions={["处理中", "已关闭"]}
+        statusFilter="处理中"
+        onStatusChange={() => {}}
+      />,
+    );
+    expect(html).toContain("处理中");
+  });
+
+  test("store interface exposes statusOptions and assigneeOptions", async () => {
+    installTauriStub();
+    const mod = await import("@/stores/feishu-project-store");
+    const state = mod.useFeishuProjectStore.getState();
+    expect(state).toHaveProperty("activeFilter");
+    expect(state).toHaveProperty("setFilter");
+    expect(state).toHaveProperty("loadMoreFiltered");
+    expect(state).toHaveProperty("fetchFilterOptions");
+  });
 });
