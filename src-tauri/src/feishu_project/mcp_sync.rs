@@ -66,34 +66,65 @@ pub async fn sync_issues_page(
     parse_mql_items(&result, workspace_hint)
 }
 
+const ENRICH_CONCURRENCY: usize = 6;
+
+/// Build arguments for `get_workitem_brief` detail call.
+/// `work_item_id` must be a string (not integer) per live MCP evidence.
+fn build_detail_args(project_key: &str, work_item_id: &str) -> Value {
+    serde_json::json!({
+        "project_key": project_key,
+        "work_item_id": work_item_id,
+        "fields": ["description", "priority", "bug_classification", "issue_stage"],
+    })
+}
+
+/// Fetch operator names for a single work item via `get_workitem_brief`.
+async fn fetch_operator_names(
+    client: &McpClient,
+    project_key: &str,
+    work_item_id: &str,
+) -> Vec<String> {
+    let args = build_detail_args(project_key, work_item_id);
+    let Ok(result) = client.call_tool("get_workitem_brief", args).await else {
+        return Vec::new();
+    };
+    let Some(text) = extract_first_text(&result) else {
+        return Vec::new();
+    };
+    let Ok(detail) = serde_json::from_str::<Value>(&text) else {
+        return Vec::new();
+    };
+    super::issue_operator::parse_operator_names(&detail)
+}
+
 /// Enrich issue items with operator names from `get_workitem_brief` detail.
-/// Items whose `work_item_id` cannot be parsed as i64 are silently skipped.
+/// Uses bounded concurrency to avoid sequential latency on large lists.
 pub async fn enrich_issues_with_operators(
     client: &McpClient,
     project_key: &str,
     items: &mut Vec<FeishuProjectInboxItem>,
 ) {
-    for item in items.iter_mut() {
-        let Ok(wid) = item.work_item_id.parse::<i64>() else {
-            continue;
-        };
-        let args = serde_json::json!({
-            "project_key": project_key,
-            "work_item_id": wid,
-            "work_item_type_key": &item.work_item_type_key,
-        });
-        let Ok(result) = client.call_tool("get_workitem_brief", args).await else {
-            continue;
-        };
-        let Some(text) = extract_first_text(&result) else {
-            continue;
-        };
-        let Ok(detail) = serde_json::from_str::<Value>(&text) else {
-            continue;
-        };
-        let names = super::issue_operator::parse_operator_names(&detail);
+    use futures_util::stream::{self, StreamExt};
+
+    let targets: Vec<(usize, String)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| !item.work_item_id.starts_with("mql_"))
+        .map(|(i, item)| (i, item.work_item_id.clone()))
+        .collect();
+
+    let results: Vec<(usize, Vec<String>)> = stream::iter(targets)
+        .map(|(idx, wid)| async move {
+            let names = fetch_operator_names(client, project_key, &wid).await;
+            (idx, names)
+        })
+        .buffer_unordered(ENRICH_CONCURRENCY)
+        .collect()
+        .await;
+
+    for (idx, names) in results {
         if !names.is_empty() {
-            item.assignee_label = Some(names.join(", "));
+            items[idx].assignee_label = Some(names.join(", "));
         }
     }
 }

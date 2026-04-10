@@ -135,6 +135,17 @@ fn issues_mql_excludes_bare_operator() {
     assert!(!mql.contains(" operator"), "MQL must not SELECT bare `operator`: {mql}");
 }
 
+// ── detail enrichment args tests ─────────────────────────
+
+#[test]
+fn detail_args_sends_string_work_item_id() {
+    let args = build_detail_args("manciyuan", "6953736504");
+    assert!(args["work_item_id"].is_string(), "work_item_id must be string, not number");
+    assert_eq!(args["work_item_id"].as_str().unwrap(), "6953736504");
+    assert!(args.get("work_item_type_key").is_none(), "must not send work_item_type_key");
+    assert!(args["fields"].is_array(), "must include fields array");
+}
+
 // ── issue_operator tests ──────────────────────────────────
 
 #[test]
