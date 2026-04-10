@@ -140,17 +140,18 @@ fn issues_mql_excludes_bare_operator() {
 #[test]
 fn parse_operator_names_from_detail() {
     use crate::feishu_project::issue_operator;
+    // Real Feishu shape: role_members is an array of {key, members} objects
     let detail = serde_json::json!({
         "work_item_attribute": {
-            "role_members": {
-                "operator": [
+            "role_members": [
+                {"key": "reporter", "members": [
+                    {"name_cn": "Charlie", "user_key": "u3"}
+                ]},
+                {"key": "operator", "members": [
                     {"name_cn": "Alice", "user_key": "u1"},
                     {"name_cn": "Bob", "user_key": "u2"}
-                ],
-                "reporter": [
-                    {"name_cn": "Charlie", "user_key": "u3"}
-                ]
-            }
+                ]}
+            ]
         }
     });
     let names = issue_operator::parse_operator_names(&detail);
@@ -165,17 +166,30 @@ fn parse_operator_names_empty_when_missing() {
 }
 
 #[test]
+fn parse_operator_names_empty_when_no_operator_role() {
+    use crate::feishu_project::issue_operator;
+    let detail = serde_json::json!({
+        "work_item_attribute": {
+            "role_members": [
+                {"key": "reporter", "members": [{"name_cn": "Charlie"}]}
+            ]
+        }
+    });
+    assert!(issue_operator::parse_operator_names(&detail).is_empty());
+}
+
+#[test]
 fn parse_operator_names_skips_empty_names() {
     use crate::feishu_project::issue_operator;
     let detail = serde_json::json!({
         "work_item_attribute": {
-            "role_members": {
-                "operator": [
+            "role_members": [
+                {"key": "operator", "members": [
                     {"name_cn": "Alice"},
                     {"name_cn": ""},
                     {"user_key": "no_name"}
-                ]
-            }
+                ]}
+            ]
         }
     });
     assert_eq!(issue_operator::parse_operator_names(&detail), vec!["Alice"]);

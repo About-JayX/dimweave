@@ -8,16 +8,26 @@ use serde_json::Value;
 
 /// Extract operator names from a parsed `get_workitem_brief` detail object.
 ///
-/// Navigates `work_item_attribute.role_members.operator` and collects `name_cn`.
-/// Returns an empty vec if the path is missing or contains no valid names.
+/// Real response shape: `work_item_attribute.role_members` is an **array** of
+/// `{"key": "<role_id>", "members": [{"name_cn": "...", ...}]}`.
+/// We find the element with `key == "operator"` and collect `name_cn` values.
 pub fn parse_operator_names(detail: &Value) -> Vec<String> {
-    let Some(ops) = detail
-        .pointer("/work_item_attribute/role_members/operator")
+    let Some(roles) = detail
+        .pointer("/work_item_attribute/role_members")
         .and_then(|v| v.as_array())
     else {
         return Vec::new();
     };
-    ops.iter()
+    let Some(op_entry) = roles.iter().find(|r| {
+        r.get("key").and_then(|k| k.as_str()) == Some("operator")
+    }) else {
+        return Vec::new();
+    };
+    let Some(members) = op_entry.get("members").and_then(|m| m.as_array()) else {
+        return Vec::new();
+    };
+    members
+        .iter()
         .filter_map(|u| u.get("name_cn").and_then(|n| n.as_str()))
         .filter(|n| !n.is_empty())
         .map(String::from)
