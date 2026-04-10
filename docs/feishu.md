@@ -394,6 +394,23 @@ WHERE conditionExpression
 - `LIMIT offset, row_count` — 从偏移位置开始
 - 实际每页上限 **50 条**（服务端限制，不受 LIMIT 值控制）
 - 内置函数：`current_login_user()` 返回当前用户
+- `SearchParam.key` 和空间字段的 `field_key` 是相同的（官方 FAQ 原文）
+
+### issue 类型实测字段映射（workspace `manciyuan`，2026-04-10）
+
+> 通过 `list_workitem_field_config(project_key=manciyuan, work_item_type=issue)` 实测获取。
+
+人员相关系统字段：
+
+| field_key | field_name | field_type | 说明 |
+|-----------|-----------|------------|------|
+| `current_status_operator` | 当前负责人 | multi-user | 当前状态的负责人，即实际经办人 |
+| `current_status_operator_role` | 当前状态授权角色 | multi-select | 当前状态授权的角色列表 |
+| `owner` | 创建者 | user | 工作项创建人 |
+| `updated_by` | 更新人 | user | 最近更新人 |
+| `watchers` | 关注人 | multi-user | 关注者列表 |
+
+注意：`operator` **不是** `issue` 类型下的合法 `field_key`。MQL 查询 issue 的经办人必须使用 `current_status_operator`。
 
 ---
 

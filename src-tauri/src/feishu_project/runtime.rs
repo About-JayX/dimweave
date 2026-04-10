@@ -40,23 +40,14 @@ pub async fn connect_and_discover(
 }
 
 /// Fetch distinct assignee names via MQL GROUP BY (single request).
-/// Tries `operator` first; falls back to `current_status_operator` on query failure.
 async fn fetch_team_members(client: &McpClient, workspace_hint: &str) -> Vec<String> {
     if workspace_hint.is_empty() {
         return Vec::new();
     }
     let mql = mcp_sync::build_team_members_mql(workspace_hint);
     let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
-    let result = match client.call_tool("search_by_mql", args).await {
-        Ok(r) => r,
-        Err(_) => {
-            let legacy = mcp_sync::build_team_members_mql_legacy(workspace_hint);
-            let args = serde_json::json!({"project_key": workspace_hint, "mql": legacy});
-            let Ok(r) = client.call_tool("search_by_mql", args).await else {
-                return Vec::new();
-            };
-            r
-        }
+    let Ok(result) = client.call_tool("search_by_mql", args).await else {
+        return Vec::new();
     };
     let Some(text) = extract_first_content_text(&result) else {
         return Vec::new();

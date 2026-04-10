@@ -32,28 +32,9 @@ async fn sync_todo(
 
 const MQL_PAGE_SIZE: u32 = 50;
 
-/// Build issue-list MQL preferring `operator` over `current_status_operator`.
+/// Build issue-list MQL using `current_status_operator` (the only valid
+/// assignee field_key for `issue` — verified via `list_workitem_field_config`).
 pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
-    format!(
-        "SELECT work_item_id, name, priority, operator, bug_classification \
-         FROM {ws}.issue LIMIT {offset}, {limit}",
-        ws = workspace,
-        offset = offset,
-        limit = MQL_PAGE_SIZE,
-    )
-}
-
-/// Build team-member GROUP BY MQL preferring `operator`.
-pub fn build_team_members_mql(workspace: &str) -> String {
-    format!(
-        "SELECT operator FROM {ws}.issue \
-         GROUP BY operator LIMIT 50",
-        ws = workspace,
-    )
-}
-
-/// Legacy issue-list MQL using `current_status_operator` as fallback.
-pub fn build_issues_mql_legacy(workspace: &str, offset: u32) -> String {
     format!(
         "SELECT work_item_id, name, priority, current_status_operator, bug_classification \
          FROM {ws}.issue LIMIT {offset}, {limit}",
@@ -63,8 +44,8 @@ pub fn build_issues_mql_legacy(workspace: &str, offset: u32) -> String {
     )
 }
 
-/// Legacy team-member GROUP BY MQL using `current_status_operator`.
-pub fn build_team_members_mql_legacy(workspace: &str) -> String {
+/// Build team-member GROUP BY MQL using `current_status_operator`.
+pub fn build_team_members_mql(workspace: &str) -> String {
     format!(
         "SELECT current_status_operator FROM {ws}.issue \
          GROUP BY current_status_operator LIMIT 50",
@@ -80,7 +61,6 @@ async fn sync_issues(
 }
 
 /// Fetch a single page of issues at the given offset.
-/// Tries `operator` first; falls back to `current_status_operator` on query failure.
 pub async fn sync_issues_page(
     client: &McpClient,
     workspace_hint: &str,
@@ -91,14 +71,7 @@ pub async fn sync_issues_page(
     }
     let mql = build_issues_mql(workspace_hint, offset);
     let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
-    let result = match client.call_tool("search_by_mql", args).await {
-        Ok(r) => r,
-        Err(_) => {
-            let legacy = build_issues_mql_legacy(workspace_hint, offset);
-            let args = serde_json::json!({"project_key": workspace_hint, "mql": legacy});
-            client.call_tool("search_by_mql", args).await?
-        }
-    };
+    let result = client.call_tool("search_by_mql", args).await?;
     parse_mql_items(&result, workspace_hint)
 }
 
@@ -156,25 +129,13 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
                     .unwrap_or("")
                     .to_string();
             }
-            // Prefer `operator` (actual assignee); fall back to `current_status_operator`
-            "operator" => {
+            "current_status_operator" => {
                 if let Some(users) = f["value"]["user_value_list"].as_array() {
                     let names: Vec<&str> = users
                         .iter()
                         .filter_map(|u| u["name_cn"].as_str())
                         .collect();
                     assignee = names.join(", ");
-                }
-            }
-            "current_status_operator" => {
-                if assignee.is_empty() {
-                    if let Some(users) = f["value"]["user_value_list"].as_array() {
-                        let names: Vec<&str> = users
-                            .iter()
-                            .filter_map(|u| u["name_cn"].as_str())
-                            .collect();
-                        assignee = names.join(", ");
-                    }
                 }
             }
             "bug_classification" => {

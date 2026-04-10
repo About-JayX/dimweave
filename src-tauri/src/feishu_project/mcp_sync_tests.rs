@@ -99,26 +99,14 @@ fn try_parse_item_skips_missing_id() {
     assert!(try_parse_item(&raw, "proj").is_none());
 }
 
-// ── Operator-first assignee + query-level fallback tests ──────
+// ── current_status_operator assignee field tests ──────
 
 fn mql_user_field(key: &str, name: &str) -> serde_json::Value {
     serde_json::json!({"key": key, "value": {"user_value_list": [{"name_cn": name}]}})
 }
 
 #[test]
-fn parse_mql_item_prefers_operator_over_current_status_operator() {
-    let raw = serde_json::json!({"moql_field_list": [
-        {"key": "work_item_id", "value": {"long_value": 100}},
-        {"key": "name", "value": {"string_value": "Bug X"}},
-        mql_user_field("operator", "Alice"),
-        mql_user_field("current_status_operator", "Bob"),
-    ]});
-    let item = parse_mql_item(&raw, "proj").unwrap();
-    assert_eq!(item.assignee_label.as_deref(), Some("Alice"));
-}
-
-#[test]
-fn parse_mql_item_falls_back_to_current_status_operator() {
+fn parse_mql_item_extracts_current_status_operator() {
     let raw = serde_json::json!({"moql_field_list": [
         {"key": "work_item_id", "value": {"long_value": 200}},
         {"key": "name", "value": {"string_value": "Bug Y"}},
@@ -129,27 +117,26 @@ fn parse_mql_item_falls_back_to_current_status_operator() {
 }
 
 #[test]
-fn sync_issues_mql_selects_operator() {
+fn parse_mql_item_ignores_unknown_operator_field() {
+    // `operator` is not a valid issue field_key; it should be ignored
+    let raw = serde_json::json!({"moql_field_list": [
+        {"key": "work_item_id", "value": {"long_value": 100}},
+        {"key": "name", "value": {"string_value": "Bug X"}},
+        mql_user_field("operator", "Alice"),
+    ]});
+    let item = parse_mql_item(&raw, "proj").unwrap();
+    assert_eq!(item.assignee_label, None);
+}
+
+#[test]
+fn issues_mql_uses_current_status_operator() {
     let mql = build_issues_mql("PROJ", 0);
-    assert!(mql.contains("operator"), "{mql}");
-    assert!(!mql.contains("current_status_operator"), "{mql}");
-}
-
-#[test]
-fn team_member_mql_groups_by_operator() {
-    let mql = build_team_members_mql("PROJ");
-    assert!(mql.contains("operator"), "{mql}");
-    assert!(!mql.contains("current_status_operator"), "{mql}");
-}
-
-#[test]
-fn legacy_issues_mql_uses_current_status_operator() {
-    let mql = build_issues_mql_legacy("PROJ", 0);
     assert!(mql.contains("current_status_operator"), "{mql}");
+    assert!(!mql.contains(" operator"), "MQL must not SELECT bare `operator`: {mql}");
 }
 
 #[test]
-fn legacy_team_member_mql_uses_current_status_operator() {
-    let mql = build_team_members_mql_legacy("PROJ");
+fn team_member_mql_groups_by_current_status_operator() {
+    let mql = build_team_members_mql("PROJ");
     assert!(mql.contains("GROUP BY current_status_operator"), "{mql}");
 }
