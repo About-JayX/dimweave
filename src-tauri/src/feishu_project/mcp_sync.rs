@@ -32,6 +32,28 @@ async fn sync_todo(
 
 const MQL_PAGE_SIZE: u32 = 50;
 
+/// Build the MQL SELECT for issue listing.
+/// Prefers `operator` (actual assignee) over `current_status_operator` (reporter).
+pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
+    format!(
+        "SELECT work_item_id, name, priority, operator, bug_classification \
+         FROM {ws}.issue LIMIT {offset}, {limit}",
+        ws = workspace,
+        offset = offset,
+        limit = MQL_PAGE_SIZE,
+    )
+}
+
+/// Build the MQL GROUP BY for team-member discovery.
+/// Prefers `operator` for accurate assignee grouping.
+pub fn build_team_members_mql(workspace: &str) -> String {
+    format!(
+        "SELECT operator FROM {ws}.issue \
+         GROUP BY operator LIMIT 50",
+        ws = workspace,
+    )
+}
+
 async fn sync_issues(
     client: &McpClient,
     workspace_hint: &str,
@@ -48,13 +70,7 @@ pub async fn sync_issues_page(
     if workspace_hint.is_empty() {
         return Err("workspace_hint required for issue sync".into());
     }
-    let mql = format!(
-        "SELECT work_item_id, name, priority, current_status_operator, bug_classification \
-         FROM {ws}.issue LIMIT {offset}, {limit}",
-        ws = workspace_hint,
-        offset = offset,
-        limit = MQL_PAGE_SIZE,
-    );
+    let mql = build_issues_mql(workspace_hint, offset);
     let args = serde_json::json!({
         "project_key": workspace_hint,
         "mql": mql,
@@ -117,13 +133,25 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
                     .unwrap_or("")
                     .to_string();
             }
-            "current_status_operator" => {
+            // Prefer `operator` (actual assignee); fall back to `current_status_operator`
+            "operator" => {
                 if let Some(users) = f["value"]["user_value_list"].as_array() {
                     let names: Vec<&str> = users
                         .iter()
                         .filter_map(|u| u["name_cn"].as_str())
                         .collect();
                     assignee = names.join(", ");
+                }
+            }
+            "current_status_operator" => {
+                if assignee.is_empty() {
+                    if let Some(users) = f["value"]["user_value_list"].as_array() {
+                        let names: Vec<&str> = users
+                            .iter()
+                            .filter_map(|u| u["name_cn"].as_str())
+                            .collect();
+                        assignee = names.join(", ");
+                    }
                 }
             }
             "bug_classification" => {

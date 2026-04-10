@@ -44,11 +44,7 @@ async fn fetch_team_members(client: &McpClient, workspace_hint: &str) -> Vec<Str
     if workspace_hint.is_empty() {
         return Vec::new();
     }
-    let mql = format!(
-        "SELECT current_status_operator FROM {ws}.issue \
-         GROUP BY current_status_operator LIMIT 50",
-        ws = workspace_hint,
-    );
+    let mql = mcp_sync::build_team_members_mql(workspace_hint);
     let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
     let Ok(result) = client.call_tool("search_by_mql", args).await else {
         return Vec::new();
