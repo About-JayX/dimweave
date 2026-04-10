@@ -159,6 +159,93 @@ pub async fn load_more(
     Ok(count)
 }
 
+/// Load next page of issues with filters (assignee + status).
+/// Resets cursor when filter changes, progressive scan for assignee filter.
+pub async fn load_more_filtered(
+    state: &SharedState,
+    app: &AppHandle,
+    filter: crate::feishu_project::types::IssueFilter,
+) -> Result<usize, String> {
+    let cfg = load_cfg();
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
+    }
+    if cfg.sync_mode != crate::feishu_project::types::FeishuSyncMode::Issues {
+        return Err("load_more_filtered only available in issues mode".into());
+    }
+    let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
+    // Get or reset cursor
+    let mut cursor = {
+        let d = state.read().await;
+        match &d.feishu_issue_cursor {
+            Some(c) if c.filter == filter => c.clone(),
+            _ => crate::feishu_project::issue_query::IssueQueryCursor {
+                filter: filter.clone(),
+                raw_offset: 0,
+                exhausted: false,
+            },
+        }
+    };
+    let items = crate::feishu_project::issue_query::scan_assignee_page(
+        &client,
+        &cfg.workspace_hint,
+        &mut cursor,
+        50,
+    )
+    .await?;
+    let count = items.len();
+    {
+        let mut daemon = state.write().await;
+        for item in items {
+            daemon.feishu_project_store.upsert(item);
+        }
+        daemon.feishu_issue_cursor = Some(cursor);
+    }
+    crate::feishu_project::runtime::persist_and_emit(state, app).await;
+    let team_members = {
+        let d = state.read().await;
+        crate::feishu_project::issue_operator::derive_team_members(
+            &d.feishu_project_store.items,
+        )
+    };
+    {
+        let mut d = state.write().await;
+        if let Some(rs) = &mut d.feishu_project_runtime {
+            rs.team_members = team_members;
+            gui::emit_feishu_project_state(app, rs);
+        }
+    }
+    gui::emit_system_log(app, "info", &format!("[FeishuProject] filtered load: {count} items"));
+    Ok(count)
+}
+
+/// Fetch filter options (status labels + assignee names from team membership).
+pub async fn fetch_filter_options(
+    state: &SharedState,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let cfg = load_cfg();
+    if cfg.mcp_user_token.is_empty() {
+        return Err("MCP user token not configured".into());
+    }
+    let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
+    let (statuses, assignees) = tokio::join!(
+        crate::feishu_project::issue_query::fetch_status_options(&client, &cfg.workspace_hint),
+        crate::feishu_project::issue_query::fetch_team_member_names(&client, &cfg.workspace_hint),
+    );
+    let status_options = statuses.unwrap_or_default();
+    let assignee_options = assignees.unwrap_or_default();
+    {
+        let mut d = state.write().await;
+        if let Some(rs) = &mut d.feishu_project_runtime {
+            rs.status_options = status_options;
+            rs.assignee_options = assignee_options;
+            gui::emit_feishu_project_state(app, rs);
+        }
+    }
+    Ok(())
+}
+
 pub async fn start_handling(
     state: &SharedState,
     app: &AppHandle,

@@ -72,6 +72,36 @@ pub async fn feishu_project_load_more(
 }
 
 #[tauri::command]
+pub async fn feishu_project_load_more_filtered(
+    sender: State<'_, DaemonSender>,
+    filter: crate::feishu_project::types::IssueFilter,
+) -> Result<usize, String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::FeishuProjectLoadMoreFiltered {
+            filter,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|_| "daemon offline".to_string())?;
+    reply_rx.await.map_err(|_| "daemon dropped".to_string())?
+}
+
+#[tauri::command]
+pub async fn feishu_project_fetch_filter_options(
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::FeishuProjectFetchFilterOptions { reply: reply_tx })
+        .await
+        .map_err(|_| "daemon offline".to_string())?;
+    reply_rx.await.map_err(|_| "daemon dropped".to_string())?
+}
+
+#[tauri::command]
 pub async fn feishu_project_start_handling(
     sender: State<'_, DaemonSender>,
     work_item_id: String,

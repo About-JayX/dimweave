@@ -117,6 +117,13 @@ pub enum DaemonCmd {
     FeishuProjectLoadMore {
         reply: oneshot::Sender<Result<usize, String>>,
     },
+    FeishuProjectLoadMoreFiltered {
+        filter: crate::feishu_project::types::IssueFilter,
+        reply: oneshot::Sender<Result<usize, String>>,
+    },
+    FeishuProjectFetchFilterOptions {
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     FeishuProjectSetIgnored {
         work_item_id: String,
         ignored: bool,

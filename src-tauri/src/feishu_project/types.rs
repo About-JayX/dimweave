@@ -89,6 +89,16 @@ impl Default for FeishuProjectConfig {
     }
 }
 
+/// Optional issue filters sent from the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFilter {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub assignee: Option<String>,
+}
+
 /// Masked runtime state safe for frontend display.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +110,8 @@ pub struct FeishuProjectRuntimeState {
     pub sync_mode: FeishuSyncMode,
     pub project_name: Option<String>,
     pub team_members: Vec<String>,
+    pub status_options: Vec<String>,
+    pub assignee_options: Vec<String>,
     pub mcp_status: McpConnectionStatus,
     pub discovered_tool_count: usize,
     pub last_sync_at: Option<u64>,
@@ -125,6 +137,8 @@ impl FeishuProjectRuntimeState {
             sync_mode: cfg.sync_mode,
             project_name: None,
             team_members: Vec::new(),
+            status_options: Vec::new(),
+            assignee_options: Vec::new(),
             mcp_status: McpConnectionStatus::Disconnected,
             discovered_tool_count: 0,
             last_sync_at: cfg.last_sync_at,

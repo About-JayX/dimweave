@@ -75,6 +75,7 @@ pub struct DaemonState {
     pub telegram_notifications_enabled: bool,
     pub feishu_project_store: crate::feishu_project::store::FeishuProjectStore,
     pub feishu_project_runtime: Option<crate::feishu_project::types::FeishuProjectRuntimeState>,
+    pub feishu_issue_cursor: Option<crate::feishu_project::issue_query::IssueQueryCursor>,
 }
 
 impl Default for DaemonState {
@@ -110,6 +111,7 @@ impl Default for DaemonState {
             telegram_notifications_enabled: false,
             feishu_project_store: crate::feishu_project::store::FeishuProjectStore::default(),
             feishu_project_runtime: None,
+            feishu_issue_cursor: None,
         }
     }
 }

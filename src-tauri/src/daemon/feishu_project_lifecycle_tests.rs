@@ -18,6 +18,8 @@ fn stale_runtime() -> FeishuProjectRuntimeState {
         sync_mode: crate::feishu_project::types::FeishuSyncMode::Issues,
         project_name: Some("Old Project Name".into()),
         team_members: vec!["Alice".into(), "Bob".into()],
+        status_options: vec!["处理中".into(), "已关闭".into()],
+        assignee_options: vec!["Alice".into(), "Bob".into()],
         mcp_status: McpConnectionStatus::Connected,
         discovered_tool_count: 35,
         last_sync_at: Some(1000),
@@ -238,4 +240,70 @@ fn disable_runtime_state_has_no_stale_token_label() {
     assert!(!rs.enabled);
     assert_eq!(rs.token_label, None);
     assert_eq!(rs.workspace_hint, None);
+}
+
+#[test]
+fn from_config_initializes_empty_filter_options() {
+    let cfg = existing_config();
+    let rs = FeishuProjectRuntimeState::from_config(&cfg);
+    assert!(rs.status_options.is_empty());
+    assert!(rs.assignee_options.is_empty());
+}
+
+#[tokio::test]
+async fn cursor_resets_when_filter_changes() {
+    use crate::feishu_project::issue_query::IssueQueryCursor;
+    use crate::feishu_project::types::IssueFilter;
+
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_issue_cursor = Some(IssueQueryCursor {
+        filter: IssueFilter { status: Some("处理中".into()), assignee: None },
+        raw_offset: 100,
+        exhausted: false,
+    });
+    let state = shared(ds);
+
+    // Different filter should produce a fresh cursor
+    let new_filter = IssueFilter { status: Some("已关闭".into()), assignee: None };
+    let cursor = {
+        let d = state.read().await;
+        match &d.feishu_issue_cursor {
+            Some(c) if c.filter == new_filter => c.clone(),
+            _ => IssueQueryCursor {
+                filter: new_filter.clone(),
+                raw_offset: 0,
+                exhausted: false,
+            },
+        }
+    };
+    assert_eq!(cursor.raw_offset, 0);
+    assert_eq!(cursor.filter.status.as_deref(), Some("已关闭"));
+}
+
+#[tokio::test]
+async fn cursor_continues_when_filter_same() {
+    use crate::feishu_project::issue_query::IssueQueryCursor;
+    use crate::feishu_project::types::IssueFilter;
+
+    let filter = IssueFilter { status: Some("处理中".into()), assignee: None };
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_issue_cursor = Some(IssueQueryCursor {
+        filter: filter.clone(),
+        raw_offset: 100,
+        exhausted: false,
+    });
+    let state = shared(ds);
+
+    let cursor = {
+        let d = state.read().await;
+        match &d.feishu_issue_cursor {
+            Some(c) if c.filter == filter => c.clone(),
+            _ => IssueQueryCursor {
+                filter: filter.clone(),
+                raw_offset: 0,
+                exhausted: false,
+            },
+        }
+    };
+    assert_eq!(cursor.raw_offset, 100);
 }

@@ -1,6 +1,9 @@
 pub mod api;
 pub mod config;
 pub mod issue_operator;
+pub mod issue_query;
+pub(crate) mod issue_query_parse;
+pub(crate) mod issue_query_team;
 pub mod mcp_client;
 pub mod mcp_http;
 pub mod mcp_sync;

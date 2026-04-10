@@ -772,6 +772,16 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     feishu_project_lifecycle::load_more(&state, &app).await;
                 let _ = reply.send(result);
             }
+            DaemonCmd::FeishuProjectLoadMoreFiltered { filter, reply } => {
+                let result =
+                    feishu_project_lifecycle::load_more_filtered(&state, &app, filter).await;
+                let _ = reply.send(result);
+            }
+            DaemonCmd::FeishuProjectFetchFilterOptions { reply } => {
+                let result =
+                    feishu_project_lifecycle::fetch_filter_options(&state, &app).await;
+                let _ = reply.send(result);
+            }
             DaemonCmd::FeishuProjectSetIgnored {
                 work_item_id,
                 ignored,
