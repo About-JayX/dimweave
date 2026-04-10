@@ -40,6 +40,7 @@
 - `2026-04-10` — user approved a focused revision after lead review found that candidate commit `cfe2d862` exceeded the original add-line budget and missed the approved operator -> `current_status_operator` query-failure fallback.
 - Revision scope remains unchanged: same 3 Rust files, no frontend/config/interface changes.
 - `2026-04-10` — `list_workitem_field_config` MCP 实测证实：在 workspace `manciyuan` 的 `issue` 类型下，`operator` **不是** 合法 field_key；唯一的经办人字段是 `current_status_operator`（当前负责人, multi-user）。之前 `7888ae33` 引入的 `operator` 优先路径实际上始终走 fallback，属于 dead code。后续修复将删除 `operator` 主路径，恢复 `current_status_operator` 为唯一查询字段。
+- `2026-04-10` — 本计划的修复（`cd931f03`）仍然不够：实测发现 `current_status_operator` 返回的人员与 `role_members.reporter` 一致，并非真正的经办人。真正的经办人在 `get_workitem_brief(...).work_item_attribute.role_members.operator`。后续由 `2026-04-10-feishu-operator-filter-fix.md` 计划完成彻底修复，改为从详情接口获取 operator 角色成员作为 assignee 来源。
 
 ### Lessons that constrain this plan
 

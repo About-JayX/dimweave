@@ -410,7 +410,16 @@ WHERE conditionExpression
 | `updated_by` | 更新人 | user | 最近更新人 |
 | `watchers` | 关注人 | multi-user | 关注者列表 |
 
-注意：`operator` **不是** `issue` 类型下的合法 `field_key`。MQL 查询 issue 的经办人必须使用 `current_status_operator`。
+注意：`operator` **不是** `issue` 类型下的合法 `field_key`，不能用于 MQL SELECT/WHERE。
+
+### field_key 与 role_id 的区别（2026-04-10 实测）
+
+- **field_key**（如 `current_status_operator`）：用于 MQL SELECT/WHERE/GROUP BY，来源于 `list_workitem_field_config`。
+- **role_id**（如 `operator`、`reporter`）：用于角色配置，来源于 `list_workitem_role_config`；出现在 `get_workitem_brief` 返回的 `work_item_attribute.role_members` 中。
+
+实测发现 `current_status_operator`（当前负责人）在实际 issue 样本中返回的人员与 `role_members.reporter` 一致，并非真正的经办人。真正的经办人在 `get_workitem_brief(...).work_item_attribute.role_members.operator`。
+
+当前实现策略：MQL 仅用于 issue 列表发现（ID/标题/状态），assignee 从 `get_workitem_brief` 详情的 `role_members.operator` 获取，team_members 从已充实的 assignee 聚合派生。
 
 ---
 
