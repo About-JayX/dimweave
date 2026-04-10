@@ -76,10 +76,57 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `refactor: remove report_telegram from prompt protocol` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path bridge/Cargo.toml tools`; `cargo test --manifest-path bridge/Cargo.toml mcp_protocol`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config::`; `cargo test --manifest-path src-tauri/Cargo.toml codex::`; `git diff --check` | `report_telegram` originally came from `3e2c95a7` + `6a6ad203`, but user now wants the field removed entirely. |
-| Task 2 | `feat: route all lead messages to telegram` | `cargo test --manifest-path src-tauri/Cargo.toml telegram`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::`; `git diff --check` | `fa5f16e4` / `d5e76ef5` / `85ea11ad` established that runtime delivery gates belong in daemon routing; this task keeps only those runtime gates and removes the model-controlled business gate. |
+| Task 1 | `refactor: remove report_telegram from prompt protocol` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path bridge/Cargo.toml tools`; `cargo test --manifest-path bridge/Cargo.toml mcp_protocol`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config::`; `cargo test --manifest-path src-tauri/Cargo.toml codex::`; `cargo test --manifest-path src-tauri/Cargo.toml telegram`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::`; `git diff --check` | `3cb840f1` — removed `report_telegram` from message models, schemas, prompts, handlers, and test helpers. Direct verification passed. Full `daemon::` still had 6 pre-existing failures, accepted via Plan Revision 3 because they reproduced identically on baseline `main`. |
+| Task 2 | `feat: route all lead messages to telegram` | `cargo test --manifest-path src-tauri/Cargo.toml telegram`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::`; `git diff --check` | `3cb840f1` — merged into Task 1 by Plan Revision 2. `src-tauri/src/telegram/report.rs` now routes all `from == "lead"` messages to Telegram while preserving runtime delivery gates. |
 
 ---
+
+## Plan Revision 1 — 2026-04-10
+
+**Approved by user:** yes (`批准`)
+
+**Reason:** Task 1 scope originally covered the primary protocol surfaces but missed several compile- and test-reachable `BridgeMessage` construction sites plus the shared `role_protocol.rs` Telegram-reporting text. Removing `report_telegram` from the message model cannot pass the required verification set without updating those files too.
+
+**Added to Task 1 allowed_files:**
+
+- `bridge/src/channel_state.rs`
+- `src-tauri/src/daemon/role_config/role_protocol.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_tests.rs`
+- `src-tauri/src/telegram/runtime_handlers.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/feishu_project_task_link.rs`
+- `src-tauri/src/daemon/orchestrator/tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/state_tests.rs`
+- `src-tauri/src/feishu_project/task_link_tests.rs`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 28`
+- `max_added_loc: 220`
+- `max_deleted_loc: 340`
+
+## Plan Revision 2 — 2026-04-10
+
+**Approved by user:** yes (`批准`)
+
+**Reason:** Revision 1 fixed most compile/test-reachable `report_telegram` references, but Task 1 and Task 2 still had a structural conflict: removing `report_telegram` from `BridgeMessage` makes `src-tauri/src/telegram/report.rs` uncompilable unless that file is updated in the same task. Therefore the protocol-field removal and the lead-only Telegram routing change cannot be executed as two separately verifiable tasks.
+
+**Task merge:** Task 1 and Task 2 are merged into one execution boundary for implementation purposes.
+
+**Added to merged task allowed_files:**
+
+- `src-tauri/src/telegram/report.rs`
+- `src-tauri/src/daemon/routing_dispatch.rs`
+
+**Revised merged-task budgets:**
+
+- `max_files_changed: 30`
+- `max_added_loc: 140`
+- `max_deleted_loc: 360`
 
 ### Task 1: 删除 `report_telegram` 协议面
 
@@ -110,12 +157,27 @@
 - `src-tauri/src/daemon/role_config/claude_prompt_tests.rs`
 - `bridge/src/mcp_protocol.rs`
 - `bridge/src/mcp_protocol_tests.rs`
+- `bridge/src/channel_state.rs`
+- `src-tauri/src/daemon/role_config/role_protocol.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_tests.rs`
+- `src-tauri/src/telegram/runtime_handlers.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/feishu_project_task_link.rs`
+- `src-tauri/src/daemon/orchestrator/tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/state_tests.rs`
+- `src-tauri/src/feishu_project/task_link_tests.rs`
+- `src-tauri/src/telegram/report.rs`
+- `src-tauri/src/daemon/routing_dispatch.rs`
 
-**max_files_changed:** `15`
+**max_files_changed:** `30`
 
-**max_added_loc:** `180`
+**max_added_loc:** `140`
 
-**max_deleted_loc:** `240`
+**max_deleted_loc:** `360`
 
 **verification_commands:**
 
@@ -124,9 +186,13 @@
 - `cargo test --manifest-path bridge/Cargo.toml mcp_protocol`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config::`
 - `cargo test --manifest-path src-tauri/Cargo.toml codex::`
+- `cargo test --manifest-path src-tauri/Cargo.toml telegram`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::`
 - `git diff --check`
 
 ### Task 2: 把 Telegram gate 改成 lead 全量转发
+
+**Status:** merged into Task 1 by Plan Revision 2. Do not execute as a separate task.
 
 **task_id:** `lead-telegram-fanout`
 
@@ -154,3 +220,24 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml telegram`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::`
 - `git diff --check`
+
+## Plan Revision 3 — 2026-04-10
+
+**Approved by user:** yes (`批准最终验收`)
+
+**Reason:** The merged task's full `cargo test --manifest-path src-tauri/Cargo.toml daemon::` verification still reports 6 failures, but lead review reproduced the exact same 6 failing tests on baseline `main` before merge. These are therefore `pre_existing`, not introduced by this plan, and must not block acceptance of the Telegram fan-out change.
+
+**Recorded pre-existing failures:**
+
+- `daemon::routing::behavior_tests::auto_fanout_delivers_to_both_agents`
+- `daemon::routing::shared_role_tests::stale_online_agent_reports_task_session_mismatch_reason`
+- `daemon::routing::tests::route_to_claude_from_unknown_sender_drops`
+- `daemon::routing::user_target_tests::auto_keeps_preferred_task_role_first_but_still_fanouts`
+- `daemon::routing::user_target_tests::auto_prefers_bound_claude_coder_for_active_task`
+- `daemon::state::state_tests::online_role_conflict_only_blocks_live_other_agent`
+
+**Acceptance adjustment:**
+
+- Direct task verification must pass in full
+- Full `daemon::` suite must show **no new failures versus baseline main**
+- The six failures above are treated as known pre-existing issues outside this plan scope
