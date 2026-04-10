@@ -106,14 +106,15 @@ fn mql_user_field(key: &str, name: &str) -> serde_json::Value {
 }
 
 #[test]
-fn parse_mql_item_extracts_current_status_operator() {
+fn parse_mql_item_leaves_assignee_empty() {
+    // MQL no longer sets assignee; enrichment via get_workitem_brief does.
     let raw = serde_json::json!({"moql_field_list": [
         {"key": "work_item_id", "value": {"long_value": 200}},
         {"key": "name", "value": {"string_value": "Bug Y"}},
         mql_user_field("current_status_operator", "Bob"),
     ]});
     let item = parse_mql_item(&raw, "proj").unwrap();
-    assert_eq!(item.assignee_label.as_deref(), Some("Bob"));
+    assert_eq!(item.assignee_label, None);
 }
 
 #[test]
@@ -129,14 +130,81 @@ fn parse_mql_item_ignores_unknown_operator_field() {
 }
 
 #[test]
-fn issues_mql_uses_current_status_operator() {
+fn issues_mql_excludes_bare_operator() {
     let mql = build_issues_mql("PROJ", 0);
-    assert!(mql.contains("current_status_operator"), "{mql}");
     assert!(!mql.contains(" operator"), "MQL must not SELECT bare `operator`: {mql}");
 }
 
+// ── issue_operator tests ──────────────────────────────────
+
 #[test]
-fn team_member_mql_groups_by_current_status_operator() {
-    let mql = build_team_members_mql("PROJ");
-    assert!(mql.contains("GROUP BY current_status_operator"), "{mql}");
+fn parse_operator_names_from_detail() {
+    use crate::feishu_project::issue_operator;
+    let detail = serde_json::json!({
+        "work_item_attribute": {
+            "role_members": {
+                "operator": [
+                    {"name_cn": "Alice", "user_key": "u1"},
+                    {"name_cn": "Bob", "user_key": "u2"}
+                ],
+                "reporter": [
+                    {"name_cn": "Charlie", "user_key": "u3"}
+                ]
+            }
+        }
+    });
+    let names = issue_operator::parse_operator_names(&detail);
+    assert_eq!(names, vec!["Alice", "Bob"]);
+}
+
+#[test]
+fn parse_operator_names_empty_when_missing() {
+    use crate::feishu_project::issue_operator;
+    let detail = serde_json::json!({"work_item_attribute": {}});
+    assert!(issue_operator::parse_operator_names(&detail).is_empty());
+}
+
+#[test]
+fn parse_operator_names_skips_empty_names() {
+    use crate::feishu_project::issue_operator;
+    let detail = serde_json::json!({
+        "work_item_attribute": {
+            "role_members": {
+                "operator": [
+                    {"name_cn": "Alice"},
+                    {"name_cn": ""},
+                    {"user_key": "no_name"}
+                ]
+            }
+        }
+    });
+    assert_eq!(issue_operator::parse_operator_names(&detail), vec!["Alice"]);
+}
+
+#[test]
+fn derive_team_members_from_items() {
+    use crate::feishu_project::issue_operator;
+    use crate::feishu_project::types::{FeishuProjectInboxItem, IngressSource};
+    let make = |assignee: Option<&str>| FeishuProjectInboxItem {
+        record_id: String::new(),
+        project_key: String::new(),
+        work_item_id: String::new(),
+        work_item_type_key: "issue".into(),
+        title: String::new(),
+        status_label: None,
+        assignee_label: assignee.map(String::from),
+        updated_at: 0,
+        source_url: String::new(),
+        raw_snapshot_ref: String::new(),
+        ignored: false,
+        linked_task_id: None,
+        last_ingress: IngressSource::Mcp,
+        last_event_uuid: None,
+    };
+    let items = vec![
+        make(Some("Alice")),
+        make(Some("Bob, Alice")),
+        make(None),
+    ];
+    assert_eq!(issue_operator::derive_team_members(&items), vec!["Alice", "Bob"]);
 }

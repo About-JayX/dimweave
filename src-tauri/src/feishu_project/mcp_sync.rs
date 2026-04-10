@@ -32,24 +32,15 @@ async fn sync_todo(
 
 const MQL_PAGE_SIZE: u32 = 50;
 
-/// Build issue-list MQL using `current_status_operator` (the only valid
-/// assignee field_key for `issue` — verified via `list_workitem_field_config`).
+/// Build issue-list MQL. Assignee data is sourced from `get_workitem_brief`
+/// detail (role_members.operator), not from MQL fields.
 pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
     format!(
-        "SELECT work_item_id, name, priority, current_status_operator, bug_classification \
+        "SELECT work_item_id, name, priority, bug_classification \
          FROM {ws}.issue LIMIT {offset}, {limit}",
         ws = workspace,
         offset = offset,
         limit = MQL_PAGE_SIZE,
-    )
-}
-
-/// Build team-member GROUP BY MQL using `current_status_operator`.
-pub fn build_team_members_mql(workspace: &str) -> String {
-    format!(
-        "SELECT current_status_operator FROM {ws}.issue \
-         GROUP BY current_status_operator LIMIT 50",
-        ws = workspace,
     )
 }
 
@@ -73,6 +64,38 @@ pub async fn sync_issues_page(
     let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
     let result = client.call_tool("search_by_mql", args).await?;
     parse_mql_items(&result, workspace_hint)
+}
+
+/// Enrich issue items with operator names from `get_workitem_brief` detail.
+/// Items whose `work_item_id` cannot be parsed as i64 are silently skipped.
+pub async fn enrich_issues_with_operators(
+    client: &McpClient,
+    project_key: &str,
+    items: &mut Vec<FeishuProjectInboxItem>,
+) {
+    for item in items.iter_mut() {
+        let Ok(wid) = item.work_item_id.parse::<i64>() else {
+            continue;
+        };
+        let args = serde_json::json!({
+            "project_key": project_key,
+            "work_item_id": wid,
+            "work_item_type_key": &item.work_item_type_key,
+        });
+        let Ok(result) = client.call_tool("get_workitem_brief", args).await else {
+            continue;
+        };
+        let Some(text) = extract_first_text(&result) else {
+            continue;
+        };
+        let Ok(detail) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        let names = super::issue_operator::parse_operator_names(&detail);
+        if !names.is_empty() {
+            item.assignee_label = Some(names.join(", "));
+        }
+    }
 }
 
 /// Parse MQL response data into inbox items.
@@ -111,7 +134,6 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
     let fields = raw.get("moql_field_list")?.as_array()?;
     let mut name = String::new();
     let mut priority = String::new();
-    let mut assignee = String::new();
     let mut classification = String::new();
     let mut work_item_id = String::new();
     for f in fields {
@@ -128,15 +150,6 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
                     .as_str()
                     .unwrap_or("")
                     .to_string();
-            }
-            "current_status_operator" => {
-                if let Some(users) = f["value"]["user_value_list"].as_array() {
-                    let names: Vec<&str> = users
-                        .iter()
-                        .filter_map(|u| u["name_cn"].as_str())
-                        .collect();
-                    assignee = names.join(", ");
-                }
             }
             "bug_classification" => {
                 classification = f["value"]["key_label_value"]["label"]
@@ -182,11 +195,7 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
         work_item_type_key: "issue".to_string(),
         title: name,
         status_label: status,
-        assignee_label: if assignee.is_empty() {
-            None
-        } else {
-            Some(assignee)
-        },
+        assignee_label: None, // filled by detail enrichment, not MQL
         updated_at: 0,
         source_url,
         raw_snapshot_ref: String::new(),

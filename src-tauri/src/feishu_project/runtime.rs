@@ -1,4 +1,7 @@
-use super::{config, mcp_client::McpClient, mcp_sync, store, types::FeishuProjectConfig};
+use super::{
+    config, issue_operator, mcp_client::McpClient, mcp_sync, store,
+    types::{FeishuProjectConfig, FeishuSyncMode},
+};
 use crate::daemon::{gui, SharedState};
 use tauri::AppHandle;
 use tokio::sync::oneshot;
@@ -37,52 +40,6 @@ pub async fn connect_and_discover(
         ),
     );
     Ok(client)
-}
-
-/// Fetch distinct assignee names via MQL GROUP BY (single request).
-async fn fetch_team_members(client: &McpClient, workspace_hint: &str) -> Vec<String> {
-    if workspace_hint.is_empty() {
-        return Vec::new();
-    }
-    let mql = mcp_sync::build_team_members_mql(workspace_hint);
-    let args = serde_json::json!({"project_key": workspace_hint, "mql": mql});
-    let Ok(result) = client.call_tool("search_by_mql", args).await else {
-        return Vec::new();
-    };
-    let Some(text) = extract_first_content_text(&result) else {
-        return Vec::new();
-    };
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
-        return Vec::new();
-    };
-    let Some(groups) = parsed.get("list").and_then(|l| l.as_array()) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = groups
-        .iter()
-        .filter_map(|g| {
-            g.get("group_infos")
-                .and_then(|gi| gi.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|info| info.get("group_name"))
-                .and_then(|n| n.as_str())
-                .filter(|n| !n.is_empty() && *n != "未知分组")
-                .map(String::from)
-        })
-        .collect();
-    names.sort();
-    names
-}
-
-fn extract_first_content_text(result: &serde_json::Value) -> Option<String> {
-    result
-        .get("content")?
-        .as_array()?
-        .iter()
-        .find(|e| e.get("type").and_then(|t| t.as_str()) == Some("text"))?
-        .get("text")?
-        .as_str()
-        .map(String::from)
 }
 
 /// Lightweight connect: only initialize, skip tools/list.
@@ -131,7 +88,15 @@ pub async fn run_mcp_sync_cycle(
 ) -> Result<McpClient, String> {
     let client = connect_and_discover(cfg, app).await?;
     match mcp_sync::run_mcp_sync(&client, &cfg.workspace_hint, cfg.sync_mode).await {
-        Ok(items) => {
+        Ok(mut items) => {
+            if cfg.sync_mode == FeishuSyncMode::Issues {
+                mcp_sync::enrich_issues_with_operators(
+                    &client,
+                    &cfg.workspace_hint,
+                    &mut items,
+                )
+                .await;
+            }
             let count = items.len();
             let new_item_ids: Vec<String> = {
                 let mut daemon = state.write().await;
@@ -209,7 +174,10 @@ pub(crate) async fn update_mcp_state(
     app: &AppHandle,
 ) {
     let project_name = fetch_project_name(client, &cfg.workspace_hint).await;
-    let team_members = fetch_team_members(client, &cfg.workspace_hint).await;
+    let team_members = {
+        let daemon = state.read().await;
+        issue_operator::derive_team_members(&daemon.feishu_project_store.items)
+    };
     let now = chrono::Utc::now().timestamp_millis() as u64;
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {

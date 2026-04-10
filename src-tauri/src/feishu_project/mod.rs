@@ -1,5 +1,6 @@
 pub mod api;
 pub mod config;
+pub mod issue_operator;
 pub mod mcp_client;
 pub mod mcp_http;
 pub mod mcp_sync;
