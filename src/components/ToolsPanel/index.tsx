@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { TelegramPanel } from "@/components/AgentStatus/TelegramPanel";
 import { BugInboxPanel } from "@/components/BugInboxPanel";
+import { TelegramIcon, FeishuIcon } from "@/components/AgentStatus/BrandIcons";
 import { cn } from "@/lib/utils";
 
 interface DisclosureSectionProps {
   title: string;
+  icon?: ReactNode;
   defaultOpen: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function DisclosureSection({
   title,
+  icon,
   defaultOpen,
   children,
 }: DisclosureSectionProps) {
@@ -30,6 +33,7 @@ function DisclosureSection({
             !open && "-rotate-90",
           )}
         />
+        {icon}
         {title}
       </button>
       {open && <div className="px-4 pb-3">{children}</div>}
@@ -40,10 +44,18 @@ function DisclosureSection({
 export function ToolsPanel() {
   return (
     <section className="flex h-full flex-col -mx-4 -my-4 overflow-y-auto">
-      <DisclosureSection title="Telegram" defaultOpen={false}>
+      <DisclosureSection
+        title="Telegram"
+        icon={<TelegramIcon className="size-3.5 shrink-0" />}
+        defaultOpen={false}
+      >
         <TelegramPanel />
       </DisclosureSection>
-      <DisclosureSection title="Feishu Project" defaultOpen>
+      <DisclosureSection
+        title="飞书"
+        icon={<FeishuIcon className="size-3.5 shrink-0" />}
+        defaultOpen
+      >
         <BugInboxPanel />
       </DisclosureSection>
     </section>
