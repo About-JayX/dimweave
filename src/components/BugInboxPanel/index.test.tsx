@@ -137,6 +137,85 @@ describe("BugInboxPanel", () => {
     expect(html).toContain('aria-label="Actions"');
   });
 
+  test("IssueList renders sentinel when items present and hasMore", async () => {
+    installTauriStub();
+    const { IssueList } = await import("./IssueList");
+    const html = renderToStaticMarkup(
+      <IssueList
+        items={[
+          {
+            recordId: "p_10",
+            projectKey: "p",
+            workItemId: "10",
+            workItemTypeKey: "bug",
+            title: "Bug A",
+            updatedAt: 0,
+            sourceUrl: "",
+            rawSnapshotRef: "",
+            ignored: false,
+            lastIngress: "mcp",
+          },
+        ]}
+        hasMore={true}
+        loadingMore={false}
+        onLoadMore={() => {}}
+        onIgnore={() => {}}
+        onStartHandling={() => {}}
+      />,
+    );
+    // Sentinel div should be present so IntersectionObserver can attach
+    expect(html).toContain('class="h-1"');
+    expect(html).not.toContain("No items");
+  });
+
+  test("IssueList renders no sentinel when items empty even with hasMore", async () => {
+    installTauriStub();
+    const { IssueList } = await import("./IssueList");
+    const html = renderToStaticMarkup(
+      <IssueList
+        items={[]}
+        hasMore={true}
+        onLoadMore={() => {}}
+        onIgnore={() => {}}
+        onStartHandling={() => {}}
+      />,
+    );
+    // Empty list returns "No items" — sentinel not in DOM
+    expect(html).not.toContain('class="h-1"');
+    expect(html).toContain("No items");
+  });
+
+  test("IssueList shows spinner instead of sentinel when loadingMore", async () => {
+    installTauriStub();
+    const { IssueList } = await import("./IssueList");
+    const html = renderToStaticMarkup(
+      <IssueList
+        items={[
+          {
+            recordId: "p_11",
+            projectKey: "p",
+            workItemId: "11",
+            workItemTypeKey: "issue",
+            title: "Bug B",
+            updatedAt: 0,
+            sourceUrl: "",
+            rawSnapshotRef: "",
+            ignored: false,
+            lastIngress: "mcp",
+          },
+        ]}
+        hasMore={true}
+        loadingMore={true}
+        onLoadMore={() => {}}
+        onIgnore={() => {}}
+        onStartHandling={() => {}}
+      />,
+    );
+    // Spinner replaces sentinel while loading more
+    expect(html).not.toContain('class="h-1"');
+    expect(html).toContain("animate-spin");
+  });
+
   test("view-model activeItemCount excludes ignored items", async () => {
     const { activeItemCount } = await import("./view-model");
 

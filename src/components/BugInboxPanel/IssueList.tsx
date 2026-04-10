@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import type { FeishuProjectInboxItem } from "@/stores/feishu-project-store";
 import {
   ActionMenu,
@@ -63,12 +63,11 @@ export function IssueList({
   onIgnore,
   onStartHandling,
 }: IssueListProps) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [sentinelNode, setSentinelNode] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!hasMore || !onLoadMore || loadingMore) return;
-    const el = sentinelRef.current;
-    if (!el) return;
+    if (!sentinelNode) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -78,9 +77,9 @@ export function IssueList({
       },
       { threshold: 0 },
     );
-    observer.observe(el);
+    observer.observe(sentinelNode);
     return () => observer.disconnect();
-  }, [hasMore, onLoadMore, loadingMore]);
+  }, [hasMore, onLoadMore, loadingMore, sentinelNode]);
 
   if (loading) {
     return <Skeleton />;
@@ -157,7 +156,7 @@ export function IssueList({
           {loadingMore ? (
             <LoadingSpinner />
           ) : (
-            <div ref={sentinelRef} className="h-1" />
+            <div ref={setSentinelNode} className="h-1" />
           )}
         </li>
       )}
