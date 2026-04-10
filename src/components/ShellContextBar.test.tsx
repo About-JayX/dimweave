@@ -138,7 +138,7 @@ describe("ShellContextBar", () => {
     expect(html).toContain("Open approvals");
   });
 
-  test("renders Bug Inbox rail item and badge", async () => {
+  test("renders Tools rail item and badge", async () => {
     installTauriStub();
     const { ShellContextBar } = await import("./ShellContextBar");
     const html = renderToStaticMarkup(
@@ -156,7 +156,8 @@ describe("ShellContextBar", () => {
       />,
     );
 
-    expect(html).toContain("Bug Inbox");
+    expect(html).toContain("Tools");
+    expect(html).not.toContain("Bug Inbox");
     expect(html).toContain("5");
   });
 });

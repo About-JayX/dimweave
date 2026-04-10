@@ -5,7 +5,6 @@ import { selectAgents, selectConnected } from "@/stores/bridge-store/selectors";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
-import { TelegramPanel } from "./TelegramPanel";
 
 export function AgentStatusPanel() {
   const agents = useBridgeStore(selectAgents);
@@ -69,8 +68,6 @@ export function AgentStatusPanel() {
           refreshUsage={refreshUsage}
           providerSession={agents.codex?.providerSession}
         />
-        <TelegramPanel />
-
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",
         ) && (

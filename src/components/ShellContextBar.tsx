@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import {
   AlertTriangle,
   Bot,
-  Bug,
   MessageSquare,
   Moon,
   Sun,
@@ -11,6 +10,7 @@ import {
   SquareRoundCorner,
   TerminalSquare,
   Workflow,
+  Wrench,
 } from "lucide-react";
 import type { RuntimeHealthInfo } from "@/types";
 import type { ShellNavItem } from "./shell-layout-state";
@@ -38,7 +38,7 @@ const NAV_ITEMS: Array<{
   { id: "task", label: "Task context", icon: Workflow },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "approvals", label: "Approvals", icon: AlertTriangle },
-  { id: "bugs", label: "Bug Inbox", icon: Bug },
+  { id: "bugs", label: "Tools", icon: Wrench },
   { id: "logs", label: "Logs", icon: TerminalSquare },
 ];
 

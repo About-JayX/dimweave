@@ -115,15 +115,17 @@ describe("TaskContextPopover", () => {
     expect(html).toContain("No pending approvals.");
   });
 
-  test("renders bugs pane inside the shared shell drawer", async () => {
+  test("renders tools pane inside the shared shell drawer", async () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");
     const html = renderToStaticMarkup(
       <TaskContextPopover activePane="bugs" onClose={() => {}} task={null} />,
     );
 
-    expect(html).toContain("Bug Inbox");
+    expect(html).toContain("Tools");
+    expect(html).toContain("Integrations");
+    expect(html).not.toContain("Bug Inbox");
     expect(html).toContain("Feishu Project");
-    expect(html).toContain("No items in inbox");
+    expect(html).toContain("Telegram");
   });
 });

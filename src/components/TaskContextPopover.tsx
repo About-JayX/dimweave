@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, Bug, Workflow } from "lucide-react";
+import { AlertTriangle, Bot, Workflow, Wrench } from "lucide-react";
 import { AgentStatusPanel } from "./AgentStatus";
-import { BugInboxPanel } from "./BugInboxPanel";
+import { ToolsPanel } from "./ToolsPanel";
 import { TaskPanel } from "./TaskPanel";
 import { PermissionQueue } from "./MessagePanel/PermissionQueue";
 import { useBridgeStore } from "@/stores/bridge-store";
@@ -134,9 +134,9 @@ export function TaskContextPopover({
       icon: AlertTriangle,
     },
     bugs: {
-      eyebrow: "Bug Inbox",
-      title: "Feishu Project",
-      icon: Bug,
+      eyebrow: "Tools",
+      title: "Integrations",
+      icon: Wrench,
     },
   } satisfies Record<
     ShellSidebarPane,
@@ -226,7 +226,7 @@ export function TaskContextPopover({
                 activePane === "bugs" ? "block" : "hidden",
               )}
             >
-              <BugInboxPanel />
+              <ToolsPanel />
             </div>
           )}
         </div>
