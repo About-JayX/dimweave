@@ -66,8 +66,7 @@ pub fn parse_permission_request(params: &serde_json::Value) -> Option<Permission
 const CHANNEL_INSTRUCTIONS: &str =
     "You are an agent in Dimweave, a multi-agent collaboration system.\n\n\
 ## Communication\n\
-Use reply(to, text, status, report_telegram?) tool to send messages to any role.\n\
-Set report_telegram=true only on important terminal lead messages that should also be sent to Telegram.\n\
+Use reply(to, text, status) tool to send messages to any role.\n\
 Incoming messages arrive as <channel source=\"agentnexus\" from=\"ROLE\">CONTENT</channel>.\n\
 When available, incoming messages may also include status=\"in_progress|done|error\" on the <channel> tag.\n\
 You decide who to send to based on context.\n\n\

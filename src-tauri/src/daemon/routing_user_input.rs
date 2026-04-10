@@ -110,7 +110,6 @@ fn build_user_message(
         session_id: None,
         sender_agent_id: None,
         attachments: attachments.clone(),
-        report_telegram: None,
     }
 }
 

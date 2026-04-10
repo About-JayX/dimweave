@@ -54,7 +54,7 @@ fn initialize_result_includes_silence_rules() {
 fn initialize_result_mentions_reply_status_contract() {
     let result = initialize_result("lead", true);
     let instructions = result["instructions"].as_str().unwrap_or_default();
-    assert!(instructions.contains("reply(to, text, status, report_telegram?)"));
+    assert!(instructions.contains("reply(to, text, status)"));
     assert!(instructions.contains("in_progress"));
     assert!(instructions.contains("done"));
     assert!(instructions.contains("error"));
@@ -97,10 +97,10 @@ fn instructions_document_online_agents_query() {
 }
 
 #[test]
-fn channel_instructions_mention_report_telegram_in_reply() {
+fn channel_instructions_do_not_mention_report_telegram() {
     let result = initialize_result("lead", true);
     let instructions = result["instructions"].as_str().unwrap_or_default();
-    assert!(instructions.contains("report_telegram"));
+    assert!(!instructions.contains("report_telegram"));
 }
 
 #[test]

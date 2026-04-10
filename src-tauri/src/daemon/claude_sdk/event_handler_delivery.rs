@@ -44,6 +44,5 @@ pub(super) fn build_direct_sdk_gui_message(
         task_id: None,
         session_id: None,
         sender_agent_id: Some("claude".to_string()),
-        attachments: None, report_telegram: None,
-    })
+        attachments: None,    })
 }

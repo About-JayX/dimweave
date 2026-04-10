@@ -43,8 +43,7 @@ async fn route_to_live_codex_when_offline_claude_shares_role() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Delivered),
@@ -83,8 +82,7 @@ async fn shared_role_both_offline_still_buffers() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Buffered),
@@ -121,8 +119,7 @@ async fn route_to_live_claude_when_offline_codex_shares_role() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Delivered),
@@ -182,8 +179,7 @@ async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
@@ -278,8 +274,7 @@ async fn lead_to_coder_uses_target_coder_session_not_sender_lead_session() {
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
         sender_agent_id: Some("codex".into()),
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Delivered));
@@ -302,8 +297,7 @@ async fn coder_to_lead_uses_target_lead_session_not_sender_coder_session() {
         task_id: Some(task_id),
         session_id: Some(coder_session_id),
         sender_agent_id: Some("claude".into()),
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Delivered));
@@ -359,8 +353,7 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
 
     let outcome = route_message_inner_with_meta(&state, msg).await;
     assert!(matches!(outcome.result, RouteResult::Buffered));

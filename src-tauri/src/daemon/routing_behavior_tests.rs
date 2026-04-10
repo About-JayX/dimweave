@@ -76,8 +76,7 @@ async fn auto_fanout_delivers_to_both_agents() {
             task_id: None,
             session_id: None,
             sender_agent_id: None,
-            attachments: None, report_telegram: None,
-        };
+            attachments: None,        };
         let result = route_message_inner(&state, msg).await;
         assert!(matches!(result, RouteResult::Delivered));
     }
@@ -101,8 +100,7 @@ async fn explicit_user_target_routes_to_gui() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::ToGui));
     assert!(state.read().await.buffered_messages.is_empty());
@@ -124,8 +122,7 @@ async fn invalid_target_is_dropped_not_buffered() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));
     assert!(state.read().await.buffered_messages.is_empty());
@@ -147,8 +144,7 @@ async fn valid_role_offline_is_buffered() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
     assert_eq!(state.read().await.buffered_messages.len(), 1);
@@ -170,8 +166,7 @@ async fn removed_role_target_is_dropped_not_buffered() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));
     assert!(state.read().await.buffered_messages.is_empty());
@@ -192,8 +187,7 @@ fn visible_messages_require_content_or_attachments() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let attachment_only = BridgeMessage {
         id: "msg-attachment".into(),
         from: "coder".into(),
@@ -208,7 +202,6 @@ fn visible_messages_require_content_or_attachments() {
         session_id: None,
         sender_agent_id: None,
         attachments: Some(vec![file_attachment()]),
-        report_telegram: None,
     };
     let empty = BridgeMessage {
         id: "msg-empty".into(),
@@ -223,8 +216,7 @@ fn visible_messages_require_content_or_attachments() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     assert!(is_renderable_message(&visible));
     assert!(is_renderable_message(&attachment_only));
     assert!(!is_renderable_message(&empty));
@@ -245,8 +237,7 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     assert!(should_emit_claude_thinking(
         &msg,
         &RouteResult::Delivered,

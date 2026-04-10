@@ -34,7 +34,7 @@ async fn route_message_with_display(
         for released_msg in effects.released {
             Box::pin(route_message_with_display(state, app, released_msg, false)).await;
         }
-        // Telegram outbound hook — queue report_telegram messages
+        // Telegram outbound hook — queue lead messages for Telegram
         if crate::telegram::report::should_send_telegram_report(&msg) {
             let s = state.read().await;
             if s.telegram_notifications_enabled {

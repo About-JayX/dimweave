@@ -608,8 +608,7 @@ fn observe_task_message_moves_task_to_reviewing_without_gate() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     assert!(s.prepare_task_routing(&coder_done).is_allowed);
     let released = s.observe_task_message(&coder_done);
     assert!(released.is_empty());
@@ -642,8 +641,7 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
 
     let effects = s.observe_task_message_effects(&coder_done);
 
@@ -675,8 +673,7 @@ fn prepare_task_routing_allows_direct_coder_messages() {
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    });
+        attachments: None,    });
 
     assert!(decision.is_allowed);
     assert!(decision.buffer_reason.is_none());
@@ -785,8 +782,7 @@ fn observe_task_message_auto_saves_without_explicit_call() {
         task_id: None,
         session_id: None,
         sender_agent_id: Some("codex".into()),
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     let _ = s.observe_task_message(&coder_done);
 
     // Load from disk WITHOUT calling save_task_graph() — the auto-save

@@ -49,13 +49,6 @@ fn build_reply_message(args: &Value, from: &str) -> Option<BridgeMessage> {
         .as_str()
         .and_then(MessageStatus::parse)
         .unwrap_or(MessageStatus::Done);
-    // Only lead may trigger Telegram reports; strip flag from non-lead senders.
-    let report_telegram = if from == "lead" {
-        args.get("report_telegram").and_then(|v| v.as_bool())
-    } else {
-        None
-    };
-
     Some(BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
@@ -70,7 +63,6 @@ fn build_reply_message(args: &Value, from: &str) -> Option<BridgeMessage> {
         session_id: None,
         sender_agent_id: Some("codex".into()),
         attachments: None,
-        report_telegram,
     })
 }
 
@@ -116,35 +108,20 @@ mod tests {
     use tokio::sync::{mpsc, RwLock};
 
     #[test]
-    fn reply_builder_preserves_status_and_report_telegram_for_lead() {
+    fn reply_builder_preserves_status() {
         let args = serde_json::json!({
             "to": "user",
             "text": "final review result",
-            "status": "error",
-            "report_telegram": true
+            "status": "error"
         });
 
         let msg = build_reply_message(&args, "lead").expect("message");
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Error));
-        assert_eq!(msg.report_telegram, Some(true));
     }
 
     #[test]
-    fn reply_builder_strips_report_telegram_for_coder() {
-        let args = serde_json::json!({
-            "to": "user",
-            "text": "task done",
-            "status": "done",
-            "report_telegram": true
-        });
-
-        let msg = build_reply_message(&args, "coder").expect("message");
-        assert_eq!(msg.report_telegram, None);
-    }
-
-    #[test]
-    fn reply_builder_defaults_status_to_done_and_flag_to_none() {
+    fn reply_builder_defaults_status_to_done() {
         let args = serde_json::json!({
             "to": "coder",
             "text": "take task 2"
@@ -152,7 +129,6 @@ mod tests {
 
         let msg = build_reply_message(&args, "lead").expect("message");
         assert_eq!(msg.status, Some(MessageStatus::Done));
-        assert_eq!(msg.report_telegram, None);
     }
 
     #[test]

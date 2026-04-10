@@ -57,8 +57,7 @@ pub(super) async fn handle_update(
         task_id: None,
         session_id: None,
         sender_agent_id: None,
-        attachments: None, report_telegram: None,
-    };
+        attachments: None,    };
     routing::route_message(state, app, msg).await;
 }
 

@@ -3,7 +3,7 @@ use super::{claude_append_system_prompt, claude_system_prompt};
 #[test]
 fn prompt_mentions_reply_status_contract() {
     let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("reply(to, text, status, report_telegram?)"));
+    assert!(prompt.contains("reply(to, text, status)"));
     assert!(prompt.contains("in_progress"));
     assert!(prompt.contains("done"));
     assert!(prompt.contains("error"));
@@ -114,18 +114,10 @@ fn factual_error_correction_still_respects_routing_policy() {
 }
 
 #[test]
-fn claude_lead_prompt_documents_report_telegram_usage() {
+fn claude_prompt_reply_tool_does_not_mention_report_telegram() {
     let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("report_telegram"));
-    assert!(prompt.contains("plan drafted"));
-    assert!(prompt.contains("final acceptance result"));
-    assert!(prompt.contains("blocked_stage_complete result"));
-}
-
-#[test]
-fn claude_prompt_mentions_report_telegram_in_reply_tool() {
-    let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("reply(to, text, status, report_telegram?)"));
+    assert!(!prompt.contains("reply(to, text, status, report_telegram?)"));
+    assert!(prompt.contains("reply(to, text, status)"));
 }
 
 #[test]

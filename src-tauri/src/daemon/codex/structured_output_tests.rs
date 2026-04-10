@@ -119,17 +119,11 @@ fn reasoning_boundary_separates_sections() {
 }
 
 #[test]
-fn parses_report_telegram_flag() {
+fn ignores_unknown_report_telegram_field_gracefully() {
     let parsed = parse_structured_output(
         r#"{"message":"done","send_to":"lead","status":"done","report_telegram":true}"#,
     )
     .unwrap();
-    assert!(parsed.report_telegram);
-}
-
-#[test]
-fn report_telegram_defaults_to_false_when_missing() {
-    let parsed =
-        parse_structured_output(r#"{"message":"done","send_to":"lead","status":"done"}"#).unwrap();
-    assert!(!parsed.report_telegram);
+    assert_eq!(parsed.message, "done");
+    assert_eq!(parsed.status.as_str(), "done");
 }

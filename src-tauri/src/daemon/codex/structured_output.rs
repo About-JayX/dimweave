@@ -11,7 +11,6 @@ pub(super) struct ParsedOutput {
     pub(super) message: String,
     pub(super) send_to: Option<String>,
     pub(super) status: MessageStatus,
-    pub(super) report_telegram: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,17 +122,12 @@ pub(super) fn parse_structured_output(raw: &str) -> Result<ParsedOutput, Structu
             message: v["message"].as_str().unwrap_or(raw).to_string(),
             send_to: v["send_to"].as_str().map(str::to_string),
             status,
-            report_telegram: v
-                .get("report_telegram")
-                .and_then(|value| value.as_bool())
-                .unwrap_or(false),
         })
     } else {
         Ok(ParsedOutput {
             message: raw.to_string(),
             send_to: None,
             status: MessageStatus::Done,
-            report_telegram: false,
         })
     }
 }

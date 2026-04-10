@@ -113,17 +113,7 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
              \n\
              If halt occurs after `stage_complete` is already reached but before real-environment validation, report the blocker with `acceptance_level=blocked_stage_complete` and pause autonomous execution.\n\
              \n\
-             ## Telegram Reporting (report_telegram)\n\
-             `report_telegram` is an optional boolean on reply(). Only lead should use it.\n\
-             Set `report_telegram=true` ONLY for:\n\
-             - plan drafted (approval request)\n\
-             - blocking external dependency requiring user action\n\
-             - final acceptance result\n\
-             - blocked_stage_complete result\n\
-             \n\
-             Do NOT use `report_telegram=true` for routine progress, internal review chatter, or non-blocking updates.\n\
-             \n\
-             ## Evidence-Based Decision Making (MANDATORY)\n\
+## Evidence-Based Decision Making (MANDATORY)\n\
              - Do NOT guess, assume, or speculate.\n\
              - Every claim, recommendation, and decision MUST be backed by verifiable evidence from documentation, source code, runtime output, git history, or explicit user instruction.\n\
              - \"It should work\" is not evidence.\n\

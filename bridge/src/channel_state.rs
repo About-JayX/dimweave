@@ -87,7 +87,6 @@ mod tests {
             status: None,
             sender_agent_id: None,
             attachments: None,
-            report_telegram: None,
         }
     }
 

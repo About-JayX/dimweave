@@ -136,14 +136,7 @@ fn build_completed_output_message(
         "user"
     };
 
-    let mut msg = build_msg_with_status(role_id, target, &parsed.message, parsed.status);
-    // Only lead may trigger Telegram reports; strip flag from non-lead senders.
-    msg.report_telegram = if role_id == "lead" && parsed.report_telegram {
-        Some(true)
-    } else {
-        None
-    };
-    Some(msg)
+    Some(build_msg_with_status(role_id, target, &parsed.message, parsed.status))
 }
 
 async fn handle_completed_agent_message(
@@ -347,7 +340,6 @@ fn build_msg_with_status(
         session_id: None,
         sender_agent_id: Some("codex".into()),
         attachments: None,
-        report_telegram: None,
     }
 }
 
@@ -357,32 +349,16 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn completed_output_builder_preserves_report_flag_for_lead() {
+    fn completed_output_builder_routes_to_schema_target() {
         let parsed = ParsedOutput {
             message: "final review result".into(),
             send_to: Some("user".into()),
             status: MessageStatus::Done,
-            report_telegram: true,
         };
 
         let msg = build_completed_output_message("lead", &parsed, true).expect("message");
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
-        assert_eq!(msg.report_telegram, Some(true));
-    }
-
-    #[test]
-    fn completed_output_builder_strips_report_flag_for_coder() {
-        let parsed = ParsedOutput {
-            message: "task done".into(),
-            send_to: Some("user".into()),
-            status: MessageStatus::Done,
-            report_telegram: true,
-        };
-
-        let msg = build_completed_output_message("coder", &parsed, true).expect("message");
-        assert_eq!(msg.to, "user");
-        assert_eq!(msg.report_telegram, None);
     }
 
     #[test]
@@ -391,12 +367,10 @@ mod tests {
             message: "final review result".into(),
             send_to: Some("reviewer".into()),
             status: MessageStatus::Done,
-            report_telegram: true,
         };
 
         let msg = build_completed_output_message("lead", &parsed, true).expect("message");
         assert_eq!(msg.to, "user");
-        assert_eq!(msg.report_telegram, Some(true));
     }
 
     #[test]
@@ -405,12 +379,10 @@ mod tests {
             message: "status update".into(),
             send_to: Some("lead".into()),
             status: MessageStatus::InProgress,
-            report_telegram: false,
         };
 
         let msg = build_completed_output_message("coder", &parsed, false).expect("message");
         assert_eq!(msg.to, "user");
-        assert_eq!(msg.report_telegram, None);
     }
 
     #[test]
@@ -419,7 +391,6 @@ mod tests {
             message: "   ".into(),
             send_to: Some("user".into()),
             status: MessageStatus::Done,
-            report_telegram: true,
         };
 
         assert!(build_completed_output_message("lead", &parsed, true).is_none());
