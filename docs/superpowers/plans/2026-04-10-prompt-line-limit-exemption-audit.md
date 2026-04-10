@@ -69,8 +69,8 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `docs: exempt prompt protocol files from line limit` | `git diff --check` | 用户于 2026-04-10 明确批准 prompt 不参与 200 行限制，并要求把规则写入文档。 |
-| Task 2 | `docs: audit and accept prompt protocol updates` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config::`; `cargo test --manifest-path bridge/Cargo.toml mcp_protocol`; `git diff --check` | 相关 prompt/protocol 改动来自 `3e2c95a7`、`6a6ad203`、`f42030b6`、`fb7f8db9`、`b9956525` 这条演进链，baseline 与 dirty 验证均为绿色。 |
+| Task 1 | `docs: exempt prompt protocol files from line limit` | `git diff --check` | `2e0d2563` — 用户于 2026-04-10 明确批准 prompt 不参与 200 行限制，并要求把规则写入文档。 |
+| Task 2 | `docs: audit and accept prompt protocol updates` | `cargo build --manifest-path bridge/Cargo.toml`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config::`; `cargo test --manifest-path bridge/Cargo.toml mcp_protocol`; `git diff --check` | `10209c36` — 相关 prompt/protocol 改动来自 `3e2c95a7`、`6a6ad203`、`f42030b6`、`fb7f8db9`、`b9956525` 这条演进链，baseline 与 dirty 验证均为绿色。 |
 
 ---
 
