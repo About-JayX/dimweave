@@ -58,7 +58,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: use assignee for feishu issue inbox` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `cargo check --manifest-path src-tauri/Cargo.toml` | `7888ae33` — final accepted fix after lead-approved revision; builds on candidate `cfe2d862` and adds the missing operator -> `current_status_operator` query-failure fallback while staying within the revised diff budget. Lead re-ran the full verification set successfully on 2026-04-10 and confirmed the change still preserves the runtime-state behavior from `33125abc` while correcting the `current_status_operator` assumption introduced by `ea461155` / `3277d2c8`. |
+| Task 1 | `fix: use assignee for feishu issue inbox` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project::mcp_sync -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `cargo check --manifest-path src-tauri/Cargo.toml` | `cd931f03` — final accepted correction after MCP field-config probe proved `current_status_operator -> 当前负责人 -> multi-user` and disproved `operator` as an `issue` field_key in workspace `manciyuan`. This commit removes the dead `operator` query path introduced by `7888ae33`, keeps the runtime-state behavior from `33125abc`, and was re-verified by lead on 2026-04-10 with the full required command set. |
 
 ---
 
