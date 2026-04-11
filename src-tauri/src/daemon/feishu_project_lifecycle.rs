@@ -219,6 +219,20 @@ pub async fn load_more_filtered(
     Ok(count)
 }
 
+/// Write fetched filter options into daemon state.
+/// Materializes runtime from config if absent, so options are never silently dropped.
+pub(crate) fn apply_filter_options(
+    d: &mut crate::daemon::state::DaemonState,
+    status_options: Vec<String>,
+    assignee_options: Vec<String>,
+) {
+    let rs = d.feishu_project_runtime.get_or_insert_with(|| {
+        crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&load_cfg())
+    });
+    rs.status_options = status_options;
+    rs.assignee_options = assignee_options;
+}
+
 /// Fetch filter options (status labels + assignee names from team membership).
 pub async fn fetch_filter_options(
     state: &SharedState,
@@ -237,9 +251,8 @@ pub async fn fetch_filter_options(
     let assignee_options = assignees.unwrap_or_default();
     {
         let mut d = state.write().await;
-        if let Some(rs) = &mut d.feishu_project_runtime {
-            rs.status_options = status_options;
-            rs.assignee_options = assignee_options;
+        apply_filter_options(&mut d, status_options, assignee_options);
+        if let Some(rs) = &d.feishu_project_runtime {
             gui::emit_feishu_project_state(app, rs);
         }
     }

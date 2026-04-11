@@ -251,6 +251,32 @@ fn from_config_initializes_empty_filter_options() {
 }
 
 #[tokio::test]
+async fn filter_options_hydrate_when_runtime_absent() {
+    // Simulates the race: feishu_project_runtime is None when filter options arrive.
+    let ds = crate::daemon::state::DaemonState::new();
+    assert!(ds.feishu_project_runtime.is_none());
+    let state = shared(ds);
+
+    {
+        let mut d = state.write().await;
+        apply_filter_options(
+            &mut d,
+            vec!["处理中".into(), "已关闭".into()],
+            vec!["Alice".into()],
+        );
+    }
+
+    let d = state.read().await;
+    assert!(
+        d.feishu_project_runtime.is_some(),
+        "runtime should be materialized by filter-option hydration"
+    );
+    let rs = d.feishu_project_runtime.as_ref().unwrap();
+    assert_eq!(rs.status_options, vec!["处理中", "已关闭"]);
+    assert_eq!(rs.assignee_options, vec!["Alice"]);
+}
+
+#[tokio::test]
 async fn cursor_resets_when_filter_changes() {
     use crate::feishu_project::issue_query::IssueQueryCursor;
     use crate::feishu_project::types::IssueFilter;

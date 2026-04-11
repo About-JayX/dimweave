@@ -26,9 +26,10 @@ export function BugInboxPanel() {
   const startHandling = useFeishuProjectStore((s) => s.startHandling);
 
   useEffect(() => {
-    void fetchState();
     void fetchItems();
-    void fetchFilterOptions();
+    // fetchState must complete before fetchFilterOptions so that backend
+    // runtime state exists when filter options are written.
+    void fetchState().then(() => fetchFilterOptions());
   }, [fetchState, fetchItems, fetchFilterOptions]);
 
   const currentMode: FeishuSyncMode = runtimeState?.syncMode ?? "todo";

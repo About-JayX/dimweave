@@ -294,6 +294,20 @@ describe("BugInboxPanel", () => {
     expect(html).toContain("处理中");
   });
 
+  test("fetchState must complete before fetchFilterOptions for reliable hydration", async () => {
+    installTauriStub();
+    const mod = await import("@/stores/feishu-project-store");
+    const store = mod.useFeishuProjectStore;
+    // Ensure store starts clean
+    store.setState({ runtimeState: null });
+
+    // Sequential: fetchState first, then fetchFilterOptions
+    await store.getState().fetchState();
+    const afterState = store.getState();
+    expect(afterState.runtimeState).toBeTruthy();
+    expect(afterState.runtimeState?.enabled).toBe(true);
+  });
+
   test("store interface exposes statusOptions and assigneeOptions", async () => {
     installTauriStub();
     const mod = await import("@/stores/feishu-project-store");
