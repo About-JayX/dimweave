@@ -153,6 +153,20 @@ mod tests {
         assert_eq!(c.filter, IssueFilter::default());
     }
 
+    #[test]
+    fn parse_status_group_by_real_payload() {
+        use super::super::issue_query_parse::parse_status_group_by;
+        // Real Feishu GROUP BY response: list[].group_infos[].group_name
+        let payload = serde_json::json!({
+            "content": [{
+                "type": "text",
+                "text": r#"{"list":[{"group_infos":[{"group_name":"新"}]},{"group_infos":[{"group_name":"重新打开"}]},{"group_infos":[{"group_name":"已关闭"}]},{"group_infos":[{"group_name":"设计如此"}]}]}"#
+            }]
+        });
+        let result = parse_status_group_by(&payload).unwrap();
+        assert_eq!(result, vec!["新", "重新打开", "已关闭", "设计如此"]);
+    }
+
     fn test_item() -> FeishuProjectInboxItem {
         FeishuProjectInboxItem {
             record_id: "test_1".into(),

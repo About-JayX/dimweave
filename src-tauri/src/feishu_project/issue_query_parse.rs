@@ -115,6 +115,9 @@ fn parse_mql_item(raw: &Value, project: &str) -> Option<FeishuProjectInboxItem> 
 }
 
 /// Parse status GROUP BY response into distinct status labels.
+///
+/// Real Feishu GROUP BY responses use `list[].group_infos[].group_name`,
+/// NOT the standard MQL `data.*.moql_field_list` shape.
 pub(crate) fn parse_status_group_by(
     result: &Value,
 ) -> Result<Vec<String>, String> {
@@ -122,26 +125,15 @@ pub(crate) fn parse_status_group_by(
         .ok_or_else(|| "status GROUP BY: missing text content".to_string())?;
     let parsed: Value =
         serde_json::from_str(&text).map_err(|e| format!("status GROUP BY: bad JSON: {e}"))?;
-    let data = parsed.get("data").and_then(|d| d.as_object());
-    let Some(data) = data else {
-        return Ok(Vec::new());
-    };
     let mut statuses = Vec::new();
-    for (_gid, items) in data {
-        if let Some(arr) = items.as_array() {
-            for item in arr {
-                if let Some(fields) = item.get("moql_field_list").and_then(|f| f.as_array()) {
-                    for f in fields {
-                        let key = f.get("key").and_then(|k| k.as_str()).unwrap_or("");
-                        if key == "work_item_status" {
-                            if let Some(label) = f
-                                .pointer("/value/key_label_value/label")
-                                .and_then(|v| v.as_str())
-                            {
-                                if !label.is_empty() && !statuses.contains(&label.to_string()) {
-                                    statuses.push(label.to_string());
-                                }
-                            }
+    // Real payload: { "list": [ { "group_infos": [ { "group_name": "新" } ] }, ... ] }
+    if let Some(list) = parsed.get("list").and_then(|l| l.as_array()) {
+        for row in list {
+            if let Some(groups) = row.get("group_infos").and_then(|g| g.as_array()) {
+                for gi in groups {
+                    if let Some(name) = gi.get("group_name").and_then(|n| n.as_str()) {
+                        if !name.is_empty() && !statuses.contains(&name.to_string()) {
+                            statuses.push(name.to_string());
                         }
                     }
                 }
