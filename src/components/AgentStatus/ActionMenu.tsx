@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 export interface ActionMenuItem {
   label: string;
   danger?: boolean;
+  active?: boolean;
   onClick: () => void;
 }
 
@@ -81,7 +82,7 @@ export function ActionMenu({
             {items.map((item) => (
               <button
                 key={item.label}
-                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-muted/40 ${item.danger ? "text-rose-400" : "text-popover-foreground"}`}
+                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-muted/40 ${item.danger ? "text-rose-400" : item.active ? "bg-muted/30 font-medium text-foreground" : "text-popover-foreground"}`}
                 onClick={() => {
                   item.onClick();
                   setOpen(false);

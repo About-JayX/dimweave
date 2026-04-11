@@ -41,6 +41,36 @@ function DropdownTrigger({ label }: { label: string }) {
   );
 }
 
+export function buildStatusMenu(
+  options: string[],
+  selected: string,
+  onChange: (s: string) => void,
+): ActionMenuItem[] {
+  return [
+    ...(selected ? [{ label: "全部状态", onClick: () => onChange("") }] : []),
+    ...options.map((s) => ({
+      label: s,
+      active: s === selected,
+      onClick: () => onChange(s),
+    })),
+  ];
+}
+
+export function buildAssigneeMenu(
+  members: string[],
+  selected: string,
+  onChange: (a: string) => void,
+): ActionMenuItem[] {
+  return [
+    ...(selected ? [{ label: "全部经办人", onClick: () => onChange("") }] : []),
+    ...members.map((a) => ({
+      label: a,
+      active: a === selected,
+      onClick: () => onChange(a),
+    })),
+  ];
+}
+
 export function SyncModeNav({
   className,
   value,
@@ -64,29 +94,9 @@ export function SyncModeNav({
       },
     }));
 
-  const assigneeMenu: ActionMenuItem[] = [
-    ...(assigneeFilter
-      ? [{ label: "全部经办人", onClick: () => onAssigneeChange("") }]
-      : []),
-    ...teamMembers
-      .filter((a) => a !== assigneeFilter)
-      .map((a) => ({
-        label: a,
-        onClick: () => onAssigneeChange(a),
-      })),
-  ];
+  const assigneeMenu = buildAssigneeMenu(teamMembers, assigneeFilter, onAssigneeChange);
 
-  const statusMenu: ActionMenuItem[] = [
-    ...(statusFilter
-      ? [{ label: "全部状态", onClick: () => onStatusChange?.("") }]
-      : []),
-    ...statusOptions
-      .filter((s) => s !== statusFilter)
-      .map((s) => ({
-        label: s,
-        onClick: () => onStatusChange?.(s),
-      })),
-  ];
+  const statusMenu = buildStatusMenu(statusOptions, statusFilter, onStatusChange ?? (() => {}));
 
   return (
     <div className={`flex items-center gap-1.5 ${className ?? ""}`}>

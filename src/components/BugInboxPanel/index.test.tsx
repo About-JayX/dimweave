@@ -385,6 +385,35 @@ describe("BugInboxPanel", () => {
     expect(state).toHaveProperty("fetchFilterOptions");
   });
 
+  test("status menu keeps selected option and marks it active", async () => {
+    const { buildStatusMenu } = await import("./SyncModeNav");
+    const menu = buildStatusMenu(["处理中", "已关闭"], "处理中", () => {});
+    // Selected option must still be in the menu, not filtered out
+    expect(menu.find((i: any) => i.label === "处理中")).toBeTruthy();
+    // Selected option must be marked active
+    expect(menu.find((i: any) => i.label === "处理中")?.active).toBe(true);
+    // Non-selected option must not be active
+    expect(menu.find((i: any) => i.label === "已关闭")?.active).toBeFalsy();
+    // Reset entry appears when filter is set
+    expect(menu[0]?.label).toBe("全部状态");
+  });
+
+  test("assignee menu keeps selected option and marks it active", async () => {
+    const { buildAssigneeMenu } = await import("./SyncModeNav");
+    const menu = buildAssigneeMenu(["Alice", "Bob"], "Alice", () => {});
+    expect(menu.find((i: any) => i.label === "Alice")).toBeTruthy();
+    expect(menu.find((i: any) => i.label === "Alice")?.active).toBe(true);
+    expect(menu.find((i: any) => i.label === "Bob")?.active).toBeFalsy();
+    expect(menu[0]?.label).toBe("全部经办人");
+  });
+
+  test("status menu omits reset entry when no filter active", async () => {
+    const { buildStatusMenu } = await import("./SyncModeNav");
+    const menu = buildStatusMenu(["处理中", "已关闭"], "", () => {});
+    expect(menu[0]?.label).not.toBe("全部状态");
+    expect(menu.length).toBe(2);
+  });
+
   test("assignee dropdown uses assigneeOptions from runtime state", async () => {
     installTauriStub();
     const mod = await import("@/stores/feishu-project-store");
