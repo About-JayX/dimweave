@@ -243,6 +243,34 @@ fn disable_runtime_state_has_no_stale_token_label() {
 }
 
 #[test]
+fn preserve_filter_options_carries_forward_existing() {
+    let prev = FeishuProjectRuntimeState {
+        status_options: vec!["处理中".into(), "已关闭".into()],
+        assignee_options: vec!["Alice".into(), "Bob".into()],
+        ..Default::default()
+    };
+    let cfg = existing_config();
+    let mut target = FeishuProjectRuntimeState::from_config(&cfg);
+    assert!(target.status_options.is_empty(), "from_config should start empty");
+
+    crate::feishu_project::runtime::preserve_filter_options(Some(&prev), &mut target);
+
+    assert_eq!(target.status_options, vec!["处理中", "已关闭"]);
+    assert_eq!(target.assignee_options, vec!["Alice", "Bob"]);
+}
+
+#[test]
+fn preserve_filter_options_noop_when_no_previous() {
+    let cfg = existing_config();
+    let mut target = FeishuProjectRuntimeState::from_config(&cfg);
+
+    crate::feishu_project::runtime::preserve_filter_options(None, &mut target);
+
+    assert!(target.status_options.is_empty());
+    assert!(target.assignee_options.is_empty());
+}
+
+#[test]
 fn from_config_initializes_empty_filter_options() {
     let cfg = existing_config();
     let rs = FeishuProjectRuntimeState::from_config(&cfg);

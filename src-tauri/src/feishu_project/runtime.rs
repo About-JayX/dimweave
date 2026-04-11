@@ -166,6 +166,19 @@ pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
     gui::emit_feishu_project_items(app, &store.items);
 }
 
+/// Carry forward existing filter options into a freshly rebuilt runtime state.
+/// Called before replacing `feishu_project_runtime` so that options fetched by
+/// `fetch_filter_options` survive sync/error rebuilds.
+pub(crate) fn preserve_filter_options(
+    prev: Option<&super::types::FeishuProjectRuntimeState>,
+    target: &mut super::types::FeishuProjectRuntimeState,
+) {
+    if let Some(prev) = prev {
+        target.status_options.clone_from(&prev.status_options);
+        target.assignee_options.clone_from(&prev.assignee_options);
+    }
+}
+
 pub(crate) async fn update_mcp_state(
     cfg: &FeishuProjectConfig,
     client: &McpClient,
@@ -193,7 +206,11 @@ pub(crate) async fn update_mcp_state(
     rs.discovered_tool_count = client.catalog.tool_count();
     rs.last_sync_at = Some(now);
     rs.last_error = error;
-    state.write().await.feishu_project_runtime = Some(rs.clone());
+    {
+        let mut d = state.write().await;
+        preserve_filter_options(d.feishu_project_runtime.as_ref(), &mut rs);
+        d.feishu_project_runtime = Some(rs.clone());
+    }
     gui::emit_feishu_project_state(app, &rs);
 }
 
@@ -212,6 +229,10 @@ async fn update_mcp_state_error(
     let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
     rs.last_error = Some(error.to_string());
     rs.mcp_status = super::types::McpConnectionStatus::Error;
-    state.write().await.feishu_project_runtime = Some(rs.clone());
+    {
+        let mut d = state.write().await;
+        preserve_filter_options(d.feishu_project_runtime.as_ref(), &mut rs);
+        d.feishu_project_runtime = Some(rs.clone());
+    }
     gui::emit_feishu_project_state(app, &rs);
 }
