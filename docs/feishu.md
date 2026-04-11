@@ -303,6 +303,24 @@
 | name_cn | string | 中文名 |
 | name_en | string | 英文名 |
 
+### Dimweave 负责人下拉：单 team 优化
+
+当前实现用项目 team 成员代替 MQL `GROUP BY current_status_operator`（后者只返回 top-N 子集）。
+
+**调用链（3 次 MCP tool call）：**
+
+1. `list_project_team(project_key)` → 解析 `data[].{name, team_id}`
+2. 选择与项目名后缀匹配的单个 team（project name 通过 `--` 分割后缀，匹配 team name 前缀）
+3. `list_team_members(team_id, page_size=200)` → 解析 `members[].user_key`
+4. `search_user_info(user_keys)` → 解析顶层数组 `[].name_cn`
+
+**真实响应结构注意：**
+
+- `list_team_members` 顶层字段是 `members`（不是 `data`）
+- `search_user_info` 返回顶层 JSON 数组（不是 `{data: [...]}`）
+
+如果没有匹配的 team（项目名没有 `--` 分隔符，或无 team 前缀匹配），返回空列表。
+
 ### RoleOwner（角色负责人）
 
 | 字段 | 类型 | 说明 |

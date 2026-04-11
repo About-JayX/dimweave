@@ -1,49 +1,42 @@
 //! Team-membership-based assignee option discovery.
-//! Uses `list_project_team` → `list_team_members` → `search_user_info`.
+//! Uses `list_project_team` → select single team → `list_team_members` → `search_user_info`.
 
 use super::issue_query_parse::extract_first_text;
 use super::mcp_client::McpClient;
 use serde_json::Value;
 
-/// Fetch team-member names from project team membership APIs.
+/// Fetch team-member display names for the current workspace.
+///
+/// Flow (3 MCP tool calls):
+/// 1. `list_project_team` → parse team names + ids
+/// 2. Select the single team matching `project_name` suffix
+/// 3. `list_team_members(page_size=200)` → user_keys
+/// 4. `search_user_info(user_keys)` → display names
 pub async fn fetch_team_member_names(
     client: &McpClient,
     workspace: &str,
+    project_name: Option<&str>,
 ) -> Result<Vec<String>, String> {
     let teams_args = serde_json::json!({"project_key": workspace});
     let teams_result = client.call_tool("list_project_team", teams_args).await?;
-    let team_ids = parse_team_ids(&teams_result);
-    if team_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut all_user_keys = Vec::new();
-    for team_id in &team_ids {
-        let mut page_token: Option<String> = None;
-        loop {
-            let mut args = serde_json::json!({
-                "project_key": workspace,
-                "team_id": team_id,
-            });
-            if let Some(ref pt) = page_token {
-                args["page_token"] = serde_json::json!(pt);
-            }
-            let Ok(result) = client.call_tool("list_team_members", args).await else {
-                break;
-            };
-            let (keys, next) = parse_team_members_page(&result);
-            all_user_keys.extend(keys);
-            match next {
-                Some(pt) if !pt.is_empty() => page_token = Some(pt),
-                _ => break,
-            }
-        }
-    }
-    if all_user_keys.is_empty() {
+    let teams = parse_teams(&teams_result);
+    let team_id = match select_team(&teams, project_name) {
+        Some(id) => id,
+        None => return Ok(Vec::new()),
+    };
+    let args = serde_json::json!({
+        "project_key": workspace,
+        "team_id": team_id,
+        "page_size": 200,
+    });
+    let result = client.call_tool("list_team_members", args).await?;
+    let user_keys = parse_team_members(&result);
+    if user_keys.is_empty() {
         return Ok(Vec::new());
     }
     let user_args = serde_json::json!({
         "project_key": workspace,
-        "user_keys": all_user_keys,
+        "user_keys": user_keys,
     });
     let Ok(user_result) = client.call_tool("search_user_info", user_args).await else {
         return Ok(Vec::new());
@@ -51,7 +44,8 @@ pub async fn fetch_team_member_names(
     Ok(parse_user_names(&user_result))
 }
 
-fn parse_team_ids(result: &Value) -> Vec<String> {
+/// Parse `list_project_team` response into (name, id) pairs.
+fn parse_teams(result: &Value) -> Vec<(String, String)> {
     let Some(text) = extract_first_text(result) else {
         return Vec::new();
     };
@@ -64,27 +58,42 @@ fn parse_team_ids(result: &Value) -> Vec<String> {
     teams
         .iter()
         .filter_map(|t| {
-            t.get("team_id")
+            let name = t.get("name").and_then(|v| v.as_str())?.to_string();
+            let id = t
+                .get("team_id")
                 .or_else(|| t.get("id"))
                 .and_then(|v| {
                     v.as_str()
                         .map(String::from)
                         .or_else(|| v.as_i64().map(|n| n.to_string()))
-                })
+                })?;
+            Some((name, id))
         })
         .collect()
 }
 
-fn parse_team_members_page(result: &Value) -> (Vec<String>, Option<String>) {
+/// Select the team whose name starts with the project name suffix (after `--`).
+fn select_team(teams: &[(String, String)], project_name: Option<&str>) -> Option<String> {
+    let suffix = project_name?
+        .rsplit_once("--")
+        .map(|(_, s)| s)?;
+    teams
+        .iter()
+        .find(|(name, _)| name.starts_with(suffix))
+        .map(|(_, id)| id.clone())
+}
+
+/// Parse `list_team_members` response: top-level `members` array.
+fn parse_team_members(result: &Value) -> Vec<String> {
     let Some(text) = extract_first_text(result) else {
-        return (Vec::new(), None);
+        return Vec::new();
     };
     let Ok(parsed) = serde_json::from_str::<Value>(&text) else {
-        return (Vec::new(), None);
+        return Vec::new();
     };
-    let keys: Vec<String> = parsed
-        .get("data")
-        .and_then(|d| d.as_array())
+    parsed
+        .get("members")
+        .and_then(|m| m.as_array())
         .unwrap_or(&Vec::new())
         .iter()
         .filter_map(|m| {
@@ -93,15 +102,10 @@ fn parse_team_members_page(result: &Value) -> (Vec<String>, Option<String>) {
                 .and_then(|v| v.as_str())
                 .map(String::from)
         })
-        .collect();
-    let next = parsed
-        .get("page_token")
-        .or_else(|| parsed.get("next_page_token"))
-        .and_then(|v| v.as_str())
-        .map(String::from);
-    (keys, next)
+        .collect()
 }
 
+/// Parse `search_user_info` response: top-level JSON array.
 fn parse_user_names(result: &Value) -> Vec<String> {
     let Some(text) = extract_first_text(result) else {
         return Vec::new();
@@ -109,14 +113,15 @@ fn parse_user_names(result: &Value) -> Vec<String> {
     let Ok(parsed) = serde_json::from_str::<Value>(&text) else {
         return Vec::new();
     };
-    let Some(users) = parsed.get("data").and_then(|d| d.as_array()) else {
-        return Vec::new();
+    let users = match parsed.as_array() {
+        Some(arr) => arr,
+        None => return Vec::new(),
     };
     let mut names: Vec<String> = users
         .iter()
         .filter_map(|u| {
-            u.get("name")
-                .or_else(|| u.get("name_cn"))
+            u.get("name_cn")
+                .or_else(|| u.get("name"))
                 .and_then(|n| n.as_str())
                 .filter(|n| !n.is_empty())
                 .map(String::from)
@@ -125,4 +130,46 @@ fn parse_user_names(result: &Value) -> Vec<String> {
     names.sort();
     names.dedup();
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn select_team_matches_project_suffix() {
+        let teams = vec![
+            ("娱乐站--基座".into(), "team_1".into()),
+            ("UXD".into(), "team_2".into()),
+            ("基座-前端".into(), "team_3".into()),
+        ];
+        let id = select_team(&teams, Some("极光矩阵--娱乐站"));
+        assert_eq!(id, Some("team_1".to_string()));
+    }
+
+    #[test]
+    fn select_team_returns_none_without_match() {
+        let teams = vec![("UXD".into(), "team_2".into())];
+        let id = select_team(&teams, Some("极光矩阵--娱乐站"));
+        assert_eq!(id, None);
+    }
+
+    #[test]
+    fn parse_team_members_uses_members_field() {
+        let payload = json!({
+            "content": [{"type": "text", "text": r#"{"members":[{"user_key":"u1"},{"user_key":"u2"}]}"#}]
+        });
+        let keys = parse_team_members(&payload);
+        assert_eq!(keys, vec!["u1", "u2"]);
+    }
+
+    #[test]
+    fn parse_user_names_from_top_level_array() {
+        let payload = json!({
+            "content": [{"type": "text", "text": r#"[{"name_cn":"橙子"},{"name_cn":"铃铛"}]"#}]
+        });
+        let names = parse_user_names(&payload);
+        assert_eq!(names, vec!["橙子", "铃铛"]);
+    }
 }

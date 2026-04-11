@@ -83,20 +83,6 @@ pub async fn fetch_status_options(
     issue_query_parse::parse_status_group_by(&result)
 }
 
-/// Fetch distinct current-owner names via MQL GROUP BY.
-pub async fn fetch_assignee_options(
-    client: &McpClient,
-    workspace: &str,
-) -> Result<Vec<String>, String> {
-    let mql = format!(
-        "SELECT current_status_operator FROM {ws}.issue GROUP BY current_status_operator",
-        ws = workspace,
-    );
-    let args = serde_json::json!({"project_key": workspace, "mql": mql});
-    let result = client.call_tool("search_by_mql", args).await?;
-    issue_query_parse::parse_assignee_group_by(&result)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,19 +124,6 @@ mod tests {
         assert_eq!(c.raw_offset, 0);
         assert!(!c.exhausted);
         assert_eq!(c.filter, IssueFilter::default());
-    }
-
-    #[test]
-    fn parse_assignee_group_by_real_payload() {
-        use super::super::issue_query_parse::parse_assignee_group_by;
-        let payload = serde_json::json!({
-            "content": [{
-                "type": "text",
-                "text": r#"{"list":[{"group_infos":[{"group_name":"Alice"}]},{"group_infos":[{"group_name":"Bob"}]}]}"#
-            }]
-        });
-        let result = parse_assignee_group_by(&payload).unwrap();
-        assert_eq!(result, vec!["Alice", "Bob"]);
     }
 
     #[test]

@@ -218,7 +218,7 @@ pub(crate) fn apply_filter_options(
     rs.assignee_options = assignee_options;
 }
 
-/// Fetch filter options (status labels + current-owner names via MQL GROUP BY).
+/// Fetch filter options (status labels via MQL GROUP BY + owner names via project team).
 pub async fn fetch_filter_options(
     state: &SharedState,
     app: &AppHandle,
@@ -227,10 +227,15 @@ pub async fn fetch_filter_options(
     if cfg.mcp_user_token.is_empty() {
         return Err("MCP user token not configured".into());
     }
+    let project_name = state.read().await
+        .feishu_project_runtime.as_ref()
+        .and_then(|r| r.project_name.clone());
     let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
     let (statuses, assignees) = tokio::join!(
         crate::feishu_project::issue_query::fetch_status_options(&client, &cfg.workspace_hint),
-        crate::feishu_project::issue_query::fetch_assignee_options(&client, &cfg.workspace_hint),
+        crate::feishu_project::issue_query_team::fetch_team_member_names(
+            &client, &cfg.workspace_hint, project_name.as_deref(),
+        ),
     );
     let status_options = statuses.unwrap_or_default();
     let assignee_options = assignees.unwrap_or_default();
