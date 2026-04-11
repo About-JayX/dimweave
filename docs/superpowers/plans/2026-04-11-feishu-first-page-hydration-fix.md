@@ -60,7 +60,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: gate feishu issues view on first-page hydration` | `bun test src/stores/feishu-project-store.test.ts`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The user requires the entire issues area to remain skeleton-only until first-page runtime state, filter options, and items are all ready. Load-more after first reveal must remain incremental. **Accepted: `aac88ef4`** |
+| Task 1 | `fix: gate feishu issues view on first-page hydration` | `bun test src/stores/feishu-project-store.test.ts`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The user requires the entire issues area to remain skeleton-only until first-page runtime state, filter options, and items are all ready. Load-more after first reveal must remain incremental. **Accepted: `aac88ef4`**, follow-up **`1572ae51`** to keep `SyncModeNav` hidden until the same hydration gate lifts. |
 
 ---
 
