@@ -6,6 +6,14 @@ use crate::daemon::types::{BridgeMessage, MessageStatus};
 pub fn process_message(store: &mut TaskGraphStore, task_id: &str, msg: &BridgeMessage) -> Vec<BridgeMessage> {
     let status = msg.status.unwrap_or(MessageStatus::Done);
 
+    // lead → coder: start implementation (only if not already implementing+)
+    if msg.from == "lead" && msg.to == "coder" {
+        let current = store.get_task(task_id).map(|t| t.status);
+        if matches!(current, Some(TaskStatus::Draft) | Some(TaskStatus::Planning)) {
+            store.update_task_status(task_id, TaskStatus::Implementing);
+        }
+    }
+
     // coder → lead (done): lead reviews next
     if msg.from == "coder" && msg.to == "lead" && status.is_terminal() {
         store.update_task_status(task_id, TaskStatus::Reviewing);

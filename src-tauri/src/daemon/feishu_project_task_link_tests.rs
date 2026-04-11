@@ -1,7 +1,7 @@
 use super::*;
 use crate::daemon::state::DaemonState;
 use crate::feishu_project::types::{FeishuProjectInboxItem, IngressSource};
-use serde_json::json;
+use serde_json::{json, Value};
 
 fn sample_item() -> FeishuProjectInboxItem {
     FeishuProjectInboxItem {
@@ -152,6 +152,56 @@ fn handoff_description_from_rich_text_object() {
     let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
     assert!(msg.content.contains("Steps to reproduce:"));
     assert!(!msg.content.contains("(no description)"));
+}
+
+#[test]
+fn find_linked_bug_locates_item_by_task_id() {
+    let mut state = DaemonState::new();
+    let mut item = sample_item();
+    let task = state.create_and_select_task("/ws", "[bug] Crash");
+    item.linked_task_id = Some(task.task_id.clone());
+    state.feishu_project_store.upsert(item);
+
+    let found = find_linked_bug(&state.feishu_project_store, &task.task_id);
+    assert!(found.is_some());
+    let found = found.unwrap();
+    assert_eq!(found.work_item_id, "1001");
+    assert_eq!(found.project_key, "proj");
+}
+
+#[test]
+fn find_linked_bug_returns_none_when_no_match() {
+    let state = DaemonState::new();
+    assert!(find_linked_bug(&state.feishu_project_store, "nonexistent").is_none());
+}
+
+#[test]
+fn parse_transition_id_finds_processing_state() {
+    let response = json!([
+        {"id": 24640610, "state_name": "待处理", "state_key": "OPEN"},
+        {"id": 24640619, "state_name": "处理中", "state_key": "IN PROGRESS"},
+        {"id": 24640620, "state_name": "已完成", "state_key": "DONE"},
+    ]);
+    let tid = parse_transition_id(&response, "处理中");
+    assert_eq!(tid, Some("24640619".to_string()));
+}
+
+#[test]
+fn parse_transition_id_returns_none_when_missing() {
+    let response = json!([
+        {"id": 24640610, "state_name": "待处理", "state_key": "OPEN"},
+    ]);
+    assert!(parse_transition_id(&response, "处理中").is_none());
+}
+
+#[test]
+fn parse_transition_id_handles_wrapped_data() {
+    // Some responses wrap in {"data": [...]}
+    let response = json!({"data": [
+        {"id": 24640619, "state_name": "处理中", "state_key": "IN PROGRESS"},
+    ]});
+    let tid = parse_transition_id(&response, "处理中");
+    assert_eq!(tid, Some("24640619".to_string()));
 }
 
 #[test]

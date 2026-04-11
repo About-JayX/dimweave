@@ -319,6 +319,160 @@ fn build_handoff_message(
     }
 }
 
+/// Find the linked Feishu bug item by its `linked_task_id`.
+pub fn find_linked_bug(
+    store: &crate::feishu_project::store::FeishuProjectStore,
+    task_id: &str,
+) -> Option<FeishuProjectInboxItem> {
+    store
+        .items
+        .iter()
+        .find(|i| i.linked_task_id.as_deref() == Some(task_id))
+        .cloned()
+}
+
+/// Parse a `get_transitable_states` response to find the transition_id
+/// for the target state name (e.g. "处理中").
+/// Handles both bare array `[{id, state_name, ...}]` and wrapped `{data: [...]}`.
+pub fn parse_transition_id(response: &Value, target_state: &str) -> Option<String> {
+    let arr = response
+        .as_array()
+        .or_else(|| response.get("data").and_then(|d| d.as_array()))?;
+    arr.iter()
+        .find(|t| t.get("state_name").and_then(|s| s.as_str()) == Some(target_state))
+        .and_then(|t| {
+            t.get("id")
+                .and_then(|id| id.as_u64().map(|n| n.to_string()).or_else(|| id.as_str().map(String::from)))
+        })
+}
+
+/// Best-effort: transition a linked Feishu bug to 处理中.
+/// Returns Ok(()) on success or if no linked bug / no transition available.
+/// Returns Err only for unexpected failures (caller should log, not block).
+pub async fn try_transition_to_processing(
+    state: &super::SharedState,
+    app: &AppHandle,
+    task_id: &str,
+) {
+    let item = {
+        let s = state.read().await;
+        find_linked_bug(&s.feishu_project_store, task_id)
+    };
+    let Some(item) = item else { return };
+
+    let cfg = crate::feishu_project::config::default_config_path()
+        .and_then(|p| crate::feishu_project::config::load_config(&p))
+        .unwrap_or_default();
+    if cfg.mcp_user_token.is_empty() {
+        return;
+    }
+
+    let mut client =
+        crate::feishu_project::mcp_client::McpClient::new(&cfg.domain, &cfg.mcp_user_token);
+    if client.connect_lite().await.is_err() {
+        return;
+    }
+
+    // Resolve a user_key from the item's assignee or fall back to config
+    let user_key = resolve_user_key_for_transition(&client, &item).await;
+    let Some(user_key) = user_key else {
+        gui::emit_system_log(
+            app,
+            "warn",
+            &format!(
+                "[FeishuProject] no user_key for transition on {}",
+                item.work_item_id
+            ),
+        );
+        return;
+    };
+
+    // get_transitable_states
+    let args = json!({
+        "project_key": item.project_key,
+        "work_item_id": item.work_item_id,
+        "work_item_type_key": item.work_item_type_key,
+        "user_key": user_key,
+    });
+    let result = match client.call_tool("get_transitable_states", args).await {
+        Ok(r) => r,
+        Err(e) => {
+            gui::emit_system_log(app, "warn", &format!(
+                "[FeishuProject] get_transitable_states failed for {}: {e}",
+                item.work_item_id
+            ));
+            return;
+        }
+    };
+    let text = match first_text(&result) {
+        Some(t) => t,
+        None => return,
+    };
+    let parsed: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let Some(transition_id) = parse_transition_id(&parsed, "处理中") else {
+        gui::emit_system_log(app, "info", &format!(
+            "[FeishuProject] no 处理中 transition available for {}",
+            item.work_item_id
+        ));
+        return;
+    };
+
+    // transition_state
+    let args = json!({
+        "project_key": item.project_key,
+        "work_item_id": item.work_item_id,
+        "transition_id": transition_id,
+    });
+    match client.call_tool("transition_state", args).await {
+        Ok(_) => {
+            gui::emit_system_log(app, "info", &format!(
+                "[FeishuProject] transitioned {} to 处理中",
+                item.work_item_id
+            ));
+        }
+        Err(e) => {
+            gui::emit_system_log(app, "warn", &format!(
+                "[FeishuProject] transition_state failed for {}: {e}",
+                item.work_item_id
+            ));
+        }
+    }
+}
+
+/// Resolve a user_key for the transition call.
+/// Tries to find an operator role member from the linked bug's detail,
+/// falling back to the first team member if available.
+async fn resolve_user_key_for_transition(
+    client: &crate::feishu_project::mcp_client::McpClient,
+    item: &FeishuProjectInboxItem,
+) -> Option<String> {
+    // Try getting detail to find operator user_key
+    let args = json!({
+        "project_key": item.project_key,
+        "work_item_id": item.work_item_id,
+        "fields": ["operator"]
+    });
+    if let Ok(result) = client.call_tool("get_workitem_brief", args).await {
+        if let Some(text) = first_text(&result) {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
+                if let Some(members) = parsed["work_item_attribute"]["role_members"]
+                    .as_array()
+                    .and_then(|arr| arr.iter().find(|r| r["key"] == "operator"))
+                    .and_then(|r| r["members"].as_array())
+                {
+                    if let Some(key) = members.first().and_then(|m| m["user_key"].as_str()) {
+                        return Some(key.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 #[path = "feishu_project_task_link_tests.rs"]
 mod tests;

@@ -24,15 +24,36 @@ async fn route_message_with_display(
         display_in_gui,
     );
     if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
-        let effects = {
+        let (effects, became_implementing) = {
             let mut s = state.write().await;
-            s.observe_task_message_effects(&msg)
+            let before_status = s.active_task_id.as_ref()
+                .and_then(|tid| s.task_graph.get_task(tid))
+                .map(|t| t.status);
+            let eff = s.observe_task_message_effects(&msg);
+            let after_status = s.active_task_id.as_ref()
+                .and_then(|tid| s.task_graph.get_task(tid))
+                .map(|t| t.status);
+            let transitioned = !matches!(before_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing))
+                && matches!(after_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing));
+            (eff, transitioned)
         };
         for event in effects.ui_events {
             event.emit(app);
         }
         for released_msg in effects.released {
             Box::pin(route_message_with_display(state, app, released_msg, false)).await;
+        }
+        // Feishu bug transition hook — best-effort transition to 处理中
+        if became_implementing {
+            if let Some(task_id) = state.read().await.active_task_id.clone() {
+                let state2 = state.clone();
+                let app2 = app.clone();
+                tokio::spawn(async move {
+                    crate::daemon::feishu_project_task_link::try_transition_to_processing(
+                        &state2, &app2, &task_id,
+                    ).await;
+                });
+            }
         }
         // Telegram outbound hook — queue lead messages for Telegram
         if crate::telegram::report::should_send_telegram_report(&msg) {

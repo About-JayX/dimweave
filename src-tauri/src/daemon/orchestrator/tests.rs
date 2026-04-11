@@ -61,6 +61,34 @@ fn unrelated_message_does_not_change_task_state() {
 }
 
 #[test]
+fn lead_to_coder_moves_task_into_implementing() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let tid = task.task_id.clone();
+    // Task starts as Draft — lead→coder should move it to Implementing
+
+    let released = task_flow::process_message(&mut store, &tid, &msg("lead", "coder", MessageStatus::InProgress));
+
+    assert!(released.is_empty());
+    let task = store.get_task(&tid).unwrap();
+    assert_eq!(task.status, TaskStatus::Implementing);
+}
+
+#[test]
+fn lead_to_coder_does_not_regress_from_implementing() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let tid = task.task_id.clone();
+    store.update_task_status(&tid, TaskStatus::Implementing);
+
+    // Second lead→coder message should keep Implementing, not re-transition
+    let released = task_flow::process_message(&mut store, &tid, &msg("lead", "coder", MessageStatus::InProgress));
+
+    assert!(released.is_empty());
+    assert_eq!(store.get_task(&tid).unwrap().status, TaskStatus::Implementing);
+}
+
+#[test]
 fn auto_target_returns_lead_during_review() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task("/ws", "T1");
