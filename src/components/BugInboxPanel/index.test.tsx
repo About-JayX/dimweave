@@ -308,7 +308,7 @@ describe("BugInboxPanel", () => {
     expect(afterState.runtimeState?.enabled).toBe(true);
   });
 
-  test("hydration gate blocks IssueList when not hydrated in issues mode", async () => {
+  test("hydration gate hides both nav and list in issues mode", async () => {
     installTauriStub();
     const mod = await import("@/stores/feishu-project-store");
     const store = mod.useFeishuProjectStore;
@@ -334,11 +334,15 @@ describe("BugInboxPanel", () => {
       state.runtimeState?.tokenLabel || state.runtimeState?.enabled,
     );
     const currentMode = state.runtimeState?.syncMode ?? "todo";
-    // Panel renders skeleton when this condition is true:
-    expect(isConfigured && currentMode === "issues" && !state.issuesHydrated).toBe(true);
+    const issuesNotHydrated = isConfigured && currentMode === "issues" && !state.issuesHydrated;
+    // Both SyncModeNav and IssueList must be hidden; skeleton replaces them:
+    expect(issuesNotHydrated).toBe(true);
+    // SyncModeNav must NOT render when issuesNotHydrated is true:
+    const showNav = isConfigured && !(currentMode === "issues" && !state.issuesHydrated);
+    expect(showNav).toBe(false);
   });
 
-  test("hydration gate allows IssueList after hydration completes", async () => {
+  test("hydration gate shows nav and list after hydration completes", async () => {
     installTauriStub();
     const mod = await import("@/stores/feishu-project-store");
     const store = mod.useFeishuProjectStore;
@@ -361,8 +365,14 @@ describe("BugInboxPanel", () => {
     });
 
     const state = store.getState();
-    // Gate is lifted — IssueList renders:
+    const isConfigured = Boolean(
+      state.runtimeState?.tokenLabel || state.runtimeState?.enabled,
+    );
+    const currentMode = state.runtimeState?.syncMode ?? "todo";
+    // Gate is lifted — both nav and list render:
     expect(state.issuesHydrated).toBe(true);
+    const showNav = isConfigured && !(currentMode === "issues" && !state.issuesHydrated);
+    expect(showNav).toBe(true);
   });
 
   test("store interface exposes statusOptions and assigneeOptions", async () => {

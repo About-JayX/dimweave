@@ -91,19 +91,20 @@ export function BugInboxPanel() {
           onSync={syncNow}
         />
 
-        {isConfigured && (
-          <SyncModeNav
-            value={currentMode}
-            onChange={handleModeChange}
-            disabled={loading}
-            teamMembers={runtimeState?.teamMembers ?? []}
-            assigneeFilter={activeFilter.assignee ?? ""}
-            onAssigneeChange={handleAssigneeChange}
-            statusOptions={runtimeState?.statusOptions ?? []}
-            statusFilter={activeFilter.status ?? ""}
-            onStatusChange={handleStatusChange}
-          />
-        )}
+        {isConfigured &&
+          !(currentMode === "issues" && !issuesHydrated) && (
+            <SyncModeNav
+              value={currentMode}
+              onChange={handleModeChange}
+              disabled={loading}
+              teamMembers={runtimeState?.teamMembers ?? []}
+              assigneeFilter={activeFilter.assignee ?? ""}
+              onAssigneeChange={handleAssigneeChange}
+              statusOptions={runtimeState?.statusOptions ?? []}
+              statusFilter={activeFilter.status ?? ""}
+              onStatusChange={handleStatusChange}
+            />
+          )}
 
         {error && (
           <div className="rounded-lg border border-rose-400/30 bg-rose-400/5 px-3 py-1.5 text-[10px] text-rose-400">
