@@ -58,7 +58,9 @@ fn parse_teams(result: &Value) -> Vec<(String, String)> {
     teams
         .iter()
         .filter_map(|t| {
-            let name = t.get("name").and_then(|v| v.as_str())?.to_string();
+            let name = t.get("team_name")
+                .or_else(|| t.get("name"))
+                .and_then(|v| v.as_str())?.to_string();
             let id = t
                 .get("team_id")
                 .or_else(|| t.get("id"))
@@ -146,6 +148,18 @@ mod tests {
         ];
         let id = select_team(&teams, Some("极光矩阵--娱乐站"));
         assert_eq!(id, Some("team_1".to_string()));
+    }
+
+    #[test]
+    fn parse_teams_reads_real_team_name_field() {
+        let payload = json!({
+            "content": [{"type": "text", "text": r#"{"data":[{"team_id":"7612468934737956047","team_name":"娱乐站--基座"},{"team_id":"123","team_name":"UXD"}]}"#}]
+        });
+        let teams = parse_teams(&payload);
+        assert_eq!(teams.len(), 2);
+        assert_eq!(teams[0].0, "娱乐站--基座");
+        assert_eq!(teams[0].1, "7612468934737956047");
+        assert_eq!(teams[1].0, "UXD");
     }
 
     #[test]
