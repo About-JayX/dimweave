@@ -92,7 +92,12 @@ pub async fn run_mcp_sync_cycle(
             let count = items.len();
             let new_item_ids: Vec<String> = {
                 let mut daemon = state.write().await;
-                daemon.feishu_project_store.sync_replace(items)
+                let ids = daemon.feishu_project_store.sync_replace(items);
+                // Mirror to visible view only when no active filter cursor
+                if daemon.feishu_issue_cursor.is_none() {
+                    daemon.feishu_issue_view = daemon.feishu_project_store.items.clone();
+                }
+                ids
             };
             persist_and_emit(state, app).await;
             gui::emit_system_log(
@@ -151,11 +156,14 @@ pub async fn start_mcp_runtime(
 }
 
 pub(crate) async fn persist_and_emit(state: &SharedState, app: &AppHandle) {
-    let store = state.read().await.feishu_project_store.clone();
+    let (store, view) = {
+        let d = state.read().await;
+        (d.feishu_project_store.clone(), d.feishu_issue_view.clone())
+    };
     if let Ok(path) = store::default_store_path() {
         let _ = store::save_store(&path, &store);
     }
-    gui::emit_feishu_project_items(app, &store.items);
+    gui::emit_feishu_project_items(app, &view);
 }
 
 /// Carry forward existing filter options into a freshly rebuilt runtime state.

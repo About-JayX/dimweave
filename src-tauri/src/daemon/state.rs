@@ -74,6 +74,7 @@ pub struct DaemonState {
     pub telegram_paired_chat_id: Option<i64>,
     pub telegram_notifications_enabled: bool,
     pub feishu_project_store: crate::feishu_project::store::FeishuProjectStore,
+    pub feishu_issue_view: Vec<crate::feishu_project::types::FeishuProjectInboxItem>,
     pub feishu_project_runtime: Option<crate::feishu_project::types::FeishuProjectRuntimeState>,
     pub feishu_issue_cursor: Option<crate::feishu_project::issue_query::IssueQueryCursor>,
 }
@@ -110,6 +111,7 @@ impl Default for DaemonState {
             telegram_paired_chat_id: None,
             telegram_notifications_enabled: false,
             feishu_project_store: crate::feishu_project::store::FeishuProjectStore::default(),
+            feishu_issue_view: Vec::new(),
             feishu_project_runtime: None,
             feishu_issue_cursor: None,
         }

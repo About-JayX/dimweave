@@ -158,31 +158,108 @@ fn make_item(
     }
 }
 
-/// MQL now includes current_status_operator; items parsed with assignee_label
-/// directly from the query — no enrichment needed.
+/// Filter tuple change must replace the visible view, not merge.
 #[tokio::test]
-async fn mql_items_have_assignee_from_current_status_operator() {
+async fn filter_change_replaces_visible_view() {
     let mut ds = crate::daemon::state::DaemonState::new();
-    ds.feishu_project_store.upsert(make_item("1001", Some("Alice")));
+    ds.feishu_issue_view = vec![make_item("old_1", None), make_item("old_2", None)];
     let state = shared(ds);
 
-    // Simulate load-more: items parsed from MQL with current_status_operator
+    // Simulate load_more_filtered with a new filter (cursor resets)
+    let new_items = vec![make_item("new_1", Some("Alice"))];
     {
-        let mut daemon = state.write().await;
-        daemon.feishu_project_store.upsert(make_item("1002", Some("Bob")));
-        daemon.feishu_project_store.upsert(make_item("1003", Some("Charlie")));
+        let mut d = state.write().await;
+        // Filter changed → replace view
+        d.feishu_issue_view = new_items.clone();
+        for item in new_items {
+            d.feishu_project_store.upsert(item);
+        }
     }
 
     let d = state.read().await;
-    let labels: Vec<_> = d
-        .feishu_project_store
-        .items
-        .iter()
-        .filter_map(|i| i.assignee_label.as_deref())
-        .collect();
-    assert!(labels.contains(&"Alice"));
-    assert!(labels.contains(&"Bob"));
-    assert!(labels.contains(&"Charlie"));
+    assert_eq!(d.feishu_issue_view.len(), 1, "view must be replaced, not merged");
+    assert_eq!(d.feishu_issue_view[0].work_item_id, "new_1");
+    // Store may still have old items via sync_replace
+}
+
+/// Same filter load-more must append to the visible view.
+#[tokio::test]
+async fn same_filter_load_more_appends_to_view() {
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_issue_view = vec![make_item("page1", None)];
+    let state = shared(ds);
+
+    let new_items = vec![make_item("page2", Some("Bob"))];
+    {
+        let mut d = state.write().await;
+        d.feishu_issue_view.extend(new_items.clone());
+        for item in new_items {
+            d.feishu_project_store.upsert(item);
+        }
+    }
+
+    let d = state.read().await;
+    assert_eq!(d.feishu_issue_view.len(), 2);
+    assert_eq!(d.feishu_issue_view[0].work_item_id, "page1");
+    assert_eq!(d.feishu_issue_view[1].work_item_id, "page2");
+}
+
+/// Background sync must not overwrite the active filtered view.
+#[tokio::test]
+async fn sync_does_not_clobber_filtered_view() {
+    use crate::feishu_project::issue_query::IssueQueryCursor;
+    use crate::feishu_project::types::IssueFilter;
+
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_issue_view = vec![make_item("filtered_1", Some("Alice"))];
+    ds.feishu_issue_cursor = Some(IssueQueryCursor {
+        filter: IssueFilter { status: Some("处理中".into()), assignee: None },
+        raw_offset: 50,
+        exhausted: false,
+    });
+    let state = shared(ds);
+
+    // Simulate background sync writing to raw cache
+    {
+        let mut d = state.write().await;
+        d.feishu_project_store.sync_replace(vec![
+            make_item("sync_A", None),
+            make_item("sync_B", None),
+        ]);
+        // View must NOT be touched because cursor is active
+        if d.feishu_issue_cursor.is_none() {
+            d.feishu_issue_view = d.feishu_project_store.items.clone();
+        }
+    }
+
+    let d = state.read().await;
+    assert_eq!(d.feishu_issue_view.len(), 1, "filtered view must be untouched");
+    assert_eq!(d.feishu_issue_view[0].work_item_id, "filtered_1");
+    assert_eq!(d.feishu_project_store.items.len(), 2, "cache updated separately");
+}
+
+/// Ignored flag must propagate to both raw cache and visible view.
+#[tokio::test]
+async fn set_ignored_propagates_to_both_stores() {
+    let item = make_item("1001", Some("Alice"));
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_project_store.upsert(item.clone());
+    ds.feishu_issue_view = vec![item];
+    let state = shared(ds);
+
+    {
+        let mut d = state.write().await;
+        d.feishu_project_store.set_ignored("1001", true);
+        if let Some(vi) = d.feishu_issue_view.iter_mut()
+            .find(|i| i.work_item_id == "1001")
+        {
+            vi.ignored = true;
+        }
+    }
+
+    let d = state.read().await;
+    assert!(d.feishu_project_store.find_by_work_item_id("1001").unwrap().ignored);
+    assert!(d.feishu_issue_view[0].ignored);
 }
 
 #[test]

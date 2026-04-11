@@ -78,21 +78,30 @@ fn handoff_message_includes_repair_workflow_instructions() {
 }
 
 #[test]
-fn link_sets_linked_task_id_in_store() {
+fn link_sets_linked_task_id_in_store_and_view() {
     let mut state = DaemonState::new();
-    state.feishu_project_store.upsert(sample_item());
+    let item = sample_item();
+    state.feishu_project_store.upsert(item.clone());
+    state.feishu_issue_view = vec![item];
     let task = state.create_and_select_task("/ws", "[bug] Crash on launch");
-    if let Some(item) = state
+    let tid = task.task_id.clone();
+    if let Some(it) = state
         .feishu_project_store
         .find_by_work_item_id_mut("1001")
     {
-        item.linked_task_id = Some(task.task_id.clone());
+        it.linked_task_id = Some(tid.clone());
+    }
+    if let Some(vi) = state.feishu_issue_view.iter_mut()
+        .find(|i| i.work_item_id == "1001")
+    {
+        vi.linked_task_id = Some(tid.clone());
     }
     let item = state
         .feishu_project_store
         .find_by_work_item_id("1001")
         .unwrap();
-    assert_eq!(item.linked_task_id.as_deref(), Some(task.task_id.as_str()));
+    assert_eq!(item.linked_task_id.as_deref(), Some(tid.as_str()));
+    assert_eq!(state.feishu_issue_view[0].linked_task_id.as_deref(), Some(tid.as_str()));
 }
 
 #[test]

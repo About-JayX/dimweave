@@ -42,13 +42,19 @@ pub async fn start_handling(
     let task_id = {
         let mut daemon = state.write().await;
         let task = daemon.create_and_select_task(&workspace, &title);
+        let tid = task.task_id.clone();
         if let Some(it) = daemon
             .feishu_project_store
             .find_by_work_item_id_mut(work_item_id)
         {
-            it.linked_task_id = Some(task.task_id.clone());
+            it.linked_task_id = Some(tid.clone());
         }
-        task.task_id
+        if let Some(vi) = daemon.feishu_issue_view.iter_mut()
+            .find(|i| i.work_item_id == work_item_id)
+        {
+            vi.linked_task_id = Some(tid.clone());
+        }
+        tid
     };
 
     // Write enriched snapshot and persist store

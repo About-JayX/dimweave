@@ -85,7 +85,7 @@ pub async fn save_and_restart(
 pub async fn list_items(
     state: &SharedState,
 ) -> Vec<crate::feishu_project::types::FeishuProjectInboxItem> {
-    state.read().await.feishu_project_store.items.clone()
+    state.read().await.feishu_issue_view.clone()
 }
 
 /// Trigger an immediate MCP sync cycle (manual "Sync now").
@@ -132,6 +132,8 @@ pub async fn load_more(
         for item in items {
             daemon.feishu_project_store.upsert(item);
         }
+        // Unfiltered load-more: mirror full store to view
+        daemon.feishu_issue_view = daemon.feishu_project_store.items.clone();
     }
     crate::feishu_project::runtime::persist_and_emit(state, app).await;
     gui::emit_system_log(
@@ -171,6 +173,7 @@ pub async fn load_more_filtered(
     if cursor.exhausted {
         return Ok(0);
     }
+    let was_reset = cursor.raw_offset == 0;
     let items = crate::feishu_project::issue_query::fetch_filtered_page(
         &client,
         &cfg.workspace_hint,
@@ -185,8 +188,14 @@ pub async fn load_more_filtered(
     cursor.raw_offset += count as u32;
     {
         let mut daemon = state.write().await;
-        for item in items {
-            daemon.feishu_project_store.upsert(item);
+        for item in &items {
+            daemon.feishu_project_store.upsert(item.clone());
+        }
+        // Filter changed → replace view; same filter → append
+        if was_reset {
+            daemon.feishu_issue_view = items;
+        } else {
+            daemon.feishu_issue_view.extend(items);
         }
         daemon.feishu_issue_cursor = Some(cursor);
     }
@@ -251,7 +260,15 @@ pub async fn set_ignored(
 ) -> Result<(), String> {
     let ok = {
         let mut daemon = state.write().await;
-        daemon.feishu_project_store.set_ignored(work_item_id, ignored)
+        let ok = daemon.feishu_project_store.set_ignored(work_item_id, ignored);
+        if ok {
+            if let Some(vi) = daemon.feishu_issue_view.iter_mut()
+                .find(|i| i.work_item_id == work_item_id)
+            {
+                vi.ignored = ignored;
+            }
+        }
+        ok
     };
     if !ok {
         return Err(format!("work item not found: {work_item_id}"));
@@ -260,8 +277,8 @@ pub async fn set_ignored(
         let store = state.read().await.feishu_project_store.clone();
         let _ = crate::feishu_project::store::save_store(&path, &store);
     }
-    let items = state.read().await.feishu_project_store.items.clone();
-    gui::emit_feishu_project_items(app, &items);
+    let view = state.read().await.feishu_issue_view.clone();
+    gui::emit_feishu_project_items(app, &view);
     Ok(())
 }
 
@@ -269,7 +286,9 @@ pub async fn set_ignored(
 pub async fn hydrate_store(state: &SharedState) {
     if let Ok(path) = crate::feishu_project::store::default_store_path() {
         if let Ok(store) = crate::feishu_project::store::load_store(&path) {
-            state.write().await.feishu_project_store = store;
+            let mut d = state.write().await;
+            d.feishu_issue_view = store.items.clone();
+            d.feishu_project_store = store;
         }
     }
 }
