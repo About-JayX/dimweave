@@ -171,6 +171,12 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set, get) => ({
   fetchFilterOptions: async () => {
     try {
       await feishuApi.fetchFilterOptions();
+      // Re-read runtime state so statusOptions/assigneeOptions are
+      // available immediately, not only after the async event arrives.
+      const rs = await invoke<FeishuProjectRuntimeState>(
+        "feishu_project_get_state",
+      );
+      set({ runtimeState: rs });
     } catch (e) {
       set({ error: String(e) });
     }
