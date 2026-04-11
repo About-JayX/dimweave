@@ -106,15 +106,15 @@ fn mql_user_field(key: &str, name: &str) -> serde_json::Value {
 }
 
 #[test]
-fn parse_mql_item_leaves_assignee_empty() {
-    // MQL no longer sets assignee; enrichment via get_workitem_brief does.
+fn parse_mql_item_extracts_current_status_operator() {
+    // current_status_operator is now parsed directly into assignee_label
     let raw = serde_json::json!({"moql_field_list": [
         {"key": "work_item_id", "value": {"long_value": 200}},
         {"key": "name", "value": {"string_value": "Bug Y"}},
         mql_user_field("current_status_operator", "Bob"),
     ]});
     let item = parse_mql_item(&raw, "proj").unwrap();
-    assert_eq!(item.assignee_label, None);
+    assert_eq!(item.assignee_label.as_deref(), Some("Bob"));
 }
 
 #[test]
@@ -133,6 +133,15 @@ fn parse_mql_item_ignores_unknown_operator_field() {
 fn issues_mql_excludes_bare_operator() {
     let mql = build_issues_mql("PROJ", 0);
     assert!(!mql.contains(" operator"), "MQL must not SELECT bare `operator`: {mql}");
+}
+
+#[test]
+fn issues_mql_selects_current_status_operator() {
+    let mql = build_issues_mql("PROJ", 0);
+    assert!(
+        mql.contains("current_status_operator"),
+        "issue list MQL must SELECT current_status_operator: {mql}",
+    );
 }
 
 // ── detail enrichment args tests ─────────────────────────

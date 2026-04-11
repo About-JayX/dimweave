@@ -120,15 +120,12 @@ pub async fn load_more(
     let offset = state.read().await.feishu_project_store.items.len() as u32;
     let client =
         crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
-    let mut items = crate::feishu_project::mcp_sync::sync_issues_page(
+    let items = crate::feishu_project::mcp_sync::sync_issues_page(
         &client,
         &cfg.workspace_hint,
         offset,
     )
     .await?;
-    crate::feishu_project::mcp_sync::enrich_issues_with_operators(
-        &client, &cfg.workspace_hint, &mut items,
-    ).await;
     let count = items.len();
     {
         let mut daemon = state.write().await;
@@ -137,20 +134,6 @@ pub async fn load_more(
         }
     }
     crate::feishu_project::runtime::persist_and_emit(state, app).await;
-    // Refresh runtime team_members from the full enriched store
-    let team_members = {
-        let d = state.read().await;
-        crate::feishu_project::issue_operator::derive_team_members(
-            &d.feishu_project_store.items,
-        )
-    };
-    {
-        let mut d = state.write().await;
-        if let Some(rs) = &mut d.feishu_project_runtime {
-            rs.team_members = team_members;
-            gui::emit_feishu_project_state(app, rs);
-        }
-    }
     gui::emit_system_log(
         app,
         "info",
@@ -159,8 +142,8 @@ pub async fn load_more(
     Ok(count)
 }
 
-/// Load next page of issues with filters (assignee + status).
-/// Resets cursor when filter changes, progressive scan for assignee filter.
+/// Load next page of issues with filters (status + current owner via MQL).
+/// Resets cursor when filter changes, both filters applied server-side.
 pub async fn load_more_filtered(
     state: &SharedState,
     app: &AppHandle,
@@ -174,7 +157,6 @@ pub async fn load_more_filtered(
         return Err("load_more_filtered only available in issues mode".into());
     }
     let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
-    // Get or reset cursor
     let mut cursor = {
         let d = state.read().await;
         match &d.feishu_issue_cursor {
@@ -186,14 +168,21 @@ pub async fn load_more_filtered(
             },
         }
     };
-    let items = crate::feishu_project::issue_query::scan_assignee_page(
+    if cursor.exhausted {
+        return Ok(0);
+    }
+    let items = crate::feishu_project::issue_query::fetch_filtered_page(
         &client,
         &cfg.workspace_hint,
-        &mut cursor,
-        50,
+        cursor.raw_offset,
+        &filter,
     )
     .await?;
     let count = items.len();
+    if (count as u32) < 50 {
+        cursor.exhausted = true;
+    }
+    cursor.raw_offset += count as u32;
     {
         let mut daemon = state.write().await;
         for item in items {
@@ -202,19 +191,6 @@ pub async fn load_more_filtered(
         daemon.feishu_issue_cursor = Some(cursor);
     }
     crate::feishu_project::runtime::persist_and_emit(state, app).await;
-    let team_members = {
-        let d = state.read().await;
-        crate::feishu_project::issue_operator::derive_team_members(
-            &d.feishu_project_store.items,
-        )
-    };
-    {
-        let mut d = state.write().await;
-        if let Some(rs) = &mut d.feishu_project_runtime {
-            rs.team_members = team_members;
-            gui::emit_feishu_project_state(app, rs);
-        }
-    }
     gui::emit_system_log(app, "info", &format!("[FeishuProject] filtered load: {count} items"));
     Ok(count)
 }
@@ -233,7 +209,7 @@ pub(crate) fn apply_filter_options(
     rs.assignee_options = assignee_options;
 }
 
-/// Fetch filter options (status labels + assignee names from team membership).
+/// Fetch filter options (status labels + current-owner names via MQL GROUP BY).
 pub async fn fetch_filter_options(
     state: &SharedState,
     app: &AppHandle,
@@ -245,7 +221,7 @@ pub async fn fetch_filter_options(
     let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
     let (statuses, assignees) = tokio::join!(
         crate::feishu_project::issue_query::fetch_status_options(&client, &cfg.workspace_hint),
-        crate::feishu_project::issue_query::fetch_team_member_names(&client, &cfg.workspace_hint),
+        crate::feishu_project::issue_query::fetch_assignee_options(&client, &cfg.workspace_hint),
     );
     let status_options = statuses.unwrap_or_default();
     let assignee_options = assignees.unwrap_or_default();

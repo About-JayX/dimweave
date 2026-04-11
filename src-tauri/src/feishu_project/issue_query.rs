@@ -18,14 +18,31 @@ pub struct IssueQueryCursor {
     pub exhausted: bool,
 }
 
-/// Build MQL with optional server-side `work_item_status` filter.
-pub fn build_filtered_mql(workspace: &str, offset: u32, status: Option<&str>) -> String {
-    let where_clause = match status {
-        Some(s) if !s.is_empty() => format!(" WHERE work_item_status = \"{s}\""),
-        _ => String::new(),
+/// Build MQL with optional server-side `work_item_status` + `current_status_operator` filters.
+pub fn build_filtered_mql(
+    workspace: &str,
+    offset: u32,
+    status: Option<&str>,
+    assignee: Option<&str>,
+) -> String {
+    let mut conditions = Vec::new();
+    if let Some(s) = status {
+        if !s.is_empty() {
+            conditions.push(format!("work_item_status = \"{s}\""));
+        }
+    }
+    if let Some(a) = assignee {
+        if !a.is_empty() {
+            conditions.push(format!("current_status_operator IN (\"{a}\")"));
+        }
+    }
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
     };
     format!(
-        "SELECT work_item_id, name, priority, bug_classification \
+        "SELECT work_item_id, name, priority, bug_classification, current_status_operator \
          FROM {ws}.issue{wh} LIMIT {offset}, {limit}",
         ws = workspace,
         wh = where_clause,
@@ -34,59 +51,22 @@ pub fn build_filtered_mql(workspace: &str, offset: u32, status: Option<&str>) ->
     )
 }
 
-/// Fetch one raw page with optional status filter, returning parsed items.
+/// Fetch one page with optional status + assignee filters, returning parsed items.
 pub async fn fetch_filtered_page(
     client: &McpClient,
     workspace: &str,
     offset: u32,
-    status: Option<&str>,
+    filter: &IssueFilter,
 ) -> Result<Vec<FeishuProjectInboxItem>, String> {
-    let mql = build_filtered_mql(workspace, offset, status);
+    let mql = build_filtered_mql(
+        workspace,
+        offset,
+        filter.status.as_deref(),
+        filter.assignee.as_deref(),
+    );
     let args = serde_json::json!({"project_key": workspace, "mql": mql});
     let result = client.call_tool("search_by_mql", args).await?;
     issue_query_parse::parse_mql_items(&result, workspace)
-}
-
-/// Progressive assignee-filtered scan: fetch raw pages starting at `cursor`,
-/// enrich with operator detail, filter by assignee, collect up to one page of
-/// matches, and advance the cursor.
-pub async fn scan_assignee_page(
-    client: &McpClient,
-    workspace: &str,
-    cursor: &mut IssueQueryCursor,
-    target_count: usize,
-) -> Result<Vec<FeishuProjectInboxItem>, String> {
-    let mut collected = Vec::new();
-    while collected.len() < target_count && !cursor.exhausted {
-        let status_filter = cursor.filter.status.as_deref();
-        let mut page =
-            fetch_filtered_page(client, workspace, cursor.raw_offset, status_filter).await?;
-        if (page.len() as u32) < MQL_PAGE_SIZE {
-            cursor.exhausted = true;
-        }
-        cursor.raw_offset += page.len() as u32;
-        super::mcp_sync::enrich_issues_with_operators(client, workspace, &mut page).await;
-        if let Some(ref target) = cursor.filter.assignee {
-            for item in page {
-                if matches_assignee(&item, target) {
-                    collected.push(item);
-                    if collected.len() >= target_count {
-                        break;
-                    }
-                }
-            }
-        } else {
-            collected.extend(page);
-        }
-    }
-    Ok(collected)
-}
-
-fn matches_assignee(item: &FeishuProjectInboxItem, target: &str) -> bool {
-    item.assignee_label
-        .as_ref()
-        .map(|label| label.split(", ").any(|n| n == target))
-        .unwrap_or(false)
 }
 
 /// Fetch distinct status labels via MQL GROUP BY.
@@ -103,8 +83,19 @@ pub async fn fetch_status_options(
     issue_query_parse::parse_status_group_by(&result)
 }
 
-/// Re-export for lifecycle callers.
-pub use super::issue_query_team::fetch_team_member_names;
+/// Fetch distinct current-owner names via MQL GROUP BY.
+pub async fn fetch_assignee_options(
+    client: &McpClient,
+    workspace: &str,
+) -> Result<Vec<String>, String> {
+    let mql = format!(
+        "SELECT current_status_operator FROM {ws}.issue GROUP BY current_status_operator",
+        ws = workspace,
+    );
+    let args = serde_json::json!({"project_key": workspace, "mql": mql});
+    let result = client.call_tool("search_by_mql", args).await?;
+    issue_query_parse::parse_assignee_group_by(&result)
+}
 
 #[cfg(test)]
 mod tests {
@@ -112,37 +103,33 @@ mod tests {
     use super::super::types::IngressSource;
 
     #[test]
-    fn build_filtered_mql_without_status() {
-        let mql = build_filtered_mql("myws", 0, None);
+    fn build_filtered_mql_without_filters() {
+        let mql = build_filtered_mql("myws", 0, None, None);
         assert!(mql.contains("FROM myws.issue LIMIT 0, 50"));
         assert!(!mql.contains("WHERE"));
+        assert!(mql.contains("current_status_operator"));
     }
 
     #[test]
     fn build_filtered_mql_with_status() {
-        let mql = build_filtered_mql("myws", 50, Some("已关闭"));
+        let mql = build_filtered_mql("myws", 50, Some("已关闭"), None);
         assert!(mql.contains("WHERE work_item_status = \"已关闭\""));
         assert!(mql.contains("LIMIT 50, 50"));
     }
 
     #[test]
-    fn matches_assignee_exact() {
-        let item = FeishuProjectInboxItem {
-            assignee_label: Some("Alice, Bob".into()),
-            ..test_item()
-        };
-        assert!(matches_assignee(&item, "Alice"));
-        assert!(matches_assignee(&item, "Bob"));
-        assert!(!matches_assignee(&item, "Charlie"));
+    fn build_filtered_mql_with_assignee() {
+        let mql = build_filtered_mql("myws", 0, None, Some("牛丸"));
+        assert!(mql.contains("current_status_operator IN (\"牛丸\")"));
+        assert!(mql.contains("WHERE"));
     }
 
     #[test]
-    fn matches_assignee_none() {
-        let item = FeishuProjectInboxItem {
-            assignee_label: None,
-            ..test_item()
-        };
-        assert!(!matches_assignee(&item, "Alice"));
+    fn build_filtered_mql_with_status_and_assignee() {
+        let mql = build_filtered_mql("myws", 0, Some("已关闭"), Some("牛丸"));
+        assert!(mql.contains("work_item_status = \"已关闭\""));
+        assert!(mql.contains("current_status_operator IN (\"牛丸\")"));
+        assert!(mql.contains("AND"));
     }
 
     #[test]
@@ -151,6 +138,19 @@ mod tests {
         assert_eq!(c.raw_offset, 0);
         assert!(!c.exhausted);
         assert_eq!(c.filter, IssueFilter::default());
+    }
+
+    #[test]
+    fn parse_assignee_group_by_real_payload() {
+        use super::super::issue_query_parse::parse_assignee_group_by;
+        let payload = serde_json::json!({
+            "content": [{
+                "type": "text",
+                "text": r#"{"list":[{"group_infos":[{"group_name":"Alice"}]},{"group_infos":[{"group_name":"Bob"}]}]}"#
+            }]
+        });
+        let result = parse_assignee_group_by(&payload).unwrap();
+        assert_eq!(result, vec!["Alice", "Bob"]);
     }
 
     #[test]

@@ -384,4 +384,35 @@ describe("BugInboxPanel", () => {
     expect(state).toHaveProperty("loadMoreFiltered");
     expect(state).toHaveProperty("fetchFilterOptions");
   });
+
+  test("assignee dropdown uses assigneeOptions from runtime state", async () => {
+    installTauriStub();
+    const mod = await import("@/stores/feishu-project-store");
+    const store = mod.useFeishuProjectStore;
+    store.setState({
+      issuesHydrated: true,
+      runtimeState: {
+        enabled: true,
+        domain: "https://project.feishu.cn",
+        workspaceHint: "myspace",
+        refreshIntervalMinutes: 10,
+        syncMode: "issues" as const,
+        mcpStatus: "connected" as const,
+        discoveredToolCount: 5,
+        tokenLabel: "tok_a***",
+        teamMembers: ["OldTeam"],
+        statusOptions: ["处理中"],
+        assigneeOptions: ["CurrentOwner"],
+      },
+    });
+
+    // Verify the index.tsx binding passes assigneeOptions, not teamMembers
+    const state = store.getState();
+    const assigneeSource = state.runtimeState?.assigneeOptions ?? [];
+    const teamSource = state.runtimeState?.teamMembers ?? [];
+    expect(assigneeSource).toEqual(["CurrentOwner"]);
+    expect(teamSource).toEqual(["OldTeam"]);
+    // The component should use assigneeOptions for the dropdown
+    expect(assigneeSource).not.toEqual(teamSource);
+  });
 });

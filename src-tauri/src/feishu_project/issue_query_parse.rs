@@ -47,6 +47,7 @@ fn parse_mql_item(raw: &Value, project: &str) -> Option<FeishuProjectInboxItem> 
     let mut priority = String::new();
     let mut classification = String::new();
     let mut work_item_id = String::new();
+    let mut current_owner: Option<String> = None;
     for f in fields {
         let key = f.get("key").and_then(|k| k.as_str()).unwrap_or("");
         match key {
@@ -74,6 +75,9 @@ fn parse_mql_item(raw: &Value, project: &str) -> Option<FeishuProjectInboxItem> 
                     .map(|n| n.to_string())
                     .or_else(|| f["value"]["string_value"].as_str().map(String::from))
                     .unwrap_or_default();
+            }
+            "current_status_operator" => {
+                current_owner = extract_user_names(f);
             }
             _ => {}
         }
@@ -103,7 +107,7 @@ fn parse_mql_item(raw: &Value, project: &str) -> Option<FeishuProjectInboxItem> 
         work_item_type_key: "issue".to_string(),
         title: name,
         status_label: status,
-        assignee_label: None,
+        assignee_label: current_owner,
         updated_at: 0,
         source_url,
         raw_snapshot_ref: String::new(),
@@ -112,6 +116,50 @@ fn parse_mql_item(raw: &Value, project: &str) -> Option<FeishuProjectInboxItem> 
         last_ingress: IngressSource::Mcp,
         last_event_uuid: None,
     })
+}
+
+/// Extract user names from a `user_value_list` MQL field, joined by ", ".
+fn extract_user_names(field: &Value) -> Option<String> {
+    let users = field
+        .pointer("/value/user_value_list")
+        .and_then(|l| l.as_array())?;
+    let names: Vec<&str> = users
+        .iter()
+        .filter_map(|u| {
+            u.get("name_cn")
+                .or_else(|| u.get("name"))
+                .and_then(|n| n.as_str())
+                .filter(|n| !n.is_empty())
+        })
+        .collect();
+    if names.is_empty() { None } else { Some(names.join(", ")) }
+}
+
+/// Parse assignee GROUP BY response into distinct current-owner names.
+///
+/// Uses the same `list[].group_infos[].group_name` shape as status GROUP BY.
+pub(crate) fn parse_assignee_group_by(
+    result: &Value,
+) -> Result<Vec<String>, String> {
+    let text = extract_first_text(result)
+        .ok_or_else(|| "assignee GROUP BY: missing text content".to_string())?;
+    let parsed: Value =
+        serde_json::from_str(&text).map_err(|e| format!("assignee GROUP BY: bad JSON: {e}"))?;
+    let mut names = Vec::new();
+    if let Some(list) = parsed.get("list").and_then(|l| l.as_array()) {
+        for row in list {
+            if let Some(groups) = row.get("group_infos").and_then(|g| g.as_array()) {
+                for gi in groups {
+                    if let Some(name) = gi.get("group_name").and_then(|n| n.as_str()) {
+                        if !name.is_empty() && !names.contains(&name.to_string()) {
+                            names.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(names)
 }
 
 /// Parse status GROUP BY response into distinct status labels.

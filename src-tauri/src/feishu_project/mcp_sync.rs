@@ -32,11 +32,10 @@ async fn sync_todo(
 
 const MQL_PAGE_SIZE: u32 = 50;
 
-/// Build issue-list MQL. Assignee data is sourced from `get_workitem_brief`
-/// detail (role_members.operator), not from MQL fields.
+/// Build issue-list MQL. Includes `current_status_operator` for assignee display.
 pub fn build_issues_mql(workspace: &str, offset: u32) -> String {
     format!(
-        "SELECT work_item_id, name, priority, bug_classification \
+        "SELECT work_item_id, name, priority, bug_classification, current_status_operator \
          FROM {ws}.issue LIMIT {offset}, {limit}",
         ws = workspace,
         offset = offset,
@@ -160,6 +159,23 @@ fn parse_mql_items(
     Ok(items)
 }
 
+/// Extract user names from a `user_value_list` MQL field, joined by ", ".
+fn extract_user_names(field: &Value) -> Option<String> {
+    let users = field
+        .pointer("/value/user_value_list")
+        .and_then(|l| l.as_array())?;
+    let names: Vec<&str> = users
+        .iter()
+        .filter_map(|u| {
+            u.get("name_cn")
+                .or_else(|| u.get("name"))
+                .and_then(|n| n.as_str())
+                .filter(|n| !n.is_empty())
+        })
+        .collect();
+    if names.is_empty() { None } else { Some(names.join(", ")) }
+}
+
 /// Parse a single MQL item with `moql_field_list` fields.
 fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectInboxItem> {
     let fields = raw.get("moql_field_list")?.as_array()?;
@@ -167,6 +183,7 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
     let mut priority = String::new();
     let mut classification = String::new();
     let mut work_item_id = String::new();
+    let mut current_owner: Option<String> = None;
     for f in fields {
         let key = f.get("key").and_then(|k| k.as_str()).unwrap_or("");
         match key {
@@ -194,6 +211,9 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
                     .map(|n| n.to_string())
                     .or_else(|| f["value"]["string_value"].as_str().map(String::from))
                     .unwrap_or_default();
+            }
+            "current_status_operator" => {
+                current_owner = extract_user_names(f);
             }
             _ => {}
         }
@@ -226,7 +246,7 @@ fn parse_mql_item(raw: &Value, fallback_project: &str) -> Option<FeishuProjectIn
         work_item_type_key: "issue".to_string(),
         title: name,
         status_label: status,
-        assignee_label: None, // filled by detail enrichment, not MQL
+        assignee_label: current_owner,
         updated_at: 0,
         source_url,
         raw_snapshot_ref: String::new(),

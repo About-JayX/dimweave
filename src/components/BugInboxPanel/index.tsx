@@ -97,7 +97,7 @@ export function BugInboxPanel() {
               value={currentMode}
               onChange={handleModeChange}
               disabled={loading}
-              teamMembers={runtimeState?.teamMembers ?? []}
+              teamMembers={runtimeState?.assigneeOptions ?? []}
               assigneeFilter={activeFilter.assignee ?? ""}
               onAssigneeChange={handleAssigneeChange}
               statusOptions={runtimeState?.statusOptions ?? []}

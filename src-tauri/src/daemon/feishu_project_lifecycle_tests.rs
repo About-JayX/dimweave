@@ -158,72 +158,31 @@ fn make_item(
     }
 }
 
-/// After load-more appends enriched items, derive_team_members from the full
-/// store must include assignees from both old and new pages.
+/// MQL now includes current_status_operator; items parsed with assignee_label
+/// directly from the query — no enrichment needed.
 #[tokio::test]
-async fn enriched_load_more_items_contribute_to_team_members() {
+async fn mql_items_have_assignee_from_current_status_operator() {
     let mut ds = crate::daemon::state::DaemonState::new();
     ds.feishu_project_store.upsert(make_item("1001", Some("Alice")));
     let state = shared(ds);
 
-    // Simulate load-more: new enriched items appended
+    // Simulate load-more: items parsed from MQL with current_status_operator
     {
         let mut daemon = state.write().await;
         daemon.feishu_project_store.upsert(make_item("1002", Some("Bob")));
-        daemon.feishu_project_store.upsert(make_item("1003", Some("Alice, Charlie")));
+        daemon.feishu_project_store.upsert(make_item("1003", Some("Charlie")));
     }
 
-    let members = {
-        let daemon = state.read().await;
-        crate::feishu_project::issue_operator::derive_team_members(
-            &daemon.feishu_project_store.items,
-        )
-    };
-    assert_eq!(members, vec!["Alice", "Bob", "Charlie"]);
-}
-
-/// Without an explicit runtime-state refresh after load-more, team_members
-/// stays stale. After refresh it must reflect the full store.
-#[tokio::test]
-async fn runtime_team_members_refreshed_after_load_more() {
-    let mut ds = crate::daemon::state::DaemonState::new();
-    ds.feishu_project_runtime = Some(FeishuProjectRuntimeState {
-        enabled: true,
-        team_members: vec!["Alice".into()],
-        sync_mode: crate::feishu_project::types::FeishuSyncMode::Issues,
-        ..Default::default()
-    });
-    ds.feishu_project_store.upsert(make_item("1001", Some("Alice")));
-    let state = shared(ds);
-
-    // Simulate load-more: add enriched item with new assignee
-    {
-        let mut daemon = state.write().await;
-        daemon.feishu_project_store.upsert(make_item("1002", Some("Bob")));
-    }
-
-    // Before refresh: runtime still stale
-    let rs = get_runtime_state(&state).await;
-    assert_eq!(rs.team_members, vec!["Alice".to_string()]);
-
-    // Refresh (mirrors the logic added to load_more)
-    let team_members = {
-        let d = state.read().await;
-        crate::feishu_project::issue_operator::derive_team_members(
-            &d.feishu_project_store.items,
-        )
-    };
-    {
-        let mut d = state.write().await;
-        if let Some(rs) = &mut d.feishu_project_runtime {
-            rs.team_members = team_members;
-        }
-    }
-
-    let rs = get_runtime_state(&state).await;
-    assert!(rs.team_members.contains(&"Alice".to_string()));
-    assert!(rs.team_members.contains(&"Bob".to_string()));
-    assert_eq!(rs.team_members.len(), 2);
+    let d = state.read().await;
+    let labels: Vec<_> = d
+        .feishu_project_store
+        .items
+        .iter()
+        .filter_map(|i| i.assignee_label.as_deref())
+        .collect();
+    assert!(labels.contains(&"Alice"));
+    assert!(labels.contains(&"Bob"));
+    assert!(labels.contains(&"Charlie"));
 }
 
 #[test]
