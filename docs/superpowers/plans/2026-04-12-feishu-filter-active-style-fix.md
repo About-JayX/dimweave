@@ -53,7 +53,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: show active feishu filter option in dropdown` | `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The selected filter option must remain in the dropdown and have an explicit active style. The option list itself must stay stable. |
+| Task 1 | `fix: show active feishu filter option in dropdown` | `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The selected filter option must remain in the dropdown and have an explicit active style. The option list itself must stay stable. **Accepted: `eb83a0d6`** |
 
 ---
 
