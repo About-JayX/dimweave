@@ -1,6 +1,6 @@
 use super::{
-    config, issue_operator, mcp_client::McpClient, mcp_sync, store,
-    types::{FeishuProjectConfig, FeishuSyncMode},
+    config, mcp_client::McpClient, mcp_sync, store,
+    types::FeishuProjectConfig,
 };
 use crate::daemon::{gui, SharedState};
 use tauri::AppHandle;
@@ -88,15 +88,7 @@ pub async fn run_mcp_sync_cycle(
 ) -> Result<McpClient, String> {
     let client = connect_and_discover(cfg, app).await?;
     match mcp_sync::run_mcp_sync(&client, &cfg.workspace_hint, cfg.sync_mode).await {
-        Ok(mut items) => {
-            if cfg.sync_mode == FeishuSyncMode::Issues {
-                mcp_sync::enrich_issues_with_operators(
-                    &client,
-                    &cfg.workspace_hint,
-                    &mut items,
-                )
-                .await;
-            }
+        Ok(items) => {
             let count = items.len();
             let new_item_ids: Vec<String> = {
                 let mut daemon = state.write().await;
@@ -187,10 +179,6 @@ pub(crate) async fn update_mcp_state(
     app: &AppHandle,
 ) {
     let project_name = fetch_project_name(client, &cfg.workspace_hint).await;
-    let team_members = {
-        let daemon = state.read().await;
-        issue_operator::derive_team_members(&daemon.feishu_project_store.items)
-    };
     let now = chrono::Utc::now().timestamp_millis() as u64;
     if let Ok(path) = config::default_config_path() {
         if let Ok(mut saved) = config::load_config(&path) {
@@ -201,7 +189,6 @@ pub(crate) async fn update_mcp_state(
     }
     let mut rs = super::types::FeishuProjectRuntimeState::from_config(cfg);
     rs.project_name = project_name;
-    rs.team_members = team_members;
     rs.mcp_status = client.status;
     rs.discovered_tool_count = client.catalog.tool_count();
     rs.last_sync_at = Some(now);
