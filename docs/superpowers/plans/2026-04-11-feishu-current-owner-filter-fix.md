@@ -69,7 +69,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: filter feishu issues by current owner via mql` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | Replace scan-based assignee filtering with pure MQL `current_status_operator` + `work_item_status`. The live query syntax has been verified before implementation. |
+| Task 1 | `fix: filter feishu issues by current owner via mql` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | Replace scan-based assignee filtering with pure MQL `current_status_operator` + `work_item_status`. The live query syntax has been verified before implementation. **Accepted: `7cb061bd`**, follow-up **`b9eba99e`** removes the last detail-operator overwrite from the initial sync/runtime path so cards and filters both use current owner semantics end-to-end. |
 
 ---
 
