@@ -13,8 +13,6 @@ export function BugInboxPanel() {
   const loading = useFeishuProjectStore((s) => s.loading);
   const loadingMore = useFeishuProjectStore((s) => s.loadingMore);
   const error = useFeishuProjectStore((s) => s.error);
-  const fetchState = useFeishuProjectStore((s) => s.fetchState);
-  const fetchItems = useFeishuProjectStore((s) => s.fetchItems);
   const saveConfig = useFeishuProjectStore((s) => s.saveConfig);
   const syncNow = useFeishuProjectStore((s) => s.syncNow);
   const loadMoreFiltered = useFeishuProjectStore((s) => s.loadMoreFiltered);
@@ -24,13 +22,14 @@ export function BugInboxPanel() {
   const hasMore = useFeishuProjectStore((s) => s.hasMore);
   const setIgnored = useFeishuProjectStore((s) => s.setIgnored);
   const startHandling = useFeishuProjectStore((s) => s.startHandling);
+  const issuesHydrated = useFeishuProjectStore((s) => s.issuesHydrated);
+  const hydrateIssuesFirstPage = useFeishuProjectStore(
+    (s) => s.hydrateIssuesFirstPage,
+  );
 
   useEffect(() => {
-    void fetchItems();
-    // fetchState must complete before fetchFilterOptions so that backend
-    // runtime state exists when filter options are written.
-    void fetchState().then(() => fetchFilterOptions());
-  }, [fetchState, fetchItems, fetchFilterOptions]);
+    void hydrateIssuesFirstPage();
+  }, [hydrateIssuesFirstPage]);
 
   const currentMode: FeishuSyncMode = runtimeState?.syncMode ?? "todo";
   const isConfigured = runtimeState?.tokenLabel || runtimeState?.enabled;
@@ -42,6 +41,7 @@ export function BugInboxPanel() {
         items: [],
         loading: true,
         hasMore: true,
+        issuesHydrated: false,
       });
       await saveConfig({
         enabled: true,
@@ -52,25 +52,30 @@ export function BugInboxPanel() {
         sync_mode: mode,
       });
       await syncNow();
-      void fetchFilterOptions();
+      await fetchFilterOptions();
+      useFeishuProjectStore.setState({ issuesHydrated: true });
     },
     [saveConfig, syncNow, runtimeState, setFilter, fetchFilterOptions],
   );
 
   const handleAssigneeChange = useCallback(
-    (assignee: string) => {
+    async (assignee: string) => {
       const next = { ...activeFilter, assignee: assignee || undefined };
       setFilter(next);
-      void loadMoreFiltered();
+      useFeishuProjectStore.setState({ issuesHydrated: false });
+      await loadMoreFiltered();
+      useFeishuProjectStore.setState({ issuesHydrated: true });
     },
     [activeFilter, setFilter, loadMoreFiltered],
   );
 
   const handleStatusChange = useCallback(
-    (status: string) => {
+    async (status: string) => {
       const next = { ...activeFilter, status: status || undefined };
       setFilter(next);
-      void loadMoreFiltered();
+      useFeishuProjectStore.setState({ issuesHydrated: false });
+      await loadMoreFiltered();
+      useFeishuProjectStore.setState({ issuesHydrated: true });
     },
     [activeFilter, setFilter, loadMoreFiltered],
   );
@@ -109,15 +114,24 @@ export function BugInboxPanel() {
 
       {/* Scrollable list area */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-        <IssueList
-          items={items}
-          loading={loading}
-          loadingMore={loadingMore}
-          hasMore={hasMore && currentMode === "issues"}
-          onLoadMore={loadMoreFiltered}
-          onIgnore={setIgnored}
-          onStartHandling={startHandling}
-        />
+        {isConfigured && currentMode === "issues" && !issuesHydrated ? (
+          <div className="space-y-2 py-2 animate-pulse">
+            <div className="h-7 w-36 rounded bg-muted/40" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[52px] rounded-lg bg-muted/20" />
+            ))}
+          </div>
+        ) : (
+          <IssueList
+            items={items}
+            loading={loading}
+            loadingMore={loadingMore}
+            hasMore={hasMore && currentMode === "issues"}
+            onLoadMore={loadMoreFiltered}
+            onIgnore={setIgnored}
+            onStartHandling={startHandling}
+          />
+        )}
       </div>
     </section>
   );

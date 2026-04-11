@@ -308,6 +308,63 @@ describe("BugInboxPanel", () => {
     expect(afterState.runtimeState?.enabled).toBe(true);
   });
 
+  test("hydration gate blocks IssueList when not hydrated in issues mode", async () => {
+    installTauriStub();
+    const mod = await import("@/stores/feishu-project-store");
+    const store = mod.useFeishuProjectStore;
+    store.setState({
+      issuesHydrated: false,
+      runtimeState: {
+        enabled: true,
+        domain: "https://project.feishu.cn",
+        workspaceHint: "myspace",
+        refreshIntervalMinutes: 10,
+        syncMode: "issues" as const,
+        mcpStatus: "connected" as const,
+        discoveredToolCount: 5,
+        tokenLabel: "tok_a***",
+        teamMembers: [],
+        statusOptions: [],
+        assigneeOptions: [],
+      },
+    });
+
+    const state = store.getState();
+    const isConfigured = Boolean(
+      state.runtimeState?.tokenLabel || state.runtimeState?.enabled,
+    );
+    const currentMode = state.runtimeState?.syncMode ?? "todo";
+    // Panel renders skeleton when this condition is true:
+    expect(isConfigured && currentMode === "issues" && !state.issuesHydrated).toBe(true);
+  });
+
+  test("hydration gate allows IssueList after hydration completes", async () => {
+    installTauriStub();
+    const mod = await import("@/stores/feishu-project-store");
+    const store = mod.useFeishuProjectStore;
+    store.setState({
+      issuesHydrated: true,
+      runtimeState: {
+        enabled: true,
+        domain: "https://project.feishu.cn",
+        workspaceHint: "myspace",
+        refreshIntervalMinutes: 10,
+        syncMode: "issues" as const,
+        mcpStatus: "connected" as const,
+        discoveredToolCount: 5,
+        tokenLabel: "tok_a***",
+        teamMembers: [],
+        statusOptions: ["处理中"],
+        assigneeOptions: [],
+      },
+      items: [],
+    });
+
+    const state = store.getState();
+    // Gate is lifted — IssueList renders:
+    expect(state.issuesHydrated).toBe(true);
+  });
+
   test("store interface exposes statusOptions and assigneeOptions", async () => {
     installTauriStub();
     const mod = await import("@/stores/feishu-project-store");

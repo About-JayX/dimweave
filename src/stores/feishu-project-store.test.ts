@@ -112,6 +112,21 @@ describe("feishu-project-store", () => {
     expect(stateIdx).toBeGreaterThan(filterIdx);
   });
 
+  test("hydrateIssuesFirstPage fetches state, options, and items atomically", async () => {
+    installTauriStub();
+    const { useFeishuProjectStore } = await import("./feishu-project-store");
+    useFeishuProjectStore.setState({ issuesHydrated: false, runtimeState: null, items: [] });
+
+    const hydrate = useFeishuProjectStore.getState().hydrateIssuesFirstPage;
+    expect(typeof hydrate).toBe("function");
+
+    await hydrate();
+    const state = useFeishuProjectStore.getState();
+    expect(state.issuesHydrated).toBe(true);
+    expect(state.runtimeState).toBeTruthy();
+    expect(state.items.length).toBeGreaterThan(0);
+  });
+
   test("types match Rust camelCase serde output", () => {
     const item = {
       recordId: "proj_1",

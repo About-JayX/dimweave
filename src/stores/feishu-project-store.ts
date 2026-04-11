@@ -67,8 +67,10 @@ interface FeishuProjectStore {
   loadingMore: boolean;
   error: string | null;
   activeFilter: IssueFilter;
+  issuesHydrated: boolean;
   fetchState: () => Promise<void>;
   fetchItems: () => Promise<void>;
+  hydrateIssuesFirstPage: () => Promise<void>;
   saveConfig: (config: FeishuProjectConfigInput) => Promise<void>;
   syncNow: () => Promise<void>;
   loadMore: () => Promise<void>;
@@ -92,6 +94,28 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set, get) => ({
   error: null,
   hasMore: true,
   activeFilter: {},
+  issuesHydrated: false,
+
+  hydrateIssuesFirstPage: async () => {
+    set({ issuesHydrated: false, loading: true, error: null });
+    try {
+      // Backend must have runtime state before filter options can be written
+      const rs = await invoke<FeishuProjectRuntimeState>(
+        "feishu_project_get_state",
+      );
+      set({ runtimeState: rs });
+      // Fetch filter options into backend state
+      await feishuApi.fetchFilterOptions();
+      // Re-read state (now with options) + items together
+      const [finalRs, items] = await Promise.all([
+        invoke<FeishuProjectRuntimeState>("feishu_project_get_state"),
+        invoke<FeishuProjectInboxItem[]>("feishu_project_list_items"),
+      ]);
+      set({ runtimeState: finalRs, items, loading: false, issuesHydrated: true });
+    } catch (e) {
+      set({ error: String(e), loading: false, issuesHydrated: true });
+    }
+  },
 
   fetchState: async () => {
     set({ loading: true, error: null });
