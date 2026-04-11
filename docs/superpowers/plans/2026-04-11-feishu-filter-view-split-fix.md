@@ -58,7 +58,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: separate feishu filtered view from sync cache` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The root cause is a shared daemon store used for both sync cache and filtered view. Filter changes must replace the visible dataset; same-filter load-more may append. Background sync must update cache without corrupting the active filtered view. |
+| Task 1 | `fix: separate feishu filtered view from sync cache` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | The root cause is a shared daemon store used for both sync cache and filtered view. Filter changes must replace the visible dataset; same-filter load-more may append. Background sync must update cache without corrupting the active filtered view. **Accepted: `a122e6fc`** |
 
 ---
 
