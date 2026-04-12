@@ -4,7 +4,9 @@ import {
   getMessageListDisplayState,
   isMessageSearchActive,
   getMessageListFollowOutputMode,
+  shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
+  STICKY_BOTTOM_THRESHOLD,
 } from "./view-model";
 
 describe("getSearchQueryForDisclosure", () => {
@@ -70,6 +72,35 @@ describe("getMessageListFollowOutputMode", () => {
     // sticky flag set only by wheel events, not by Virtuoso atBottomStateChange.
     // When the user explicitly scrolls away, follow must stop.
     expect(getMessageListFollowOutputMode(false, false)).toBe(false);
+  });
+});
+
+describe("shouldClearStickyOnScroll", () => {
+  test("upward scroll beyond threshold with no immunity clears sticky", () => {
+    expect(
+      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD + 1, false),
+    ).toBe(true);
+  });
+
+  test("upward scroll beyond threshold during immunity window keeps sticky", () => {
+    expect(
+      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD + 1, true),
+    ).toBe(false);
+  });
+
+  test("downward or flat scroll never clears sticky regardless of immunity", () => {
+    expect(
+      shouldClearStickyOnScroll(false, STICKY_BOTTOM_THRESHOLD + 1, false),
+    ).toBe(false);
+    expect(
+      shouldClearStickyOnScroll(false, STICKY_BOTTOM_THRESHOLD + 1, true),
+    ).toBe(false);
+  });
+
+  test("upward scroll within threshold keeps sticky even without immunity", () => {
+    expect(
+      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD - 1, false),
+    ).toBe(false);
   });
 });
 

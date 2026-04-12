@@ -10,7 +10,9 @@ import {
   getCodexStreamIndicatorViewModel,
   getMessageListDisplayState,
   getMessageListFollowOutputMode,
+  shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
+  PROGRAMMATIC_SCROLL_IMMUNITY_MS,
   STICKY_BOTTOM_THRESHOLD,
   type StreamIndicatorId,
 } from "./view-model";
@@ -46,6 +48,7 @@ export function MessageList({
   const scrollerRef = useRef<HTMLElement | null>(null);
   const didInitialScrollRef = useRef(false);
   const stickyRef = useRef(true);
+  const programmaticScrollRef = useRef<number>(0);
   const [showBackToBottom, setShowBackToBottom] = useState(false);
   const [scrollerNode, setScrollerNode] = useState<HTMLElement | null>(null);
   const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
@@ -83,11 +86,8 @@ export function MessageList({
     }
   }, []);
 
-  // Detect user-initiated scroll-away via scroll direction.
-  // Only upward scroll (scrollTop decreasing) beyond threshold clears sticky.
-  // This covers all user scroll methods (wheel, scrollbar drag, trackpad,
-  // keyboard, touch) while ignoring downward programmatic scrolls from
-  // followOutput and non-scroll interactions like click-to-select.
+  // Detect user-initiated scroll-away. Programmatic scrolls (followOutput,
+  // scrollToBottom, initial scroll) set an immunity window to prevent false positives.
   useEffect(() => {
     if (!scrollerNode) return;
     let lastScrollTop = scrollerNode.scrollTop;
@@ -97,25 +97,31 @@ export function MessageList({
       const top = el.scrollTop;
       const scrolledUp = top < lastScrollTop;
       lastScrollTop = top;
-      if (!scrolledUp) return;
+      const immunityActive =
+        Date.now() - programmaticScrollRef.current <
+        PROGRAMMATIC_SCROLL_IMMUNITY_MS;
       const dist = el.scrollHeight - top - el.clientHeight;
-      if (dist > STICKY_BOTTOM_THRESHOLD) {
-        stickyRef.current = false;
-        setShowBackToBottom(true);
-      }
+      if (!shouldClearStickyOnScroll(scrolledUp, dist, immunityActive)) return;
+      stickyRef.current = false;
+      setShowBackToBottom(true);
     };
     scrollerNode.addEventListener("scroll", onScroll, { passive: true });
     return () => scrollerNode.removeEventListener("scroll", onScroll);
   }, [scrollerNode]);
 
-  const followOutputFn = useCallback(
-    () => getMessageListFollowOutputMode(searchActive, stickyRef.current),
-    [searchActive],
-  );
+  const followOutputFn = useCallback(() => {
+    const mode = getMessageListFollowOutputMode(
+      searchActive,
+      stickyRef.current,
+    );
+    if (mode !== false) programmaticScrollRef.current = Date.now();
+    return mode;
+  }, [searchActive]);
 
   const scrollToBottom = useCallback(() => {
     stickyRef.current = true;
     setShowBackToBottom(false);
+    programmaticScrollRef.current = Date.now();
     if (scrollerRef.current) {
       scrollerRef.current.scrollTo({
         top: scrollerRef.current.scrollHeight,
@@ -134,6 +140,7 @@ export function MessageList({
     if (searchActive || totalCount === 0 || didInitialScrollRef.current) return;
     didInitialScrollRef.current = true;
     const raf = window.requestAnimationFrame(() => {
+      programmaticScrollRef.current = Date.now();
       virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
     });
     return () => window.cancelAnimationFrame(raf);

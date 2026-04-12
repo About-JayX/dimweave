@@ -54,16 +54,13 @@ export function getLogsFollowOutputMode(atBottom: boolean): false | "smooth" {
   return atBottom ? "smooth" : false;
 }
 
-export function getMessageIdentityPresentation(
-  message: BridgeMessage,
-): {
+export function getMessageIdentityPresentation(message: BridgeMessage): {
   badgeSource: string;
   roleLabel: string | null;
 } {
   const badgeSource = message.displaySource ?? message.from;
   const roleLabel =
-    message.from !== badgeSource &&
-    !["user", "system"].includes(message.from)
+    message.from !== badgeSource && !["user", "system"].includes(message.from)
       ? message.from
       : null;
   return { badgeSource, roleLabel };
@@ -86,9 +83,7 @@ export function getTransientIndicators(
   const codexIndicator = getCodexStreamIndicatorViewModel(codexStream);
   return [
     ...(claudeStream.thinking ? (["claude"] as const) : []),
-    ...(codexIndicator.visible
-      ? (["codex"] as const)
-      : []),
+    ...(codexIndicator.visible ? (["codex"] as const) : []),
   ];
 }
 
@@ -122,9 +117,9 @@ export function getCodexStreamIndicatorViewModel(
 ): CodexStreamIndicatorViewModel {
   const hasVisibleContent = Boolean(
     codexStream.currentDelta ||
-      codexStream.activity ||
-      codexStream.reasoning ||
-      codexStream.commandOutput,
+    codexStream.activity ||
+    codexStream.reasoning ||
+    codexStream.commandOutput,
   );
   const statusLabel = codexStream.currentDelta
     ? "streaming…"
@@ -146,6 +141,22 @@ export function isMessageSearchActive(searchQuery: string): boolean {
 }
 
 export const STICKY_BOTTOM_THRESHOLD = 50;
+export const PROGRAMMATIC_SCROLL_IMMUNITY_MS = 300;
+
+/**
+ * Returns true only when a scroll event should clear sticky mode.
+ * Immunity window suppresses false positives from Virtuoso layout corrections
+ * that briefly decrease scrollTop after a programmatic followOutput scroll.
+ */
+export function shouldClearStickyOnScroll(
+  scrolledUp: boolean,
+  distFromBottom: number,
+  immunityActive: boolean,
+): boolean {
+  if (!scrolledUp) return false;
+  if (immunityActive) return false;
+  return distFromBottom > STICKY_BOTTOM_THRESHOLD;
+}
 
 export function getMessageListFollowOutputMode(
   searchActive: boolean,
