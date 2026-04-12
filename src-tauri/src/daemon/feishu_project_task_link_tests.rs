@@ -205,6 +205,19 @@ fn parse_transition_id_handles_wrapped_data() {
 }
 
 #[test]
+fn build_transitable_states_args_uses_work_item_type() {
+    let item = sample_item();
+    let args = build_transitable_states_args(&item, "uk_123");
+    // Feishu API requires "work_item_type", not "work_item_type_key"
+    assert!(args.get("work_item_type").is_some(), "must use work_item_type");
+    assert!(args.get("work_item_type_key").is_none(), "must NOT use work_item_type_key");
+    assert_eq!(args["work_item_type"], "bug");
+    assert_eq!(args["project_key"], "proj");
+    assert_eq!(args["work_item_id"], "1001");
+    assert_eq!(args["user_key"], "uk_123");
+}
+
+#[test]
 fn handoff_description_fallback_when_missing() {
     let item = sample_item();
     let context = json!({

@@ -24,7 +24,7 @@ async fn route_message_with_display(
         display_in_gui,
     );
     if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
-        let (effects, became_implementing) = {
+        let (effects, became_implementing, transition_task_id) = {
             let mut s = state.write().await;
             let before_status = s.active_task_id.as_ref()
                 .and_then(|tid| s.task_graph.get_task(tid))
@@ -35,7 +35,9 @@ async fn route_message_with_display(
                 .map(|t| t.status);
             let transitioned = !matches!(before_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing))
                 && matches!(after_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing));
-            (eff, transitioned)
+            // Prefer msg.task_id (explicit message context) over global active_task_id
+            let tid = msg.task_id.clone().or_else(|| s.active_task_id.clone());
+            (eff, transitioned, tid)
         };
         for event in effects.ui_events {
             event.emit(app);
@@ -45,7 +47,7 @@ async fn route_message_with_display(
         }
         // Feishu bug transition hook — best-effort transition to 处理中
         if became_implementing {
-            if let Some(task_id) = state.read().await.active_task_id.clone() {
+            if let Some(task_id) = transition_task_id {
                 let state2 = state.clone();
                 let app2 = app.clone();
                 tokio::spawn(async move {

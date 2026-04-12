@@ -346,6 +346,17 @@ pub fn parse_transition_id(response: &Value, target_state: &str) -> Option<Strin
         })
 }
 
+/// Build the JSON arguments for `get_transitable_states`.
+/// Uses `work_item_type` (not `work_item_type_key`) per Feishu API schema.
+pub fn build_transitable_states_args(item: &FeishuProjectInboxItem, user_key: &str) -> Value {
+    json!({
+        "project_key": item.project_key,
+        "work_item_id": item.work_item_id,
+        "work_item_type": item.work_item_type_key,
+        "user_key": user_key,
+    })
+}
+
 /// Best-effort: transition a linked Feishu bug to 处理中.
 /// Returns Ok(()) on success or if no linked bug / no transition available.
 /// Returns Err only for unexpected failures (caller should log, not block).
@@ -388,12 +399,7 @@ pub async fn try_transition_to_processing(
     };
 
     // get_transitable_states
-    let args = json!({
-        "project_key": item.project_key,
-        "work_item_id": item.work_item_id,
-        "work_item_type_key": item.work_item_type_key,
-        "user_key": user_key,
-    });
+    let args = build_transitable_states_args(&item, &user_key);
     let result = match client.call_tool("get_transitable_states", args).await {
         Ok(r) => r,
         Err(e) => {
