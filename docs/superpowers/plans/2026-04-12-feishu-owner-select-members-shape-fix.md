@@ -124,3 +124,11 @@ git commit -m "fix: parse string member keys for feishu owner options"
 ```
 
 - [ ] **Step 6: Update `## CM Memory` with the real commit SHA after lead review**
+
+---
+
+## Deferred Follow-Up: True Owner Filtering (Postponed)
+
+> **Status: deferred** — See `2026-04-12-feishu-owner-single-team-fix.md § Deferred Follow-Up` for full research results.
+
+This parser fix restored the owner **dropdown** but did not address the deeper semantic gap: issue list filtering still uses `current_status_operator` (field_key) in MQL, which does not match the true "负责人" role (`role_members.operator`). The web frontend uses a completely different goapi internal chain for role-based filtering. OpenAPI `search/params` could theoretically support this but is blocked by missing `plugin_token` + `user_key` credentials (MCP token is incompatible with OpenAPI auth). Progressive scan via `get_workitem_brief` enrichment remains the only no-new-credentials path.

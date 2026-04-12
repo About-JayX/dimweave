@@ -134,3 +134,24 @@ git commit -m "fix: source feishu owner options from project team"
 ```
 
 - [ ] **Step 6: Update `## CM Memory` with the real commit SHA after lead review**
+
+---
+
+## Deferred Follow-Up: True Owner Filtering (Postponed)
+
+> **Status: deferred** — 2026-04-12 research complete, implementation postponed pending auth prerequisites or alternative strategy decision.
+
+### Problem Not Yet Solved
+
+This plan fixed the **owner dropdown source** (team members instead of truncated MQL group-by), but the **issue list filtering** still uses `current_status_operator` in MQL. This field does NOT correspond to the true "负责人" (`role_members.operator`); it is a separate field_key with different semantics. Users filtering by "负责人=jay" may get incorrect results.
+
+### Verified Facts (2026-04-12)
+
+1. **Web frontend** filters true operator via internal goapi chain — not MQL:
+   - `POST /goapi/v5/search/general/preference/updateagg/v2` — sets filter with `component_key: "issue#role:user"` + `search_user_key_list`
+   - `POST /goapi/v5/search/general/struct_info` — resolves filter structure
+   - `POST /goapi/v5/search/commonview/work_item/mget_ui_async` — fetches results via `runtime_config_id`
+   - This is a server-side filter session model using role-based identity, not field_key MQL.
+2. **OpenAPI `search/params`** endpoint exists and is functional (`POST /open_api/{project_key}/work_item/{type_key}/search/params`), supports `SearchUser { role, user_keys, field_key }`, but **blocked by missing credentials**: persisted `plugin_token` is empty, MCP token rejected as "token expire" by OpenAPI layer (err_code 10022). MCP and OpenAPI are separate auth systems.
+3. **Path B (progressive scan)** via MCP `get_workitem_brief → role_members.operator` is the only validated approach without new credentials, but requires per-issue enrichment after MQL fetch.
+4. **Enrichment code exists** in `mcp_sync.rs::enrich_issues_with_operators()` but is never called from the filtered-page lifecycle path.
