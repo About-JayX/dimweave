@@ -45,9 +45,9 @@
 
 ## CM Memory
 
-| Task | Planned commit message | Verification | Memory |
-|------|------------------------|--------------|--------|
-| Task 1 | `fix: hydrate project name before owner option fetch` | `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture`; `bun test src/components/BugInboxPanel/index.test.tsx`; `bun run build` | Repair the regression introduced by `4bf33dc7` by ensuring owner-option fetch has a usable `project_name` even immediately after restart/hydration. |
+| Task | Planned commit message | Actual commit | Verification | Memory |
+|------|------------------------|---------------|--------------|--------|
+| Task 1 | `fix: hydrate project name before owner option fetch` | `1db6e732` | `cargo test feishu_project` ✅ 116 passed; `bun test BugInboxPanel` ✅ 19 passed; `bun run build` ✅ | Repair the regression introduced by `4bf33dc7` by ensuring owner-option fetch has a usable `project_name` even immediately after restart/hydration. +78/-2, 2 files changed. |
 
 ---
 
