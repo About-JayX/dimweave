@@ -83,37 +83,29 @@ export function MessageList({
     }
   }, []);
 
-  // Detect user-initiated scroll-away via interaction intent + scroll events.
-  // wheel covers mouse wheel + trackpad; pointerdown covers scrollbar drag + touch.
-  // Programmatic scrolls (followOutput) lack user intent and are ignored.
+  // Detect user-initiated scroll-away via scroll direction.
+  // Only upward scroll (scrollTop decreasing) beyond threshold clears sticky.
+  // This covers all user scroll methods (wheel, scrollbar drag, trackpad,
+  // keyboard, touch) while ignoring downward programmatic scrolls from
+  // followOutput and non-scroll interactions like click-to-select.
   useEffect(() => {
     if (!scrollerNode) return;
-    let userIntent = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const markIntent = () => {
-      userIntent = true;
-      clearTimeout(timer);
-      timer = setTimeout(() => { userIntent = false; }, 200);
-    };
+    let lastScrollTop = scrollerNode.scrollTop;
     const onScroll = () => {
-      if (!userIntent) return;
       const el = scrollerRef.current;
       if (!el) return;
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const top = el.scrollTop;
+      const scrolledUp = top < lastScrollTop;
+      lastScrollTop = top;
+      if (!scrolledUp) return;
+      const dist = el.scrollHeight - top - el.clientHeight;
       if (dist > STICKY_BOTTOM_THRESHOLD) {
         stickyRef.current = false;
         setShowBackToBottom(true);
       }
     };
-    scrollerNode.addEventListener("wheel", markIntent, { passive: true });
-    scrollerNode.addEventListener("pointerdown", markIntent);
     scrollerNode.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      clearTimeout(timer);
-      scrollerNode.removeEventListener("wheel", markIntent);
-      scrollerNode.removeEventListener("pointerdown", markIntent);
-      scrollerNode.removeEventListener("scroll", onScroll);
-    };
+    return () => scrollerNode.removeEventListener("scroll", onScroll);
   }, [scrollerNode]);
 
   const followOutputFn = useCallback(
