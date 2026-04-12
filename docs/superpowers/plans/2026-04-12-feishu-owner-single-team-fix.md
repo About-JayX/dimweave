@@ -37,6 +37,14 @@
 - Only replace the owner dropdown source.
 - The optimization is workspace-specific but should still degrade safely: if no unique matching team is found, return an empty list or documented fallback rather than guessing silently.
 
+### Post-incident lesson (2026-04-12 incident chain: `4bf33dc7` → `1db6e732` → `ad49610d`)
+
+This plan introduced two latent failures that required separate follow-up fixes:
+1. **Timing gap:** `project_name` was not available in runtime state when `fetchFilterOptions()` ran after restart. Fix: `1db6e732` hydrates `project_name` inline via `search_project_info`.
+2. **Payload shape mismatch:** `list_team_members` returns `members: string[]` (user key strings), not `members[].user_key` (objects). The original parser silently returned `[]`. Fix: `ad49610d`.
+
+**Constraint for future Feishu MCP changes:** Before merging any parser or query change, validate the current live payload structure against the real MCP endpoint and record the confirmed shape in the plan. Do not trust guessed shapes or test-only fixtures.
+
 ## File Map
 
 - Modify: `src-tauri/src/feishu_project/issue_query_team.rs`

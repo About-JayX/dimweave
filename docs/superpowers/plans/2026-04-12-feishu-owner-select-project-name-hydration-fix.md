@@ -38,6 +38,12 @@
 - The minimal fix is to repair the missing `project_name` input, not to redesign the filter path again.
 - Frontend contract should remain unchanged: `SyncModeNav` still reads `runtimeState.assigneeOptions`.
 
+### Post-incident lesson (2026-04-12 incident chain)
+
+This fix was necessary but insufficient: `project_name` hydration alone did not restore the owner select because `parse_team_members()` still expected `members[].user_key` objects while the live endpoint returns `members: string[]`. The second fix (`ad49610d`) was required.
+
+**Constraint for future Feishu MCP changes:** When adding a new MCP dependency (like `project_name` for team selection), validate not just the new input's availability but also the downstream parser's compatibility with the real live payload shape.
+
 ## File Map
 
 - Modify: `src-tauri/src/daemon/feishu_project_lifecycle.rs`

@@ -43,6 +43,12 @@
 - Do not touch frontend code again unless forced by evidence.
 - Fix the real payload mismatch at the parser boundary only.
 
+### Post-incident lesson (2026-04-12 incident chain: `4bf33dc7` → `1db6e732` → `ad49610d`)
+
+This was the final fix in a three-commit chain. The root cause was that `4bf33dc7` wrote parsers against a guessed `members[].user_key` shape without verifying the live MCP response, which actually returns `members: string[]`.
+
+**Constraint for future Feishu MCP changes:** Before merging any Feishu parser or query change, call the real MCP endpoint with the current token/workspace and confirm the actual response structure. Record the confirmed payload shape (with a date stamp) in `docs/feishu.md` and in the plan's baseline evidence. Do not rely on field names from documentation alone — the MCP tool layer may transform them.
+
 ## File Map
 
 - Modify: `src-tauri/src/feishu_project/issue_query_team.rs`
