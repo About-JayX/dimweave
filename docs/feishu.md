@@ -311,12 +311,12 @@
 
 1. `list_project_team(project_key)` → 解析 `data[].{name, team_id}`
 2. 选择与项目名后缀匹配的单个 team（project name 通过 `--` 分割后缀，匹配 team name 前缀）
-3. `list_team_members(team_id, page_size=200)` → 解析 `members[].user_key`
+3. `list_team_members(team_id, page_size=200)` → 解析 `members[]`（字符串 user key 数组）
 4. `search_user_info(user_keys)` → 解析顶层数组 `[].name_cn`
 
 **真实响应结构注意：**
 
-- `list_team_members` 顶层字段是 `members`（不是 `data`）
+- `list_team_members` 顶层字段是 `members`（不是 `data`）；`members` 是 **字符串数组**（user key），不是对象数组（2026-04-12 实测 workspace `manciyuan` 确认）
 - `search_user_info` 返回顶层 JSON 数组（不是 `{data: [...]}`）
 
 如果没有匹配的 team（项目名没有 `--` 分隔符，或无 team 前缀匹配），返回空列表。

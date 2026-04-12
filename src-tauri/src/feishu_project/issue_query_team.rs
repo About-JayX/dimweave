@@ -99,10 +99,14 @@ fn parse_team_members(result: &Value) -> Vec<String> {
         .unwrap_or(&Vec::new())
         .iter()
         .filter_map(|m| {
-            m.get("user_key")
-                .or_else(|| m.get("user_id"))
-                .and_then(|v| v.as_str())
-                .map(String::from)
+            // Real payload: members is a string array of user keys
+            m.as_str().map(String::from).or_else(|| {
+                // Object fallback: {user_key: "..."} or {user_id: "..."}
+                m.get("user_key")
+                    .or_else(|| m.get("user_id"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
         })
         .collect()
 }
@@ -176,6 +180,16 @@ mod tests {
         });
         let keys = parse_team_members(&payload);
         assert_eq!(keys, vec!["u1", "u2"]);
+    }
+
+    #[test]
+    fn parse_team_members_string_array() {
+        // Real Feishu payload: members is an array of user key strings, not objects
+        let payload = json!({
+            "content": [{"type": "text", "text": r#"{"members":["7620253762535378105","7611423493078535394"]}"#}]
+        });
+        let keys = parse_team_members(&payload);
+        assert_eq!(keys, vec!["7620253762535378105", "7611423493078535394"]);
     }
 
     #[test]
