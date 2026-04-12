@@ -83,22 +83,37 @@ export function MessageList({
     }
   }, []);
 
-  // Detect user-initiated scroll-away via wheel events
+  // Detect user-initiated scroll-away via interaction intent + scroll events.
+  // wheel covers mouse wheel + trackpad; pointerdown covers scrollbar drag + touch.
+  // Programmatic scrolls (followOutput) lack user intent and are ignored.
   useEffect(() => {
     if (!scrollerNode) return;
-    const onWheel = () => {
-      requestAnimationFrame(() => {
-        const el = scrollerRef.current;
-        if (!el) return;
-        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-        if (dist > STICKY_BOTTOM_THRESHOLD) {
-          stickyRef.current = false;
-          setShowBackToBottom(true);
-        }
-      });
+    let userIntent = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const markIntent = () => {
+      userIntent = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => { userIntent = false; }, 200);
     };
-    scrollerNode.addEventListener("wheel", onWheel, { passive: true });
-    return () => scrollerNode.removeEventListener("wheel", onWheel);
+    const onScroll = () => {
+      if (!userIntent) return;
+      const el = scrollerRef.current;
+      if (!el) return;
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (dist > STICKY_BOTTOM_THRESHOLD) {
+        stickyRef.current = false;
+        setShowBackToBottom(true);
+      }
+    };
+    scrollerNode.addEventListener("wheel", markIntent, { passive: true });
+    scrollerNode.addEventListener("pointerdown", markIntent);
+    scrollerNode.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      scrollerNode.removeEventListener("wheel", markIntent);
+      scrollerNode.removeEventListener("pointerdown", markIntent);
+      scrollerNode.removeEventListener("scroll", onScroll);
+    };
   }, [scrollerNode]);
 
   const followOutputFn = useCallback(

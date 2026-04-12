@@ -321,4 +321,42 @@ describe("MessageList", () => {
     expect(typeof followOutput).toBe("function");
     expect(followOutput()).toBe("smooth");
   });
+
+  test("content growth (atBottomStateChange false) does not disable auto-follow", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: false, previewText: "", thinkingText: "",
+        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+      },
+      codexStream: {
+        thinking: false, currentDelta: "", lastMessage: "",
+        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+      },
+    }));
+
+    lastVirtuosoProps = null;
+    renderToStaticMarkup(
+      <MessageList
+        messages={[{
+          id: "msg_1", from: "claude", to: "user",
+          content: "Streaming content", timestamp: 1,
+        }]}
+        searchActive={false}
+      />,
+    );
+
+    // Simulate Virtuoso reporting content-growth scroll-away (NOT user-initiated).
+    // This must NOT clear sticky mode — only user interaction (wheel/pointer) should.
+    const atBottomStateChange = lastVirtuosoProps!.atBottomStateChange as (b: boolean) => void;
+    atBottomStateChange(false);
+
+    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    expect(followOutput()).toBe("smooth");
+  });
 });
