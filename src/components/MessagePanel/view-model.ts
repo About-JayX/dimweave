@@ -147,9 +147,9 @@ export function isMessageSearchActive(searchQuery: string): boolean {
 
 export function getMessageListFollowOutputMode(
   searchActive: boolean,
-  atBottom: boolean,
+  _atBottom: boolean,
 ): false | "smooth" {
-  return searchActive ? false : atBottom ? "smooth" : false;
+  return searchActive ? false : "smooth";
 }
 
 export function shouldResetMessageListInitialScroll(

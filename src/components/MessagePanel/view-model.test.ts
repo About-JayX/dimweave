@@ -68,8 +68,11 @@ describe("getMessageListFollowOutputMode", () => {
     expect(getMessageListFollowOutputMode(false, true)).toBe("smooth");
   });
 
-  test("inactive search not at bottom disables follow", () => {
-    expect(getMessageListFollowOutputMode(false, false)).toBe(false);
+  test("inactive search not at bottom still enables smooth follow", () => {
+    // Regression: 51497e5e gated followOutput on atBottom, but atBottom can
+    // flip to false from draft-row height growth (not user scroll). Non-search
+    // mode must always follow so new bubbles stay visible.
+    expect(getMessageListFollowOutputMode(false, false)).toBe("smooth");
   });
 });
 
