@@ -51,9 +51,11 @@
 
 ## CM Memory
 
-| Task | Planned commit message | Verification | Memory |
-|------|------------------------|--------------|--------|
-| Task 1 | `fix: refactor chat auto-scroll to track sticky bottom` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build` | Replace stale `atBottom` state gating with a ref-based sticky-bottom controller that preserves auto-follow on passive draft growth while respecting intentional user scroll-away. |
+| Task | Commit | Verification | Memory |
+|------|--------|--------------|--------|
+| Task 1 — initial refactor | `c409552c` fix: refactor chat auto-scroll to track sticky bottom via refs | 31 tests passed; build ✅ | Replaced `useState` atBottom with `useRef` stickyRef + wheel listener + followOutputFn callback. |
+| Task 1 — rework #1 | `799c74f1` fix: generalize scroll-away detection beyond wheel-only | 31 tests passed; build ✅ | Added pointerdown + scroll intent heuristic to cover scrollbar drag. |
+| Task 1 — rework #2 (final) | `e1aa5ea3` fix: use scroll direction instead of pointer intent for scroll-away | 31 tests passed; build ✅ | Replaced intent-based (wheel+pointerdown+timer) with scroll-direction detection. Only upward scroll clears sticky — eliminates click-to-select false positives while covering all user scroll methods. |
 
 ---
 
