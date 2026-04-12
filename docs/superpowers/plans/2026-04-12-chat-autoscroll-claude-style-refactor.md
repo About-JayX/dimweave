@@ -55,7 +55,8 @@
 |------|--------|--------------|--------|
 | Task 1 — initial refactor | `c409552c` fix: refactor chat auto-scroll to track sticky bottom via refs | 31 tests passed; build ✅ | Replaced `useState` atBottom with `useRef` stickyRef + wheel listener + followOutputFn callback. |
 | Task 1 — rework #1 | `799c74f1` fix: generalize scroll-away detection beyond wheel-only | 31 tests passed; build ✅ | Added pointerdown + scroll intent heuristic to cover scrollbar drag. |
-| Task 1 — rework #2 (final) | `e1aa5ea3` fix: use scroll direction instead of pointer intent for scroll-away | 31 tests passed; build ✅ | Replaced intent-based (wheel+pointerdown+timer) with scroll-direction detection. Only upward scroll clears sticky — eliminates click-to-select false positives while covering all user scroll methods. |
+| Task 1 — rework #2 | `e1aa5ea3` fix: use scroll direction instead of pointer intent for scroll-away | 31 tests passed; build ✅ | Replaced intent-based (wheel+pointerdown+timer) with scroll-direction detection. Only upward scroll clears sticky — eliminates click-to-select false positives while covering all user scroll methods. |
+| Task 1 — rework #3 (final) | `ba9f8f7c` fix: add programmatic-scroll immunity gate to prevent false sticky-clear | 35 tests passed; build ✅ | Added `shouldClearStickyOnScroll()` pure function + `PROGRAMMATIC_SCROLL_IMMUNITY_MS=300` to view-model. Stamps `programmaticScrollRef` in `followOutputFn`, `scrollToBottom`, and initial-scroll rAF. Direction detector skips sticky-clear during the 300 ms immunity window — prevents Virtuoso layout-correction upward scrolls from falsely clearing sticky mode. |
 
 ---
 
