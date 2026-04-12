@@ -56,6 +56,10 @@
 - Use the linked-bug relation already stored on issue items; do not add a second linkage model.
 - Only the first real lead→coder handoff should flip task status to `Implementing`.
 
+### Plan revision history
+
+- `2026-04-12` — user approved a small revision after lead review found the first implementation exceeded the original `max_added_loc` and still used the wrong `get_transitable_states` parameter name (`work_item_type_key` instead of `work_item_type`). The same revision also narrows the Feishu transition side effect to `msg.task_id` instead of the global `active_task_id`.
+
 ## File Map
 
 - Modify: `src-tauri/src/daemon/orchestrator/task_flow.rs`
@@ -68,7 +72,7 @@
 
 | Task | Planned commit message | Verification | Memory |
 |------|------------------------|--------------|--------|
-| Task 1 | `fix: transition feishu bug when implementation starts` | `cargo test --manifest-path src-tauri/Cargo.toml daemon::orchestrator::tests:: -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::feishu_project_task_link_tests:: -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture` | Add a `lead -> coder` Implementing transition in the task graph and trigger a best-effort Feishu `transition_state` side effect after successful routing. Feishu transition failures must not block task routing. |
+| Task 1 | `fix: transition feishu bug when implementation starts` | `cargo test --manifest-path src-tauri/Cargo.toml daemon::orchestrator::tests:: -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::feishu_project_task_link_tests:: -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml feishu_project -- --nocapture` | Add a `lead -> coder` Implementing transition in the task graph and trigger a best-effort Feishu `transition_state` side effect after successful routing. Feishu transition failures must not block task routing. **Accepted: `623f53b8`**, follow-up **`480aa37a`** fixes `get_transitable_states` parameter naming and uses `msg.task_id` instead of global `active_task_id` for the Feishu transition side effect. |
 
 ---
 
@@ -93,7 +97,7 @@
 
 **max_files_changed:** `5`
 
-**max_added_loc:** `180`
+**max_added_loc:** `320`
 
 **max_deleted_loc:** `70`
 
