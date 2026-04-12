@@ -397,3 +397,45 @@ async fn cursor_continues_when_filter_same() {
     };
     assert_eq!(cursor.raw_offset, 100);
 }
+
+#[test]
+fn parse_project_name_from_mcp_response() {
+    let valid = serde_json::json!({
+        "content": [{"type": "text", "text": "{\"name\": \"MyProject--team-alpha\", \"id\": 123}"}]
+    });
+    assert_eq!(parse_project_name_from_response(&valid).as_deref(), Some("MyProject--team-alpha"));
+    assert_eq!(parse_project_name_from_response(&serde_json::json!({"content": []})), None);
+    let bad = serde_json::json!({"content": [{"type": "text", "text": "not json"}]});
+    assert_eq!(parse_project_name_from_response(&bad), None);
+}
+
+#[tokio::test]
+async fn apply_filter_options_with_project_persists_and_guards() {
+    // Resolved name is persisted when runtime project_name is None
+    let mut ds = crate::daemon::state::DaemonState::new();
+    ds.feishu_project_runtime = Some(FeishuProjectRuntimeState {
+        project_name: None,
+        ..FeishuProjectRuntimeState::from_config(&existing_config())
+    });
+    let state = shared(ds);
+    {
+        let mut d = state.write().await;
+        apply_filter_options_with_project(
+            &mut d, vec!["处理中".into()], vec!["Alice".into()], Some("Resolved--team-x".into()),
+        );
+    }
+    let rs = state.read().await.feishu_project_runtime.clone().unwrap();
+    assert_eq!(rs.project_name.as_deref(), Some("Resolved--team-x"));
+    assert_eq!(rs.assignee_options, vec!["Alice"]);
+
+    // None resolved_project_name must not overwrite existing name
+    {
+        let mut d = state.write().await;
+        apply_filter_options_with_project(
+            &mut d, vec!["新状态".into()], vec!["Charlie".into()], None,
+        );
+    }
+    let rs2 = state.read().await.feishu_project_runtime.clone().unwrap();
+    assert_eq!(rs2.project_name.as_deref(), Some("Resolved--team-x"));
+    assert_eq!(rs2.assignee_options, vec!["Charlie"]);
+}

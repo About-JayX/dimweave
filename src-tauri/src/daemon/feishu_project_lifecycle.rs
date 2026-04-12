@@ -204,6 +204,18 @@ pub async fn load_more_filtered(
     Ok(count)
 }
 
+/// Parse project name from MCP `search_project_info` response.
+pub(crate) fn parse_project_name_from_response(response: &serde_json::Value) -> Option<String> {
+    let text = response.get("content")?
+        .as_array()?
+        .iter()
+        .find(|e| e.get("type").and_then(|t| t.as_str()) == Some("text"))?
+        .get("text")?
+        .as_str()?;
+    let parsed: serde_json::Value = serde_json::from_str(text).ok()?;
+    parsed.get("name").and_then(|n| n.as_str()).map(String::from)
+}
+
 /// Write fetched filter options into daemon state.
 /// Materializes runtime from config if absent, so options are never silently dropped.
 pub(crate) fn apply_filter_options(
@@ -211,11 +223,26 @@ pub(crate) fn apply_filter_options(
     status_options: Vec<String>,
     assignee_options: Vec<String>,
 ) {
+    apply_filter_options_with_project(d, status_options, assignee_options, None)
+}
+
+/// Write fetched filter options and optionally persist a resolved project name.
+pub(crate) fn apply_filter_options_with_project(
+    d: &mut crate::daemon::state::DaemonState,
+    status_options: Vec<String>,
+    assignee_options: Vec<String>,
+    resolved_project_name: Option<String>,
+) {
     let rs = d.feishu_project_runtime.get_or_insert_with(|| {
         crate::feishu_project::types::FeishuProjectRuntimeState::from_config(&load_cfg())
     });
     rs.status_options = status_options;
     rs.assignee_options = assignee_options;
+    if let Some(name) = resolved_project_name {
+        if rs.project_name.is_none() {
+            rs.project_name = Some(name);
+        }
+    }
 }
 
 /// Fetch filter options (status labels via MQL GROUP BY + owner names via project team).
@@ -227,10 +254,17 @@ pub async fn fetch_filter_options(
     if cfg.mcp_user_token.is_empty() {
         return Err("MCP user token not configured".into());
     }
-    let project_name = state.read().await
+    let mut project_name = state.read().await
         .feishu_project_runtime.as_ref()
         .and_then(|r| r.project_name.clone());
     let client = crate::feishu_project::runtime::connect_lite(&cfg, app).await?;
+    // Hydrate project_name from MCP if not yet in runtime state
+    if project_name.is_none() && !cfg.workspace_hint.is_empty() {
+        let args = serde_json::json!({"project_key": &cfg.workspace_hint});
+        if let Ok(resp) = client.call_tool("search_project_info", args).await {
+            project_name = parse_project_name_from_response(&resp);
+        }
+    }
     let (statuses, assignees) = tokio::join!(
         crate::feishu_project::issue_query::fetch_status_options(&client, &cfg.workspace_hint),
         crate::feishu_project::issue_query_team::fetch_team_member_names(
@@ -241,7 +275,7 @@ pub async fn fetch_filter_options(
     let assignee_options = assignees.unwrap_or_default();
     {
         let mut d = state.write().await;
-        apply_filter_options(&mut d, status_options, assignee_options);
+        apply_filter_options_with_project(&mut d, status_options, assignee_options, project_name);
         if let Some(rs) = &d.feishu_project_runtime {
             gui::emit_feishu_project_state(app, rs);
         }
