@@ -141,6 +141,7 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set, get) => ({
   },
 
   saveConfig: async (config) => {
+    const prevWorkspace = get().runtimeState?.workspaceHint ?? "";
     set({ loading: true, error: null });
     try {
       const rs = await invoke<FeishuProjectRuntimeState>(
@@ -148,6 +149,10 @@ export const useFeishuProjectStore = create<FeishuProjectStore>((set, get) => ({
         { config },
       );
       set({ runtimeState: rs, loading: false });
+      // Re-fetch owner/status options only when workspace actually changed
+      if ((config.workspace_hint ?? "") !== (prevWorkspace ?? "")) {
+        await get().fetchFilterOptions();
+      }
     } catch (e) {
       set({ error: String(e), loading: false });
     }

@@ -16,7 +16,6 @@ export function BugInboxPanel() {
   const saveConfig = useFeishuProjectStore((s) => s.saveConfig);
   const syncNow = useFeishuProjectStore((s) => s.syncNow);
   const loadMoreFiltered = useFeishuProjectStore((s) => s.loadMoreFiltered);
-  const fetchFilterOptions = useFeishuProjectStore((s) => s.fetchFilterOptions);
   const activeFilter = useFeishuProjectStore((s) => s.activeFilter);
   const setFilter = useFeishuProjectStore((s) => s.setFilter);
   const hasMore = useFeishuProjectStore((s) => s.hasMore);
@@ -52,10 +51,9 @@ export function BugInboxPanel() {
         sync_mode: mode,
       });
       await syncNow();
-      await fetchFilterOptions();
       useFeishuProjectStore.setState({ issuesHydrated: true });
     },
-    [saveConfig, syncNow, runtimeState, setFilter, fetchFilterOptions],
+    [saveConfig, syncNow, runtimeState, setFilter],
   );
 
   const handleAssigneeChange = useCallback(
