@@ -252,7 +252,7 @@ describe("MessageList", () => {
     expect(html).toContain("No messages match rollout.");
   });
 
-  test("disables followOutput while search is active", async () => {
+  test("followOutput is a function that returns false during search", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([
       import("./MessageList"),
@@ -282,10 +282,12 @@ describe("MessageList", () => {
     );
 
     expect(lastVirtuosoProps).not.toBeNull();
-    expect(lastVirtuosoProps!.followOutput).toBe(false);
+    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    expect(typeof followOutput).toBe("function");
+    expect(followOutput()).toBe(false);
   });
 
-  test("enables smooth followOutput when search is inactive", async () => {
+  test("followOutput function returns smooth when sticky (initial state)", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([
       import("./MessageList"),
@@ -315,6 +317,8 @@ describe("MessageList", () => {
     );
 
     expect(lastVirtuosoProps).not.toBeNull();
-    expect(lastVirtuosoProps!.followOutput).toBe("smooth");
+    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    expect(typeof followOutput).toBe("function");
+    expect(followOutput()).toBe("smooth");
   });
 });

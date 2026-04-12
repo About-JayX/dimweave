@@ -11,6 +11,7 @@ import {
   getMessageListDisplayState,
   getMessageListFollowOutputMode,
   shouldResetMessageListInitialScroll,
+  STICKY_BOTTOM_THRESHOLD,
   type StreamIndicatorId,
 } from "./view-model";
 
@@ -44,7 +45,9 @@ export function MessageList({
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const didInitialScrollRef = useRef(false);
-  const [atBottom, setAtBottom] = useState(true);
+  const stickyRef = useRef(true);
+  const [showBackToBottom, setShowBackToBottom] = useState(false);
+  const [scrollerNode, setScrollerNode] = useState<HTMLElement | null>(null);
   const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
   const claudePreviewText = useBridgeStore((s) => s.claudeStream.previewText);
   const hasClaudeDraft = claudeThinking || claudePreviewText.length > 0;
@@ -72,11 +75,40 @@ export function MessageList({
     [streamRailIndicators],
   );
 
+  // Only restore sticky on return-to-bottom; ignore false (content growth)
   const handleAtBottomChange = useCallback((bottom: boolean) => {
-    setAtBottom(bottom);
+    if (bottom) {
+      stickyRef.current = true;
+      setShowBackToBottom(false);
+    }
   }, []);
 
+  // Detect user-initiated scroll-away via wheel events
+  useEffect(() => {
+    if (!scrollerNode) return;
+    const onWheel = () => {
+      requestAnimationFrame(() => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        if (dist > STICKY_BOTTOM_THRESHOLD) {
+          stickyRef.current = false;
+          setShowBackToBottom(true);
+        }
+      });
+    };
+    scrollerNode.addEventListener("wheel", onWheel, { passive: true });
+    return () => scrollerNode.removeEventListener("wheel", onWheel);
+  }, [scrollerNode]);
+
+  const followOutputFn = useCallback(
+    () => getMessageListFollowOutputMode(searchActive, stickyRef.current),
+    [searchActive],
+  );
+
   const scrollToBottom = useCallback(() => {
+    stickyRef.current = true;
+    setShowBackToBottom(false);
     if (scrollerRef.current) {
       scrollerRef.current.scrollTo({
         top: scrollerRef.current.scrollHeight,
@@ -117,12 +149,14 @@ export function MessageList({
         <Virtuoso
           ref={virtuosoRef}
           scrollerRef={(el) => {
-            scrollerRef.current = el as HTMLElement | null;
+            const node = el instanceof HTMLElement ? el : null;
+            scrollerRef.current = node;
+            setScrollerNode(node);
           }}
           totalCount={totalCount}
           atBottomStateChange={handleAtBottomChange}
-          atBottomThreshold={80}
-          followOutput={getMessageListFollowOutputMode(searchActive, atBottom)}
+          atBottomThreshold={STICKY_BOTTOM_THRESHOLD}
+          followOutput={followOutputFn}
           className="h-full"
           increaseViewportBy={200}
           context={footerContext}
@@ -148,7 +182,7 @@ export function MessageList({
           }}
         />
       </div>
-      {!atBottom && (
+      {showBackToBottom && (
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
           <BackToBottomButton onClick={scrollToBottom} />
         </div>

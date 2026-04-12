@@ -145,11 +145,13 @@ export function isMessageSearchActive(searchQuery: string): boolean {
   return searchQuery.trim().length > 0;
 }
 
+export const STICKY_BOTTOM_THRESHOLD = 50;
+
 export function getMessageListFollowOutputMode(
   searchActive: boolean,
-  _atBottom: boolean,
+  isSticky: boolean,
 ): false | "smooth" {
-  return searchActive ? false : "smooth";
+  return searchActive ? false : isSticky ? "smooth" : false;
 }
 
 export function shouldResetMessageListInitialScroll(

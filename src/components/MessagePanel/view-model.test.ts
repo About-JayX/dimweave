@@ -56,23 +56,20 @@ describe("isMessageSearchActive", () => {
 });
 
 describe("getMessageListFollowOutputMode", () => {
-  test("active search disables message-list follow output", () => {
+  test("search active disables follow regardless of sticky state", () => {
     expect(getMessageListFollowOutputMode(true, true)).toBe(false);
-  });
-
-  test("active search disables follow even when not at bottom", () => {
     expect(getMessageListFollowOutputMode(true, false)).toBe(false);
   });
 
-  test("inactive search at bottom enables smooth follow", () => {
+  test("sticky mode enables smooth follow", () => {
     expect(getMessageListFollowOutputMode(false, true)).toBe("smooth");
   });
 
-  test("inactive search not at bottom still enables smooth follow", () => {
-    // Regression: 51497e5e gated followOutput on atBottom, but atBottom can
-    // flip to false from draft-row height growth (not user scroll). Non-search
-    // mode must always follow so new bubbles stay visible.
-    expect(getMessageListFollowOutputMode(false, false)).toBe("smooth");
+  test("user-scrolled-away (not sticky) disables follow", () => {
+    // With the Claude-style refactor, the second parameter is a ref-backed
+    // sticky flag set only by wheel events, not by Virtuoso atBottomStateChange.
+    // When the user explicitly scrolls away, follow must stop.
+    expect(getMessageListFollowOutputMode(false, false)).toBe(false);
   });
 });
 
