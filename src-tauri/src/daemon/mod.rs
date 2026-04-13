@@ -84,7 +84,7 @@ async fn stop_codex_for_task(
     app: &AppHandle,
 ) {
     if let Some(h) = codex_handles.remove(task_id) {
-        port_pool.release(h.port, task_id);
+        port_pool.release(h.port, task_id, h.launch_id);
         h.stop().await;
     }
     let tid = state.write().await.invalidate_codex_task_session(task_id);
@@ -284,14 +284,22 @@ async fn attach_provider_history(
                 .ok_or_else(|| "no active task selected".to_string())?;
             // Stop only this task's existing Codex session if any
             stop_codex_for_task(codex_handles, codex_port_pool, &attach_task_id, state, app).await;
-            let allocated_port = codex_port_pool
-                .reserve(&attach_task_id)
-                .ok_or("no Codex port available in pool")?;
             let launch_epoch = {
                 let mut s = state.write().await;
-                s.begin_codex_task_launch(&attach_task_id, allocated_port)
+                s.begin_codex_task_launch(&attach_task_id, 0)
                     .unwrap_or_else(|| s.begin_codex_launch())
             };
+            let allocated_port = codex_port_pool
+                .reserve(&attach_task_id, launch_epoch)
+                .ok_or("no Codex port available in pool")?;
+            {
+                let mut s = state.write().await;
+                if let Some(rt) = s.task_runtimes.get_mut(&attach_task_id) {
+                    if let Some(ref mut slot) = rt.codex_slot {
+                        slot.port = allocated_port;
+                    }
+                }
+            }
             let handle = codex::resume(
                 codex::ResumeOpts {
                     task_id: attach_task_id.clone(),
@@ -308,7 +316,7 @@ async fn attach_provider_history(
             .await
             .map_err(|err| err.to_string())?;
             codex_handles.insert(attach_task_id.clone(), handle);
-            codex_port_pool.promote(allocated_port, &attach_task_id);
+            codex_port_pool.promote(allocated_port, &attach_task_id, launch_epoch);
             {
                 let mut daemon = state.write().await;
                 crate::daemon::provider::codex::register_on_launch(
@@ -359,8 +367,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         // Drain Codex natural-exit notices so ports and handles are released promptly
         let cmd = tokio::select! {
             Some(notice) = codex_exit_rx.recv() => {
-                codex_handles.remove(&notice.task_id);
-                codex_port_pool.release(notice.port, &notice.task_id);
+                // Guard: only act if the current handle matches the notice's launch_id
+                let matches = codex_handles.get(&notice.task_id)
+                    .map_or(false, |h| h.launch_id == notice.launch_id);
+                if matches {
+                    codex_handles.remove(&notice.task_id);
+                }
+                codex_port_pool.release(notice.port, &notice.task_id, notice.launch_id);
                 continue;
             }
             cmd = cmd_rx.recv() => match cmd {
@@ -402,7 +415,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(err));
                     continue;
                 }
-                let allocated_port = match codex_port_pool.reserve(&resolved_task_id) {
+                let launch_epoch = {
+                    let mut s = state.write().await;
+                    s.begin_codex_task_launch(&resolved_task_id, 0)
+                        .unwrap_or_else(|| s.begin_codex_launch())
+                };
+                let allocated_port = match codex_port_pool.reserve(&resolved_task_id, launch_epoch) {
                     Some(p) => p,
                     None => {
                         gui::emit_system_log(
@@ -414,11 +432,15 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         continue;
                     }
                 };
-                let launch_epoch = {
+                // Update placeholder port in the task slot
+                {
                     let mut s = state.write().await;
-                    s.begin_codex_task_launch(&resolved_task_id, allocated_port)
-                        .unwrap_or_else(|| s.begin_codex_launch())
-                };
+                    if let Some(rt) = s.task_runtimes.get_mut(&resolved_task_id) {
+                        if let Some(ref mut slot) = rt.codex_slot {
+                            slot.port = allocated_port;
+                        }
+                    }
+                }
                 let launch_result = match resume_thread_id {
                     Some(thread_id) => {
                         let resumed_thread_id = thread_id.clone();
@@ -441,7 +463,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         {
                             Ok(h) => {
                                 codex_handles.insert(resolved_task_id.clone(), h);
-                                codex_port_pool.promote(allocated_port, &resolved_task_id);
+                                codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
                                 let task_id = {
                                     let mut daemon = state.write().await;
                                     launch_task_sync::sync_codex_launch_into_task(
@@ -458,7 +480,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 Ok(())
                             }
                             Err(e) => {
-                                codex_port_pool.release(allocated_port, &resolved_task_id);
+                                codex_port_pool.release(allocated_port, &resolved_task_id, launch_epoch);
                                 gui::emit_agent_status(&app, "codex", false, None, None);
                                 gui::emit_system_log(
                                     &app,
@@ -487,14 +509,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     {
                         Ok(h) => {
                             codex_handles.insert(resolved_task_id.clone(), h);
-                            codex_port_pool.promote(allocated_port, &resolved_task_id);
+                            codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
                             if let Some(task_id) = state.read().await.active_task_id.clone() {
                                 emit_task_context_events(&state, &app, &task_id).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
-                            codex_port_pool.release(allocated_port, &resolved_task_id);
+                            codex_port_pool.release(allocated_port, &resolved_task_id, launch_epoch);
                             gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,
@@ -754,17 +776,26 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             Ok(target) => {
                                 let resume_task_id = sess.task_id.clone();
                                 stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resume_task_id, &state, &app).await;
+                                let launch_epoch = {
+                                    let mut s = state.write().await;
+                                    s.begin_codex_task_launch(&resume_task_id, 0)
+                                        .unwrap_or_else(|| s.begin_codex_launch())
+                                };
                                 let alloc = codex_port_pool
-                                    .reserve(&resume_task_id)
+                                    .reserve(&resume_task_id, launch_epoch)
                                     .ok_or_else(|| "no Codex port available".to_string());
                                 match alloc {
                                     Err(e) => Err(e),
                                     Ok(allocated_port) => {
-                                let launch_epoch = {
+                                // Update placeholder port in the task slot
+                                {
                                     let mut s = state.write().await;
-                                    s.begin_codex_task_launch(&resume_task_id, allocated_port)
-                                        .unwrap_or_else(|| s.begin_codex_launch())
-                                };
+                                    if let Some(rt) = s.task_runtimes.get_mut(&resume_task_id) {
+                                        if let Some(ref mut slot) = rt.codex_slot {
+                                            slot.port = allocated_port;
+                                        }
+                                    }
+                                }
                                 let role_id = match target.role {
                                     crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                     crate::daemon::task_graph::types::SessionRole::Coder => "coder",
@@ -787,11 +818,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 {
                                     Ok(handle) => {
                                         codex_handles.insert(resume_task_id.clone(), handle);
-                                        codex_port_pool.promote(allocated_port, &resume_task_id);
+                                        codex_port_pool.promote(allocated_port, &resume_task_id, launch_epoch);
                                         state.write().await.resume_session(&session_id)
                                     }
                                     Err(err) => {
-                                        codex_port_pool.release(allocated_port, &sess.task_id);
+                                        codex_port_pool.release(allocated_port, &sess.task_id, launch_epoch);
                                         Err(err.to_string())
                                     }
                                 }

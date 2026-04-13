@@ -86,6 +86,7 @@ pub(super) fn spawn_health_monitor(
                         let _ = exit_tx.send(super::CodexExitNotice {
                             task_id: task_id.clone(),
                             port,
+                            launch_id: session_epoch,
                         });
                         return;
                     }

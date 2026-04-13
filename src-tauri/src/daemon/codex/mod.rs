@@ -23,6 +23,7 @@ use tokio_util::sync::CancellationToken;
 pub struct CodexExitNotice {
     pub task_id: String,
     pub port: u16,
+    pub launch_id: u64,
 }
 
 pub struct CodexHandle {
@@ -31,6 +32,7 @@ pub struct CodexHandle {
     session_id: String,
     cancel: CancellationToken,
     pub port: u16,
+    pub launch_id: u64,
 }
 
 pub struct StartOpts {
@@ -238,6 +240,7 @@ async fn launch(
     let session_exit_tx = exit_tx.clone();
     let session_exit_port = codex_port;
     let session_exit_task_id = task_id.clone();
+    let session_exit_launch_id = launch_epoch;
     tokio::spawn(async move {
         tokio::select! {
             _ = cancel_session.cancelled() => {}
@@ -256,6 +259,7 @@ async fn launch(
         let _ = session_exit_tx.send(CodexExitNotice {
             task_id: session_exit_task_id,
             port: session_exit_port,
+            launch_id: session_exit_launch_id,
         });
     });
 
@@ -357,6 +361,7 @@ async fn launch(
         session_id,
         cancel,
         port: codex_port,
+        launch_id: launch_epoch,
     })
 }
 
