@@ -17,6 +17,7 @@ import {
   NEW_PROVIDER_SESSION_VALUE,
   resolveProviderHistoryAction,
   resolveProviderHistoryWorkspace,
+  type AgentDraftConfig,
 } from "./provider-session-view-model";
 import {
   buildCodexLaunchConfig,
@@ -44,6 +45,7 @@ interface CodexPanelProps {
   providerSession?: ProviderSessionInfo;
   workspace?: string;
   draftMode?: boolean;
+  onDraftChange?: (config: AgentDraftConfig) => void;
 }
 
 export function CodexPanel({
@@ -56,6 +58,7 @@ export function CodexPanel({
   providerSession,
   workspace,
   draftMode = false,
+  onDraftChange,
 }: CodexPanelProps) {
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
@@ -207,6 +210,14 @@ export function CodexPanel({
       setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
     }
   }, [selectedHistory, selectedHistoryId]);
+
+  useEffect(() => {
+    onDraftChange?.({
+      model: selectedModel,
+      effort: selectedReasoning,
+      historyAction: resolveProviderHistoryAction(selectedHistory),
+    });
+  }, [onDraftChange, selectedModel, selectedReasoning, selectedHistory]);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);

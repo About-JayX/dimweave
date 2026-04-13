@@ -22,6 +22,7 @@ import {
   NEW_PROVIDER_SESSION_VALUE,
   resolveProviderHistoryAction,
   resolveProviderHistoryWorkspace,
+  type AgentDraftConfig,
 } from "@/components/AgentStatus/provider-session-view-model";
 import { ClaudeConfigRows } from "./ClaudeConfigRows";
 import { ClaudeHint } from "./ClaudeHint";
@@ -34,6 +35,7 @@ interface ClaudePanelProps {
   providerSession?: ProviderSessionInfo;
   workspace?: string;
   draftMode?: boolean;
+  onDraftChange?: (config: AgentDraftConfig) => void;
 }
 
 export function ClaudePanel({
@@ -41,6 +43,7 @@ export function ClaudePanel({
   providerSession,
   workspace,
   draftMode = false,
+  onDraftChange,
 }: ClaudePanelProps) {
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
@@ -115,6 +118,14 @@ export function ClaudePanel({
       setSelectedHistoryId(NEW_PROVIDER_SESSION_VALUE);
     }
   }, [selectedHistory, selectedHistoryId]);
+
+  useEffect(() => {
+    onDraftChange?.({
+      model,
+      effort,
+      historyAction: resolveProviderHistoryAction(selectedHistory),
+    });
+  }, [onDraftChange, model, effort, selectedHistory]);
 
   const doLaunch = useCallback(async () => {
     setConnecting(true);

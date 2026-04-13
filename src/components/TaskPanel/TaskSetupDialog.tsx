@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { AgentStatusPanel } from "@/components/AgentStatus";
+import type { AgentDraftConfig } from "@/components/AgentStatus/provider-session-view-model";
 import type { Provider } from "@/stores/task-store/types";
 
 export type TaskSetupMode = "create" | "edit";
@@ -7,6 +8,8 @@ export type TaskSetupMode = "create" | "edit";
 export interface TaskSetupSubmitPayload {
   leadProvider: Provider;
   coderProvider: Provider;
+  claudeConfig: AgentDraftConfig | null;
+  codexConfig: AgentDraftConfig | null;
 }
 
 interface TaskSetupDialogProps {
@@ -61,6 +64,10 @@ export function TaskSetupDialog({
     useState<Provider>(initialLeadProvider);
   const [coderProvider, setCoderProvider] =
     useState<Provider>(initialCoderProvider);
+  const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(
+    null,
+  );
+  const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -80,7 +87,7 @@ export function TaskSetupDialog({
   const draftMode = mode === "create";
 
   const handleSubmit = () => {
-    onSubmit({ leadProvider, coderProvider });
+    onSubmit({ leadProvider, coderProvider, claudeConfig, codexConfig });
     onOpenChange(false);
   };
 
@@ -132,6 +139,8 @@ export function TaskSetupDialog({
           draftMode={draftMode}
           draftLeadProvider={leadProvider}
           draftCoderProvider={coderProvider}
+          onClaudeDraftChange={setClaudeConfig}
+          onCodexDraftChange={setCodexConfig}
         />
       </div>
     </div>

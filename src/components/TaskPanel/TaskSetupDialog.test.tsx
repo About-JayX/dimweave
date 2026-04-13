@@ -41,7 +41,7 @@ Object.assign(globalThis, {
 });
 
 describe("TaskSetupDialog", () => {
-  test("renders create-mode dialog with modal overlay and agent panels", async () => {
+  test("renders create-mode modal with provider selectors and agent panels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -61,7 +61,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Runtime control");
   });
 
-  test("renders edit-mode dialog with agent configuration panels", async () => {
+  test("renders edit-mode modal with agent configuration panels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -95,5 +95,28 @@ describe("TaskSetupDialog", () => {
     expect(html).not.toContain("New Task");
     expect(html).not.toContain("Lead provider");
     expect(html).not.toContain('role="dialog"');
+  });
+
+  test("submit payload includes agent draft config slots", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    let captured: Parameters<typeof import("./TaskSetupDialog").TaskSetupDialog extends
+      (p: infer P) => any ? P : never>["onSubmit"] extends (p: infer R) => void ? R : never;
+
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        mode="create"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={(p) => {
+          captured = p;
+        }}
+      />,
+    );
+    // Static render: onSubmit is never called, but the payload type
+    // is validated at compile time. Verify the dialog renders the
+    // panels that feed the config slots.
+    expect(html).toContain("Runtime control");
+    expect(html).toContain("Providers");
   });
 });

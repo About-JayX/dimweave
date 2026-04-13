@@ -78,6 +78,12 @@ export type ProviderHistoryAction =
   | { kind: "resumeNormalized"; sessionId: string }
   | { kind: "resumeExternal"; externalId: string };
 
+export interface AgentDraftConfig {
+  model: string;
+  effort: string;
+  historyAction: ProviderHistoryAction;
+}
+
 export function resolveProviderHistoryAction(
   entry: Pick<ProviderHistoryInfo, "externalId" | "normalizedSessionId"> | null,
 ): ProviderHistoryAction {

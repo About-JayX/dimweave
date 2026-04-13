@@ -9,6 +9,7 @@ import {
   type TaskProviderBindings,
 } from "@/stores/task-store/selectors";
 import type { Provider } from "@/stores/task-store/types";
+import type { AgentDraftConfig } from "./provider-session-view-model";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
 
@@ -17,6 +18,8 @@ interface AgentStatusPanelProps {
   draftMode?: boolean;
   draftLeadProvider?: Provider;
   draftCoderProvider?: Provider;
+  onClaudeDraftChange?: (config: AgentDraftConfig) => void;
+  onCodexDraftChange?: (config: AgentDraftConfig) => void;
 }
 
 export function AgentStatusPanel({
@@ -24,6 +27,8 @@ export function AgentStatusPanel({
   draftMode = false,
   draftLeadProvider,
   draftCoderProvider,
+  onClaudeDraftChange,
+  onCodexDraftChange,
 }: AgentStatusPanelProps) {
   const agents = useBridgeStore(selectAgents);
   const connected = useBridgeStore(selectConnected);
@@ -112,6 +117,7 @@ export function AgentStatusPanel({
           providerSession={claudeProviderSession}
           workspace={workspace}
           draftMode={draftMode}
+          onDraftChange={onClaudeDraftChange}
         />
         <CodexPanel
           codexTuiRunning={codexOnlineForTask}
@@ -123,6 +129,7 @@ export function AgentStatusPanel({
           providerSession={codexProviderSession}
           workspace={workspace}
           draftMode={draftMode}
+          onDraftChange={onCodexDraftChange}
         />
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",

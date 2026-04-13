@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
@@ -14,6 +15,7 @@ import {
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
+import { launchProvidersAfterCreate } from "./launch-after-create";
 import { useArtifactDetail } from "./use-artifact-detail";
 import {
   buildArtifactTimeline,
@@ -29,6 +31,8 @@ export function TaskPanel() {
   const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
   const createConfiguredTask = useTaskStore((s) => s.createConfiguredTask);
   const updateTaskConfig = useTaskStore((s) => s.updateTaskConfig);
+  const claudeRole = useBridgeStore((s) => s.claudeRole);
+  const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const sessionRows = useMemo(
@@ -55,12 +59,25 @@ export function TaskPanel() {
   );
 
   const handleSetupSubmit = useCallback(
-    (payload: TaskSetupSubmitPayload) => {
+    async (payload: TaskSetupSubmitPayload) => {
       if (dialogMode === "create" && selectedWorkspace) {
-        void createConfiguredTask(selectedWorkspace, "", {
-          leadProvider: payload.leadProvider,
-          coderProvider: payload.coderProvider,
-        });
+        try {
+          const newTask = await createConfiguredTask(selectedWorkspace, "", {
+            leadProvider: payload.leadProvider,
+            coderProvider: payload.coderProvider,
+          });
+          await launchProvidersAfterCreate({
+            taskId: newTask.taskId,
+            workspace: selectedWorkspace,
+            claudeRole,
+            claudeConfig: payload.claudeConfig,
+            codexConfig: payload.codexConfig,
+            resumeSession,
+            applyConfig,
+          });
+        } catch {
+          /* task creation or launch error — UI updates via store */
+        }
       } else if (dialogMode === "edit" && task) {
         void updateTaskConfig(task.taskId, {
           leadProvider: payload.leadProvider,
@@ -68,7 +85,16 @@ export function TaskPanel() {
         });
       }
     },
-    [createConfiguredTask, dialogMode, selectedWorkspace, task, updateTaskConfig],
+    [
+      applyConfig,
+      claudeRole,
+      createConfiguredTask,
+      dialogMode,
+      resumeSession,
+      selectedWorkspace,
+      task,
+      updateTaskConfig,
+    ],
   );
 
   const reviewBadge: ReviewBadge | null =
