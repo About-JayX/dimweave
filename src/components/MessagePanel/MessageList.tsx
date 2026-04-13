@@ -71,6 +71,10 @@ export function MessageList({
   const codexVisible = useBridgeStore(
     (s) => getCodexStreamIndicatorViewModel(s.codexStream).visible,
   );
+  const codexStreamTail = useBridgeStore((s) => {
+    const cs = s.codexStream;
+    return cs.currentDelta || cs.activity || cs.reasoning || cs.commandOutput;
+  });
   const streamRailIndicators = useMemo(
     () => [...(codexVisible ? (["codex"] as const) : [])],
     [codexVisible],
@@ -185,7 +189,13 @@ export function MessageList({
       }
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [hasClaudeDraft, claudePreviewText, codexVisible, searchActive]);
+  }, [
+    hasClaudeDraft,
+    claudePreviewText,
+    codexVisible,
+    codexStreamTail,
+    searchActive,
+  ]);
 
   if (!displayState.hasContent) {
     return (
