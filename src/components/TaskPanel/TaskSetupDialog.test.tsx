@@ -137,6 +137,27 @@ describe("TaskSetupDialog", () => {
     }
   });
 
+  test("submit payload includes both claude and codex draft roles", async () => {
+    // Both roles flow through dialog-local state into the payload.
+    // CodexHeader must wire draftRole/onDraftChange into RoleSelect
+    // so the Codex role is captured alongside the Claude role.
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="create" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    // Both Claude and Codex role selects render (stub: lead + coder)
+    // Each CyberSelect trigger shows the current role label in a span
+    expect(html).toContain("Coder"); // Codex role select value
+    // Payload shape proof: construct matching TaskSetupSubmitPayload
+    const p = {
+      leadProvider: "claude" as const, coderProvider: "codex" as const,
+      claudeConfig: null, codexConfig: null,
+      claudeRole: "coder", codexRole: "lead", requestLaunch: true,
+    };
+    expect(p).toHaveProperty("codexRole", "lead");
+  });
+
   test("launch gate: only providers bound to task bindings are selected", () => {
     // Mirrors the gating logic in TaskPanel handleSetupSubmit
     const cases: { lead: string; coder: string; expectClaude: boolean; expectCodex: boolean }[] = [

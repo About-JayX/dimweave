@@ -26,7 +26,7 @@ export function CodexHeader({
           />
           <CodexIcon className="size-7 text-codex" />
         </div>
-        <RoleSelect agent="codex" disabled={running} />
+        <RoleSelect agent="codex" disabled={running} draftValue={draftRole} onDraftChange={onDraftRoleChange} />
       </div>
 
       {connectionLabel && (
