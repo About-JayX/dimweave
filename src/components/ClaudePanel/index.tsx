@@ -46,11 +46,15 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
   );
   const claudeRole = useBridgeStore((s) => s.claudeRole);
   const activeTask = useTaskStore(selectActiveTask);
+  const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
   const resumeSession = useTaskStore((s) => s.resumeSession);
   const effectiveCwd = useMemo(
-    () => resolveProviderHistoryWorkspace(activeTask?.workspaceRoot),
-    [activeTask?.workspaceRoot],
+    () =>
+      resolveProviderHistoryWorkspace(
+        activeTask?.workspaceRoot ?? selectedWorkspace,
+      ),
+    [activeTask?.workspaceRoot, selectedWorkspace],
   );
   const selectWorkspaceHistory = useMemo(
     () => makeProviderHistorySelector(effectiveCwd),

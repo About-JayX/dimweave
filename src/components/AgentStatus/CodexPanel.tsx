@@ -58,6 +58,7 @@ export function CodexPanel({
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const codexRole = useBridgeStore((s) => s.codexRole);
   const activeTask = useTaskStore(selectActiveTask);
+  const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
   const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
   const resumeSession = useTaskStore((s) => s.resumeSession);
 
@@ -67,8 +68,11 @@ export function CodexPanel({
     NEW_PROVIDER_SESSION_VALUE,
   );
   const effectiveCwd = useMemo(
-    () => resolveProviderHistoryWorkspace(activeTask?.workspaceRoot),
-    [activeTask?.workspaceRoot],
+    () =>
+      resolveProviderHistoryWorkspace(
+        activeTask?.workspaceRoot ?? selectedWorkspace,
+      ),
+    [activeTask?.workspaceRoot, selectedWorkspace],
   );
 
   const [connecting, setConnecting] = useState(false);
