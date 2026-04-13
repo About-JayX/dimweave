@@ -4,6 +4,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionInfo,
+  TaskInfo,
   TaskProviderSessionInfo,
   TaskProviderSummary,
   TaskStoreState,
@@ -59,13 +60,30 @@ const DEFAULT_BINDINGS: TaskProviderBindings = {
   coderOnline: false,
 };
 
+// Memoization cache for selectActiveTaskProviderBindings — prevents
+// Zustand snapshot equality check from triggering infinite re-renders.
+let _prevTaskId: string | null = null;
+let _prevTask: TaskInfo | null | undefined = undefined;
+let _prevSummary: TaskProviderSummary | undefined = undefined;
+let _prevResult: TaskProviderBindings = DEFAULT_BINDINGS;
+
 export function selectActiveTaskProviderBindings(
   state: TaskStoreState,
 ): TaskProviderBindings {
   const task = state.activeTaskId ? state.tasks[state.activeTaskId] : null;
   if (!task) return DEFAULT_BINDINGS;
   const summary = state.providerSummaries[task.taskId];
-  return {
+  if (
+    state.activeTaskId === _prevTaskId &&
+    task === _prevTask &&
+    summary === _prevSummary
+  ) {
+    return _prevResult;
+  }
+  _prevTaskId = state.activeTaskId;
+  _prevTask = task;
+  _prevSummary = summary;
+  _prevResult = {
     leadProvider: task.leadProvider,
     coderProvider: task.coderProvider,
     leadOnline: summary?.leadOnline ?? false,
@@ -73,6 +91,7 @@ export function selectActiveTaskProviderBindings(
     leadProviderSession: summary?.leadProviderSession ?? null,
     coderProviderSession: summary?.coderProviderSession ?? null,
   };
+  return _prevResult;
 }
 
 export function selectProviderSummary(
