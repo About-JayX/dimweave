@@ -2,8 +2,43 @@ use super::{api, config, types::*};
 use crate::daemon::gui;
 use crate::daemon::SharedState;
 use reqwest::Client;
+use std::collections::{HashSet, VecDeque};
 use tauri::AppHandle;
 use tokio::sync::{mpsc, oneshot};
+
+/// Bounded ring-buffer dedup guard for recently processed Telegram `update_id`s.
+/// Prevents duplicate delivery during short replay windows without unbounded growth.
+pub(crate) struct RecentUpdateGuard {
+    seen: HashSet<i64>,
+    order: VecDeque<i64>,
+    capacity: usize,
+}
+
+impl RecentUpdateGuard {
+    pub(crate) fn new(capacity: usize) -> Self {
+        Self {
+            seen: HashSet::new(),
+            order: VecDeque::new(),
+            capacity,
+        }
+    }
+
+    /// Returns `true` if `id` was already seen (duplicate).
+    /// If new, records it (evicting the oldest entry when at capacity) and returns `false`.
+    pub(crate) fn check_and_insert(&mut self, id: i64) -> bool {
+        if self.seen.contains(&id) {
+            return true;
+        }
+        if self.order.len() >= self.capacity {
+            if let Some(evicted) = self.order.pop_front() {
+                self.seen.remove(&evicted);
+            }
+        }
+        self.order.push_back(id);
+        self.seen.insert(id);
+        false
+    }
+}
 
 pub struct TelegramHandle {
     pub outbound_tx: mpsc::Sender<TelegramOutbound>,
@@ -50,6 +85,7 @@ pub async fn start_runtime(
 
     tokio::spawn(async move {
         let mut offset = cfg.last_update_id.map(|id| id + 1);
+        let mut dedup = RecentUpdateGuard::new(64);
         loop {
             tokio::select! {
                 _ = &mut shutdown_rx => {
@@ -83,6 +119,9 @@ pub async fn start_runtime(
                         Ok(updates) => {
                             for update in updates {
                                 offset = Some(update.update_id + 1);
+                                if dedup.check_and_insert(update.update_id) {
+                                    continue;
+                                }
                                 super::runtime_handlers::handle_update(
                                     &state, &app, &client, &token, &mut cfg, &update,
                                 ).await;

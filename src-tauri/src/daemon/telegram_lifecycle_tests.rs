@@ -133,3 +133,63 @@ fn old_config_without_bot_user_id_loads_as_none() {
     assert_eq!(loaded.bot_user_id, None);
     let _ = std::fs::remove_file(&path);
 }
+
+// --- RecentUpdateGuard dedup tests ---
+
+#[test]
+fn dedup_guard_new_id_is_not_duplicate() {
+    let mut guard = crate::telegram::runtime::RecentUpdateGuard::new(64);
+    assert!(!guard.check_and_insert(1001), "first occurrence must not be a duplicate");
+}
+
+#[test]
+fn dedup_guard_repeated_id_is_duplicate() {
+    let mut guard = crate::telegram::runtime::RecentUpdateGuard::new(64);
+    guard.check_and_insert(1001);
+    assert!(guard.check_and_insert(1001), "second occurrence must be detected as duplicate");
+}
+
+#[test]
+fn dedup_guard_different_ids_are_independent() {
+    let mut guard = crate::telegram::runtime::RecentUpdateGuard::new(64);
+    assert!(!guard.check_and_insert(1001));
+    assert!(!guard.check_and_insert(1002));
+    // both still blocked on repeat
+    assert!(guard.check_and_insert(1001));
+    assert!(guard.check_and_insert(1002));
+}
+
+#[test]
+fn dedup_guard_bounded_evicts_oldest_allowing_readmission() {
+    // capacity=3: insert 100, 101, 102 → full.
+    // All three are blocked. Inserting 103 evicts 100 (oldest).
+    // After eviction, 100 is readmitted; 102 and 103 remain blocked.
+    let mut guard = crate::telegram::runtime::RecentUpdateGuard::new(3);
+    guard.check_and_insert(100);
+    guard.check_and_insert(101);
+    guard.check_and_insert(102);
+    // at capacity — all three blocked
+    assert!(guard.check_and_insert(100));
+    assert!(guard.check_and_insert(101));
+    assert!(guard.check_and_insert(102));
+    // insert 103 evicts 100 (oldest); window is now [101, 102, 103]
+    guard.check_and_insert(103);
+    // 100 is no longer in the window — readmitted
+    // (re-inserting 100 evicts 101; window becomes [102, 103, 100])
+    assert!(!guard.check_and_insert(100), "evicted id must be readmittable");
+    // 102 and 103 still within the current window — blocked
+    assert!(guard.check_and_insert(102));
+    assert!(guard.check_and_insert(103));
+}
+
+#[test]
+fn dedup_guard_within_capacity_ids_remain_blocked() {
+    let mut guard = crate::telegram::runtime::RecentUpdateGuard::new(64);
+    for id in 1..=50 {
+        guard.check_and_insert(id);
+    }
+    // All 50 IDs within capacity window are still blocked
+    for id in 1..=50 {
+        assert!(guard.check_and_insert(id), "id {id} within capacity must stay blocked");
+    }
+}
