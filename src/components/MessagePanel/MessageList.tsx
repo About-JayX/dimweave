@@ -25,6 +25,19 @@ interface Props {
   onOpenImage?: (attachment: Attachment) => void;
 }
 
+/**
+ * Determines the scroll strategy for draft anchor effects.
+ * "scroller-bottom" uses scrollTo(scrollHeight) to reach the absolute content
+ * bottom — required when a growing item is already visible but its bottom edge
+ * is off-screen. "last-index" falls back to scrollToIndex for SSR / before the
+ * scroller element mounts.
+ */
+export function getDraftScrollStrategy(
+  hasScrollerElement: boolean,
+): "scroller-bottom" | "last-index" {
+  return hasScrollerElement ? "scroller-bottom" : "last-index";
+}
+
 type FooterContext = { indicators: StreamIndicatorId[] };
 
 export function StreamTailFooter({ context }: { context?: FooterContext }) {
@@ -147,16 +160,21 @@ export function MessageList({
     return () => window.cancelAnimationFrame(raf);
   }, [searchActive, totalCount]);
 
-  // Pin viewport to bottom on draft start and during streaming growth.
-  // Fires when the draft row appears (hasClaudeDraft: false→true) and on
-  // every previewText update while the draft is active. rAF throttles to
-  // one scroll per frame; cleanup cancels a pending rAF if deps change again.
+  // Pin viewport to the absolute content bottom on draft start and during
+  // streaming growth. scrollToIndex("LAST") only guarantees the last item is
+  // visible but does not scroll to its growing bottom edge; scrollTo(scrollHeight)
+  // does. rAF throttles to one scroll per frame and is cancelled on re-fire.
   useEffect(() => {
     if (!shouldScrollOnDraftStart(hasClaudeDraft, searchActive, stickyRef.current))
       return;
     const raf = window.requestAnimationFrame(() => {
       programmaticScrollRef.current = Date.now();
-      virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+      const el = scrollerRef.current;
+      if (getDraftScrollStrategy(el !== null) === "scroller-bottom" && el) {
+        el.scrollTo({ top: el.scrollHeight });
+      } else {
+        virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+      }
     });
     return () => window.cancelAnimationFrame(raf);
   }, [hasClaudeDraft, claudePreviewText, searchActive]);

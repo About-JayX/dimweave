@@ -79,6 +79,22 @@ function installTauriStub() {
   });
 }
 
+describe("getDraftScrollStrategy", () => {
+  // Distinguishes the two scroll semantics used by the draft anchor effect:
+  //  "scroller-bottom" — scrollTo(scrollHeight) pins to absolute content bottom
+  //  "last-index"      — scrollToIndex("LAST") only ensures item is in viewport
+  test("when scroller element exists, strategy is scroller-bottom", async () => {
+    installTauriStub();
+    const { getDraftScrollStrategy } = await import("./MessageList");
+    expect(getDraftScrollStrategy(true)).toBe("scroller-bottom");
+  });
+
+  test("when scroller element is absent (SSR / unmounted), strategy is last-index", async () => {
+    const { getDraftScrollStrategy } = await import("./MessageList");
+    expect(getDraftScrollStrategy(false)).toBe("last-index");
+  });
+});
+
 describe("MessageList", () => {
   test("filters long sessions by message content and attachment names", () => {
     const filtered = filterMessagesByQuery(
