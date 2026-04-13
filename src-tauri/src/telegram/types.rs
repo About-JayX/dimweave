@@ -12,6 +12,10 @@ pub struct TelegramConfig {
     pub pending_pair_expires_at: Option<u64>,
     #[serde(default)]
     pub bot_username: Option<String>,
+    /// Numeric Telegram user id of the bot itself. Persisted on first connect.
+    /// Used to filter out messages sent by the bot from getUpdates.
+    #[serde(default)]
+    pub bot_user_id: Option<i64>,
 }
 
 /// Masked runtime state safe for frontend display.

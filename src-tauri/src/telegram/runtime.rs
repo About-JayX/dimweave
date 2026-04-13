@@ -36,8 +36,9 @@ pub async fn start_runtime(
         &format!("[Telegram] connected as @{bot_username}"),
     );
 
-    // Persist bot_username so it survives restarts
+    // Persist bot identity so it survives restarts and is available for self-filter
     cfg.bot_username = Some(bot_username);
+    cfg.bot_user_id = Some(bot.id);
     let config_path = config::default_config_path()?;
     let _ = config::save_config(&config_path, &cfg);
 
@@ -107,6 +108,16 @@ pub async fn start_runtime(
         config_tx,
         shutdown_tx: Some(shutdown_tx),
     })
+}
+
+/// Returns true when an inbound message was sent by the bot itself.
+/// When bot_user_id is unknown (None), we pass the message through rather
+/// than silently dropping it.
+pub(crate) fn is_bot_own_message(from_id: Option<i64>, bot_user_id: Option<i64>) -> bool {
+    match (from_id, bot_user_id) {
+        (Some(fid), Some(bid)) => fid == bid,
+        _ => false,
+    }
 }
 
 /// Advance the cursor to `update_id` and immediately persist to disk.

@@ -53,6 +53,7 @@ mod tests {
             pending_pair_code: None,
             pending_pair_expires_at: None,
             bot_username: None,
+            bot_user_id: None,
         };
         let path = temp_path("round_trip");
         save_config(&path, &cfg).unwrap();

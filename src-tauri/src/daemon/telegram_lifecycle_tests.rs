@@ -84,3 +84,52 @@ fn mid_batch_crash_replays_only_uncommitted_updates() {
     assert_eq!(restart_offset, Some(102));
     let _ = std::fs::remove_file(&path);
 }
+
+// --- is_bot_own_message tests ---
+
+#[test]
+fn bot_own_message_matches_by_user_id() {
+    // from_id matches bot_user_id → filter it out
+    assert!(crate::telegram::runtime::is_bot_own_message(Some(42), Some(42)));
+}
+
+#[test]
+fn different_user_is_not_filtered() {
+    assert!(!crate::telegram::runtime::is_bot_own_message(Some(99), Some(42)));
+}
+
+#[test]
+fn unknown_bot_id_passes_through() {
+    // If we don't know the bot id yet, don't drop messages
+    assert!(!crate::telegram::runtime::is_bot_own_message(Some(42), None));
+}
+
+#[test]
+fn missing_sender_passes_through() {
+    // No from field (e.g. channel posts) — pass through
+    assert!(!crate::telegram::runtime::is_bot_own_message(None, Some(42)));
+}
+
+#[test]
+fn bot_user_id_persisted_in_config() {
+    // Verify TelegramConfig carries bot_user_id and round-trips through serde
+    let path = temp_config_path("bot_user_id_persist");
+    let cfg = TelegramConfig { bot_user_id: Some(123456789), ..Default::default() };
+    config::save_config(&path, &cfg).unwrap();
+    let loaded = config::load_config(&path).unwrap();
+    assert_eq!(loaded.bot_user_id, Some(123456789));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn old_config_without_bot_user_id_loads_as_none() {
+    // Backward compat: JSON without bot_user_id deserializes to None
+    let path = temp_config_path("bot_user_id_compat");
+    std::fs::write(
+        &path,
+        r#"{"enabled":false,"bot_token":"","notifications_enabled":false}"#,
+    ).unwrap();
+    let loaded = config::load_config(&path).unwrap();
+    assert_eq!(loaded.bot_user_id, None);
+    let _ = std::fs::remove_file(&path);
+}

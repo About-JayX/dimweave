@@ -39,6 +39,13 @@ pub(super) async fn handle_update(
         return;
     }
 
+    if crate::telegram::runtime::is_bot_own_message(
+        message.from.as_ref().map(|u| u.id),
+        cfg.bot_user_id,
+    ) {
+        return;
+    }
+
     gui::emit_system_log(
         app,
         "info",
