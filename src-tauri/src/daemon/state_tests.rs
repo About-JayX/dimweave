@@ -1532,7 +1532,6 @@ fn codex_owning_task_id_falls_back_to_active_task() {
 
 #[test]
 fn resolve_task_provider_agent_maps_lead_and_coder() {
-    use crate::daemon::task_graph::types::Provider;
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
     // Default: lead=Claude, coder=Codex
@@ -1621,4 +1620,105 @@ fn task_runtime_routing_provider_summary_ignores_global_channels() {
     let summary = s.task_provider_summary(&task.task_id).unwrap();
     assert!(!summary.lead_online, "global Claude should not count");
     assert!(!summary.coder_online, "global Codex should not count");
+}
+
+// ── runtime_final_cleanup: task-local ownership supersedes global singletons ──
+
+#[test]
+fn runtime_final_cleanup_task_local_role_ignores_global_role() {
+    let mut s = DaemonState::new();
+    s.claude_role = "coder".into(); // global says coder
+    let task = s.task_graph.create_task("/ws", "T");
+    // task says claude is lead (default lead_provider=Claude)
+    let agent = s.resolve_task_provider_agent(&task.task_id, "lead");
+    assert_eq!(agent, Some("claude"), "task-local lead_provider takes precedence over global claude_role");
+}
+
+#[test]
+fn runtime_final_cleanup_task_provider_connection_ignores_global_mirror() {
+    use crate::daemon::task_graph::types::Provider;
+    use crate::daemon::task_runtime::CodexTaskSlot;
+    use crate::daemon::types::{ProviderConnectionMode, ProviderConnectionState};
+
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.init_task_runtime(&task.task_id, "/ws".into());
+
+    // Global mirror has a stale codex connection
+    s.set_provider_connection("codex", ProviderConnectionState {
+        provider: Provider::Codex,
+        external_session_id: "global_stale".into(),
+        cwd: "/other".into(),
+        connection_mode: ProviderConnectionMode::Resumed,
+    });
+
+    // Task slot has its own connection
+    let mut slot = CodexTaskSlot::new(4510);
+    slot.connection = Some(ProviderConnectionState {
+        provider: Provider::Codex,
+        external_session_id: "task_local".into(),
+        cwd: "/ws".into(),
+        connection_mode: ProviderConnectionMode::New,
+    });
+    s.task_runtimes.get_mut(&task.task_id).unwrap().codex_slot = Some(slot);
+
+    let conn = s.task_provider_connection(&task.task_id, "codex");
+    assert_eq!(
+        conn.as_ref().map(|c| c.external_session_id.as_str()),
+        Some("task_local"),
+        "task_provider_connection must read from the task slot, not the global mirror"
+    );
+
+    let global = s.provider_connection("codex");
+    assert_eq!(
+        global.as_ref().map(|c| c.external_session_id.as_str()),
+        Some("global_stale"),
+        "global mirror is untouched"
+    );
+}
+
+#[test]
+fn runtime_final_cleanup_summary_uses_task_slot_connection() {
+    use crate::daemon::task_graph::types::Provider;
+    use crate::daemon::task_runtime::ClaudeTaskSlot;
+    use crate::daemon::types::{ProviderConnectionMode, ProviderConnectionState};
+
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.init_task_runtime(&task.task_id, "/ws".into());
+
+    // Global mirror has a stale session
+    s.set_provider_connection("claude", ProviderConnectionState {
+        provider: Provider::Claude,
+        external_session_id: "global_sess".into(),
+        cwd: "/other".into(),
+        connection_mode: ProviderConnectionMode::Resumed,
+    });
+
+    // Task slot is online with its own session
+    let mut claude_slot = ClaudeTaskSlot::new();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+    claude_slot.ws_tx = Some(tx);
+    claude_slot.connection = Some(ProviderConnectionState {
+        provider: Provider::Claude,
+        external_session_id: "task_sess".into(),
+        cwd: "/ws".into(),
+        connection_mode: ProviderConnectionMode::New,
+    });
+    s.task_runtimes.get_mut(&task.task_id).unwrap().claude_slot = Some(claude_slot);
+
+    let summary = s.task_provider_summary(&task.task_id).unwrap();
+    assert!(summary.lead_online);
+    let lead_sess = summary.lead_provider_session.unwrap();
+    assert_eq!(
+        lead_sess.external_session_id, "task_sess",
+        "summary must use task slot session, not global mirror"
+    );
+}
+
+#[test]
+fn runtime_final_cleanup_global_role_defaults_empty() {
+    let s = DaemonState::new();
+    assert_eq!(s.claude_role, "", "global claude_role defaults to empty (compat-only)");
+    assert_eq!(s.codex_role, "", "global codex_role defaults to empty (compat-only)");
 }

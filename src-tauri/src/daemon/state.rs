@@ -46,10 +46,14 @@ pub struct DaemonState {
     pub buffered_messages: Vec<BridgeMessage>,
     pending_permissions: HashMap<String, PendingPermission>,
     buffered_verdicts: HashMap<String, Vec<PermissionVerdict>>,
+    /// Compatibility-only: global Codex inject channel. Task-scoped code should
+    /// use `CodexTaskSlot.inject_tx` via `codex_task_inject_tx(task_id)`.
     pub codex_inject_tx: Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>>,
     codex_session_epoch: u64,
-    // Claude SDK connection (hybrid WS + HTTP POST mode)
+    /// Compatibility-only: global Claude SDK WS sender. Task-scoped code should
+    /// use `ClaudeTaskSlot.ws_tx` via the task runtime.
     pub claude_sdk_ws_tx: Option<mpsc::Sender<String>>,
+    /// Compatibility-only: global Claude SDK event sender.
     pub claude_sdk_event_tx: Option<mpsc::Sender<Vec<serde_json::Value>>>,
     /// Oneshot that fires when Claude connects via WS, carrying the inject sender.
     pub claude_sdk_ready_tx: Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>>,
@@ -60,9 +64,19 @@ pub struct DaemonState {
     claude_sdk_direct_text_state: ClaudeSdkDirectTextState,
     claude_preview_buffer: String,
     claude_preview_flush_scheduled: bool,
+    /// Compatibility-only: global role label set at connect time.
+    /// Not authoritative for task-scoped ownership — use task's
+    /// `lead_provider`/`coder_provider` via `resolve_task_provider_agent()`.
     pub claude_role: String,
+    /// Compatibility-only: global role label set at connect time.
+    /// Not authoritative for task-scoped ownership — use task's
+    /// `lead_provider`/`coder_provider` via `resolve_task_provider_agent()`.
     pub codex_role: String,
+    /// Compatibility-only: global provider connection mirror.
+    /// Task-scoped code should use `task_provider_connection(task_id, agent)`.
     pub claude_connection: Option<ProviderConnectionState>,
+    /// Compatibility-only: global provider connection mirror.
+    /// Task-scoped code should use `task_provider_connection(task_id, agent)`.
     pub codex_connection: Option<ProviderConnectionState>,
     pub runtime_health: Option<RuntimeHealthStatus>,
     pub session_mgr: Arc<Mutex<SessionManager>>,

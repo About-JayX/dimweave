@@ -38,8 +38,8 @@ impl DaemonState {
         }
     }
 
-    /// Returns a stable-ordered snapshot of currently online agents.
-    /// Order: claude first, codex second, then any other bridge agents by agent_id.
+    /// Compatibility-only: global online agents using singleton role labels.
+    /// Task-scoped callers should use `task_scoped_online_agents(task_id)`.
     pub fn online_agents_snapshot(&self) -> Vec<OnlineAgentInfo> {
         let mut result = Vec::new();
         if self.is_agent_online("claude") {

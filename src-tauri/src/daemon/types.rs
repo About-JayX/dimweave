@@ -139,7 +139,10 @@ pub struct DaemonStatusSnapshot {
     pub agents: Vec<AgentRuntimeStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_health: Option<RuntimeHealthStatus>,
+    /// Compatibility-only: reflects the global role label, not task-scoped ownership.
+    /// Frontend should prefer `TaskProviderSummary` for per-task role→provider mapping.
     pub claude_role: String,
+    /// Compatibility-only: reflects the global role label, not task-scoped ownership.
     pub codex_role: String,
 }
 

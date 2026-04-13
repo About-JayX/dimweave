@@ -583,3 +583,35 @@ Design rules:
 - Codex concurrent launches cannot reserve or release the same port lease incorrectly.
 - Background tasks continue executing while a different task is selected.
 - Frontend surfaces only the selected task's message stream while preserving per-task runtime visibility.
+
+## Final Task-Local Ownership Model (Post-Implementation)
+
+### Authoritative ownership chain
+
+```text
+Task.lead_provider / Task.coder_provider   (persisted in task_graph)
+  → resolve_task_provider_agent(task_id, role) → "claude" | "codex"
+  → TaskRuntime.claude_slot / codex_slot       (live runtime state)
+  → slot.connection                            (provider session metadata)
+  → is_task_agent_online(task_id, agent)       (online check)
+  → task_provider_summary(task_id)             (frontend DTO)
+```
+
+### Compatibility-only singletons
+
+The following `DaemonState` fields are retained for legacy/pre-task callers
+but are **not authoritative** for task-scoped operations:
+
+| Field | Task-scoped replacement |
+|-------|------------------------|
+| `claude_role` / `codex_role` | `Task.lead_provider` / `Task.coder_provider` |
+| `claude_connection` / `codex_connection` | `ClaudeTaskSlot.connection` / `CodexTaskSlot.connection` |
+| `claude_sdk_ws_tx` / `codex_inject_tx` | `ClaudeTaskSlot.ws_tx` / `CodexTaskSlot.inject_tx` |
+| `active_task_id` | Explicit `task_id` param in commands and messages |
+| `DaemonStatusSnapshot.claude_role` / `.codex_role` | `TaskProviderSummary` per-task DTO |
+
+### Allocator invariants
+
+- **Port allocation**: Codex `CodexTaskSlot.port` is unique per-task; allocated via `begin_codex_task_launch` which checks `codex_used_ports()`.
+- **Session epoch**: Each slot carries its own `session_epoch` to reject stale callbacks from prior launches of the same task.
+- **Connection metadata**: `slot.connection` is set at connect time alongside the global mirror; `task_provider_connection()` reads from the slot, never the mirror.
