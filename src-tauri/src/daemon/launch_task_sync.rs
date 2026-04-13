@@ -1,8 +1,9 @@
 use crate::daemon::task_graph::types::Provider;
 use crate::daemon::DaemonState;
 
-pub fn sync_claude_launch_into_active_task(
+pub fn sync_claude_launch_into_task(
     state: &mut DaemonState,
+    task_id: &str,
     role_id: &str,
     cwd: &str,
     session_id: &str,
@@ -20,15 +21,16 @@ pub fn sync_claude_launch_into_active_task(
             .set_transcript_path(&existing_session_id, transcript_path);
         state.resume_session(&existing_session_id).ok()
     } else {
-        // Unknown session: register on the currently active task.
+        // Unknown session: register on the explicit task.
         crate::daemon::provider::claude::register_on_launch(
             state,
+            task_id,
             role_id,
             cwd,
             session_id,
             transcript_path,
         );
-        state.active_task_id.clone()
+        Some(task_id.to_string())
     }
 }
 

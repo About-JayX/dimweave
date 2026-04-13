@@ -47,17 +47,21 @@ async fn handle_ws_connection(
     let (tx, mut rx) = mpsc::channel::<String>(64);
     let trace_nonce = crate::daemon::claude_sdk::process::redact_launch_nonce(&launch_nonce);
 
-    let (epoch, ws_generation) = {
+    let (epoch, ws_generation, task_id) = {
         let mut s = state.write().await;
-        let epoch = s.claude_sdk_epoch();
-        let Some(ws_generation) = s.attach_claude_sdk_ws(epoch, &launch_nonce, tx.clone()) else {
+        let Some(task_id) = s.find_task_for_claude_nonce(&launch_nonce) else {
+            warn!(launch_nonce = %trace_nonce, "failed to attach WS: no task owns this nonce");
+            return;
+        };
+        let epoch = s.claude_task_epoch(&task_id).unwrap_or(0);
+        let Some(ws_generation) = s.attach_claude_task_ws(&task_id, epoch, &launch_nonce, tx.clone()) else {
             warn!(epoch, launch_nonce = %trace_nonce, "failed to attach WS: epoch/nonce mismatch");
             return;
         };
-        if let Some(ready_tx) = s.claude_sdk_ready_tx.take() {
+        if let Some(ready_tx) = s.take_claude_task_ready_tx(&task_id) {
             let _ = ready_tx.send(tx.clone());
         }
-        (epoch, ws_generation)
+        (epoch, ws_generation, task_id)
     };
 
     gui::emit_agent_status(&app, "claude", true, None, None);
@@ -99,7 +103,7 @@ async fn handle_ws_connection(
 
     let cleared = {
         let mut s = state.write().await;
-        s.clear_claude_sdk_ws(epoch, &launch_nonce, ws_generation)
+        s.clear_claude_task_ws(&task_id, epoch, &launch_nonce, ws_generation)
     };
     if !cleared {
         gui::emit_system_log(

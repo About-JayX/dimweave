@@ -176,6 +176,171 @@ impl DaemonState {
         self.claude_sdk_active_nonce.as_deref()
     }
 
+    // ── Task-scoped Claude SDK lifecycle ─────────────────────
+
+    /// Find which task owns a given Claude launch nonce.
+    pub fn find_task_for_claude_nonce(&self, nonce: &str) -> Option<String> {
+        self.task_runtimes.iter().find_map(|(tid, rt)| {
+            let slot = rt.claude_slot.as_ref()?;
+            if slot.pending_nonce.as_deref() == Some(nonce)
+                || slot.active_nonce.as_deref() == Some(nonce)
+            {
+                Some(tid.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Begin a Claude launch scoped to a specific task.
+    pub fn begin_claude_task_launch(&mut self, task_id: &str, nonce: String) -> Option<u64> {
+        let rt = self.task_runtimes.get_mut(task_id)?;
+        let slot = rt.claude_slot.get_or_insert_with(
+            crate::daemon::task_runtime::ClaudeTaskSlot::new,
+        );
+        slot.session_epoch = slot.session_epoch.wrapping_add(1);
+        slot.pending_nonce = Some(nonce.clone());
+        slot.active_nonce = None;
+        slot.ws_tx = None;
+        slot.preview_buffer.clear();
+        slot.preview_flush_scheduled = false;
+        let epoch = slot.session_epoch;
+        // Sync singleton mirrors for backward-compat callers
+        self.claude_sdk_session_epoch = epoch;
+        self.claude_sdk_pending_nonce = Some(nonce);
+        self.claude_sdk_active_nonce = None;
+        self.claude_sdk_ws_tx = None;
+        self.clear_claude_preview_batch();
+        Some(epoch)
+    }
+
+    /// Attach a Claude WS connection to a specific task's slot.
+    pub fn attach_claude_task_ws(
+        &mut self,
+        task_id: &str,
+        epoch: u64,
+        launch_nonce: &str,
+        tx: mpsc::Sender<String>,
+    ) -> Option<u64> {
+        let slot = self.task_runtimes.get_mut(task_id)?.claude_slot.as_mut()?;
+        if slot.session_epoch != epoch {
+            return None;
+        }
+        if slot.pending_nonce.as_deref() == Some(launch_nonce) {
+            slot.active_nonce = Some(launch_nonce.to_string());
+            slot.pending_nonce = None;
+        } else if slot.active_nonce.as_deref() != Some(launch_nonce) {
+            return None;
+        }
+        slot.ws_generation = slot.ws_generation.wrapping_add(1);
+        slot.ws_tx = Some(tx.clone());
+        let gen = slot.ws_generation;
+        // Sync singleton mirrors
+        self.claude_sdk_ws_generation = gen;
+        self.claude_sdk_ws_tx = Some(tx);
+        self.claude_sdk_pending_nonce = slot.pending_nonce.clone();
+        self.claude_sdk_active_nonce = slot.active_nonce.clone();
+        Some(gen)
+    }
+
+    /// Clear Claude WS for a specific task's slot.
+    pub fn clear_claude_task_ws(
+        &mut self,
+        task_id: &str,
+        epoch: u64,
+        launch_nonce: &str,
+        ws_generation: u64,
+    ) -> bool {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.claude_slot.as_mut())
+        else {
+            return false;
+        };
+        if slot.session_epoch != epoch
+            || slot.active_nonce.as_deref() != Some(launch_nonce)
+            || slot.ws_generation != ws_generation
+        {
+            return false;
+        }
+        slot.ws_tx = None;
+        // Sync singleton mirror
+        self.claude_sdk_ws_tx = None;
+        true
+    }
+
+    /// Invalidate Claude session for a specific task.
+    pub fn invalidate_claude_task_session(&mut self, task_id: &str) -> Option<String> {
+        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.claude_slot.as_mut())
+        {
+            slot.session_epoch = slot.session_epoch.wrapping_add(1);
+            slot.ws_tx = None;
+            slot.event_tx = None;
+            slot.ready_tx = None;
+            slot.pending_nonce = None;
+            slot.active_nonce = None;
+            slot.preview_buffer.clear();
+            slot.preview_flush_scheduled = false;
+        }
+        // Sync singleton mirrors + detach provider binding
+        self.invalidate_claude_sdk_session()
+    }
+
+    /// Conditionally invalidate if task epoch matches.
+    pub fn invalidate_claude_task_session_if_current(
+        &mut self,
+        task_id: &str,
+        epoch: u64,
+    ) -> Option<String> {
+        let matches = self.task_runtimes.get(task_id)
+            .and_then(|rt| rt.claude_slot.as_ref())
+            .map_or(false, |slot| slot.session_epoch == epoch);
+        if !matches {
+            return None;
+        }
+        self.invalidate_claude_task_session(task_id)
+    }
+
+    /// Get the session epoch for a task's Claude slot.
+    pub fn claude_task_epoch(&self, task_id: &str) -> Option<u64> {
+        self.task_runtimes.get(task_id)?
+            .claude_slot.as_ref()
+            .map(|s| s.session_epoch)
+    }
+
+    /// Check if a specific task's Claude slot is online.
+    pub fn is_claude_task_online(&self, task_id: &str) -> bool {
+        self.task_runtimes.get(task_id)
+            .and_then(|rt| rt.claude_slot.as_ref())
+            .map_or(false, |slot| slot.is_online())
+    }
+
+    /// Store ready_tx and event_tx in a task's Claude slot.
+    pub fn set_claude_task_channels(
+        &mut self,
+        task_id: &str,
+        ready_tx: tokio::sync::oneshot::Sender<mpsc::Sender<String>>,
+        event_tx: mpsc::Sender<Vec<serde_json::Value>>,
+    ) {
+        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.claude_slot.as_mut())
+        {
+            slot.ready_tx = Some(ready_tx);
+            slot.event_tx = Some(event_tx);
+        }
+        // Singleton mirrors set by callers for backward compat
+    }
+
+    /// Take the ready_tx from a task's Claude slot.
+    pub fn take_claude_task_ready_tx(
+        &mut self,
+        task_id: &str,
+    ) -> Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>> {
+        self.task_runtimes.get_mut(task_id)?
+            .claude_slot.as_mut()?
+            .ready_tx.take()
+    }
+
     pub fn is_claude_sdk_online(&self) -> bool {
         self.claude_sdk_ws_tx.is_some()
     }

@@ -49,14 +49,13 @@ pub fn bind_transcript_path(
 /// Register a managed Claude launch into the normalized task graph.
 pub fn register_on_launch(
     state: &mut crate::daemon::DaemonState,
+    task_id: &str,
     role_id: &str,
     cwd: &str,
     claude_session_id: &str,
     transcript_path: &str,
 ) {
-    let Some(task_id) = state.active_task_id.clone() else {
-        return;
-    };
+    let task_id = task_id.to_string();
     let session_role = match role_id {
         "coder" => SessionRole::Coder,
         _ => SessionRole::Lead,

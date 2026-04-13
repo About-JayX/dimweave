@@ -45,24 +45,26 @@ impl ClaudeSdkHandle {
 /// `control/claude_sdk_handler.rs`).
 pub async fn launch(
     opts: ClaudeLaunchOpts,
+    task_id: String,
     state: SharedState,
     app: AppHandle,
 ) -> anyhow::Result<ClaudeSdkHandle> {
     let cancel = CancellationToken::new();
-    let (child_arc, epoch) = spawn_runtime(&opts, state.clone(), app.clone()).await?;
+    let (child_arc, epoch) = spawn_runtime(&opts, &task_id, state.clone(), app.clone()).await?;
     let monitor_cancel = cancel.clone();
     let monitor_app = app.clone();
     let monitor_state = state.clone();
     let monitor_role = opts.role.clone().unwrap_or_else(|| "lead".into());
     let monitor_opts = opts.clone();
     let monitor_child = child_arc.clone();
+    let monitor_task_id = task_id;
     tokio::spawn(async move {
         let mut current_child = monitor_child;
         let mut current_epoch = epoch;
         loop {
             tokio::select! {
                 _ = monitor_cancel.cancelled() => return,
-                ws_lost = wait_for_ws_disconnect(&monitor_state, current_epoch) => {
+                ws_lost = wait_for_ws_disconnect(&monitor_state, &monitor_task_id, current_epoch) => {
                     if !ws_lost {
                         return;
                     }
@@ -70,6 +72,7 @@ pub async fn launch(
                         &mut current_child,
                         &mut current_epoch,
                         &monitor_opts,
+                        &monitor_task_id,
                         &monitor_state,
                         &monitor_app,
                         &monitor_cancel,
@@ -78,10 +81,13 @@ pub async fn launch(
                     }
                 }
                 _ = poll_child_exit(&current_child, true) => {
-                    let (is_current, task_id) = {
+                    let (is_current, affected_task_id) = {
                         let mut s = monitor_state.write().await;
-                        let is_current = s.claude_sdk_epoch() == current_epoch;
-                        let tid = s.invalidate_claude_sdk_session_if_current(current_epoch);
+                        let is_current = s.claude_task_epoch(&monitor_task_id)
+                            == Some(current_epoch);
+                        let tid = s.invalidate_claude_task_session_if_current(
+                            &monitor_task_id, current_epoch,
+                        );
                         (is_current, tid)
                     };
                     if !is_current {
@@ -100,9 +106,9 @@ pub async fn launch(
                         "info",
                         &format!("[Claude SDK] process exited, role={monitor_role}"),
                     );
-                    if let Some(task_id) = task_id {
+                    if let Some(tid) = affected_task_id {
                         crate::daemon::gui_task::emit_task_context_events(
-                            &monitor_state, &monitor_app, &task_id,
+                            &monitor_state, &monitor_app, &tid,
                         ).await;
                     }
                     return;

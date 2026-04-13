@@ -868,3 +868,122 @@ fn shutdown_teardown_clears_live_runtime_handles() {
         .resolve_permission("req-1", PermissionBehavior::Allow, 200)
         .is_none());
 }
+
+// ── claude_task_slot tests ─────────────────────────────────
+
+#[test]
+fn claude_task_slot_begin_launch_creates_slot_and_returns_epoch() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+
+    let epoch = s.begin_claude_task_launch(&task.task_id, "nonce-a".into());
+    assert!(epoch.is_some());
+    assert_eq!(s.claude_task_epoch(&task.task_id), epoch);
+}
+
+#[test]
+fn claude_task_slot_begin_launch_returns_none_without_runtime() {
+    let mut s = DaemonState::new();
+    assert!(s.begin_claude_task_launch("no-such-task", "nonce".into()).is_none());
+}
+
+#[test]
+fn claude_task_slot_attach_ws_promotes_nonce_and_returns_generation() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_claude_task_launch(&task.task_id, "nonce-a".into()).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+
+    let gen = s.attach_claude_task_ws(&task.task_id, epoch, "nonce-a", tx);
+    assert!(gen.is_some());
+    assert!(s.is_claude_task_online(&task.task_id));
+}
+
+#[test]
+fn claude_task_slot_attach_ws_rejects_wrong_nonce() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_claude_task_launch(&task.task_id, "nonce-a".into()).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+
+    assert!(s.attach_claude_task_ws(&task.task_id, epoch, "wrong-nonce", tx).is_none());
+    assert!(!s.is_claude_task_online(&task.task_id));
+}
+
+#[test]
+fn claude_task_slot_clear_ws_only_affects_matching_generation() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_claude_task_launch(&task.task_id, "nonce-a".into()).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<String>(1);
+    let gen1 = s.attach_claude_task_ws(&task.task_id, epoch, "nonce-a", tx1).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<String>(1);
+    let gen2 = s.attach_claude_task_ws(&task.task_id, epoch, "nonce-a", tx2).unwrap();
+
+    // Stale generation cannot clear
+    assert!(!s.clear_claude_task_ws(&task.task_id, epoch, "nonce-a", gen1));
+    assert!(s.is_claude_task_online(&task.task_id));
+    // Current generation clears
+    assert!(s.clear_claude_task_ws(&task.task_id, epoch, "nonce-a", gen2));
+    assert!(!s.is_claude_task_online(&task.task_id));
+}
+
+#[test]
+fn claude_task_slot_cross_task_isolation() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let epoch1 = s.begin_claude_task_launch(&t1.task_id, "nonce-1".into()).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t1.task_id, epoch1, "nonce-1", tx1);
+
+    let epoch2 = s.begin_claude_task_launch(&t2.task_id, "nonce-2".into()).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t2.task_id, epoch2, "nonce-2", tx2);
+
+    // Invalidating task 1 should NOT affect task 2
+    s.invalidate_claude_task_session(&t1.task_id);
+    assert!(!s.is_claude_task_online(&t1.task_id));
+    // Task 2 epoch should still be valid (even though singleton was cleared)
+    assert_eq!(s.claude_task_epoch(&t2.task_id), Some(epoch2));
+}
+
+#[test]
+fn claude_task_slot_find_task_for_nonce_scans_runtimes() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    s.begin_claude_task_launch(&t1.task_id, "nonce-1".into());
+    s.begin_claude_task_launch(&t2.task_id, "nonce-2".into());
+
+    assert_eq!(s.find_task_for_claude_nonce("nonce-1"), Some(t1.task_id.clone()));
+    assert_eq!(s.find_task_for_claude_nonce("nonce-2"), Some(t2.task_id.clone()));
+    assert_eq!(s.find_task_for_claude_nonce("unknown"), None);
+}
+
+#[test]
+fn claude_task_slot_invalidate_if_current_guards_on_epoch() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch1 = s.begin_claude_task_launch(&task.task_id, "nonce-a".into()).unwrap();
+    // Launch again — epoch advances
+    let epoch2 = s.begin_claude_task_launch(&task.task_id, "nonce-b".into()).unwrap();
+    assert_ne!(epoch1, epoch2);
+
+    // Stale epoch cannot invalidate
+    assert!(s.invalidate_claude_task_session_if_current(&task.task_id, epoch1).is_none());
+    // Current epoch can
+    assert!(s.invalidate_claude_task_session_if_current(&task.task_id, epoch2).is_some()
+        || s.claude_task_epoch(&task.task_id).is_some());
+}

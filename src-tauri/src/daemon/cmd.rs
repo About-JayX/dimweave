@@ -20,6 +20,7 @@ pub enum DaemonCmd {
         reply: oneshot::Sender<Result<(), String>>,
     },
     LaunchClaudeSdk {
+        task_id: String,
         role_id: String,
         cwd: String,
         model: Option<String>,

@@ -169,13 +169,23 @@ pub async fn daemon_launch_claude_sdk(
     model: Option<String>,
     effort: Option<String>,
     resume_session_id: Option<String>,
+    task_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     validate_claude_launch_args(&role_id, &cwd)?;
+    // Resolve task_id: explicit param > active task (resolved by daemon)
+    let task_id = match task_id {
+        Some(tid) if !tid.is_empty() => tid,
+        _ => {
+            // Daemon will resolve from active_task_id
+            String::new()
+        }
+    };
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
         .0
         .send(DaemonCmd::LaunchClaudeSdk {
+            task_id,
             role_id,
             cwd,
             model,

@@ -40,13 +40,17 @@ async fn prepare_launch_channels(
     state: SharedState,
     app: AppHandle,
     launch_nonce: String,
-) -> (oneshot::Receiver<mpsc::Sender<String>>, u64) {
+    task_id: &str,
+) -> Result<(oneshot::Receiver<mpsc::Sender<String>>, u64), String> {
     let (ready_tx, ready_rx) = oneshot::channel::<mpsc::Sender<String>>();
     let (event_tx, mut event_rx) = mpsc::channel::<Vec<Value>>(256);
     let epoch = {
         let mut s = state.write().await;
-        let epoch = s.begin_claude_sdk_launch(launch_nonce);
-        s.claude_sdk_ready_tx = Some(ready_tx);
+        let epoch = s.begin_claude_task_launch(task_id, launch_nonce)
+            .ok_or_else(|| format!("task runtime not found: {task_id}"))?;
+        s.set_claude_task_channels(task_id, ready_tx, event_tx.clone());
+        // Singleton mirrors for backward-compat event ingress
+        s.claude_sdk_ready_tx = None; // ready_tx moved into slot
         s.claude_sdk_event_tx = Some(event_tx);
         epoch
     };
@@ -62,11 +66,12 @@ async fn prepare_launch_channels(
             .await;
         }
     });
-    (ready_rx, epoch)
+    Ok((ready_rx, epoch))
 }
 
 pub async fn spawn_runtime(
     opts: &ClaudeLaunchOpts,
+    task_id: &str,
     state: SharedState,
     app: AppHandle,
 ) -> anyhow::Result<(Arc<Mutex<Option<tokio::process::Child>>>, u64)> {
@@ -74,7 +79,9 @@ pub async fn spawn_runtime(
     let role_id = opts.role.clone().unwrap_or_else(|| "lead".into());
     let is_resume = opts.resume.is_some();
     let (ready_rx, epoch) =
-        prepare_launch_channels(state.clone(), app.clone(), opts.launch_nonce.clone()).await;
+        prepare_launch_channels(state.clone(), app.clone(), opts.launch_nonce.clone(), task_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
 
     let mut child = match process::spawn_claude(opts) {
         Ok(child) => child,
@@ -82,7 +89,7 @@ pub async fn spawn_runtime(
             state
                 .write()
                 .await
-                .invalidate_claude_sdk_session_if_current(epoch);
+                .invalidate_claude_task_session_if_current(task_id, epoch);
             return Err(err);
         }
     };
@@ -110,7 +117,7 @@ pub async fn spawn_runtime(
         state
             .write()
             .await
-            .invalidate_claude_sdk_session_if_current(epoch);
+            .invalidate_claude_task_session_if_current(task_id, epoch);
         anyhow::bail!("Claude SDK did not connect within 30s");
     }
 

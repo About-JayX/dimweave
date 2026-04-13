@@ -6,14 +6,14 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-pub async fn wait_for_ws_disconnect(state: &SharedState, epoch: u64) -> bool {
+pub async fn wait_for_ws_disconnect(state: &SharedState, task_id: &str, epoch: u64) -> bool {
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         let daemon = state.read().await;
-        if daemon.claude_sdk_epoch() != epoch {
+        if daemon.claude_task_epoch(task_id) != Some(epoch) {
             return false;
         }
-        if !daemon.is_claude_sdk_online() {
+        if !daemon.is_claude_task_online(task_id) {
             return true;
         }
     }
@@ -23,6 +23,7 @@ pub async fn recover_ws_connection(
     child: &mut Arc<Mutex<Option<tokio::process::Child>>>,
     epoch: &mut u64,
     base_opts: &ClaudeLaunchOpts,
+    task_id: &str,
     state: &SharedState,
     app: &AppHandle,
     cancel: &CancellationToken,
@@ -54,7 +55,7 @@ pub async fn recover_ws_connection(
         let mut next_opts = base_opts.clone();
         next_opts.resume = Some(session_id.clone());
         next_opts.launch_nonce = uuid::Uuid::new_v4().to_string();
-        match spawn_runtime(&next_opts, state.clone(), app.clone()).await {
+        match spawn_runtime(&next_opts, task_id, state.clone(), app.clone()).await {
             Ok((next_child, next_epoch)) => {
                 *child = next_child;
                 *epoch = next_epoch;
@@ -81,18 +82,18 @@ pub async fn recover_ws_connection(
         ),
     )
     .await;
-    let (is_current, task_id) = {
+    let (is_current, affected_task_id) = {
         let mut s = state.write().await;
-        let is_current = s.claude_sdk_epoch() == *epoch;
-        let tid = s.invalidate_claude_sdk_session_if_current(*epoch);
+        let is_current = s.claude_task_epoch(task_id) == Some(*epoch);
+        let tid = s.invalidate_claude_task_session_if_current(task_id, *epoch);
         (is_current, tid)
     };
     if is_current {
         gui::emit_agent_status(app, "claude", false, None, None);
         gui::emit_claude_stream(app, gui::ClaudeStreamPayload::Reset);
     }
-    if let Some(task_id) = task_id {
-        crate::daemon::gui_task::emit_task_context_events(state, app, &task_id).await;
+    if let Some(tid) = affected_task_id {
+        crate::daemon::gui_task::emit_task_context_events(state, app, &tid).await;
     }
     false
 }

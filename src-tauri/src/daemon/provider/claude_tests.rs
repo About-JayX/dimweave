@@ -5,7 +5,7 @@ use crate::daemon::provider::shared::{
 use crate::daemon::task_graph::store::TaskGraphStore;
 use crate::daemon::task_graph::types::*;
 use crate::daemon::DaemonState;
-use crate::daemon::launch_task_sync::sync_claude_launch_into_active_task;
+use crate::daemon::launch_task_sync::sync_claude_launch_into_task;
 use std::fs;
 
 // ── register_session ───────────────────────────────────────
@@ -159,6 +159,7 @@ fn register_on_launch_captures_transcript_path() {
 
     claude::register_on_launch(
         &mut s,
+        &tid,
         "lead",
         "/ws",
         "claude_launch_123",
@@ -183,8 +184,9 @@ fn sync_claude_launch_sets_current_coder_session_for_active_task() {
     let mut state = DaemonState::new();
     let task = state.create_and_select_task("/ws", "Task");
 
-    sync_claude_launch_into_active_task(
+    sync_claude_launch_into_task(
         &mut state,
+        &task.task_id,
         "coder",
         "/ws",
         "claude_session_1",
@@ -216,8 +218,9 @@ fn sync_claude_launch_resumes_known_history_session() {
         .task_graph
         .set_lead_session(&task_history.task_id, &history_session.session_id);
 
-    sync_claude_launch_into_active_task(
+    sync_claude_launch_into_task(
         &mut state,
+        &task_current.task_id,
         "lead",
         "/ws",
         "claude_hist_1",

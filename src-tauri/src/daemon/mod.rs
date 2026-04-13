@@ -108,6 +108,7 @@ async fn stop_claude_sdk_session(
 }
 
 async fn launch_claude_sdk(
+    task_id: &str,
     role_id: &str,
     cwd: &str,
     model: Option<String>,
@@ -151,7 +152,7 @@ async fn launch_claude_sdk(
         mcp_config: Some(mcp_config),
     };
 
-    match claude_sdk::launch(opts, state.clone(), app.clone()).await {
+    match claude_sdk::launch(opts, task_id.to_string(), state.clone(), app.clone()).await {
         Ok(handle) => Ok((handle, external_session_id)),
         Err(e) => {
             gui::emit_agent_status(app, "claude", false, None, None);
@@ -208,7 +209,10 @@ async fn attach_provider_history(
                 ));
             }
             stop_claude_sdk_session(claude_sdk_handle, state, app).await;
+            let attach_task_id = state.read().await.active_task_id.clone()
+                .unwrap_or_default();
             let (handle, _external_session_id) = launch_claude_sdk(
+                &attach_task_id,
                 role_id,
                 &cwd,
                 None,
@@ -225,17 +229,19 @@ async fn attach_provider_history(
                     .to_string();
             let task_id = {
                 let mut daemon = state.write().await;
+                let tid = daemon
+                    .active_task_id
+                    .clone()
+                    .ok_or_else(|| "no active task selected".to_string())?;
                 crate::daemon::provider::claude::register_on_launch(
                     &mut daemon,
+                    &tid,
                     role_id,
                     &cwd,
                     &external_id,
                     &transcript_path,
                 );
-                daemon
-                    .active_task_id
-                    .clone()
-                    .ok_or_else(|| "no active task selected".to_string())?
+                tid
             };
             Ok(task_id)
         }
@@ -421,6 +427,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             }
             DaemonCmd::StopCodex => stop_codex_session(&mut codex_handle, &state, &app).await,
             DaemonCmd::LaunchClaudeSdk {
+                task_id,
                 role_id,
                 cwd,
                 model,
@@ -429,7 +436,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 reply,
             } => {
                 stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                // Resolve task_id: explicit param > active_task_id
+                let resolved_task_id = if task_id.is_empty() {
+                    state.read().await.active_task_id.clone().unwrap_or_default()
+                } else {
+                    task_id
+                };
                 let result = launch_claude_sdk(
+                    &resolved_task_id,
                     &role_id,
                     &cwd,
                     model,
@@ -453,10 +467,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 continue;
                             }
                         };
-                        let task_id = {
+                        let synced_task_id = {
                             let mut daemon = state.write().await;
-                            launch_task_sync::sync_claude_launch_into_active_task(
+                            launch_task_sync::sync_claude_launch_into_task(
                                 &mut daemon,
+                                &resolved_task_id,
                                 &role_id,
                                 &cwd,
                                 &external_session_id,
@@ -464,7 +479,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             )
                         };
                         claude_sdk_handle = Some(handle);
-                        if let Some(task_id) = task_id {
+                        if let Some(task_id) = synced_task_id {
                             emit_task_context_events(&state, &app, &task_id).await;
                         }
                         let _ = reply.send(Ok(()));
@@ -702,7 +717,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 } else {
                                     stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app)
                                         .await;
+                                    let resume_task_id = state.read().await.active_task_id
+                                        .clone().unwrap_or_default();
                                     match launch_claude_sdk(
+                                        &resume_task_id,
                                         role_id,
                                         &target.cwd,
                                         None,
