@@ -57,7 +57,12 @@ export function TaskPanel() {
   const handleSetupSubmit = useCallback(
     (payload: TaskSetupSubmitPayload) => {
       if (dialogMode === "create" && selectedWorkspace) {
-        void createConfiguredTask(selectedWorkspace, payload.title, {
+        const title =
+          selectedWorkspace
+            .split(/[\\/]/)
+            .filter(Boolean)
+            .at(-1) || "Untitled";
+        void createConfiguredTask(selectedWorkspace, title, {
           leadProvider: payload.leadProvider,
           coderProvider: payload.coderProvider,
         });
@@ -123,7 +128,6 @@ export function TaskPanel() {
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           onSubmit={handleSetupSubmit}
-          initialTitle={task.title}
           initialLeadProvider={task.leadProvider}
           initialCoderProvider={task.coderProvider}
         />

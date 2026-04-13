@@ -46,7 +46,10 @@ export function ReplyInput() {
     codexRole,
   });
   const canSend =
-    connected && !taskSessionWarning && hasMessagePayload(draft, attachments);
+    !!activeTask &&
+    connected &&
+    !taskSessionWarning &&
+    hasMessagePayload(draft, attachments);
 
   const handleSend = useCallback(() => {
     const trimmed = draft.trim();
@@ -132,7 +135,8 @@ export function ReplyInput() {
         </div>
         <textarea
           ref={textareaRef}
-          className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+          disabled={!activeTask}
+          className="block w-full min-h-[44px] resize-none bg-transparent px-5 py-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onPaste={handlePaste}

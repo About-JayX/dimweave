@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { Provider } from "@/stores/task-store/types";
 
 export type TaskSetupMode = "create" | "edit";
 
 export interface TaskSetupSubmitPayload {
-  title: string;
   leadProvider: Provider;
   coderProvider: Provider;
 }
@@ -15,7 +15,6 @@ interface TaskSetupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: TaskSetupSubmitPayload) => void;
-  initialTitle?: string;
   initialLeadProvider?: Provider;
   initialCoderProvider?: Provider;
 }
@@ -51,15 +50,12 @@ function ProviderSelect({
 
 export function TaskSetupDialog({
   mode,
-  workspace,
   open,
   onOpenChange,
   onSubmit,
-  initialTitle = "",
   initialLeadProvider = "claude",
   initialCoderProvider = "codex",
 }: TaskSetupDialogProps) {
-  const [title, setTitle] = useState(initialTitle);
   const [leadProvider, setLeadProvider] =
     useState<Provider>(initialLeadProvider);
   const [coderProvider, setCoderProvider] =
@@ -71,18 +67,7 @@ export function TaskSetupDialog({
   const submitLabel = mode === "create" ? "Create" : "Save";
 
   const handleSubmit = () => {
-    const finalTitle =
-      title.trim() ||
-      workspace
-        .split(/[\\/]/)
-        .filter(Boolean)
-        .at(-1) ||
-      "Untitled";
-    onSubmit({
-      title: finalTitle,
-      leadProvider,
-      coderProvider,
-    });
+    onSubmit({ leadProvider, coderProvider });
     onOpenChange(false);
   };
 
@@ -91,22 +76,6 @@ export function TaskSetupDialog({
       <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
 
       <div className="space-y-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Title</span>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={
-              workspace
-                .split(/[\\/]/)
-                .filter(Boolean)
-                .at(-1) || "Task title"
-            }
-            className="rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary/40"
-          />
-        </label>
-
         <ProviderSelect
           label="Lead provider"
           value={leadProvider}
@@ -135,6 +104,8 @@ export function TaskSetupDialog({
           {submitLabel}
         </button>
       </div>
+
+      {mode === "edit" && <AgentStatusPanel />}
     </div>
   );
 }

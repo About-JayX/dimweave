@@ -155,6 +155,7 @@ describe("ReplyInput", () => {
     const { ReplyInput } = await import("./index");
     const html = renderToStaticMarkup(<ReplyInput />);
     expect(html).toContain("Create a task first");
+    expect(html).toContain('disabled=""');
   });
 
   test("returns no warning when the connected agent matches the active task session", () => {
