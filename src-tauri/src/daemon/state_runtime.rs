@@ -76,6 +76,11 @@ impl DaemonState {
     }
 
     pub fn claude_sdk_accepts_launch_nonce(&self, launch_nonce: &str) -> bool {
+        // Primary: scan task-local slots (truth source for multi-task)
+        if self.find_task_for_claude_nonce(launch_nonce).is_some() {
+            return true;
+        }
+        // Fallback: singleton mirrors for legacy (non-task-scoped) launches
         self.claude_sdk_pending_nonce.as_deref() == Some(launch_nonce)
             || self.claude_sdk_active_nonce.as_deref() == Some(launch_nonce)
     }
@@ -199,19 +204,12 @@ impl DaemonState {
             crate::daemon::task_runtime::ClaudeTaskSlot::new,
         );
         slot.session_epoch = slot.session_epoch.wrapping_add(1);
-        slot.pending_nonce = Some(nonce.clone());
+        slot.pending_nonce = Some(nonce);
         slot.active_nonce = None;
         slot.ws_tx = None;
         slot.preview_buffer.clear();
         slot.preview_flush_scheduled = false;
-        let epoch = slot.session_epoch;
-        // Sync singleton mirrors for backward-compat callers
-        self.claude_sdk_session_epoch = epoch;
-        self.claude_sdk_pending_nonce = Some(nonce);
-        self.claude_sdk_active_nonce = None;
-        self.claude_sdk_ws_tx = None;
-        self.clear_claude_preview_batch();
-        Some(epoch)
+        Some(slot.session_epoch)
     }
 
     /// Attach a Claude WS connection to a specific task's slot.
@@ -235,11 +233,9 @@ impl DaemonState {
         slot.ws_generation = slot.ws_generation.wrapping_add(1);
         slot.ws_tx = Some(tx.clone());
         let gen = slot.ws_generation;
-        // Sync singleton mirrors
-        self.claude_sdk_ws_generation = gen;
+        // Sync singleton ws_tx — routing.rs / permission.rs read this directly.
+        // In single-active-Claude mode, this is always the most recent attach.
         self.claude_sdk_ws_tx = Some(tx);
-        self.claude_sdk_pending_nonce = slot.pending_nonce.clone();
-        self.claude_sdk_active_nonce = slot.active_nonce.clone();
         Some(gen)
     }
 
@@ -263,12 +259,21 @@ impl DaemonState {
             return false;
         }
         slot.ws_tx = None;
-        // Sync singleton mirror
-        self.claude_sdk_ws_tx = None;
+        // Recompute singleton ws_tx from surviving task slots
+        self.recompute_claude_singleton_ws_tx();
         true
     }
 
+    /// Recompute singleton `claude_sdk_ws_tx` from task slots.
+    /// Sets it to the first online slot's ws_tx, or None if none online.
+    fn recompute_claude_singleton_ws_tx(&mut self) {
+        self.claude_sdk_ws_tx = self.task_runtimes.values()
+            .filter_map(|rt| rt.claude_slot.as_ref())
+            .find_map(|slot| slot.ws_tx.clone());
+    }
+
     /// Invalidate Claude session for a specific task.
+    /// Only clears this task's slot; does NOT blindly wipe global state.
     pub fn invalidate_claude_task_session(&mut self, task_id: &str) -> Option<String> {
         if let Some(slot) = self.task_runtimes.get_mut(task_id)
             .and_then(|rt| rt.claude_slot.as_mut())
@@ -282,8 +287,20 @@ impl DaemonState {
             slot.preview_buffer.clear();
             slot.preview_flush_scheduled = false;
         }
-        // Sync singleton mirrors + detach provider binding
-        self.invalidate_claude_sdk_session()
+        // Only clear global state if NO other task has an active Claude slot
+        if !self.any_claude_task_online() {
+            self.invalidate_claude_sdk_session()
+        } else {
+            // Detach provider binding for this task only
+            self.detach_provider_binding("claude")
+        }
+    }
+
+    /// True if any task runtime has an online Claude slot.
+    fn any_claude_task_online(&self) -> bool {
+        self.task_runtimes.values().any(|rt| {
+            rt.claude_slot.as_ref().map_or(false, |s| s.is_online())
+        })
     }
 
     /// Conditionally invalidate if task epoch matches.
@@ -341,7 +358,32 @@ impl DaemonState {
             .ready_tx.take()
     }
 
+    /// Get the event_tx for whichever task owns this launch nonce.
+    pub fn claude_task_event_tx_for_nonce(
+        &self,
+        nonce: &str,
+    ) -> Option<mpsc::Sender<Vec<serde_json::Value>>> {
+        let task_id = self.find_task_for_claude_nonce(nonce)?;
+        self.task_runtimes.get(&task_id)?
+            .claude_slot.as_ref()?
+            .event_tx.clone()
+    }
+
+    /// Get the ws_tx for a specific task's Claude slot.
+    pub fn claude_task_ws_tx(&self, task_id: &str) -> Option<mpsc::Sender<String>> {
+        self.task_runtimes.get(task_id)?
+            .claude_slot.as_ref()?
+            .ws_tx.clone()
+    }
+
     pub fn is_claude_sdk_online(&self) -> bool {
+        // Primary: any task slot with an active WS
+        if self.task_runtimes.values().any(|rt| {
+            rt.claude_slot.as_ref().map_or(false, |s| s.is_online())
+        }) {
+            return true;
+        }
+        // Fallback: singleton mirror for legacy callers
         self.claude_sdk_ws_tx.is_some()
     }
 

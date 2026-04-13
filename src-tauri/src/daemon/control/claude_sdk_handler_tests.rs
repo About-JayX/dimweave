@@ -51,7 +51,7 @@ fn summarize_events_batch_reports_count_and_event_kinds() {
 async fn enqueue_events_errors_when_queue_missing() {
     let state = Arc::new(RwLock::new(DaemonState::new()));
 
-    let result = enqueue_events(&state, vec![json!({"type": "system"})]).await;
+    let result = enqueue_events(&state, "no-nonce", vec![json!({"type": "system"})]).await;
 
     assert_eq!(result, Err(EventEnqueueError::QueueUnavailable));
 }
@@ -63,7 +63,7 @@ async fn enqueue_events_errors_when_queue_closed() {
     drop(rx);
     state.write().await.claude_sdk_event_tx = Some(tx);
 
-    let result = enqueue_events(&state, vec![json!({"type": "system"})]).await;
+    let result = enqueue_events(&state, "no-nonce", vec![json!({"type": "system"})]).await;
 
     assert_eq!(result, Err(EventEnqueueError::QueueClosed));
 }
@@ -76,8 +76,8 @@ async fn enqueue_events_preserves_fifo_batch_order() {
     let first = vec![json!({"type": "system", "session_id": "1"})];
     let second = vec![json!({"type": "result", "session_id": "2"})];
 
-    enqueue_events(&state, first.clone()).await.unwrap();
-    enqueue_events(&state, second.clone()).await.unwrap();
+    enqueue_events(&state, "no-nonce", first.clone()).await.unwrap();
+    enqueue_events(&state, "no-nonce", second.clone()).await.unwrap();
 
     assert_eq!(rx.recv().await, Some(first));
     assert_eq!(rx.recv().await, Some(second));

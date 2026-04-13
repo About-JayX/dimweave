@@ -48,10 +48,10 @@ async fn prepare_launch_channels(
         let mut s = state.write().await;
         let epoch = s.begin_claude_task_launch(task_id, launch_nonce)
             .ok_or_else(|| format!("task runtime not found: {task_id}"))?;
-        s.set_claude_task_channels(task_id, ready_tx, event_tx.clone());
-        // Singleton mirrors for backward-compat event ingress
-        s.claude_sdk_ready_tx = None; // ready_tx moved into slot
-        s.claude_sdk_event_tx = Some(event_tx);
+        s.set_claude_task_channels(task_id, ready_tx, event_tx);
+        // ready_tx and event_tx now live in the task slot;
+        // no singleton mirror needed — enqueue_events resolves via nonce.
+        s.claude_sdk_ready_tx = None;
         epoch
     };
     let event_state = state.clone();

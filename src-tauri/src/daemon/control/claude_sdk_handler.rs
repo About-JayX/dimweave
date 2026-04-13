@@ -158,7 +158,7 @@ pub async fn events_handler(
                     summarize_events_batch(&body)
                 ),
             );
-            match enqueue_events(&state, body.events).await {
+            match enqueue_events(&state, &launch_nonce, body.events).await {
                 Ok(()) => (StatusCode::OK, Json(serde_json::json!({"ok": true}))).into_response(),
                 Err(EventEnqueueError::QueueUnavailable) => (
                     StatusCode::SERVICE_UNAVAILABLE,
@@ -185,13 +185,14 @@ pub async fn events_handler(
     }
 }
 
-async fn enqueue_events(state: &SharedState, events: Vec<serde_json::Value>) -> Result<(), EventEnqueueError> {
-    let tx = state
-        .read()
-        .await
-        .claude_sdk_event_tx
-        .clone()
+async fn enqueue_events(state: &SharedState, launch_nonce: &str, events: Vec<serde_json::Value>) -> Result<(), EventEnqueueError> {
+    let s = state.read().await;
+    // Primary: task-local event_tx resolved by nonce
+    let tx = s.claude_task_event_tx_for_nonce(launch_nonce)
+        // Fallback: singleton mirror for legacy callers
+        .or_else(|| s.claude_sdk_event_tx.clone())
         .ok_or(EventEnqueueError::QueueUnavailable)?;
+    drop(s);
     tx.send(events)
         .await
         .map_err(|_| EventEnqueueError::QueueClosed)

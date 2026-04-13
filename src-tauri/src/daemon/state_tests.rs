@@ -987,3 +987,86 @@ fn claude_task_slot_invalidate_if_current_guards_on_epoch() {
     assert!(s.invalidate_claude_task_session_if_current(&task.task_id, epoch2).is_some()
         || s.claude_task_epoch(&task.task_id).is_some());
 }
+
+// ── Regression: Finding 1 — nonce isolation across tasks ────
+
+#[test]
+fn claude_task_slot_task_b_launch_does_not_invalidate_task_a_nonce() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    s.begin_claude_task_launch(&t1.task_id, "nonce-a".into());
+    // Task B launches — must NOT invalidate nonce-a
+    s.begin_claude_task_launch(&t2.task_id, "nonce-b".into());
+
+    assert!(s.claude_sdk_accepts_launch_nonce("nonce-a"),
+        "task A nonce must survive task B launch");
+    assert!(s.claude_sdk_accepts_launch_nonce("nonce-b"));
+}
+
+// ── Regression: Finding 2 — event routing per nonce ─────────
+
+#[test]
+fn claude_task_slot_event_tx_resolves_by_nonce() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    s.begin_claude_task_launch(&t1.task_id, "nonce-1".into());
+    s.begin_claude_task_launch(&t2.task_id, "nonce-2".into());
+
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<Vec<serde_json::Value>>(1);
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<Vec<serde_json::Value>>(1);
+    let (ready1, _) = tokio::sync::oneshot::channel();
+    let (ready2, _) = tokio::sync::oneshot::channel();
+    s.set_claude_task_channels(&t1.task_id, ready1, tx1);
+    s.set_claude_task_channels(&t2.task_id, ready2, tx2);
+
+    // nonce-1 must resolve to task 1's event_tx, not task 2's
+    let resolved1 = s.claude_task_event_tx_for_nonce("nonce-1");
+    let resolved2 = s.claude_task_event_tx_for_nonce("nonce-2");
+    assert!(resolved1.is_some(), "nonce-1 should resolve event_tx");
+    assert!(resolved2.is_some(), "nonce-2 should resolve event_tx");
+    assert!(s.claude_task_event_tx_for_nonce("unknown").is_none());
+}
+
+// ── Regression: Finding 3 — invalidate isolation ────────────
+
+#[test]
+fn claude_task_slot_invalidate_task_a_preserves_task_b_online() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let epoch1 = s.begin_claude_task_launch(&t1.task_id, "nonce-1".into()).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t1.task_id, epoch1, "nonce-1", tx1);
+
+    let epoch2 = s.begin_claude_task_launch(&t2.task_id, "nonce-2".into()).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t2.task_id, epoch2, "nonce-2", tx2);
+
+    // Both online
+    assert!(s.is_claude_task_online(&t1.task_id));
+    assert!(s.is_claude_task_online(&t2.task_id));
+    assert!(s.is_claude_sdk_online());
+
+    // Invalidate task 1 — must NOT take task 2 offline
+    s.invalidate_claude_task_session(&t1.task_id);
+
+    assert!(!s.is_claude_task_online(&t1.task_id));
+    assert!(s.is_claude_task_online(&t2.task_id),
+        "task B must stay online after task A invalidation");
+    assert!(s.is_claude_sdk_online(),
+        "global online must reflect surviving task B");
+    // Singleton ws_tx should still work (recomputed from task B)
+    assert!(s.claude_sdk_ws_tx.is_some(),
+        "singleton ws_tx must be recomputed from surviving slots");
+}
