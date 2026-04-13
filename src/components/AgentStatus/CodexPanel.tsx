@@ -42,6 +42,8 @@ interface CodexPanelProps {
   refreshing: boolean;
   refreshUsage: () => void;
   providerSession?: ProviderSessionInfo;
+  workspace?: string;
+  draftMode?: boolean;
 }
 
 export function CodexPanel({
@@ -52,6 +54,8 @@ export function CodexPanel({
   refreshing,
   refreshUsage,
   providerSession,
+  workspace,
+  draftMode = false,
 }: CodexPanelProps) {
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
@@ -70,9 +74,9 @@ export function CodexPanel({
   const effectiveCwd = useMemo(
     () =>
       resolveProviderHistoryWorkspace(
-        activeTask?.workspaceRoot ?? selectedWorkspace,
+        workspace ?? activeTask?.workspaceRoot ?? selectedWorkspace,
       ),
-    [activeTask?.workspaceRoot, selectedWorkspace],
+    [workspace, activeTask?.workspaceRoot, selectedWorkspace],
   );
 
   const [connecting, setConnecting] = useState(false);
@@ -306,13 +310,14 @@ export function CodexPanel({
             )}
             size="sm"
             disabled={
-              !connecting &&
-              !canConnectCodex({
-                cwd: effectiveCwd,
-                role: codexRole,
-                connecting: false,
-                running: !!codexTuiRunning,
-              })
+              draftMode ||
+              (!connecting &&
+                !canConnectCodex({
+                  cwd: effectiveCwd,
+                  role: codexRole,
+                  connecting: false,
+                  running: !!codexTuiRunning,
+                }))
             }
             onClick={handleConnect}
           >

@@ -26,6 +26,10 @@ Object.assign(globalThis, {
     removeEventListener: () => {},
     innerWidth: 800,
   },
+  document: {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  },
   localStorage: {
     getItem: () => null,
     setItem: () => {},
@@ -37,7 +41,7 @@ Object.assign(globalThis, {
 });
 
 describe("TaskSetupDialog", () => {
-  test("renders create-mode dialog with provider selectors and agent panels", async () => {
+  test("renders create-mode dialog with modal overlay and agent panels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -52,7 +56,8 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Lead provider");
     expect(html).toContain("Coder provider");
     expect(html).toContain("Create");
-    expect(html).not.toContain("Title");
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
     expect(html).toContain("Runtime control");
   });
 
@@ -72,6 +77,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Edit Task");
     expect(html).toContain("Save");
     expect(html).toContain("Lead provider");
+    expect(html).toContain('role="dialog"');
     expect(html).toContain("Runtime control");
   });
 
@@ -88,5 +94,6 @@ describe("TaskSetupDialog", () => {
     );
     expect(html).not.toContain("New Task");
     expect(html).not.toContain("Lead provider");
+    expect(html).not.toContain('role="dialog"');
   });
 });

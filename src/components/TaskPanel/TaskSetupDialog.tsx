@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { Provider } from "@/stores/task-store/types";
 
@@ -50,6 +50,7 @@ function ProviderSelect({
 
 export function TaskSetupDialog({
   mode,
+  workspace,
   open,
   onOpenChange,
   onSubmit,
@@ -61,10 +62,22 @@ export function TaskSetupDialog({
   const [coderProvider, setCoderProvider] =
     useState<Provider>(initialCoderProvider);
 
+  const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, handleClose]);
+
   if (!open) return null;
 
   const heading = mode === "create" ? "New Task" : "Edit Task";
   const submitLabel = mode === "create" ? "Create" : "Save";
+  const draftMode = mode === "create";
 
   const handleSubmit = () => {
     onSubmit({ leadProvider, coderProvider });
@@ -72,40 +85,55 @@ export function TaskSetupDialog({
   };
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/80 p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={handleClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-10 w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-xl border border-border/50 bg-card p-4 shadow-xl space-y-3"
+      >
+        <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
 
-      <div className="space-y-2">
-        <ProviderSelect
-          label="Lead provider"
-          value={leadProvider}
-          onChange={setLeadProvider}
-        />
-        <ProviderSelect
-          label="Coder provider"
-          value={coderProvider}
-          onChange={setCoderProvider}
+        <div className="space-y-2">
+          <ProviderSelect
+            label="Lead provider"
+            value={leadProvider}
+            onChange={setLeadProvider}
+          />
+          <ProviderSelect
+            label="Coder provider"
+            value={coderProvider}
+            onChange={setCoderProvider}
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            {submitLabel}
+          </button>
+        </div>
+
+        <AgentStatusPanel
+          workspace={workspace}
+          draftMode={draftMode}
+          draftLeadProvider={leadProvider}
+          draftCoderProvider={coderProvider}
         />
       </div>
-
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          {submitLabel}
-        </button>
-      </div>
-
-      <AgentStatusPanel />
     </div>
   );
 }

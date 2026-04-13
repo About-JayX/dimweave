@@ -4,11 +4,27 @@ import { useBridgeStore } from "@/stores/bridge-store";
 import { selectAgents, selectConnected } from "@/stores/bridge-store/selectors";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useTaskStore } from "@/stores/task-store";
-import { selectActiveTaskProviderBindings } from "@/stores/task-store/selectors";
+import {
+  selectActiveTaskProviderBindings,
+  type TaskProviderBindings,
+} from "@/stores/task-store/selectors";
+import type { Provider } from "@/stores/task-store/types";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
 
-export function AgentStatusPanel() {
+interface AgentStatusPanelProps {
+  workspace?: string;
+  draftMode?: boolean;
+  draftLeadProvider?: Provider;
+  draftCoderProvider?: Provider;
+}
+
+export function AgentStatusPanel({
+  workspace,
+  draftMode = false,
+  draftLeadProvider,
+  draftCoderProvider,
+}: AgentStatusPanelProps) {
   const agents = useBridgeStore(selectAgents);
   const connected = useBridgeStore(selectConnected);
   const stopCodexTui = useBridgeStore((s) => s.stopCodexTui);
@@ -19,7 +35,16 @@ export function AgentStatusPanel() {
   const fetchUsage = useCodexAccountStore((s) => s.fetchUsage);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
 
-  const bindings = useTaskStore(selectActiveTaskProviderBindings);
+  const storeBindings = useTaskStore(selectActiveTaskProviderBindings);
+
+  const bindings: TaskProviderBindings = draftMode
+    ? {
+        leadProvider: draftLeadProvider ?? "claude",
+        coderProvider: draftCoderProvider ?? "codex",
+        leadOnline: false,
+        coderOnline: false,
+      }
+    : storeBindings;
 
   // Derive per-task connected state and provider session from task-scoped bindings
   const claudeOnlineForTask =
@@ -30,14 +55,16 @@ export function AgentStatusPanel() {
     (bindings.coderProvider === "codex" && bindings.coderOnline);
 
   // Provider session info from the task-scoped summary, not global agents mirror
-  const claudeProviderSession =
-    (bindings.leadProvider === "claude" ? bindings.leadProviderSession : null) ??
-    (bindings.coderProvider === "claude" ? bindings.coderProviderSession : null) ??
-    undefined;
-  const codexProviderSession =
-    (bindings.leadProvider === "codex" ? bindings.leadProviderSession : null) ??
-    (bindings.coderProvider === "codex" ? bindings.coderProviderSession : null) ??
-    undefined;
+  const claudeProviderSession = draftMode
+    ? undefined
+    : (bindings.leadProvider === "claude" ? bindings.leadProviderSession : null) ??
+      (bindings.coderProvider === "claude" ? bindings.coderProviderSession : null) ??
+      undefined;
+  const codexProviderSession = draftMode
+    ? undefined
+    : (bindings.leadProvider === "codex" ? bindings.leadProviderSession : null) ??
+      (bindings.coderProvider === "codex" ? bindings.coderProviderSession : null) ??
+      undefined;
 
   useEffect(() => {
     fetchProfile();
@@ -83,6 +110,8 @@ export function AgentStatusPanel() {
         <ClaudePanel
           connected={claudeOnlineForTask}
           providerSession={claudeProviderSession}
+          workspace={workspace}
+          draftMode={draftMode}
         />
         <CodexPanel
           codexTuiRunning={codexOnlineForTask}
@@ -92,6 +121,8 @@ export function AgentStatusPanel() {
           refreshing={refreshing}
           refreshUsage={refreshUsage}
           providerSession={codexProviderSession}
+          workspace={workspace}
+          draftMode={draftMode}
         />
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",

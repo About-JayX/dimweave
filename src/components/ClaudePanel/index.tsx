@@ -32,9 +32,16 @@ import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 interface ClaudePanelProps {
   connected: boolean;
   providerSession?: ProviderSessionInfo;
+  workspace?: string;
+  draftMode?: boolean;
 }
 
-export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
+export function ClaudePanel({
+  connected,
+  providerSession,
+  workspace,
+  draftMode = false,
+}: ClaudePanelProps) {
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,9 +59,9 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
   const effectiveCwd = useMemo(
     () =>
       resolveProviderHistoryWorkspace(
-        activeTask?.workspaceRoot ?? selectedWorkspace,
+        workspace ?? activeTask?.workspaceRoot ?? selectedWorkspace,
       ),
-    [activeTask?.workspaceRoot, selectedWorkspace],
+    [workspace, activeTask?.workspaceRoot, selectedWorkspace],
   );
   const selectWorkspaceHistory = useMemo(
     () => makeProviderHistorySelector(effectiveCwd),
@@ -244,14 +251,15 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
                 : "bg-claude/15 text-claude border-claude/25 hover:bg-claude/25",
             )}
             disabled={
-              !connecting &&
-              !canConnectClaude({
-                cwd: effectiveCwd,
-                role: claudeRole,
-                connecting,
-                connected,
-                disconnecting,
-              })
+              draftMode ||
+              (!connecting &&
+                !canConnectClaude({
+                  cwd: effectiveCwd,
+                  role: claudeRole,
+                  connecting,
+                  connected,
+                  disconnecting,
+                }))
             }
             onClick={handleLaunch}
           >
