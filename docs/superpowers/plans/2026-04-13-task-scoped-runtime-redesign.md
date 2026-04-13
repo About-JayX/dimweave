@@ -178,13 +178,15 @@ Rules:
 - `src-tauri/src/daemon/task_runtime.rs`
 - `src-tauri/src/daemon/state.rs`
 - `src-tauri/src/daemon/state_snapshot.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
 - `src-tauri/src/commands_task.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 - `tests/task-store.test.ts` only if command contract fallout requires frontend fixture updates
 
-**max_files_changed:** `7`
-**max_added_loc:** `360`
-**max_deleted_loc:** `120`
+**max_files_changed:** `9`
+**max_added_loc:** `390`
+**max_deleted_loc:** `140`
 
 **verification_commands:**
 
@@ -192,6 +194,21 @@ Rules:
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon:: -- --nocapture task_workspace`
 - `cargo test --manifest-path src-tauri/Cargo.toml commands_task -- --nocapture`
 - `git diff --check`
+
+## Plan Revision 1 — 2026-04-13
+
+**Reason:** Task 1 acceptance criterion “Task creation fails cleanly for non-git workspace roots” requires the create-task error to propagate through the daemon command boundary. That changes the `CreateTask` reply type and its handler path, which necessarily touches `src-tauri/src/daemon/cmd.rs` and `src-tauri/src/daemon/mod.rs` in addition to the already-approved `src-tauri/src/commands_task.rs`.
+
+**Added to Task 1 allowed_files:**
+
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 9`
+- `max_added_loc: 390`
+- `max_deleted_loc: 140`
 
 ---
 
