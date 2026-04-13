@@ -322,6 +322,62 @@ describe("MessageList", () => {
     expect(followOutput()).toBe("smooth");
   });
 
+  test("draft row renders at totalCount = messages.length + 1 and followOutput stays smooth", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }] = await Promise.all([
+      import("./MessageList"),
+      import("@/stores/bridge-store"),
+    ]);
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: true,
+        previewText: "Drafting reply…",
+        thinkingText: "",
+        blockType: "text" as const,
+        toolName: "",
+        lastUpdatedAt: 1,
+      },
+      codexStream: {
+        thinking: false, currentDelta: "", lastMessage: "",
+        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+      },
+    }));
+
+    lastVirtuosoProps = null;
+    renderToStaticMarkup(
+      <MessageList
+        messages={[{
+          id: "msg_1", from: "user", to: "claude",
+          content: "Start streaming", timestamp: 1,
+        }]}
+        searchActive={false}
+      />,
+    );
+
+    // totalCount should be messages.length + 1 (the inline draft row).
+    expect(lastVirtuosoProps).not.toBeNull();
+    expect(lastVirtuosoProps!.totalCount).toBe(2);
+    // followOutput must still return "smooth" — draft start must not lose sticky.
+    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    expect(followOutput()).toBe("smooth");
+    // search frozen: draft active + search → no follow
+    const { MessageList: ML2 } = await import("./MessageList");
+    lastVirtuosoProps = null;
+    renderToStaticMarkup(
+      <ML2
+        messages={[{
+          id: "msg_1", from: "user", to: "claude",
+          content: "Start streaming", timestamp: 1,
+        }]}
+        searchActive={true}
+      />,
+    );
+    expect(lastVirtuosoProps).not.toBeNull();
+    const followOutputSearch = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    expect(followOutputSearch()).toBe(false);
+  });
+
   test("content growth (atBottomStateChange false) does not disable auto-follow", async () => {
     installTauriStub();
     const [{ MessageList }, { useBridgeStore }] = await Promise.all([

@@ -6,6 +6,7 @@ import {
   getMessageListFollowOutputMode,
   shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
+  shouldScrollOnDraftStart,
   STICKY_BOTTOM_THRESHOLD,
 } from "./view-model";
 
@@ -101,6 +102,24 @@ describe("shouldClearStickyOnScroll", () => {
     expect(
       shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD - 1, false),
     ).toBe(false);
+  });
+});
+
+describe("shouldScrollOnDraftStart", () => {
+  test("draft active + sticky + no search → should scroll to bottom", () => {
+    expect(shouldScrollOnDraftStart(true, false, true)).toBe(true);
+  });
+
+  test("draft not started → should not scroll", () => {
+    expect(shouldScrollOnDraftStart(false, false, true)).toBe(false);
+  });
+
+  test("search active during draft → should not scroll", () => {
+    expect(shouldScrollOnDraftStart(true, true, true)).toBe(false);
+  });
+
+  test("user scrolled away (not sticky) during draft → should not scroll", () => {
+    expect(shouldScrollOnDraftStart(true, false, false)).toBe(false);
   });
 });
 

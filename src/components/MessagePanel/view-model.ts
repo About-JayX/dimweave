@@ -158,6 +158,19 @@ export function shouldClearStickyOnScroll(
   return distFromBottom > STICKY_BOTTOM_THRESHOLD;
 }
 
+/**
+ * Returns true when the draft row just became active and the viewport should
+ * immediately pin to the bottom. Also governs scroll-pinning during streaming
+ * growth: as long as draft is active, sticky, and search is off, keep bottom.
+ */
+export function shouldScrollOnDraftStart(
+  hasClaudeDraft: boolean,
+  searchActive: boolean,
+  isSticky: boolean,
+): boolean {
+  return hasClaudeDraft && !searchActive && isSticky;
+}
+
 export function getMessageListFollowOutputMode(
   searchActive: boolean,
   isSticky: boolean,

@@ -12,6 +12,7 @@ import {
   getMessageListFollowOutputMode,
   shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
+  shouldScrollOnDraftStart,
   PROGRAMMATIC_SCROLL_IMMUNITY_MS,
   STICKY_BOTTOM_THRESHOLD,
   type StreamIndicatorId,
@@ -145,6 +146,20 @@ export function MessageList({
     });
     return () => window.cancelAnimationFrame(raf);
   }, [searchActive, totalCount]);
+
+  // Pin viewport to bottom on draft start and during streaming growth.
+  // Fires when the draft row appears (hasClaudeDraft: false→true) and on
+  // every previewText update while the draft is active. rAF throttles to
+  // one scroll per frame; cleanup cancels a pending rAF if deps change again.
+  useEffect(() => {
+    if (!shouldScrollOnDraftStart(hasClaudeDraft, searchActive, stickyRef.current))
+      return;
+    const raf = window.requestAnimationFrame(() => {
+      programmaticScrollRef.current = Date.now();
+      virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [hasClaudeDraft, claudePreviewText, searchActive]);
 
   if (!displayState.hasContent) {
     return (
