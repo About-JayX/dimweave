@@ -412,10 +412,154 @@ impl DaemonState {
         self.claude_sdk_ws_tx.is_some()
     }
 
+    // ── Task-scoped Codex lifecycle ────────────────────────────
+
+    /// Allocate a port and begin a Codex launch scoped to a specific task.
+    pub fn begin_codex_task_launch(&mut self, task_id: &str, port: u16) -> Option<u64> {
+        let rt = self.task_runtimes.get_mut(task_id)?;
+        let slot = rt.codex_slot.get_or_insert_with(|| {
+            crate::daemon::task_runtime::CodexTaskSlot::new(port)
+        });
+        slot.session_epoch = slot.session_epoch.wrapping_add(1);
+        slot.inject_tx = None;
+        slot.port = port;
+        Some(slot.session_epoch)
+    }
+
+    /// Attach a Codex inject channel to a specific task's slot.
+    pub fn attach_codex_task_session(
+        &mut self,
+        task_id: &str,
+        epoch: u64,
+        tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+    ) -> bool {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot.as_mut())
+        else {
+            return false;
+        };
+        if slot.session_epoch != epoch {
+            return false;
+        }
+        slot.inject_tx = Some(tx.clone());
+        // Sync singleton mirror — routing.rs reads codex_inject_tx directly
+        self.codex_inject_tx = Some(tx);
+        true
+    }
+
+    /// Clear Codex session for a specific task if epoch matches.
+    pub fn clear_codex_task_session(
+        &mut self,
+        task_id: &str,
+        epoch: u64,
+    ) -> Option<String> {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot.as_mut())
+        else {
+            return None;
+        };
+        if slot.session_epoch != epoch {
+            return None;
+        }
+        slot.inject_tx = None;
+        self.recompute_codex_singleton_inject_tx();
+        self.clear_provider_connection("codex")
+    }
+
+    /// Invalidate Codex session for a specific task.
+    pub fn invalidate_codex_task_session(&mut self, task_id: &str) -> Option<String> {
+        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot.as_mut())
+        {
+            slot.session_epoch = slot.session_epoch.wrapping_add(1);
+            slot.inject_tx = None;
+        }
+        if !self.any_codex_task_online() {
+            self.invalidate_codex_session()
+        } else {
+            self.detach_codex_sessions_for_task(task_id);
+            self.recompute_codex_singleton_inject_tx();
+            Some(task_id.to_string())
+        }
+    }
+
+    /// Detach only the Codex sessions belonging to a specific task.
+    fn detach_codex_sessions_for_task(&mut self, task_id: &str) {
+        let session_ids: Vec<String> = self
+            .task_graph
+            .sessions_for_task(task_id)
+            .into_iter()
+            .filter(|s| s.provider == Provider::Codex)
+            .map(|s| s.session_id.clone())
+            .collect();
+        if session_ids.is_empty() {
+            return;
+        }
+        for sid in &session_ids {
+            let _ = self.task_graph.update_session_status(sid, SessionStatus::Paused);
+            let _ = self.task_graph.clear_lead_session_if_matches(task_id, sid);
+            let _ = self.task_graph.clear_coder_session_if_matches(task_id, sid);
+        }
+        self.auto_save_task_graph();
+    }
+
+    /// True if any task runtime has an online Codex slot.
+    fn any_codex_task_online(&self) -> bool {
+        self.task_runtimes.values().any(|rt| {
+            rt.codex_slot.as_ref().map_or(false, |s| s.is_online())
+        })
+    }
+
+    /// Recompute singleton `codex_inject_tx` from task slots.
+    fn recompute_codex_singleton_inject_tx(&mut self) {
+        self.codex_inject_tx = self.task_runtimes.values()
+            .filter_map(|rt| rt.codex_slot.as_ref())
+            .find_map(|slot| slot.inject_tx.clone());
+    }
+
+    pub fn codex_task_epoch(&self, task_id: &str) -> Option<u64> {
+        self.task_runtimes.get(task_id)?
+            .codex_slot.as_ref()
+            .map(|s| s.session_epoch)
+    }
+
+    pub fn is_codex_task_online(&self, task_id: &str) -> bool {
+        self.task_runtimes.get(task_id)
+            .and_then(|rt| rt.codex_slot.as_ref())
+            .map_or(false, |slot| slot.is_online())
+    }
+
+    pub fn codex_task_inject_tx(
+        &self,
+        task_id: &str,
+    ) -> Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>> {
+        self.task_runtimes.get(task_id)?
+            .codex_slot.as_ref()?
+            .inject_tx.clone()
+    }
+
+    /// Collect the set of ports currently allocated to *online* Codex task slots.
+    pub fn codex_used_ports(&self) -> std::collections::HashSet<u16> {
+        self.task_runtimes.values()
+            .filter_map(|rt| rt.codex_slot.as_ref())
+            .filter(|slot| slot.is_online())
+            .map(|slot| slot.port)
+            .collect()
+    }
+
+    pub fn is_codex_online(&self) -> bool {
+        if self.task_runtimes.values().any(|rt| {
+            rt.codex_slot.as_ref().map_or(false, |s| s.is_online())
+        }) {
+            return true;
+        }
+        self.codex_inject_tx.is_some()
+    }
+
     pub fn is_agent_online(&self, agent: &str) -> bool {
         match agent {
             "claude" => self.is_claude_sdk_online(),
-            "codex" => self.codex_inject_tx.is_some(),
+            "codex" => self.is_codex_online(),
             other => self.attached_agents.contains_key(other),
         }
     }

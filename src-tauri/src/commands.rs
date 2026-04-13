@@ -56,13 +56,19 @@ pub async fn daemon_launch_codex(
     model: Option<String>,
     reasoning_effort: Option<String>,
     resume_thread_id: Option<String>,
+    task_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     validate_codex_launch_args(&role_id, &cwd)?;
+    let task_id = match task_id {
+        Some(tid) if !tid.is_empty() => tid,
+        _ => String::new(), // Daemon will resolve from active_task_id
+    };
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
         .0
         .send(DaemonCmd::LaunchCodex {
+            task_id,
             role_id,
             cwd,
             model,

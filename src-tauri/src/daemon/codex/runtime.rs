@@ -41,6 +41,7 @@ where
 
 pub(super) fn spawn_health_monitor(
     child: Arc<Mutex<Option<tokio::process::Child>>>,
+    task_id: String,
     session_epoch: u64,
     state: SharedState,
     app: AppHandle,
@@ -58,23 +59,25 @@ pub(super) fn spawn_health_monitor(
                     Ok(Some(status)) => {
                         eprintln!("[Codex] health_monitor: process exited with status={status}");
                         cancel.cancel();
-                        let (is_current, task_id) = {
+                        let cleanup = {
                             let mut daemon = state.write().await;
-                            let is_current = daemon.codex_session_epoch() == session_epoch;
-                            let tid = daemon.clear_codex_session_if_current(session_epoch);
-                            (is_current, tid)
+                            let cleared = daemon.clear_codex_task_session(&task_id, session_epoch);
+                            let any_online = daemon.is_codex_online();
+                            (cleared, any_online)
                         };
-                        if is_current {
+                        if cleanup.0.is_some() && !cleanup.1 {
                             gui::emit_agent_status(&app, "codex", false, None, None);
+                        }
+                        if cleanup.0.is_some() {
                             gui::emit_system_log(
                                 &app,
                                 "warn",
                                 &format!("[Codex] exited: {status}"),
                             );
                         }
-                        if let Some(task_id) = task_id {
+                        if let Some(tid) = cleanup.0 {
                             crate::daemon::gui_task::emit_task_context_events(
-                                &state, &app, &task_id,
+                                &state, &app, &tid,
                             )
                             .await;
                         }

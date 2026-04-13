@@ -568,7 +568,7 @@ fn codex_register_on_launch_binds_resumed_thread_to_active_task() {
     let task = s.task_graph.create_task("/ws", "Task");
     s.active_task_id = Some(task.task_id.clone());
 
-    crate::daemon::provider::codex::register_on_launch(&mut s, "coder", "/ws", "thread_resumed_1");
+    crate::daemon::provider::codex::register_on_launch(&mut s, &task.task_id, "coder", "/ws", "thread_resumed_1");
 
     let session = s
         .task_graph
@@ -1149,5 +1149,179 @@ fn claude_task_slot_invalidate_task_a_preserves_task_b_graph_binding() {
         t1_sess.status,
         crate::daemon::task_graph::types::SessionStatus::Paused,
         "Task A session should be paused"
+    );
+}
+
+// ── codex_task_slot tests ─────────────────────────────────
+
+#[test]
+fn codex_task_slot_begin_launch_creates_slot_and_returns_epoch() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+
+    let epoch = s.begin_codex_task_launch(&task.task_id, 4500);
+    assert!(epoch.is_some());
+    assert_eq!(s.codex_task_epoch(&task.task_id), epoch);
+}
+
+#[test]
+fn codex_task_slot_begin_launch_returns_none_without_runtime() {
+    let mut s = DaemonState::new();
+    assert!(s.begin_codex_task_launch("no-such-task", 4500).is_none());
+}
+
+#[test]
+fn codex_task_slot_attach_marks_online() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+
+    assert!(s.attach_codex_task_session(&task.task_id, epoch, tx));
+    assert!(s.is_codex_task_online(&task.task_id));
+    assert!(s.is_codex_online());
+}
+
+#[test]
+fn codex_task_slot_attach_rejects_stale_epoch() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let stale_epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
+    let _current_epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+
+    assert!(!s.attach_codex_task_session(&task.task_id, stale_epoch, tx));
+    assert!(!s.is_codex_task_online(&task.task_id));
+}
+
+#[test]
+fn codex_task_slot_clear_only_matching_epoch() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T1");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&task.task_id, epoch, tx);
+
+    // Stale epoch cannot clear
+    assert!(s.clear_codex_task_session(&task.task_id, epoch.wrapping_sub(1)).is_none());
+    assert!(s.is_codex_task_online(&task.task_id));
+    // Current epoch clears the slot (returns None when no provider connection exists)
+    let _ = s.clear_codex_task_session(&task.task_id, epoch);
+    assert!(!s.is_codex_task_online(&task.task_id));
+}
+
+#[test]
+fn codex_task_slot_cross_task_isolation() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+
+    // Both online
+    assert!(s.is_codex_task_online(&t1.task_id));
+    assert!(s.is_codex_task_online(&t2.task_id));
+
+    // Invalidating task 1 must NOT affect task 2
+    s.invalidate_codex_task_session(&t1.task_id);
+    assert!(!s.is_codex_task_online(&t1.task_id));
+    assert!(s.is_codex_task_online(&t2.task_id),
+        "task B must stay online after task A invalidation");
+    assert!(s.is_codex_online(),
+        "global online must reflect surviving task B");
+}
+
+#[test]
+fn codex_task_slot_used_ports_only_returns_online_slots() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+
+    assert_eq!(s.codex_used_ports().len(), 2);
+
+    // After invalidating task 1, its port should be freed
+    s.invalidate_codex_task_session(&t1.task_id);
+    let used = s.codex_used_ports();
+    assert_eq!(used.len(), 1);
+    assert!(used.contains(&4501));
+    assert!(!used.contains(&4500));
+}
+
+#[test]
+fn codex_task_slot_invalidate_preserves_task_b_graph_binding() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let sess_a = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t1.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        role: crate::daemon::task_graph::types::SessionRole::Coder,
+        cwd: "/ws/a",
+        title: "Codex A",
+    });
+    s.task_graph.set_coder_session(&t1.task_id, &sess_a.session_id);
+
+    let sess_b = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t2.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        role: crate::daemon::task_graph::types::SessionRole::Coder,
+        cwd: "/ws/b",
+        title: "Codex B",
+    });
+    s.task_graph.set_coder_session(&t2.task_id, &sess_b.session_id);
+
+    let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+
+    // Invalidate Task A — must NOT touch Task B's task_graph binding
+    s.invalidate_codex_task_session(&t1.task_id);
+
+    let t2_task = s.task_graph.get_task(&t2.task_id).unwrap();
+    assert_eq!(
+        t2_task.current_coder_session_id.as_deref(),
+        Some(sess_b.session_id.as_str()),
+        "Task B coder_session_id must not be cleared by Task A invalidation"
+    );
+    let t2_sess = s.task_graph.get_session(&sess_b.session_id).unwrap();
+    assert_eq!(
+        t2_sess.status,
+        crate::daemon::task_graph::types::SessionStatus::Active,
+        "Task B session must not be paused by Task A invalidation"
+    );
+    let t1_task = s.task_graph.get_task(&t1.task_id).unwrap();
+    assert!(
+        t1_task.current_coder_session_id.is_none(),
+        "Task A coder_session_id should be cleared"
     );
 }

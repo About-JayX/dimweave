@@ -256,14 +256,25 @@ async fn attach_provider_history(
                 ));
             }
             stop_codex_session(codex_handle, state, app).await;
-            let launch_epoch = state.write().await.begin_codex_launch();
+            let attach_task_id = state.read().await.active_task_id.clone()
+                .ok_or_else(|| "no active task selected".to_string())?;
+            let pool = codex::port_pool::CodexPortPool::new(ports::PortConfig::from_env().codex);
+            let allocated_port = pool
+                .allocate(&state.read().await.codex_used_ports())
+                .ok_or("no Codex port available in pool")?;
+            let launch_epoch = {
+                let mut s = state.write().await;
+                s.begin_codex_task_launch(&attach_task_id, allocated_port)
+                    .unwrap_or_else(|| s.begin_codex_launch())
+            };
             let handle = codex::resume(
                 codex::ResumeOpts {
+                    task_id: attach_task_id.clone(),
                     role_id: role_id.clone(),
                     cwd: cwd.clone(),
                     thread_id: external_id.clone(),
                     launch_epoch,
-                    codex_port: ports::PortConfig::from_env().codex,
+                    codex_port: allocated_port,
                 },
                 state.clone(),
                 app.clone(),
@@ -271,20 +282,17 @@ async fn attach_provider_history(
             .await
             .map_err(|err| err.to_string())?;
             *codex_handle = Some(handle);
-            let task_id = {
+            {
                 let mut daemon = state.write().await;
                 crate::daemon::provider::codex::register_on_launch(
                     &mut daemon,
+                    &attach_task_id,
                     &role_id,
                     &cwd,
                     &external_id,
                 );
-                daemon
-                    .active_task_id
-                    .clone()
-                    .ok_or_else(|| "no active task selected".to_string())?
-            };
-            Ok(task_id)
+            }
+            Ok(attach_task_id)
         }
     }
 }
@@ -313,6 +321,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     feishu_project_lifecycle::hydrate_store(&state).await;
     let mut feishu_project_handle: Option<crate::feishu_project::runtime::FeishuProjectHandle> =
         feishu_project_lifecycle::auto_start(&state, &app).await;
+    let codex_port_pool = codex::port_pool::CodexPortPool::new(codex_port);
     let mut codex_handle: Option<codex::CodexHandle> = None;
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> =
@@ -323,6 +332,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 routing::route_user_input(&state, &app, content, target, attachments).await;
             }
             DaemonCmd::LaunchCodex {
+                task_id,
                 role_id,
                 cwd,
                 model,
@@ -331,6 +341,11 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 reply,
             } => {
                 stop_codex_session(&mut codex_handle, &state, &app).await;
+                let resolved_task_id = if task_id.is_empty() {
+                    state.read().await.active_task_id.clone().unwrap_or_default()
+                } else {
+                    task_id
+                };
                 if let Some(conflict_agent) = {
                     let daemon = state.read().await;
                     daemon.online_role_conflict("codex", &role_id)
@@ -345,7 +360,25 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(err));
                     continue;
                 }
-                let launch_epoch = state.write().await.begin_codex_launch();
+                let allocated_port = match codex_port_pool
+                    .allocate(&state.read().await.codex_used_ports())
+                {
+                    Some(p) => p,
+                    None => {
+                        gui::emit_system_log(
+                            &app,
+                            "error",
+                            "[Daemon] no Codex port available in pool",
+                        );
+                        let _ = reply.send(Err("no Codex port available in pool".into()));
+                        continue;
+                    }
+                };
+                let launch_epoch = {
+                    let mut s = state.write().await;
+                    s.begin_codex_task_launch(&resolved_task_id, allocated_port)
+                        .unwrap_or_else(|| s.begin_codex_launch())
+                };
                 let launch_result = match resume_thread_id {
                     Some(thread_id) => {
                         let resumed_thread_id = thread_id.clone();
@@ -353,11 +386,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         let resume_cwd = cwd.clone();
                         match codex::resume(
                             codex::ResumeOpts {
+                                task_id: resolved_task_id.clone(),
                                 role_id,
                                 cwd,
                                 thread_id,
                                 launch_epoch,
-                                codex_port,
+                                codex_port: allocated_port,
                             },
                             state.clone(),
                             app.clone(),
@@ -393,12 +427,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     }
                     None => match codex::start(
                         codex::StartOpts {
+                            task_id: resolved_task_id.clone(),
                             role_id,
                             cwd,
                             model,
                             effort: reasoning_effort,
                             launch_epoch,
-                            codex_port,
+                            codex_port: allocated_port,
                         },
                         state.clone(),
                         app.clone(),
@@ -668,7 +703,19 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         match target {
                             Ok(target) => {
                                 stop_codex_session(&mut codex_handle, &state, &app).await;
-                                let launch_epoch = state.write().await.begin_codex_launch();
+                                let resume_task_id = sess.task_id.clone();
+                                let pool = codex::port_pool::CodexPortPool::new(codex_port);
+                                let alloc = pool
+                                    .allocate(&state.read().await.codex_used_ports())
+                                    .ok_or_else(|| "no Codex port available".to_string());
+                                match alloc {
+                                    Err(e) => Err(e),
+                                    Ok(allocated_port) => {
+                                let launch_epoch = {
+                                    let mut s = state.write().await;
+                                    s.begin_codex_task_launch(&resume_task_id, allocated_port)
+                                        .unwrap_or_else(|| s.begin_codex_launch())
+                                };
                                 let role_id = match target.role {
                                     crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                     crate::daemon::task_graph::types::SessionRole::Coder => "coder",
@@ -676,11 +723,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 .to_string();
                                 match codex::resume(
                                     codex::ResumeOpts {
+                                        task_id: resume_task_id,
                                         role_id,
                                         cwd: target.cwd,
                                         thread_id: target.external_id,
                                         launch_epoch,
-                                        codex_port,
+                                        codex_port: allocated_port,
                                     },
                                     state.clone(),
                                     app.clone(),
@@ -692,6 +740,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         state.write().await.resume_session(&session_id)
                                     }
                                     Err(err) => Err(err.to_string()),
+                                }
+                                    }
                                 }
                             }
                             Err(err) => Err(err),

@@ -12,6 +12,7 @@ pub enum DaemonCmd {
         attachments: Option<Vec<crate::daemon::types::Attachment>>,
     },
     LaunchCodex {
+        task_id: String,
         role_id: String,
         cwd: String,
         model: Option<String>,

@@ -25,6 +25,7 @@ pub struct SessionOpts {
 pub async fn run(
     port: u16,
     session_epoch: u64,
+    task_id: String,
     opts: SessionOpts,
     state: SharedState,
     app: AppHandle,
@@ -39,6 +40,7 @@ pub async fn run(
             run_with_reconnect(
                 port,
                 session_epoch,
+                &task_id,
                 &opts.role_id,
                 &state,
                 &app,
@@ -58,6 +60,7 @@ pub async fn run(
 pub async fn resume(
     port: u16,
     session_epoch: u64,
+    task_id: String,
     role_id: String,
     thread_id: String,
     state: SharedState,
@@ -72,6 +75,7 @@ pub async fn resume(
             run_with_reconnect(
                 port,
                 session_epoch,
+                &task_id,
                 &role_id,
                 &state,
                 &app,
@@ -91,6 +95,7 @@ pub async fn resume(
 async fn run_with_reconnect(
     port: u16,
     session_epoch: u64,
+    task_id: &str,
     role_id: &str,
     state: &SharedState,
     app: &AppHandle,
@@ -149,18 +154,20 @@ async fn run_with_reconnect(
             }
         }
     }
-    let task_id = {
+    let cleanup = {
         let mut s = state.write().await;
-        let is_current = s.codex_session_epoch() == session_epoch;
-        let tid = s.clear_codex_session_if_current(session_epoch);
-        (is_current, tid)
+        let cleared = s.clear_codex_task_session(task_id, session_epoch);
+        let any_online = s.is_codex_online();
+        (cleared, any_online)
     };
-    if task_id.0 {
+    if cleanup.0.is_some() && !cleanup.1 {
         gui::emit_agent_status(app, "codex", false, None, None);
+    }
+    if cleanup.0.is_some() {
         gui::emit_system_log(app, "info", "[Codex] session ended");
     }
-    if let Some(task_id) = task_id.1 {
-        crate::daemon::gui_task::emit_task_context_events(state, app, &task_id).await;
+    if let Some(tid) = cleanup.0 {
+        crate::daemon::gui_task::emit_task_context_events(state, app, &tid).await;
     }
 }
 

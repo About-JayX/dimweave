@@ -45,13 +45,14 @@ pub fn bind_thread_id(store: &mut TaskGraphStore, session_id: &str, thread_id: &
 /// task's current_coder_session_id.  No-op when no active task exists.
 pub fn register_on_launch(
     state: &mut crate::daemon::DaemonState,
+    task_id: &str,
     role_id: &str,
     cwd: &str,
     thread_id: &str,
 ) {
-    let Some(task_id) = state.active_task_id.clone() else {
+    if task_id.is_empty() {
         return;
-    };
+    }
     let parent_id = state
         .task_graph
         .get_task(&task_id)
@@ -61,7 +62,7 @@ pub fn register_on_launch(
         _ => SessionRole::Coder,
     };
     let reg = SessionRegistration {
-        task_id: task_id.clone(),
+        task_id: task_id.to_string(),
         parent_session_id: parent_id,
         role: session_role,
         cwd: cwd.into(),

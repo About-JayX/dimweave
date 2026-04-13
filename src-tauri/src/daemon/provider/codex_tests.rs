@@ -127,7 +127,7 @@ fn register_on_launch_creates_session_with_thread_id() {
         .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
-    codex::register_on_launch(&mut s, "coder", "/ws", "thread_abc");
+    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_abc");
 
     // Session registered with correct external_session_id
     let task = s.task_graph.get_task(&tid).unwrap();
@@ -145,8 +145,8 @@ fn register_on_launch_creates_session_with_thread_id() {
 #[test]
 fn register_on_launch_noop_without_active_task() {
     let mut s = DaemonState::new();
-    // No active task — should not panic or create anything
-    codex::register_on_launch(&mut s, "coder", "/ws", "thread_xyz");
+    // No active task — passing empty task_id should be a no-op
+    codex::register_on_launch(&mut s, "", "coder", "/ws", "thread_xyz");
     assert!(s.task_graph.list_tasks().is_empty());
 }
 
@@ -168,7 +168,7 @@ fn register_on_launch_links_to_lead_session() {
         .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
-    codex::register_on_launch(&mut s, "coder", "/ws", "thread_child");
+    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_child");
 
     let task = s.task_graph.get_task(&tid).unwrap();
     let coder_sid = task.current_coder_session_id.as_ref().unwrap();

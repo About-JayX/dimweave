@@ -50,7 +50,8 @@ pub fn sync_codex_launch_into_task(
         state.resume_session(&existing_session_id).ok()
     } else {
         // Unknown thread: register on the currently active task.
-        crate::daemon::provider::codex::register_on_launch(state, role_id, cwd, thread_id);
+        let tid = state.active_task_id.clone().unwrap_or_default();
+        crate::daemon::provider::codex::register_on_launch(state, &tid, role_id, cwd, thread_id);
         state.active_task_id.clone()
     }
 }

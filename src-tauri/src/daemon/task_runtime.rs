@@ -34,11 +34,33 @@ impl ClaudeTaskSlot {
     }
 }
 
+/// Per-task Codex app-server connection state.
+pub struct CodexTaskSlot {
+    pub session_epoch: u64,
+    pub inject_tx: Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>>,
+    pub port: u16,
+}
+
+impl CodexTaskSlot {
+    pub fn new(port: u16) -> Self {
+        Self {
+            session_epoch: 0,
+            inject_tx: None,
+            port,
+        }
+    }
+
+    pub fn is_online(&self) -> bool {
+        self.inject_tx.is_some()
+    }
+}
+
 /// Per-task runtime state. Each active task owns one of these.
 pub struct TaskRuntime {
     pub task_id: String,
     pub workspace_root: PathBuf,
     pub claude_slot: Option<ClaudeTaskSlot>,
+    pub codex_slot: Option<CodexTaskSlot>,
 }
 
 impl TaskRuntime {
@@ -47,6 +69,7 @@ impl TaskRuntime {
             task_id,
             workspace_root,
             claude_slot: None,
+            codex_slot: None,
         }
     }
 }
