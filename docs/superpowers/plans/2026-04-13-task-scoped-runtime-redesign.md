@@ -1,28 +1,29 @@
-# Task-Scoped Runtime Registry Redesign Implementation Plan
+# Task-Scoped Runtime and Workspace Redesign Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the current global live lead/coder runtime model with a task-scoped runtime registry so multiple tasks can execute concurrently without routing or provider-binding races.
+**Goal:** Make each task a full execution-isolation unit by provisioning a dedicated workspace per task, binding lead/coder providers per task, routing by `task_id`, and eliminating Codex port races through a centralized dynamic port pool.
 
-**Architecture:** Introduce a daemon-side `TaskRuntimeRegistry` keyed by `task_id`, move provider runtime state into per-task runtime slots, make provider launch/resume explicit about `task_id`, route by `task_id` instead of `active_task_id`, and add a race-free Codex dynamic port pool. Keep `active_task_id` only as the foreground UI focus and maintain legacy fallback only for old messages/commands that truly lack task context.
+**Architecture:** The implementation proceeds in phases. First add task workspace provisioning and a task runtime registry without changing behavior. Then move provider launch/binding onto explicit `task_id`s, route delivery by task runtime instead of UI focus, add a race-free Codex port allocator for app-server instances, and finally make the frontend treat `active_task_id` as a pure view selector over already-running background tasks.
 
-**Tech Stack:** Rust, tokio, Tauri daemon, React, Zustand, Codex app-server, Claude SDK, Cargo, Bun.
+**Tech Stack:** Rust, tokio, Tauri daemon, React, Zustand, Git worktrees, Codex app-server, Claude SDK, Cargo, Bun.
 
 ---
 
 ## Baseline Evidence
 
-- Current runtime singleton proof:
-  - `src-tauri/src/daemon/state.rs` holds global `claude_sdk_ws_tx`, `codex_inject_tx`, `claude_connection`, `codex_connection`, roles, epochs, preview state.
+- Current singleton runtime proof:
+  - `src-tauri/src/daemon/state.rs` still owns global `claude_sdk_ws_tx`, `codex_inject_tx`, connection state, roles, epochs, preview state.
   - `src-tauri/src/daemon/routing.rs` reads those global fields directly to deliver messages.
-  - `src-tauri/src/daemon/provider/claude.rs` and `provider/codex.rs` bind launches through `state.active_task_id`.
-- Existing task/session scaffolding already present:
-  - `src-tauri/src/daemon/task_graph/types.rs` has `Task`, `SessionHandle`, provider + role metadata.
-  - `BridgeMessage` already carries `task_id` and `session_id`.
-  - `state_delivery.rs` already has task-aware buffered-message helpers.
-- Codex transport limitation:
-  - `src-tauri/src/daemon/codex/lifecycle.rs` launches one `codex app-server --listen ws://127.0.0.1:{port}` per instance.
+  - `src-tauri/src/daemon/provider/claude.rs` / `provider/codex.rs` bind launches via `state.active_task_id`.
+- Current shared-workspace proof:
+  - `src-tauri/src/daemon/state_snapshot.rs::create_and_select_task()` stores the caller-provided workspace directly; it does not provision a dedicated task workspace.
+- Codex transport proof:
+  - `src-tauri/src/daemon/codex/lifecycle.rs` launches `codex app-server --listen ws://127.0.0.1:{port}`.
   - `src-tauri/src/daemon/ports.rs` currently exposes only a single global Codex port.
+- Frontend proof:
+  - `src/stores/task-store/index.ts` already has task-scoped task/session history state.
+  - `src/stores/bridge-store/listener-setup.ts` still appends all messages into one global timeline, leaving task filtering to the view layer.
 
 ## Project Memory
 
@@ -30,113 +31,111 @@
 
 - `577751e7` — task/session foundation
 - `d676d2f4` — task session history workspace
-- `c403ad69` — Codex provider history and resume adapter
-- `0b1c29c6` — repair active-task routing and Claude launch binding
-- `fa688747` — enforce task-scoped workspace routing boundaries
-- `dda01a6c` — remember reply target per task
-- `68d0ffd6` — Codex WS pump/session lifecycle stabilization
+- `c403ad69` — Codex provider history/resume
+- `0b1c29c6` — active-task routing and Claude launch binding remediation
+- `fa688747` — task-scoped workspace routing boundaries
+- `dda01a6c` — reply target remembered per task
+- `68d0ffd6` — Codex lifecycle stabilization
 - `46488de7` — centralized daemon/Codex ports
 
 ### Relevant prior plans
 
 - `docs/superpowers/plans/2026-04-06-task-binding-routing-remediation.md`
 - `docs/superpowers/plans/2026-04-07-reply-target-terminal-exit-polish.md`
-- `docs/superpowers/specs/2026-03-31-unified-task-session-architecture-design.md`
+- `docs/superpowers/plans/2026-04-13-telegram-route-loop-fix.md`
 - `docs/agents/codex-chain.md`
 - `docs/agents/claude-chain.md`
 
 ### Lessons carried forward
 
-- Active-task-based binding is fragile even in the single-runtime design and must not remain on the correctness path.
-- Reply-target and workspace ownership already moved toward task-scoped semantics; the runtime layer should follow that same boundary.
-- Codex lifecycle bugs tend to appear as stale port holders and stale session completion events, so the port allocator must be launch-id aware rather than "best effort".
+- `active_task_id` must leave the correctness path; it is too fragile as a binding source.
+- Workspace ownership and reply-target memory have already moved to task scope; runtime ownership must align.
+- Codex port management cannot rely on single-port cleanup heuristics once concurrency is introduced.
+- A task without an isolated workspace is not a real isolation boundary.
 
 ## File Map
 
-### Backend runtime model
+### Task workspace provisioning
+
+- Create: `src-tauri/src/daemon/task_workspace.rs`
+  - validate git root
+  - create `.worktrees/tasks`
+  - derive branch/worktree names from `task_id`
+  - provision task worktree
+- Modify: `src-tauri/src/daemon/state_snapshot.rs`
+  - `create_and_select_task()` provisions workspace before task becomes active
+- Modify: `src-tauri/src/commands_task.rs`
+  - task creation semantics/documentation align with task-scoped workspace
+- Modify: `src/components/workspace-entry-state.ts`
+  - frontend wording/flow stays aligned with “start a new task workspace”
+
+### Task runtime registry
 
 - Create: `src-tauri/src/daemon/task_runtime.rs`
-  - `TaskRuntime`, `RuntimeSlot`, provider-specific runtime metadata, registry helpers
+  - `TaskRuntime`, `RuntimeSlot`, provider runtime metadata
 - Modify: `src-tauri/src/daemon/state.rs`
-  - add `task_runtimes`, keep temporary global-field shims
+  - add `task_runtimes`
 - Modify: `src-tauri/src/daemon/state_runtime.rs`
-  - move runtime epoch/nonce/preview helpers behind task-scoped accessors
+  - move runtime helpers behind task-scoped accessors
 - Modify: `src-tauri/src/daemon/state_delivery.rs`
-  - per-task buffered delivery instead of one global vector
+  - task-scoped buffered messages
 - Modify: `src-tauri/src/daemon/state_task_flow.rs`
-  - task-scoped session matching, message stamping, preferred target lookup
+  - task-scoped routing/session matching
 
-### Backend command + provider lifecycle
+### Provider lifecycle and routing
 
 - Modify: `src-tauri/src/daemon/cmd.rs`
-  - add explicit `task_id` to launch/send/stop commands where required
 - Modify: `src-tauri/src/commands.rs`
-  - thread `task_id` through Tauri command surfaces
 - Modify: `src-tauri/src/daemon/mod.rs`
-  - replace single `Option<CodexHandle>` / `Option<ClaudeSdkHandle>` with task-scoped handle registries
 - Modify: `src-tauri/src/daemon/launch_task_sync.rs`
-  - task-scoped sync helpers
 - Modify: `src-tauri/src/daemon/provider/claude.rs`
-  - register/bind/resume against explicit `task_id`
 - Modify: `src-tauri/src/daemon/provider/codex.rs`
-  - register/bind/resume against explicit `task_id`
-
-### Backend routing
-
 - Modify: `src-tauri/src/daemon/routing.rs`
-  - resolve target channel from task runtime slot
 - Modify: `src-tauri/src/daemon/routing_user_input.rs`
-  - require/stamp explicit task context from command payload
 - Modify: `src-tauri/src/daemon/routing_target_session.rs`
-  - resolve target session by `task_id + role`
 
 ### Codex port pool
 
 - Create: `src-tauri/src/daemon/codex/port_pool.rs`
-  - allocator, lease state, reservation/promotion/cooldown
 - Modify: `src-tauri/src/daemon/ports.rs`
-  - move from single `codex` port to `codex_base` + `codex_pool_size`
 - Modify: `src-tauri/src/daemon/codex/mod.rs`
-  - accept reserved port + launch id, route stop/release through allocator
 - Modify: `src-tauri/src/daemon/codex/runtime.rs`
-  - remove single-port assumption from health/availability helpers
 - Modify: `src-tauri/src/daemon/codex/lifecycle.rs`
-  - keep orphan cleanup as fallback only, not allocator
 
-### Frontend task-scoped UI/state
+### Frontend task-scoped runtime display
 
 - Modify: `src/stores/task-store/index.ts`
-  - current task remains UI focus only
 - Modify: `src/stores/bridge-store/index.ts`
-  - task-scoped launch/send arguments
 - Modify: `src/stores/bridge-store/listener-setup.ts`
-  - task-aware message/runtime event handling
 - Modify: `src/components/ClaudePanel/index.tsx`
-  - pass explicit `taskId` on launch/resume/stop
-- Modify: `src/components/AgentStatus/index.tsx`
-  - task-aware runtime display
 - Modify: `src/components/ReplyInput/index.tsx`
-  - send explicit `taskId`
 - Modify: `src/components/MessagePanel/index.tsx`
-  - render only active task's message stream
-- Modify: `src/components/TaskPanel/*`
-  - show per-task provider bindings/status
+- Modify: `src/components/TaskPanel/index.tsx`
+- Modify: `src/components/TaskPanel/TaskHeader.tsx`
+- Modify: `src/components/AgentStatus/index.tsx`
 
 ### Tests / docs
 
 - Modify: `src-tauri/src/daemon/state_tests.rs`
-- Modify: `src-tauri/src/daemon/routing_shared_role_tests.rs`
-- Modify: `src-tauri/src/daemon/routing_user_target_tests.rs`
 - Modify: `src-tauri/src/daemon/provider/claude_tests.rs`
 - Modify: `src-tauri/src/daemon/provider/codex_tests.rs`
-- Modify: `src-tauri/src/daemon/telegram_lifecycle_tests.rs` only if unrelated compile fallout occurs (not expected; avoid unless necessary)
-- Modify/add focused frontend tests adjacent to touched TS/TSX files
+- Modify: `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- Modify: `src-tauri/src/daemon/routing_user_target_tests.rs`
+- Modify: `tests/task-store.test.ts`
+- Modify: `tests/task-panel-view-model.test.ts`
+- Modify: `src/components/ReplyInput/index.test.tsx`
+- Modify: `src/components/MessagePanel/index.test.tsx`
+- Modify: `src/components/TaskPanel/TaskHeader.test.tsx`
+- Modify: `src/components/TaskPanel/ArtifactTimeline.test.tsx`
+- Modify: `src/components/ClaudePanel/connect-state.test.ts`
+- Modify: `src/components/ClaudePanel/launch-request.test.ts`
+- Modify: `src/components/AgentStatus/codex-launch-config.test.ts`
 
 ## Port-Race Constraint
 
 This plan must not introduce Codex port races.
 
-**Required invariant:** a Codex port may only move through these allocator states under a single serialized authority:
+**Required invariant:** a Codex port may only move through these states under one serialized allocator:
 
 `Free -> Reserved(task_id, role, launch_id) -> Live(task_id, role, launch_id) -> CoolingDown(until_ms) -> Free`
 
@@ -144,50 +143,54 @@ Rules:
 
 - no launch may pick a port without first creating a `Reserved` lease
 - no stale success callback may promote a lease unless `launch_id` still matches
-- no stop/failure path may release a port unless `launch_id` still matches
-- cooldown is mandatory before reuse
-- `lsof` cleanup remains defensive cleanup, never the allocator
+- no stale stop/failure callback may release a lease unless `launch_id` still matches
+- every released port must enter cooldown before reuse
+- `lsof` cleanup remains defensive fallback only, never the allocator itself
 
 ## CM Memory
 
 | Task | Commit | Summary | Verification | Status |
 |------|--------|---------|--------------|--------|
-| Task 1 | to be filled after implementation | Introduce task runtime registry and compatibility shims | Use Task 1 verification commands | planned |
-| Task 2 | to be filled after implementation | Make launch/resume/stop explicit about task ownership | Use Task 2 verification commands | planned |
-| Task 3 | to be filled after implementation | Route/buffer by task runtime instead of active task | Use Task 3 verification commands | planned |
-| Task 4 | to be filled after implementation | Add race-free Codex port pool and multi-instance lifecycle | Use Task 4 verification commands | planned |
-| Task 5 | to be filled after implementation | Frontend task-scoped message/runtime isolation | Use Task 5 verification commands | planned |
+| Task 1 | to be filled after implementation | Add task workspace provisioning and task runtime registry skeleton | Use Task 1 verification commands | planned |
+| Task 2 | to be filled after implementation | Make provider lifecycle explicitly task-bound | Use Task 2 verification commands | planned |
+| Task 3 | to be filled after implementation | Route and buffer by task runtime | Use Task 3 verification commands | planned |
+| Task 4 | to be filled after implementation | Add race-free Codex port pool | Use Task 4 verification commands | planned |
+| Task 5 | to be filled after implementation | Frontend task-scoped runtime/message isolation | Use Task 5 verification commands | planned |
+| Task 6 | to be filled after implementation | Final compatibility cleanup and regression barrier | Use Task 6 verification commands | planned |
 
 ---
 
-### Task 1: Introduce `TaskRuntimeRegistry` and compatibility shims
+### Task 1: Add task workspace provisioning and runtime registry skeleton
 
-**task_id:** `task-runtime-registry-skeleton`
+**task_id:** `task-workspace-and-runtime-skeleton`
 
 **Acceptance criteria:**
 
-- `DaemonState` gains a `task_runtimes` registry keyed by `task_id`.
-- A new `TaskRuntime` / `RuntimeSlot` model exists in a dedicated module.
-- Existing global provider/runtime fields still work through compatibility shims so behavior does not change yet.
-- Backend tests cover registry creation, lookup, and shim fallback.
+- Creating a task provisions a dedicated task worktree at `.worktrees/tasks/<task_id>`.
+- Task creation fails cleanly for non-git workspace roots.
+- `Task.workspace_root` stores the task worktree path, not the shared source root.
+- `DaemonState` gains a `task_runtimes` registry and task-runtime accessors.
+- Existing singleton runtime behavior still works through compatibility shims.
 
 **allowed_files:**
 
-- `src-tauri/src/daemon/state.rs`
-- `src-tauri/src/daemon/state_runtime.rs`
+- `src-tauri/src/daemon/task_workspace.rs`
 - `src-tauri/src/daemon/task_runtime.rs`
+- `src-tauri/src/daemon/state.rs`
+- `src-tauri/src/daemon/state_snapshot.rs`
+- `src-tauri/src/commands_task.rs`
 - `src-tauri/src/daemon/state_tests.rs`
-- `src-tauri/src/daemon/state_task_snapshot_tests.rs` only if snapshot assertions need updates
+- `tests/task-store.test.ts` only if command contract fallout requires frontend fixture updates
 
-**max_files_changed:** `5`
-**max_added_loc:** `260`
-**max_deleted_loc:** `80`
+**max_files_changed:** `7`
+**max_added_loc:** `360`
+**max_deleted_loc:** `120`
 
 **verification_commands:**
 
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_task_snapshot_tests:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon:: -- --nocapture task_workspace`
+- `cargo test --manifest-path src-tauri/Cargo.toml commands_task -- --nocapture`
 - `git diff --check`
 
 ---
@@ -198,10 +201,10 @@ Rules:
 
 **Acceptance criteria:**
 
-- Launch/resume/stop/send command surfaces accept explicit `task_id` where task ownership matters.
-- `register_on_launch()` / `register_on_connect()` stop reading `active_task_id`.
-- The daemon run loop tracks Claude/Codex handles per task instead of one global handle each.
-- Switching UI task focus during a launch no longer changes which task owns the resulting runtime.
+- Launch/resume/send/stop surfaces carry explicit `task_id` where task ownership matters.
+- `register_on_launch()` / `register_on_connect()` no longer read `active_task_id`.
+- Daemon runtime handles for Claude/Codex are tracked by task.
+- Launching while switching UI focus cannot bind a provider to the wrong task.
 
 **allowed_files:**
 
@@ -215,8 +218,8 @@ Rules:
 - `src-tauri/src/daemon/provider/codex_tests.rs`
 
 **max_files_changed:** `8`
-**max_added_loc:** `320`
-**max_deleted_loc:** `120`
+**max_added_loc:** `340`
+**max_deleted_loc:** `140`
 
 **verification_commands:**
 
@@ -227,7 +230,7 @@ Rules:
 
 ---
 
-### Task 3: Route and buffer by task runtime instead of `active_task_id`
+### Task 3: Route and buffer by task runtime instead of UI focus
 
 **task_id:** `task-runtime-routing`
 
@@ -235,8 +238,8 @@ Rules:
 
 - `route_message_inner` resolves target runtime by `BridgeMessage.task_id`.
 - Task-scoped buffered messages no longer share one global queue.
-- `stamp_message_context()` and `preferred_auto_target()` only use `active_task_id` as UI fallback, not as the primary routing key.
-- Legacy messages without `task_id` still work through explicit fallback.
+- `stamp_message_context()` and `preferred_auto_target()` use `active_task_id` only as UI fallback.
+- Legacy messages without `task_id` still work through explicit compatibility fallback.
 
 **allowed_files:**
 
@@ -269,10 +272,11 @@ Rules:
 
 **Acceptance criteria:**
 
-- Codex runtime allocation uses a central allocator with `Reserved`, `Live`, and `CoolingDown` leases.
+- Codex launches reserve ports through a central allocator before spawn.
 - Two concurrent Codex launches cannot reserve the same port.
-- Stale launch success/failure callbacks cannot steal or release another task's port.
-- Codex stop/restart behavior remains compatible with orphan cleanup, but port ownership is allocator-driven rather than `lsof`-driven.
+- Stale launch success/failure callbacks cannot steal or release another task's lease.
+- Released ports enter cooldown before reuse.
+- Existing orphan-process cleanup remains a defensive fallback only.
 
 **allowed_files:**
 
@@ -286,14 +290,14 @@ Rules:
 - `src-tauri/src/daemon/state_tests.rs`
 
 **max_files_changed:** `8`
-**max_added_loc:** `360`
-**max_deleted_loc:** `120`
+**max_added_loc:** `380`
+**max_deleted_loc:** `140`
 
 **verification_commands:**
 
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
 - `git diff --check`
 
 ---
@@ -306,26 +310,35 @@ Rules:
 
 - Frontend launches Claude/Codex with explicit `taskId`.
 - ReplyInput sends explicit `taskId`.
-- Bridge message rendering shows only the selected task's messages.
-- Task panel and agent-status surfaces show per-task provider bindings instead of one global provider status.
-- Switching the selected task does not stop or rebind background tasks.
+- Task creation and workspace-entry flow reflect “new task workspace” semantics.
+- Message panel renders only the active task's messages.
+- Task panel and runtime surfaces show per-task provider bindings instead of one global runtime status.
 
 **allowed_files:**
 
 - `src/stores/task-store/index.ts`
 - `src/stores/bridge-store/index.ts`
 - `src/stores/bridge-store/listener-setup.ts`
+- `src/components/workspace-entry-state.ts`
 - `src/components/ClaudePanel/index.tsx`
 - `src/components/ReplyInput/index.tsx`
 - `src/components/MessagePanel/index.tsx`
 - `src/components/TaskPanel/index.tsx`
 - `src/components/TaskPanel/TaskHeader.tsx`
 - `src/components/AgentStatus/index.tsx`
-- focused adjacent test files for the touched frontend modules
+- `tests/task-store.test.ts`
+- `tests/task-panel-view-model.test.ts`
+- `src/components/ReplyInput/index.test.tsx`
+- `src/components/MessagePanel/index.test.tsx`
+- `src/components/TaskPanel/TaskHeader.test.tsx`
+- `src/components/TaskPanel/ArtifactTimeline.test.tsx`
+- `src/components/ClaudePanel/connect-state.test.ts`
+- `src/components/ClaudePanel/launch-request.test.ts`
+- `src/components/AgentStatus/codex-launch-config.test.ts`
 
-**max_files_changed:** `12`
-**max_added_loc:** `360`
-**max_deleted_loc:** `180`
+**max_files_changed:** `19`
+**max_added_loc:** `420`
+**max_deleted_loc:** `200`
 
 **verification_commands:**
 
@@ -336,15 +349,16 @@ Rules:
 
 ---
 
-### Task 6: End-to-end migration cleanup and regression barrier
+### Task 6: Final compatibility cleanup and regression barrier
 
 **task_id:** `task-runtime-final-regression-barrier`
 
 **Acceptance criteria:**
 
-- Old global runtime fields are either removed or reduced to clearly marked fallback-only shims.
-- Background multi-task execution is verified with focused runtime tests and manual smoke instructions.
-- Docs and CM memory are updated with the final runtime ownership model and port-pool invariants.
+- Remaining global runtime fields are either removed or reduced to clearly marked fallback-only shims.
+- Multi-task runtime/manual smoke instructions are documented.
+- Docs record the final ownership model and Codex allocator invariants.
+- No new regressions appear in daemon/provider/routing/build verification.
 
 **allowed_files:**
 
@@ -354,7 +368,7 @@ Rules:
 - `docs/agents/codex-chain.md`
 - `docs/agents/claude-chain.md`
 - `docs/superpowers/plans/2026-04-13-task-scoped-runtime-redesign.md`
-- only directly relevant regression tests for touched daemon modules
+- only directly related daemon/provider/routing test files if needed
 
 **max_files_changed:** `7`
 **max_added_loc:** `220`
@@ -370,6 +384,6 @@ Rules:
 
 ## Rollout Notes
 
-- Do not skip directly to Task 4. The port pool depends on the task-scoped handle registry from Tasks 1-3.
-- Do not start frontend isolation before provider binding is explicit; otherwise the UI will look task-scoped while the backend is still globally bound.
-- Preserve legacy fallback for task-less messages until Task 6, then delete only after verification proves there are no live callers left.
+- Do not skip Task 1. Without per-task workspace provisioning, runtime isolation is incomplete.
+- Do not start frontend isolation before Task 2 and Task 3 land; otherwise the UI will look task-scoped while backend ownership remains global.
+- Do not start Codex pool work before Task 2; the allocator needs explicit task-bound lifecycle inputs.
