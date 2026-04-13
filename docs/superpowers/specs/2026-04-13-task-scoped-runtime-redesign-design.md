@@ -2,107 +2,120 @@
 
 ## Summary
 
-The current system already has a multi-task graph, but the live execution layer is still global:
+The current system already has a task graph, but the live execution layer is still effectively singleton:
 
 - one global Claude runtime
 - one global Codex runtime
-- one global active-task-driven routing context
+- one global `claude_role` / `codex_role`
+- one global `active_task_id` used in too many correctness paths
 
-That mismatch is the source of the current task race. Creating or switching tasks while providers are live can bind a launch to the wrong task, route against the wrong session, or let one task's stream/runtime state overwrite another's.
+That model cannot support real multi-task execution. If multiple tasks share one Claude runtime or one Codex runtime, launches race, routing can bind to the wrong task, and tasks serialize on one provider instance instead of running independently.
 
 The redesign changes the execution model from:
 
-- **global live lead/coder runtimes**
+- one global live Claude agent
+- one global live Codex agent
 
 to:
 
-- **per-task isolated workspace**
-- **per-task lead/coder runtime slots**
-- **routing by `task_id`**
-- **foreground task selection as UI-only state**
+- one isolated workspace per task
+- one task-local Claude runtime slot per task
+- one task-local Codex runtime slot per task
+- one task-local role binding map per task
+- routing by `task_id`, with `active_task_id` demoted to UI focus only
 
-Codex remains on **app-server**, not MCP server or Responses API. Because app-server is port-bound, the redesign adds a daemon-owned dynamic port pool with strict reservation and cooldown rules to eliminate port races.
+Codex remains on `app-server`, not MCP server or Responses API. Because `app-server` is port-bound, multi-task Codex support requires a daemon-owned dynamic port pool with reservation, handshake promotion, and cooldown rules.
 
 ## Product Goal
 
-- Creating a task creates a dedicated task workspace.
-- Each task owns its own lead/coder provider binding.
-- Each task can continue running in the background while another task is selected.
-- Routing correctness depends on `task_id`, not `active_task_id`.
-- Codex multi-instance launches are race-free.
+- Creating a task creates a dedicated task workspace/worktree.
+- Every task owns its own Claude agent state and its own Codex agent state.
+- Every task persists its own role bindings instead of relying on global `claude_role` / `codex_role`.
+- Two tasks can run concurrently without sharing provider runtime state.
+- Routing correctness depends on `BridgeMessage.task_id`, not `active_task_id`.
+- Codex concurrent launches are race-free.
 
 ## Scope
 
 ### Included
 
 - Task-scoped workspace provisioning.
-- Task-scoped runtime registry in the daemon.
-- Task-scoped provider launch/resume/stop semantics.
-- Task-scoped routing and buffered delivery.
+- Task-scoped provider binding metadata on the task graph.
+- Task-scoped Claude runtime state.
+- Task-scoped Codex runtime state.
+- Task-scoped routing, status lookup, and buffered delivery.
 - Codex dynamic port pool for app-server instances.
-- Frontend task-scoped message and runtime display.
+- Frontend task-scoped launch/send/status/message display.
 
 ### Excluded
 
 - Replacing Codex app-server with another transport.
-- Changing the normalized task/session graph shape in incompatible ways.
-- Multi-user / remote scheduler support.
+- Generalizing non-Claude/non-Codex `attached_agents` into multi-instance task runtimes in this wave.
 - Automatic deletion of task workspaces when tasks close.
-- Support for automatic task workspace provisioning from non-git source folders in v1.
+- Multi-user or remote scheduler support.
+- A generic provider-plugin system.
 
 ## Current Architecture Facts
 
-### 1. Task graph is already task-scoped
+### 1. The normalized task graph exists, but it does not persist provider bindings
 
-`src-tauri/src/daemon/task_graph/types.rs` already models:
+`src-tauri/src/daemon/task_graph/types.rs` currently has:
 
-- `Task { task_id, workspace_root, lead_session_id, current_coder_session_id, ... }`
+- `Task { task_id, workspace_root, title, status, lead_session_id, current_coder_session_id, ... }`
 - `SessionHandle { session_id, task_id, provider, role, external_session_id, ... }`
 
-This is the correct ownership boundary for normalized history and artifacts.
+What is missing is task-local provider ownership metadata such as:
+
+- `lead_provider`
+- `coder_provider`
+
+Without those fields, task semantics still leak through the global `claude_role` / `codex_role`.
 
 ### 2. Task creation still reuses one shared workspace
 
-`src-tauri/src/daemon/state_snapshot.rs::create_and_select_task()` currently stores the caller-provided workspace directly onto the new task. It does **not** create a dedicated task worktree/workspace.
+`src-tauri/src/daemon/state_snapshot.rs::create_and_select_task()` currently stores the caller-provided workspace directly on the task. It does not provision a dedicated task worktree.
 
-That means two tasks created from one repository still share one mutable filesystem surface.
+That means two tasks created from the same repo still share one mutable filesystem surface.
 
-### 3. Live runtime is still singleton global state
+### 3. Live runtime state is still singleton global state
 
 `src-tauri/src/daemon/state.rs` currently stores exactly one live Claude runtime and one live Codex runtime:
 
 - `claude_sdk_ws_tx`
+- `claude_sdk_event_tx`
+- `claude_sdk_ready_tx`
 - `codex_inject_tx`
 - `claude_connection` / `codex_connection`
 - `claude_role` / `codex_role`
-- Claude nonce/preview/direct-text state
-- single runtime epochs
+- Claude nonce / preview / direct-text state
+- one Codex launch epoch
 
-### 4. Routing correctness still depends on UI focus
+That is incompatible with multiple tasks owning independent Claude/Codex agents.
 
-`src-tauri/src/daemon/state_task_flow.rs` and `src-tauri/src/daemon/routing.rs` still use:
+### 4. Routing and message stamping still depend on global focus/role state
+
+`src-tauri/src/daemon/routing.rs`, `state_task_flow.rs`, `state_delivery.rs`, `control/handler.rs`, `codex/session_event.rs`, and `codex/handler.rs` still resolve too much through:
 
 - `active_task_id`
-- global role ownership
-- global provider channels
+- global `claude_role`
+- global `codex_role`
 
-This is wrong for background execution. UI focus should not be part of delivery correctness.
+That is wrong for background task execution.
 
-### 5. Provider launch binding still uses `active_task_id`
+### 5. Claude and Codex runtime attachment points are still global
 
-`src-tauri/src/daemon/provider/claude.rs::register_on_launch()` and `provider/codex.rs::register_on_launch()` still bind live launches to the active task.
+Claude and Codex launch/attach/reconnect logic still hangs off global state transitions:
 
-That is inherently race-prone once multiple tasks exist.
+- Claude: `claude_sdk/runtime.rs`, `control/claude_sdk_handler.rs`, `claude_sdk/reconnect.rs`
+- Codex: `codex/mod.rs`, `codex/runtime.rs`, `codex/session.rs`
 
-### 6. Codex concurrency is blocked by a single port assumption
+Those paths currently protect against stale callbacks only inside a singleton runtime, not across task-local runtime slots.
 
-`src-tauri/src/daemon/codex/lifecycle.rs` launches:
+### 6. Status and UI contracts are still global-provider oriented
 
-- `codex app-server --listen ws://127.0.0.1:{port}`
+`state_snapshot.rs`, `types.rs`, `types_dto.rs`, `gui_task.rs`, and the frontend bridge/task stores still assume there is one global Claude status and one global Codex status.
 
-`src-tauri/src/daemon/ports.rs` currently exposes one Codex port.
-
-So concurrent Codex runtimes require a real allocator. Without one, concurrent task launches will race for ports and orphan cleanup.
+That is insufficient once every task owns its own provider pair.
 
 ## Project Memory
 
@@ -116,6 +129,7 @@ So concurrent Codex runtimes require a real allocator. Without one, concurrent t
 - `dda01a6c` — remember reply target per task
 - `68d0ffd6` — Codex WS pump/session lifecycle stabilization
 - `46488de7` — centralized daemon/Codex ports
+- `8cb38d7e` — revise redesign docs for per-task workspaces
 
 ### Relevant prior plans and docs
 
@@ -126,50 +140,53 @@ So concurrent Codex runtimes require a real allocator. Without one, concurrent t
 
 ### Constraints carried forward
 
-- Binding launches through `active_task_id` is already proven fragile and must leave the correctness path.
-- Workspace ownership must remain task-scoped and explicit.
-- Reply target and other UI state already moved toward task-scoped semantics; runtime ownership should match that.
-- Codex lifecycle issues often appear as stale launch completion, stale port holders, and misbound runtime state; the allocator must be launch-id-aware.
+- `active_task_id` must leave the correctness path.
+- Workspace ownership must remain explicit and task-scoped.
+- Reply-target memory already moved to task scope; runtime ownership must match.
+- Codex lifecycle bugs commonly appear as stale success/failure callbacks and stale port holders; the allocator must be launch-id-aware.
+- This wave is about real multi-task execution, so every task must own both a Claude runtime slot and a Codex runtime slot even if one slot is idle.
 
 ## Options Considered
 
-### Option 1: Task-scoped runtime + per-task worktree + Codex port pool (recommended)
+### Option 1: Per-task workspace + per-task Claude/Codex slots + task-local role bindings (recommended)
 
 Each task owns:
 
 - its own workspace root
-- its own lead/coder runtime slots
+- its own persisted role bindings
+- its own Claude slot
+- its own Codex slot
 - its own buffered delivery scope
 
-Codex concurrency is handled by a central dynamic port pool.
+Routing becomes:
+
+`task_id -> task role binding -> provider slot -> send channel`
 
 **Pros**
 
-- Matches the intended product model exactly.
-- Eliminates the shared-workspace collision in addition to message/runtime races.
-- Clean mental model: task = workspace + runtime + history.
+- Matches the product requirement that each task owns dedicated Claude/Codex agents.
+- Eliminates shared-workspace collisions and provider-state races together.
+- Makes background execution deterministic.
 
 **Cons**
 
 - Highest implementation cost.
 - Requires explicit Codex multi-instance lifecycle management.
 
-### Option 2: Task-scoped runtime without per-task workspace
+### Option 2: Per-task role slots only
 
-Keep task-scoped routing/runtime but continue reusing one shared repo workspace.
+Each task owns `lead` and `coder` slots, but provider live state remains mixed inside those role slots.
 
 **Pros**
 
-- Smaller change.
+- Smaller conceptual change from the current model.
 
 **Cons**
 
-- Leaves the most dangerous class of collisions intact: concurrent file edits and command execution in the same cwd.
-- Not acceptable for the new product direction.
+- It still hides provider-specific live state behind role ownership.
+- It does not directly satisfy the requirement that every task own its own Claude and Codex agent state.
 
-### Option 3: Single active provider switching
-
-Switch provider binding as the user changes the selected task.
+### Option 3: Keep global Claude/Codex and patch with `active_task_id`
 
 **Pros**
 
@@ -177,70 +194,82 @@ Switch provider binding as the user changes the selected task.
 
 **Cons**
 
-- Violates the requirement that background tasks keep running.
+- Preserves the race.
+- Forces tasks to serialize on shared provider state.
+- Not acceptable for real multi-task execution.
 
 ## Recommended Design
 
 Use Option 1.
 
-The new model is:
+The core ownership model becomes:
 
 ```text
 task_id
   -> task workspace root
+  -> Task { lead_provider, coder_provider, ... }
   -> TaskRuntime
-      -> lead slot
-      -> coder slot
+      -> claude slot
+      -> codex slot
       -> task-scoped buffered delivery
       -> task-scoped runtime status
 ```
 
-The user flow becomes:
+The runtime routing rule becomes:
 
-1. choose a base repository workspace
-2. create task
-3. daemon provisions a dedicated task workspace/worktree
-4. user chooses provider roles for that task
-5. lead/coder launch into the task workspace
-6. task keeps running even when another task is selected
+```text
+BridgeMessage.task_id
+  -> task
+  -> resolve target role (lead | coder)
+  -> resolve bound provider from task.lead_provider / task.coder_provider
+  -> deliver to that provider's task-local runtime slot
+```
 
 ## Architecture
 
-### 1. Per-task workspace provisioning
+### 1. Task model gains persisted provider bindings
 
-This is foundational, not optional.
+This wave needs explicit task-local provider ownership.
 
-#### Rule
+`src-tauri/src/daemon/task_graph/types.rs::Task` must gain:
 
-Creating a task from a git-backed workspace must create a dedicated task worktree.
+- `lead_provider: Provider`
+- `coder_provider: Provider`
 
-Recommended canonical shape:
+`src-tauri/src/daemon/task_graph/store.rs::create_task()` must initialize those fields explicitly.
+
+For this wave, the default task pair is:
+
+- `lead_provider = Provider::Claude`
+- `coder_provider = Provider::Codex`
+
+That matches the current product expectation that each task gets a Claude lead and a Codex coder. If per-task provider reassignment is needed later, it can build on these persisted fields instead of reintroducing global provider semantics.
+
+### 2. Per-task workspace provisioning
+
+Creating a task from a git-backed workspace must create a dedicated task worktree before the task is considered ready.
+
+Canonical shape:
 
 - base repo root: user-selected workspace
 - task worktree root: `<repo>/.worktrees/tasks/<task_id>`
 - task branch: `task/<task_id>`
 
-`Task.workspace_root` must become the **task workspace root**, not the shared repo root.
+`Task.workspace_root` must store the task worktree path, not the shared repo root.
 
-#### New module
+New module:
 
 - `src-tauri/src/daemon/task_workspace.rs`
 
 Responsibilities:
 
-- validate that the selected workspace is a git repository root
+- validate the selected workspace is a git repository root
 - create `.worktrees/tasks` if needed
 - verify `.worktrees` remains ignored
 - allocate deterministic branch/worktree names from `task_id`
-- provision the worktree before the task is treated as ready
+- provision the worktree before task creation succeeds
 
-#### First-version cleanup policy
-
-- task creation creates the workspace immediately
-- task close/archive does **not** auto-delete the workspace
-- cleanup is explicit and can be automated later
-
-### 2. `TaskRuntimeRegistry`
+### 3. `TaskRuntimeRegistry`
 
 New daemon-local registry:
 
@@ -256,24 +285,27 @@ Recommended shape:
 pub struct TaskRuntime {
     pub task_id: String,
     pub workspace_root: String,
-    pub lead: Option<RuntimeSlot>,
-    pub coder: Option<RuntimeSlot>,
+    pub claude: ProviderRuntimeSlot,
+    pub codex: ProviderRuntimeSlot,
     pub buffered_messages: Vec<BridgeMessage>,
 }
 
-pub struct RuntimeSlot {
+pub struct ProviderRuntimeSlot {
     pub provider: Provider,
+    pub bound_role: Option<SessionRole>,
     pub normalized_session_id: Option<String>,
     pub external_session_id: Option<String>,
     pub connection: Option<ProviderConnectionState>,
     pub send_channel: Option<RuntimeSendChannel>,
+    pub launch_id: Option<String>,
     pub epoch: u64,
-    pub launch_nonce: Option<String>,
-    pub runtime_meta: RuntimeSlotMeta,
+    pub runtime_meta: ProviderRuntimeMeta,
 }
 ```
 
-### 3. `DaemonState` migration strategy
+The role binding lives on the task. The live runtime state lives on the provider slot.
+
+### 4. `DaemonState` migration strategy
 
 `src-tauri/src/daemon/state.rs` gains:
 
@@ -281,62 +313,50 @@ pub struct RuntimeSlot {
 
 Migration strategy:
 
-- keep current global runtime fields temporarily as compatibility shims
+- keep current global fields temporarily as compatibility mirrors
 - add task-scoped accessors first
-- migrate callers phase-by-phase
+- move Claude/Codex attachment points onto task-local runtime slots
+- remove or deprecate singleton fields only after routing and frontend contracts are updated
 
-This keeps the transition controlled instead of doing a flag-day rewrite.
-
-### 4. Routing becomes task-scoped
-
-Affected files:
-
-- `src-tauri/src/daemon/routing.rs`
-- `src-tauri/src/daemon/routing_user_input.rs`
-- `src-tauri/src/daemon/routing_target_session.rs`
-- `src-tauri/src/daemon/state_task_flow.rs`
-- `src-tauri/src/daemon/state_delivery.rs`
-
-New routing rules:
-
-1. If `BridgeMessage.task_id` is present, resolve the target runtime from that `task_id`.
-2. Within that task, resolve the target slot from `to = lead | coder`.
-3. Deliver into that slot's channel.
-4. Only messages that truly lack `task_id` may fall back to `active_task_id`.
-
-This demotes `active_task_id` from correctness input to legacy fallback/UI focus.
+This avoids a flag-day rewrite.
 
 ### 5. Launch/resume APIs must accept explicit `task_id`
 
-Affected files:
+Affected surfaces:
 
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/commands.rs`
 - `src-tauri/src/daemon/mod.rs`
-- `src-tauri/src/daemon/launch_task_sync.rs`
 - `src-tauri/src/daemon/provider/claude.rs`
 - `src-tauri/src/daemon/provider/codex.rs`
 
-New rule:
+New rules:
 
-- every launch/resume/send operation carries explicit `task_id`
-- launches derive `cwd` from the task's provisioned workspace
-- no provider lifecycle path infers its task from `active_task_id`
+- every Claude launch/resume/send/stop operation carries explicit `task_id`
+- every Codex launch/resume/send/stop operation carries explicit `task_id`
+- launches derive `cwd` from the provisioned task workspace
+- no provider lifecycle path infers task ownership from `active_task_id`
 
-### 6. Codex dynamic port pool with no port race
+### 6. Claude live state becomes task-scoped
 
-This is the highest-risk part and must be explicit.
+Claude does not need a port pool, but it does need per-task live state.
 
-#### Problem
+State that must move into the Claude task slot:
 
-The current single-port logic assumes one live Codex instance:
+- `claude_sdk_ready_tx`
+- `claude_sdk_event_tx`
+- `claude_sdk_pending_nonce`
+- `claude_sdk_active_nonce`
+- `claude_sdk_ws_generation`
+- `claude_sdk_direct_text_state`
+- `claude_preview_buffer`
+- `claude_preview_flush_scheduled`
 
-- `ensure_port_available(port, ...)`
-- `kill_port_holder(port)`
+Without that move, one task's Claude reconnect or preview flush can still corrupt another task's state.
 
-That is not safe once more than one task can launch Codex concurrently.
+### 7. Codex uses a dynamic port pool
 
-#### New allocator
+The current single-port model is incompatible with per-task Codex agents.
 
 New file:
 
@@ -365,101 +385,101 @@ pub enum PortLeaseState {
 }
 ```
 
-#### Allocation rules
+Allocation rules:
 
 1. Generate a unique `launch_id`.
-2. Under a single serialized allocator, choose a free or expired-cooldown port.
+2. Under one serialized allocator, choose a free or expired-cooldown port.
 3. Mark it `Reserved(task_id, role, launch_id)`.
 4. Spawn Codex on that reserved port.
-5. On successful handshake, promote the lease to `Live` **only if `launch_id` still matches**.
-6. On stop/failure, move the lease to `CoolingDown` **only if `launch_id` still matches**.
+5. Promote to `Live` only if the same `launch_id` completes the handshake.
+6. Move to `CoolingDown` only if the same `launch_id` owns the stop/failure callback.
 7. Reuse only after cooldown expires.
 
-#### Why this avoids port races
+`lsof` cleanup remains defensive fallback only.
 
-- no launch can spawn without first reserving a port
-- stale success callbacks cannot promote another launch's lease
-- stale stop/failure callbacks cannot release another launch's port
-- cooldown prevents immediate reuse after orphan cleanup or kernel lag
+### 8. Routing becomes task-scoped and role-binding-aware
 
-`lsof` cleanup remains a defensive fallback only.
+Affected paths:
 
-#### Config change
+- `routing.rs`
+- `routing_user_input.rs`
+- `routing_target_session.rs`
+- `state_task_flow.rs`
+- `state_delivery.rs`
+- `control/handler.rs`
+- `codex/session_event.rs`
+- `codex/handler.rs`
+- `control/claude_sdk_handler_processing.rs`
 
-`src-tauri/src/daemon/ports.rs` must evolve from:
+New routing rules:
 
-- single `codex: u16`
+1. If `BridgeMessage.task_id` exists, resolve the owning task runtime from that `task_id`.
+2. Resolve `to = lead | coder`.
+3. Read the bound provider from the task's persisted role bindings.
+4. Deliver to that provider's task-local runtime slot.
+5. Only messages that truly lack `task_id` may fall back to `active_task_id`.
 
-to:
+This demotes `active_task_id` to UI focus and legacy compatibility only.
 
-- `codex_base: u16`
-- `codex_pool_size: u16`
+### 9. Buffered delivery becomes task-scoped
 
-### 7. Claude task-scoped live state
-
-Claude does not need a port pool, but it still needs task-scoped live state.
-
-State that must move into the task slot:
-
-- `claude_sdk_pending_nonce`
-- `claude_sdk_active_nonce`
-- `claude_sdk_ws_generation`
-- `claude_sdk_direct_text_state`
-- `claude_preview_buffer`
-- `claude_preview_flush_scheduled`
-
-Without this move, concurrent Claude tasks will still corrupt each other.
-
-### 8. Task-scoped buffered delivery
-
-Current `buffered_messages` is daemon-global.
-
-It should become:
+`buffered_messages` must move from daemon-global storage to task-local storage:
 
 - `TaskRuntime.buffered_messages`
 
-or equivalent `HashMap<task_id, Vec<BridgeMessage>>`.
+That prevents one task's backlog from displacing another's and makes `check_messages` / replay semantics task-correct.
 
-That prevents one task's offline backlog from displacing another's.
-
-### 9. Frontend changes
+### 10. Task context and status snapshots become task-aware
 
 Affected files:
 
-- `src/stores/task-store/index.ts`
-- `src/stores/bridge-store/index.ts`
-- `src/stores/bridge-store/listener-setup.ts`
-- `src/components/ClaudePanel/index.tsx`
-- `src/components/ReplyInput/index.tsx`
-- `src/components/MessagePanel/index.tsx`
-- `src/components/TaskPanel/*`
-- `src/components/AgentStatus/*`
+- `state_snapshot.rs`
+- `types.rs`
+- `types_dto.rs`
+- `gui_task.rs`
+
+Required behavior:
+
+- task snapshots and task events expose per-task provider bindings and runtime summaries
+- global daemon status becomes compatibility-oriented, not the source of truth for task ownership
+- task-local tool calls such as `get_status` and `check_messages` must resolve against the caller's task runtime, not the globally active task
+
+### 11. Frontend changes
+
+Affected areas:
+
+- task store
+- bridge store
+- task panel
+- message panel
+- Claude panel
+- agent status panel
 
 Design rules:
 
-- the frontend still receives all bridge events
-- visible selectors filter by `active_task_id`
-- task creation flow becomes: create task -> workspace ready -> choose providers/roles
-- task switching changes only the visible task, not the underlying runtime binding
-- task rows show their own lead/coder provider status
+- task creation flow becomes: choose workspace -> create task -> daemon provisions task workspace -> task shows Claude/Codex pair for that task
+- frontend launches providers with explicit `taskId`
+- visible panels filter by `activeTaskId`
+- background tasks continue running even when not selected
+- the UI no longer treats one global Claude/Codex status as the ownership truth
 
 ## Behavior Changes
 
 ### Before
 
-- there is effectively one live lead/coder pair
-- two tasks can still share one mutable workspace
-- switching task can change routing/launch semantics
-- background tasks cannot safely keep running
+- one live Claude runtime and one live Codex runtime effectively gate the whole app
+- multiple tasks can share one mutable workspace
+- routing and status resolution can change when `active_task_id` changes
+- tasks serialize on shared provider state
 
 ### After
 
-- each task owns an isolated workspace
-- each task owns its own runtime binding
-- switching task changes only the visible viewport
-- background tasks continue executing
-- launch/resume is deterministic by explicit `task_id`
-- Codex app-server instances are allocated through a race-free port pool
+- each task owns its own isolated workspace
+- each task owns its own Claude slot and Codex slot
+- each task persists its own provider bindings
+- routing resolves by `task_id` first
+- background tasks continue executing while another task is selected
+- Codex launches use a race-free port allocator
 
 ## File Plan
 
@@ -471,69 +491,95 @@ Design rules:
 
 ### Modified backend files
 
+- `src-tauri/src/daemon/task_graph/types.rs`
+- `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/tests.rs`
 - `src-tauri/src/daemon/state.rs`
-- `src-tauri/src/daemon/state_snapshot.rs`
 - `src-tauri/src/daemon/state_runtime.rs`
+- `src-tauri/src/daemon/state_snapshot.rs`
+- `src-tauri/src/daemon/state_snapshot_tests.rs`
 - `src-tauri/src/daemon/state_task_flow.rs`
 - `src-tauri/src/daemon/state_delivery.rs`
 - `src-tauri/src/daemon/mod.rs`
-- `src-tauri/src/daemon/launch_task_sync.rs`
-- `src-tauri/src/daemon/routing.rs`
-- `src-tauri/src/daemon/routing_user_input.rs`
-- `src-tauri/src/daemon/routing_target_session.rs`
-- `src-tauri/src/daemon/provider/claude.rs`
-- `src-tauri/src/daemon/provider/codex.rs`
-- `src-tauri/src/daemon/codex/mod.rs`
-- `src-tauri/src/daemon/codex/runtime.rs`
-- `src-tauri/src/daemon/codex/lifecycle.rs`
-- `src-tauri/src/daemon/ports.rs`
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/commands.rs`
 - `src-tauri/src/commands_task.rs`
+- `src-tauri/src/daemon/provider/claude.rs`
+- `src-tauri/src/daemon/provider/codex.rs`
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
+- `src-tauri/src/daemon/claude_sdk/mod.rs`
+- `src-tauri/src/daemon/claude_sdk/reconnect.rs`
+- `src-tauri/src/daemon/control/claude_sdk_handler.rs`
+- `src-tauri/src/daemon/control/claude_sdk_handler_processing.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/codex/mod.rs`
+- `src-tauri/src/daemon/codex/runtime.rs`
+- `src-tauri/src/daemon/codex/session.rs`
+- `src-tauri/src/daemon/codex/lifecycle.rs`
+- `src-tauri/src/daemon/codex/handler.rs`
+- `src-tauri/src/daemon/codex/session_event.rs`
+- `src-tauri/src/daemon/routing.rs`
+- `src-tauri/src/daemon/routing_display.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/routing_target_session.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `src-tauri/src/daemon/types.rs`
+- `src-tauri/src/daemon/types_dto.rs`
+- `src-tauri/src/daemon/types_tests.rs`
+- `src-tauri/src/daemon/ports.rs`
 
 ### Modified frontend files
 
+- `src/stores/task-store/types.ts`
 - `src/stores/task-store/index.ts`
+- `src/stores/task-store/events.ts`
+- `src/stores/bridge-store/types.ts`
 - `src/stores/bridge-store/index.ts`
 - `src/stores/bridge-store/listener-setup.ts`
+- `src/stores/bridge-store/sync.ts`
+- `src/components/workspace-entry-state.ts`
 - `src/components/ClaudePanel/index.tsx`
 - `src/components/ReplyInput/index.tsx`
 - `src/components/MessagePanel/index.tsx`
-- `src/components/TaskPanel/*`
-- `src/components/AgentStatus/*`
-- `src/components/workspace-entry-state.ts`
+- `src/components/TaskPanel/index.tsx`
+- `src/components/TaskPanel/TaskHeader.tsx`
+- `src/components/TaskPanel/view-model.ts`
+- `src/components/AgentStatus/index.tsx`
 
 ## Testing Strategy
 
 ### Backend
 
-- task workspace provisioning tests: worktree path allocation, branch naming, git-root validation, existing `.worktrees/tasks`
-- per-task routing tests: `lead/coder` delivery resolves by `task_id`
-- provider binding tests: explicit `task_id` launch does not mutate another task
-- port allocator tests: reserve/promote/release/cooldown, no duplicate leases
-- Codex lifecycle tests: stale launch completion cannot steal/release another task's port
-- Claude state tests: preview/direct-text state stays isolated per task
+- task creation tests: worktree path allocation, branch naming, non-git root rejection, persisted provider-binding defaults
+- task runtime tests: one task gets one Claude slot and one Codex slot
+- Claude tests: task A reconnect/disconnect cannot clear task B Claude state
+- Codex tests: task A launch/stop cannot steal task B port or runtime slot
+- routing tests: `task_id + role` resolves through task-local provider binding, not global role state
+- status tests: task-local `get_status` / `check_messages` views remain correct when another task is active
 
 ### Frontend
 
-- task creation flow shows task-scoped workspace semantics
-- message panel only renders active task messages
-- task rows show per-task runtime state
-- switching visible task does not stop background execution
+- task creation flow reflects dedicated task workspace semantics
+- task store holds task-local provider binding/runtime summaries
+- launch/send flows pass explicit `taskId`
+- message panel renders only active task messages
+- task panel shows per-task Claude/Codex runtime state
 
 ### Runtime smoke
 
 - two tasks create two distinct worktrees
-- two tasks can attach independent lead/coder sessions
-- background task continues streaming while another task is selected
-- stopping one task's Codex does not affect another task's Codex runtime
+- two tasks can each hold an independent Claude runtime
+- two tasks can each hold an independent Codex runtime
+- task A can keep streaming while task B is selected
+- stopping task A Codex does not disconnect task B Codex
 
 ## Acceptance Criteria
 
-- Each new task gets its own isolated task workspace before providers launch.
-- Multiple tasks can have independent live lead/coder runtimes at the same time.
+- Each task gets its own isolated task workspace before providers launch.
+- Each task owns its own Claude runtime state and Codex runtime state.
+- Task-local provider bindings are persisted on the task graph.
 - Routing no longer depends on `active_task_id` when `task_id` is present.
-- Provider launch/resume binds explicitly to the requested task.
-- Codex concurrent launches are serialized through a central allocator and do not contend for the same port.
-- Background tasks continue executing while a different task is selected in the UI.
-- Frontend surfaces only the selected task's messages while preserving per-task runtime visibility.
+- Claude reconnect/preview/direct-text state cannot bleed across tasks.
+- Codex concurrent launches cannot reserve or release the same port lease incorrectly.
+- Background tasks continue executing while a different task is selected.
+- Frontend surfaces only the selected task's message stream while preserving per-task runtime visibility.
