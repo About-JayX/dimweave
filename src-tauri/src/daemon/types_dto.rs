@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-/// Frontend DTO: active task with its sessions and artifacts.
+/// Frontend DTO: active task with its sessions, artifacts, and runtime summary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSnapshot {
     pub task: crate::daemon::task_graph::types::Task,
     pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
     pub artifacts: Vec<crate::daemon::task_graph::types::Artifact>,
+    pub provider_summary: Option<TaskProviderSummary>,
 }
 
 /// Frontend DTO: session tree for a task (flat list, tree via parent_session_id).

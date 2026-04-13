@@ -56,11 +56,12 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     setDraft: (text) => set({ draft: text }),
     clearClaudeAttention: () => set({ claudeNeedsAttention: false }),
 
-    sendToCodex: (content, target, attachments) => {
+    sendToCodex: (content, target, attachments, taskId) => {
       invoke("daemon_send_user_input", {
         content,
         target: target ?? "auto",
         attachments: attachments?.length ? attachments : null,
+        taskId: taskId ?? null,
       }).catch(logError(set));
     },
 
@@ -122,6 +123,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
           model: config.model ?? null,
           reasoningEffort: config.reasoningEffort ?? null,
           resumeThreadId: config.resumeThreadId ?? null,
+          taskId: config.taskId ?? null,
         });
       } catch (error) {
         logError(set)(error);

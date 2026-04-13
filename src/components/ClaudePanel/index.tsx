@@ -122,6 +122,7 @@ export function ClaudePanel({ connected, providerSession }: ClaudePanelProps) {
             effort,
             resumeSessionId:
               action.kind === "resumeExternal" ? action.externalId : undefined,
+            taskId: activeTask?.taskId,
           }),
         );
       }

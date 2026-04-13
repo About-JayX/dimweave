@@ -15,6 +15,7 @@ interface CodexLaunchInputs {
   reasoningEffort?: string;
   cwd?: string;
   resumeThreadId?: string;
+  taskId?: string;
 }
 
 interface CodexConnectTimeoutState {
@@ -54,17 +55,20 @@ export function buildCodexLaunchConfig({
   reasoningEffort,
   cwd,
   resumeThreadId,
+  taskId,
 }: CodexLaunchInputs): {
   model?: string;
   reasoningEffort?: string;
   cwd?: string;
   resumeThreadId?: string;
+  taskId?: string;
 } {
   return {
     model: model || undefined,
     reasoningEffort: reasoningEffort || undefined,
     cwd: cwd?.trim() || undefined,
     resumeThreadId: resumeThreadId?.trim() || undefined,
+    taskId: taskId || undefined,
   };
 }
 

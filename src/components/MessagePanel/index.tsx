@@ -9,7 +9,8 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
-import { selectMessages } from "@/stores/bridge-store/selectors";
+import { selectMessages, filterMessagesByTaskId } from "@/stores/bridge-store/selectors";
+import { useTaskStore } from "@/stores/task-store";
 import { MessageList } from "./MessageList";
 import { MessageImageLightbox } from "./MessageBubble";
 import {
@@ -38,7 +39,12 @@ export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: Message
   const [searchQuery, setSearchQuery] = useState("");
   const effectiveSearchQuery = getSearchQueryForDisclosure(searchOpen, searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const messages = useBridgeStore(selectMessages);
+  const allMessages = useBridgeStore(selectMessages);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const messages = useMemo(
+    () => filterMessagesByTaskId(allMessages, activeTaskId),
+    [allMessages, activeTaskId],
+  );
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);

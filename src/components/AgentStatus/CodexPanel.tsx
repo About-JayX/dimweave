@@ -216,6 +216,7 @@ export function CodexPanel({
             cwd: effectiveCwd,
             resumeThreadId:
               action.kind === "resumeExternal" ? action.externalId : undefined,
+            taskId: activeTask?.taskId,
           }),
         );
       }

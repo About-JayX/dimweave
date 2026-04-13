@@ -27,6 +27,8 @@ export interface TaskInfo {
   status: TaskStatus;
   leadSessionId?: string | null;
   currentCoderSessionId?: string | null;
+  leadProvider: Provider;
+  coderProvider: Provider;
   createdAt: number;
   updatedAt: number;
 }
@@ -70,6 +72,14 @@ export interface ArtifactInfo {
   createdAt: number;
 }
 
+export interface TaskProviderSummary {
+  taskId: string;
+  leadProvider: string;
+  coderProvider: string;
+  leadOnline: boolean;
+  coderOnline: boolean;
+}
+
 // Event payloads from gui_task.rs
 
 export interface ActiveTaskChangedPayload {
@@ -101,6 +111,7 @@ export interface TaskStoreData {
   replyTargets: Record<string, ReplyTarget>;
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;
+  providerSummaries: Record<string, TaskProviderSummary>;
   providerHistory: Record<string, ProviderHistoryInfo[]>;
   providerHistoryLoading: Record<string, boolean>;
   providerHistoryError: Record<string, string | null>;

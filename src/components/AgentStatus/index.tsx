@@ -3,6 +3,8 @@ import { ClaudePanel } from "@/components/ClaudePanel";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { selectAgents, selectConnected } from "@/stores/bridge-store/selectors";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
+import { useTaskStore } from "@/stores/task-store";
+import { selectActiveTaskProviderBindings } from "@/stores/task-store/selectors";
 import { StatusDot } from "./StatusDot";
 import { CodexPanel } from "./CodexPanel";
 
@@ -17,16 +19,30 @@ export function AgentStatusPanel() {
   const fetchUsage = useCodexAccountStore((s) => s.fetchUsage);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
 
-  // Derive agent states from the agents map (populated via agent_status Tauri events)
-  const claudeConnected = agents.claude?.status === "connected";
-  const codexConnected = agents.codex?.status === "connected";
+  const bindings = useTaskStore(selectActiveTaskProviderBindings);
+
+  // Derive per-task connected state from task-scoped provider bindings
+  const claudeOnlineForTask =
+    (bindings.leadProvider === "claude" && bindings.leadOnline) ||
+    (bindings.coderProvider === "claude" && bindings.coderOnline);
+  const codexOnlineForTask =
+    (bindings.leadProvider === "codex" && bindings.leadOnline) ||
+    (bindings.coderProvider === "codex" && bindings.coderOnline);
+
+  // Only surface provider session info when the provider is online for the active task
+  const claudeProviderSession = claudeOnlineForTask
+    ? agents.claude?.providerSession
+    : undefined;
+  const codexProviderSession = codexOnlineForTask
+    ? agents.codex?.providerSession
+    : undefined;
 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
   useEffect(() => {
-    if (codexConnected) fetchUsage();
-  }, [codexConnected, fetchUsage]);
+    if (codexOnlineForTask) fetchUsage();
+  }, [codexOnlineForTask, fetchUsage]);
 
   return (
     <section className="space-y-3">
@@ -48,25 +64,32 @@ export function AgentStatusPanel() {
             {connected ? "Daemon online" : "Daemon offline"}
           </span>
         </div>
-        <div className="mt-2 text-[12px] text-muted-foreground/65">
-          Keep Claude and Codex available here, but push message work back to
-          the central timeline.
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground/70">
+          <span className="flex items-center gap-1">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${bindings.leadOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
+            lead: <strong className="text-foreground/80">{bindings.leadProvider}</strong>
+          </span>
+          <span className="text-border/60">|</span>
+          <span className="flex items-center gap-1">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${bindings.coderOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
+            coder: <strong className="text-foreground/80">{bindings.coderProvider}</strong>
+          </span>
         </div>
       </div>
 
       <div className="space-y-3">
         <ClaudePanel
-          connected={claudeConnected}
-          providerSession={agents.claude?.providerSession}
+          connected={claudeOnlineForTask}
+          providerSession={claudeProviderSession}
         />
         <CodexPanel
-          codexTuiRunning={codexConnected}
+          codexTuiRunning={codexOnlineForTask}
           stopCodexTui={stopCodexTui}
           profile={profile}
           usage={usage}
           refreshing={refreshing}
           refreshUsage={refreshUsage}
-          providerSession={agents.codex?.providerSession}
+          providerSession={codexProviderSession}
         />
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",

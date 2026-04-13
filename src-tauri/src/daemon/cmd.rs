@@ -10,6 +10,7 @@ pub enum DaemonCmd {
         content: String,
         target: String,
         attachments: Option<Vec<crate::daemon::types::Attachment>>,
+        task_id: Option<String>,
     },
     LaunchCodex {
         task_id: String,

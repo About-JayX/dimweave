@@ -5,6 +5,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionRole,
+  TaskProviderSummary,
   TaskStoreData,
   TaskInfo,
   TaskStoreState,
@@ -19,6 +20,7 @@ type TaskSnapshot = {
   task: TaskInfo;
   sessions: any[];
   artifacts: any[];
+  providerSummary?: TaskProviderSummary | null;
 };
 
 type TaskSetter = (
@@ -27,6 +29,7 @@ type TaskSetter = (
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
+    providerSummaries: Record<string, TaskProviderSummary>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
     providerHistoryLoading: Record<string, boolean>;
     providerHistoryError: Record<string, string | null>;
@@ -37,6 +40,7 @@ type TaskSetter = (
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
+    providerSummaries: Record<string, TaskProviderSummary>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
     providerHistoryLoading: Record<string, boolean>;
     providerHistoryError: Record<string, string | null>;
@@ -46,11 +50,14 @@ type TaskSetter = (
 ) => void;
 
 export function snapshotToPatch(snap: TaskSnapshot) {
+  const summaryPatch: Record<string, TaskProviderSummary> =
+    snap.providerSummary ? { [snap.task.taskId]: snap.providerSummary } : {};
   return {
     activeTaskId: snap.task.taskId,
     tasks: { [snap.task.taskId]: snap.task },
     sessions: { [snap.task.taskId]: snap.sessions },
     artifacts: { [snap.task.taskId]: snap.artifacts },
+    providerSummaries: summaryPatch,
   };
 }
 
@@ -58,6 +65,7 @@ export async function bootstrapTaskStore(
   set: TaskSetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
   listenImpl: typeof createTaskListeners = createTaskListeners,
+  onActiveTaskChanged?: () => void,
 ) {
   set(() => ({ bootstrapComplete: false, bootstrapError: null }));
 
@@ -68,7 +76,7 @@ export async function bootstrapTaskStore(
       set(() => snapshotToPatch(snap));
     }
     set(() => ({ bootstrapComplete: true }));
-    unlisteners = await listenImpl(set as any);
+    unlisteners = await listenImpl(set as any, onActiveTaskChanged);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     set(() => ({ bootstrapComplete: false, bootstrapError: message }));
@@ -175,7 +183,12 @@ export function createFetchProviderHistoryAction(
 
 export const useTaskStore = create<TaskStoreState>((set, get) => {
   if (typeof window !== "undefined") {
-    void bootstrapTaskStore(set as any).catch(() => {});
+    void bootstrapTaskStore(
+      set as any,
+      undefined,
+      undefined,
+      () => void get().fetchSnapshot(),
+    ).catch(() => {});
   }
 
   const fetchProviderHistory = createFetchProviderHistoryAction(set as any);
@@ -187,6 +200,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     replyTargets: {},
     sessions: {},
     artifacts: {},
+    providerSummaries: {},
     providerHistory: {},
     providerHistoryLoading: {},
     providerHistoryError: {},
@@ -210,6 +224,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
 
     selectTask: async (taskId) => {
       await invoke("daemon_select_task", { taskId });
+      // Refresh snapshot to get fresh provider summary for the new task
+      await get().fetchSnapshot();
     },
 
     setReplyTarget: (target) =>
@@ -218,11 +234,13 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     fetchSnapshot: async () => {
       const snap = await invoke<TaskSnapshot | null>("daemon_get_task_snapshot");
       if (!snap) return;
+      const patch = snapshotToPatch(snap);
       set((s) => ({
-        ...snapshotToPatch(snap),
+        ...patch,
         tasks: { ...s.tasks, [snap.task.taskId]: snap.task },
         sessions: { ...s.sessions, [snap.task.taskId]: snap.sessions },
         artifacts: { ...s.artifacts, [snap.task.taskId]: snap.artifacts },
+        providerSummaries: { ...s.providerSummaries, ...patch.providerSummaries },
       }));
     },
 

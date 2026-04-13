@@ -382,8 +382,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             },
         };
         match cmd {
-            DaemonCmd::SendUserInput { content, target, attachments } => {
-                routing::route_user_input(&state, &app, content, target, attachments).await;
+            DaemonCmd::SendUserInput { content, target, attachments, task_id } => {
+                routing::route_user_input(&state, &app, content, target, attachments, task_id).await;
             }
             DaemonCmd::LaunchCodex {
                 task_id,

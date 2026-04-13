@@ -58,6 +58,7 @@ export interface BridgeState {
     content: string,
     target?: string,
     attachments?: Attachment[],
+    taskId?: string,
   ) => void;
   clearMessages: () => void;
   stopCodexTui: () => void;
@@ -70,6 +71,7 @@ export interface BridgeState {
     reasoningEffort?: string;
     cwd?: string;
     resumeThreadId?: string;
+    taskId?: string;
   }) => Promise<void>;
   setRole: (agent: "claude" | "codex", role: string) => void;
   cleanup: () => void;

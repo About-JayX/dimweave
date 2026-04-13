@@ -55,6 +55,7 @@ export function ReplyInput() {
       trimmed,
       target,
       attachments.length > 0 ? attachments : undefined,
+      activeTask?.taskId,
     );
     setDraft("");
     clear();

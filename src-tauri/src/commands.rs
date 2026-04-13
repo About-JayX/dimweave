@@ -33,6 +33,7 @@ pub async fn daemon_send_user_input(
     content: String,
     target: String,
     attachments: Option<Vec<crate::daemon::types::Attachment>>,
+    task_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     if target != "auto" && !crate::daemon::is_valid_agent_role(&target) {
@@ -44,6 +45,7 @@ pub async fn daemon_send_user_input(
             content,
             target,
             attachments,
+            task_id,
         })
         .await
         .map_err(|e| e.to_string())

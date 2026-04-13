@@ -55,13 +55,17 @@ export function reduceSaveStatus(
 
 // ── Listener setup ───────────────────────────────────────────
 
-export function createTaskListeners(set: TaskSetter): Promise<UnlistenFn[]> {
+export function createTaskListeners(
+  set: TaskSetter,
+  onActiveTaskChanged?: () => void,
+): Promise<UnlistenFn[]> {
   return Promise.all([
     listen<TaskInfo>("task_updated", (e) => {
       set((s) => reduceTaskUpdated(s, e.payload));
     }),
     listen<ActiveTaskChangedPayload>("active_task_changed", (e) => {
       set((s) => reduceActiveTaskChanged(s, e.payload));
+      onActiveTaskChanged?.();
     }),
     listen<SessionTreeChangedPayload>("session_tree_changed", (e) => {
       set((s) => reduceSessionTreeChanged(s, e.payload));

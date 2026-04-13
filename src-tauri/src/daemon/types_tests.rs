@@ -87,6 +87,7 @@ fn task_snapshot_serializes_camel_case() {
             updated_at: 2000,
         }],
         artifacts: vec![],
+        provider_summary: None,
     };
     let json = serde_json::to_value(&snap).unwrap();
     assert_eq!(json["task"]["taskId"], "task_1");
@@ -115,6 +116,7 @@ fn task_snapshot_roundtrip() {
         },
         sessions: vec![],
         artifacts: vec![],
+        provider_summary: None,
     };
     let json_str = serde_json::to_string(&snap).unwrap();
     let decoded: TaskSnapshot = serde_json::from_str(&json_str).unwrap();

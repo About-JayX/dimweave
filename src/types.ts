@@ -33,6 +33,8 @@ export interface BridgeMessage {
   replyTo?: string;
   priority?: "normal" | "urgent";
   status?: MessageStatus;
+  taskId?: string;
+  sessionId?: string;
   senderAgentId?: string;
   attachments?: Attachment[];
 }

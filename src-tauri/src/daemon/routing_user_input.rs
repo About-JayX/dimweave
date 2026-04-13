@@ -12,6 +12,7 @@ pub async fn route_user_input(
     content: String,
     target: String,
     attachments: Option<Vec<Attachment>>,
+    explicit_task_id: Option<String>,
 ) {
     if !has_user_input_payload(&content, &attachments) {
         gui::emit_system_log(app, "warn", "[Route] ignoring empty user input");
@@ -34,16 +35,34 @@ pub async fn route_user_input(
     let mut display_msg = build_user_message(now, &display_to, &content, &attachments);
     {
         let s = state.read().await;
-        s.stamp_message_context("user", &mut display_msg);
+        stamp_user_message(&s, explicit_task_id.as_deref(), &mut display_msg);
     }
     gui::emit_agent_message(app, &display_msg);
     for role in targets {
         let mut msg = build_user_message(now, &role, &content, &attachments);
         {
             let s = state.read().await;
-            s.stamp_message_context("user", &mut msg);
+            stamp_user_message(&s, explicit_task_id.as_deref(), &mut msg);
         }
         routing::route_message_silent(state, app, msg).await;
+    }
+}
+
+/// Stamp a user message with task context.  When the frontend supplied an
+/// explicit `task_id`, use task-specific stamping so the daemon's
+/// `active_task_id` is never mutated as a send side-effect.
+fn stamp_user_message(
+    s: &DaemonState,
+    explicit_task_id: Option<&str>,
+    msg: &mut BridgeMessage,
+) {
+    match explicit_task_id {
+        Some(tid) if s.task_graph.get_task(tid).is_some() => {
+            s.stamp_message_context_for_task(tid, "user", msg);
+        }
+        _ => {
+            s.stamp_message_context("user", msg);
+        }
     }
 }
 
@@ -175,5 +194,44 @@ mod tests {
         );
 
         assert!(resolve_user_targets(&state, "auto").is_empty());
+    }
+
+    #[test]
+    fn explicit_task_id_stamps_without_mutating_active_task() {
+        let mut state = DaemonState::new();
+        let task_a = state.task_graph.create_task("/repo-a", "Task A");
+        let task_b = state.task_graph.create_task("/repo-b", "Task B");
+        state.active_task_id = Some(task_a.task_id.clone());
+        let sess_b = state.task_graph.create_session(CreateSessionParams {
+            task_id: &task_b.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/repo-b",
+            title: "Coder B",
+        });
+        state
+            .task_graph
+            .set_coder_session(&task_b.task_id, &sess_b.session_id);
+
+        let mut msg = build_user_message(1, "coder", "hello", &None);
+        stamp_user_message(&state, Some(&task_b.task_id), &mut msg);
+
+        // Message should be stamped with task_b, not task_a
+        assert_eq!(msg.task_id.as_deref(), Some(task_b.task_id.as_str()));
+        // active_task_id must remain task_a — not mutated
+        assert_eq!(state.active_task_id.as_deref(), Some(task_a.task_id.as_str()));
+    }
+
+    #[test]
+    fn no_explicit_task_id_uses_active_task() {
+        let mut state = DaemonState::new();
+        let task = state.task_graph.create_task("/repo", "Task");
+        state.active_task_id = Some(task.task_id.clone());
+
+        let mut msg = build_user_message(1, "lead", "hi", &None);
+        stamp_user_message(&state, None, &mut msg);
+
+        assert_eq!(msg.task_id.as_deref(), Some(task.task_id.as_str()));
     }
 }

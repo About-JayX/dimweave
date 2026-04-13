@@ -146,10 +146,12 @@ impl DaemonState {
             .into_iter()
             .cloned()
             .collect();
+        let provider_summary = self.task_provider_summary(task_id);
         Some(TaskSnapshot {
             task,
             sessions,
             artifacts,
+            provider_summary,
         })
     }
 

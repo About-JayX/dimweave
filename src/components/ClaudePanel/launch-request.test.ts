@@ -17,6 +17,7 @@ describe("buildClaudeLaunchRequest", () => {
       model: "claude-sonnet-4-20250514",
       effort: "high",
       resumeSessionId: "session-123",
+      taskId: null,
     });
   });
 
@@ -35,6 +36,7 @@ describe("buildClaudeLaunchRequest", () => {
       model: null,
       effort: null,
       resumeSessionId: null,
+      taskId: null,
     });
   });
 
