@@ -71,7 +71,9 @@ export function TaskPanel() {
           if (payload.requestLaunch) {
             const tid = newTask.taskId;
             const cwd = selectedWorkspace;
-            const cc = payload.claudeConfig;
+            const wantsClaude = payload.leadProvider === "claude" || payload.coderProvider === "claude";
+            const wantsCodex = payload.leadProvider === "codex" || payload.coderProvider === "codex";
+            const cc = wantsClaude ? payload.claudeConfig : null;
             if (cc) {
               const a = cc.historyAction;
               if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
@@ -81,7 +83,7 @@ export function TaskPanel() {
                 taskId: tid,
               }));
             }
-            const cx = payload.codexConfig;
+            const cx = wantsCodex ? payload.codexConfig : null;
             if (cx) {
               const a = cx.historyAction;
               if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);

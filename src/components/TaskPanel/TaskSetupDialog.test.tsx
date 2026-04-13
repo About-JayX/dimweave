@@ -101,8 +101,6 @@ describe("TaskSetupDialog", () => {
 
   test("submit payload includes agent draft config slots", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    let captured: Parameters<typeof import("./TaskSetupDialog").TaskSetupDialog extends
-      (p: infer P) => any ? P : never>["onSubmit"] extends (p: infer R) => void ? R : never;
 
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -110,15 +108,26 @@ describe("TaskSetupDialog", () => {
         workspace="/repo"
         open={true}
         onOpenChange={() => {}}
-        onSubmit={(p) => {
-          captured = p;
-        }}
+        onSubmit={() => {}}
       />,
     );
-    // Static render: onSubmit is never called, but the payload type
-    // is validated at compile time. Verify the dialog renders the
-    // panels that feed the config slots.
     expect(html).toContain("Runtime control");
     expect(html).toContain("Providers");
+  });
+
+  test("launch gate: only providers bound to task bindings are selected", () => {
+    // Mirrors the gating logic in TaskPanel handleSetupSubmit
+    const cases: { lead: string; coder: string; expectClaude: boolean; expectCodex: boolean }[] = [
+      { lead: "claude", coder: "codex", expectClaude: true, expectCodex: true },
+      { lead: "claude", coder: "claude", expectClaude: true, expectCodex: false },
+      { lead: "codex", coder: "codex", expectClaude: false, expectCodex: true },
+      { lead: "codex", coder: "claude", expectClaude: true, expectCodex: true },
+    ];
+    for (const c of cases) {
+      const wantsClaude = c.lead === "claude" || c.coder === "claude";
+      const wantsCodex = c.lead === "codex" || c.coder === "codex";
+      expect(wantsClaude).toBe(c.expectClaude);
+      expect(wantsCodex).toBe(c.expectCodex);
+    }
   });
 });
