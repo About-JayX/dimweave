@@ -43,6 +43,8 @@ pub(super) fn spawn_health_monitor(
     child: Arc<Mutex<Option<tokio::process::Child>>>,
     task_id: String,
     session_epoch: u64,
+    port: u16,
+    exit_tx: tokio::sync::mpsc::UnboundedSender<super::CodexExitNotice>,
     state: SharedState,
     app: AppHandle,
     cancel: CancellationToken,
@@ -81,6 +83,10 @@ pub(super) fn spawn_health_monitor(
                             )
                             .await;
                         }
+                        let _ = exit_tx.send(super::CodexExitNotice {
+                            task_id: task_id.clone(),
+                            port,
+                        });
                         return;
                     }
                     Ok(None) => {}

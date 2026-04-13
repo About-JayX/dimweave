@@ -204,6 +204,7 @@ async fn attach_provider_history(
     codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
     codex_port_pool: &mut codex::port_pool::CodexPortPool,
     claude_sdk_handle: &mut Option<claude_sdk::ClaudeSdkHandle>,
+    codex_exit_tx: &tokio::sync::mpsc::UnboundedSender<codex::CodexExitNotice>,
     state: &SharedState,
     app: &AppHandle,
 ) -> Result<String, String> {
@@ -302,10 +303,12 @@ async fn attach_provider_history(
                 },
                 state.clone(),
                 app.clone(),
+                codex_exit_tx.clone(),
             )
             .await
             .map_err(|err| err.to_string())?;
             codex_handles.insert(attach_task_id.clone(), handle);
+            codex_port_pool.promote(allocated_port, &attach_task_id);
             {
                 let mut daemon = state.write().await;
                 crate::daemon::provider::codex::register_on_launch(
@@ -347,10 +350,24 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         feishu_project_lifecycle::auto_start(&state, &app).await;
     let mut codex_port_pool = codex::port_pool::CodexPortPool::new(codex_port);
     let mut codex_handles: std::collections::HashMap<String, codex::CodexHandle> = std::collections::HashMap::new();
+    let (codex_exit_tx, mut codex_exit_rx) =
+        tokio::sync::mpsc::unbounded_channel::<codex::CodexExitNotice>();
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> =
         telegram_lifecycle::auto_start(&state, &app).await;
-    while let Some(cmd) = cmd_rx.recv().await {
+    loop {
+        // Drain Codex natural-exit notices so ports and handles are released promptly
+        let cmd = tokio::select! {
+            Some(notice) = codex_exit_rx.recv() => {
+                codex_handles.remove(&notice.task_id);
+                codex_port_pool.release(notice.port, &notice.task_id);
+                continue;
+            }
+            cmd = cmd_rx.recv() => match cmd {
+                Some(c) => c,
+                None => break,
+            },
+        };
         match cmd {
             DaemonCmd::SendUserInput { content, target, attachments } => {
                 routing::route_user_input(&state, &app, content, target, attachments).await;
@@ -418,11 +435,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             },
                             state.clone(),
                             app.clone(),
+                            codex_exit_tx.clone(),
                         )
                         .await
                         {
                             Ok(h) => {
                                 codex_handles.insert(resolved_task_id.clone(), h);
+                                codex_port_pool.promote(allocated_port, &resolved_task_id);
                                 let task_id = {
                                     let mut daemon = state.write().await;
                                     launch_task_sync::sync_codex_launch_into_task(
@@ -462,11 +481,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         },
                         state.clone(),
                         app.clone(),
+                        codex_exit_tx.clone(),
                     )
                     .await
                     {
                         Ok(h) => {
                             codex_handles.insert(resolved_task_id.clone(), h);
+                            codex_port_pool.promote(allocated_port, &resolved_task_id);
                             if let Some(task_id) = state.read().await.active_task_id.clone() {
                                 emit_task_context_events(&state, &app, &task_id).await;
                             }
@@ -760,11 +781,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     },
                                     state.clone(),
                                     app.clone(),
+                                    codex_exit_tx.clone(),
                                 )
                                 .await
                                 {
                                     Ok(handle) => {
-                                        codex_handles.insert(resume_task_id, handle);
+                                        codex_handles.insert(resume_task_id.clone(), handle);
+                                        codex_port_pool.promote(allocated_port, &resume_task_id);
                                         state.write().await.resume_session(&session_id)
                                     }
                                     Err(err) => {
@@ -858,6 +881,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     &mut codex_handles,
                     &mut codex_port_pool,
                     &mut claude_sdk_handle,
+                    &codex_exit_tx,
                     &state,
                     &app,
                 )

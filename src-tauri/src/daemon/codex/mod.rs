@@ -16,6 +16,15 @@ use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 
+/// Notification sent from session/runtime tasks when a Codex session
+/// exits naturally (process death or session loop end). The daemon loop
+/// uses this to release the port lease and remove the stale task handle.
+#[derive(Debug)]
+pub struct CodexExitNotice {
+    pub task_id: String,
+    pub port: u16,
+}
+
 pub struct CodexHandle {
     process: Arc<Mutex<Option<tokio::process::Child>>>,
     session_mgr: Arc<Mutex<crate::daemon::session_manager::SessionManager>>,
@@ -66,6 +75,7 @@ pub async fn start(
     opts: StartOpts,
     state: SharedState,
     app: AppHandle,
+    exit_tx: tokio::sync::mpsc::UnboundedSender<CodexExitNotice>,
 ) -> anyhow::Result<CodexHandle> {
     let StartOpts {
         task_id,
@@ -98,6 +108,7 @@ pub async fn start(
         approval_policy,
         state,
         app,
+        exit_tx,
     )
     .await
 }
@@ -106,6 +117,7 @@ pub async fn resume(
     opts: ResumeOpts,
     state: SharedState,
     app: AppHandle,
+    exit_tx: tokio::sync::mpsc::UnboundedSender<CodexExitNotice>,
 ) -> anyhow::Result<CodexHandle> {
     let ResumeOpts {
         task_id,
@@ -130,6 +142,7 @@ pub async fn resume(
         approval_policy,
         state,
         app,
+        exit_tx,
     )
     .await
 }
@@ -158,6 +171,7 @@ async fn launch(
     approval_policy: String,
     state: SharedState,
     app: AppHandle,
+    exit_tx: tokio::sync::mpsc::UnboundedSender<CodexExitNotice>,
 ) -> anyhow::Result<CodexHandle> {
     let session_mgr = state.read().await.session_mgr.clone();
     let session_id = session_mgr.lock().await.next_session_id();
@@ -221,6 +235,9 @@ async fn launch(
     let cancel_session = cancel.clone();
     let is_new_session = matches!(&mode, LaunchMode::New(_));
     let task_id_session = task_id.clone();
+    let session_exit_tx = exit_tx.clone();
+    let session_exit_port = codex_port;
+    let session_exit_task_id = task_id.clone();
     tokio::spawn(async move {
         tokio::select! {
             _ = cancel_session.cancelled() => {}
@@ -235,6 +252,11 @@ async fn launch(
                 }
             } => {}
         }
+        // Notify daemon loop so it can release port lease and remove handle
+        let _ = session_exit_tx.send(CodexExitNotice {
+            task_id: session_exit_task_id,
+            port: session_exit_port,
+        });
     });
 
     // Wait for session handshake to complete before declaring connected
@@ -322,6 +344,8 @@ async fn launch(
         child_arc.clone(),
         task_id.clone(),
         launch_epoch,
+        codex_port,
+        exit_tx,
         state.clone(),
         app.clone(),
         cancel.clone(),
