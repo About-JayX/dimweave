@@ -171,6 +171,20 @@ export function shouldScrollOnDraftStart(
   return hasClaudeDraft && !searchActive && isSticky;
 }
 
+/**
+ * Returns true when any stream tail should pin the viewport to the absolute
+ * scroller bottom. Covers Claude draft (inline row) and Codex thinking/activity
+ * (StreamTailFooter). Either tail active with sticky on and search off triggers.
+ */
+export function shouldScrollOnStreamTail(
+  hasClaudeDraft: boolean,
+  codexStreamVisible: boolean,
+  searchActive: boolean,
+  isSticky: boolean,
+): boolean {
+  return (hasClaudeDraft || codexStreamVisible) && !searchActive && isSticky;
+}
+
 export function getMessageListFollowOutputMode(
   searchActive: boolean,
   isSticky: boolean,

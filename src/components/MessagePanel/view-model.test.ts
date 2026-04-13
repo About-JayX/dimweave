@@ -7,6 +7,7 @@ import {
   shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
   shouldScrollOnDraftStart,
+  shouldScrollOnStreamTail,
   STICKY_BOTTOM_THRESHOLD,
 } from "./view-model";
 
@@ -120,6 +121,32 @@ describe("shouldScrollOnDraftStart", () => {
 
   test("user scrolled away (not sticky) during draft → should not scroll", () => {
     expect(shouldScrollOnDraftStart(true, false, false)).toBe(false);
+  });
+});
+
+describe("shouldScrollOnStreamTail", () => {
+  test("claude draft + sticky + no search → should scroll", () => {
+    expect(shouldScrollOnStreamTail(true, false, false, true)).toBe(true);
+  });
+
+  test("codex stream visible + sticky + no search → should scroll", () => {
+    expect(shouldScrollOnStreamTail(false, true, false, true)).toBe(true);
+  });
+
+  test("both claude and codex active → should scroll", () => {
+    expect(shouldScrollOnStreamTail(true, true, false, true)).toBe(true);
+  });
+
+  test("neither claude nor codex active → should not scroll", () => {
+    expect(shouldScrollOnStreamTail(false, false, false, true)).toBe(false);
+  });
+
+  test("search active suppresses scroll regardless of stream state", () => {
+    expect(shouldScrollOnStreamTail(true, true, true, true)).toBe(false);
+  });
+
+  test("user scrolled away (not sticky) suppresses scroll", () => {
+    expect(shouldScrollOnStreamTail(true, true, false, false)).toBe(false);
   });
 });
 

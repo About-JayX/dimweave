@@ -12,7 +12,7 @@ import {
   getMessageListFollowOutputMode,
   shouldClearStickyOnScroll,
   shouldResetMessageListInitialScroll,
-  shouldScrollOnDraftStart,
+  shouldScrollOnStreamTail,
   PROGRAMMATIC_SCROLL_IMMUNITY_MS,
   STICKY_BOTTOM_THRESHOLD,
   type StreamIndicatorId,
@@ -160,12 +160,20 @@ export function MessageList({
     return () => window.cancelAnimationFrame(raf);
   }, [searchActive, totalCount]);
 
-  // Pin viewport to the absolute content bottom on draft start and during
-  // streaming growth. scrollToIndex("LAST") only guarantees the last item is
-  // visible but does not scroll to its growing bottom edge; scrollTo(scrollHeight)
-  // does. rAF throttles to one scroll per frame and is cancelled on re-fire.
+  // Pin viewport to the absolute content bottom whenever any stream tail is
+  // active: Claude draft (inline row, may grow) or Codex thinking/activity
+  // (StreamTailFooter). scrollTo(scrollHeight) reaches the actual bottom even
+  // when the last item is already partially visible but its bottom is off-screen.
+  // rAF throttles to one scroll per frame; cleanup cancels a pending rAF.
   useEffect(() => {
-    if (!shouldScrollOnDraftStart(hasClaudeDraft, searchActive, stickyRef.current))
+    if (
+      !shouldScrollOnStreamTail(
+        hasClaudeDraft,
+        codexVisible,
+        searchActive,
+        stickyRef.current,
+      )
+    )
       return;
     const raf = window.requestAnimationFrame(() => {
       programmaticScrollRef.current = Date.now();
@@ -177,7 +185,7 @@ export function MessageList({
       }
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [hasClaudeDraft, claudePreviewText, searchActive]);
+  }, [hasClaudeDraft, claudePreviewText, codexVisible, searchActive]);
 
   if (!displayState.hasContent) {
     return (
