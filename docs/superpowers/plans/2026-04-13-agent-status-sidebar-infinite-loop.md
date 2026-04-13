@@ -58,4 +58,4 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Stabilize `selectActiveTaskProviderBindings()` and add a focused regression test. | _pending_ | pending |
+| Task 1 | `f6725d8a`, `b52bed56` | Stabilized `selectActiveTaskProviderBindings()` with module-local memoization so unchanged active-task/provider-summary inputs return a stable object reference, and added focused selector regressions for stable identity, default bindings, and summary updates. | `bun test tests/task-store-selectors.test.ts` ✅ 3 passed; `bun test src/components/TaskContextPopover.test.tsx` ✅ 6 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
