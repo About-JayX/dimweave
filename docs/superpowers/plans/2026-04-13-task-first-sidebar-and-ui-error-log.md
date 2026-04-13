@@ -237,7 +237,7 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `a4f6767a`, `c30d84bf` | Decoupled `selectedWorkspace` from `activeTaskId`, stopped workspace entry from auto-creating a task, fixed shell workspace labeling with no active task, and added workspace task-list hydration through `daemon_list_tasks`. | `bun test src/components/workspace-entry-state.test.ts src/components/WorkspaceEntryOverlay.test.tsx` ✅ 9 passed; `bun test tests/task-store.test.ts` ✅ 25 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | _pending_ | _pending_ | pending |
+| Task 2 | `629e711e` | Added the task-config contract at the daemon/store layer: task creation can carry explicit lead/coder provider bindings, task bindings can be updated later through a dedicated command/store action, and both paths avoid any implicit provider launch side effects. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 29 passed; `bun test tests/task-store.test.ts` ✅ 27 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
 | Task 5 | _pending_ | _pending_ | _pending_ | pending |
