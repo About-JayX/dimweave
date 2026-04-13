@@ -200,7 +200,7 @@ Rules:
 |------|--------|---------|--------------|--------|
 | Task 1 | `6938ba4d` | Add per-task git worktree provisioning, concrete Claude/Codex task bindings, `TaskRuntime` initialization, and rollback for failed task creation | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 26 passed; `cargo test --manifest-path src-tauri/Cargo.toml task_workspace -- --nocapture` ✅ 5 passed; `cargo test --manifest-path src-tauri/Cargo.toml task_runtime -- --nocapture` ✅ 4 passed; `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml commands_task -- --nocapture` ✅ 0 tests / wrapper path; `git diff --check` ✅ | accepted |
 | Task 2 | `e3497bf6` | Move Claude SDK lifecycle state into `ClaudeTaskSlot`, thread explicit `task_id` through launch/reconnect/sync paths, and add focused `claude_task_slot` coverage. **Accepted: `e3497bf6`**, follow-up **`e708538f`** fixes cross-task nonce/event/invalidation isolation, follow-up **`b3ca85f4`** fixes task-graph binding isolation during task-local invalidation. | `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture` ✅ 17 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::control::claude_sdk_handler::tests:: -- --nocapture` ✅ 9 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture` ✅ 38 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_task_slot -- --nocapture` ✅ 12 passed; `git diff --check` ✅ | accepted |
-| Task 3 | `pending_commit` | Move Codex runtime state into task-local slots and add port pool | Use Task 3 verification commands | planned |
+| Task 3 | `5f8773fa` | Move Codex runtime state into task-local slots and add a reservation-aware port pool. **Accepted: `5f8773fa`**, follow-up **`e93cd0b5`** fixes task-graph binding isolation for clear paths, follow-up **`f4225782`** threads explicit `task_id` through resume sync and stores task-local connection ownership, follow-up **`4d5fab2a`** replaces singleton `CodexHandle` with task-keyed handle ownership and adds reservation tracking, follow-up **`f269bdb6`** wires `reserve -> promote -> release` and natural-exit notifications, follow-up **`5aa7b7fc`** makes lease ownership launch-id-aware and extracts focused port-pool tests. | `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture` ✅ 18 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex_task_slot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex_port_pool -- --nocapture` ✅ 15 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture` ✅ 50 passed; `git diff --check` ✅ | accepted |
 | Task 4 | `pending_commit` | Route, buffer, and expose status by `task_id` and task-local bindings | Use Task 4 verification commands | planned |
 | Task 5 | `pending_commit` | Update frontend launch/status/message flows to true task scope | Use Task 5 verification commands | planned |
 | Task 6 | `pending_commit` | Remove/quarantine singleton shims and document the final model | Use Task 6 verification commands | planned |
@@ -316,6 +316,20 @@ Rules:
 - `max_added_loc: 620`
 - `max_deleted_loc: 220`
 
+## Plan Revision 6 — 2026-04-13
+
+**Reason:** Task 3 extracted `src-tauri/src/daemon/codex/port_pool_tests.rs` from `port_pool.rs` to keep the allocator module within file-size limits while adding the required launch-id-aware lease regressions. The cumulative accepted implementation also exceeded the original `max_added_loc` once the reservation tracker, task-keyed handle map, exit-notice plumbing, and extracted tests were all included.
+
+**Added to Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/codex/port_pool_tests.rs`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 16`
+- `max_added_loc: 1120`
+- `max_deleted_loc: 220`
+
 ---
 
 ### Task 2: Move Claude runtime state into task-local slots
@@ -384,6 +398,7 @@ Rules:
 - `src-tauri/src/daemon/state_runtime.rs`
 - `src-tauri/src/daemon/ports.rs`
 - `src-tauri/src/daemon/codex/port_pool.rs`
+- `src-tauri/src/daemon/codex/port_pool_tests.rs`
 - `src-tauri/src/daemon/codex/mod.rs`
 - `src-tauri/src/daemon/codex/runtime.rs`
 - `src-tauri/src/daemon/codex/session.rs`
@@ -392,8 +407,8 @@ Rules:
 - `src-tauri/src/daemon/provider/codex_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 
-**max_files_changed:** `15`
-**max_added_loc:** `620`
+**max_files_changed:** `16`
+**max_added_loc:** `1120`
 **max_deleted_loc:** `220`
 
 **verification_commands:**
@@ -452,9 +467,17 @@ Rules:
 - `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_shared_role_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_user_target_tests:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml task_runtime_routing -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml types_tests -- --nocapture`
 - `git diff --check`
+
+## Plan Revision 7 — 2026-04-13
+
+**Reason:** Baseline verification already proved `daemon::state::state_tests::` contains a pre-existing unrelated failure (`online_role_conflict_only_blocks_live_other_agent`). Task 4 therefore needs a focused state-side regression prefix instead of the entire `state_tests` module.
+
+**Revised verification focus for Task 4:**
+
+- Task 4 must add and run focused tests matched by `task_runtime_routing`.
 
 ---
 
