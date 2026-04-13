@@ -512,6 +512,13 @@ Rules:
 
 **allowed_files:**
 
+- `src-tauri/src/commands.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/state_snapshot.rs`
+- `src-tauri/src/daemon/types_dto.rs`
+- `src-tauri/src/daemon/types_tests.rs`
 - `src/stores/task-store/types.ts`
 - `src/stores/task-store/index.ts`
 - `src/stores/task-store/events.ts`
@@ -540,18 +547,50 @@ Rules:
 - `src/components/ClaudePanel/launch-request.test.ts`
 - `src/components/AgentStatus/codex-launch-config.test.ts`
 
-**max_files_changed:** `27`
-**max_added_loc:** `660`
+**max_files_changed:** `34`
+**max_added_loc:** `920`
 **max_deleted_loc:** `300`
 
 **verification_commands:**
 
+- `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
 - `bun test tests/task-store.test.ts tests/task-panel-view-model.test.ts`
 - `bun test src/components/ReplyInput/index.test.tsx src/components/MessagePanel/index.test.tsx`
 - `bun test src/components/TaskPanel/TaskHeader.test.tsx src/components/TaskPanel/ArtifactTimeline.test.tsx`
 - `bun test src/components/ClaudePanel/connect-state.test.ts src/components/ClaudePanel/launch-request.test.ts src/components/AgentStatus/codex-launch-config.test.ts`
 - `bun run build`
 - `git diff --check`
+
+## Plan Revision 9 — 2026-04-13
+
+**Reason:** Lead review found Task 5 could not satisfy two approved acceptance criteria with frontend-only scope:
+
+- explicit `taskId` on user send operations requires the daemon send command surface (`commands.rs`, `cmd.rs`, `mod.rs`, `routing_user_input.rs`)
+- task-local runtime summaries in the task store require backend snapshot DTO wiring (`state_snapshot.rs`, `types_dto.rs`)
+
+Task 5 also needs targeted Rust verification for those contract changes.
+
+**Added to Task 5 allowed_files:**
+
+- `src-tauri/src/commands.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/state_snapshot.rs`
+- `src-tauri/src/daemon/types_dto.rs`
+- `src-tauri/src/daemon/types_tests.rs`
+
+**Revised Task 5 budgets:**
+
+- `max_files_changed: 34`
+- `max_added_loc: 920`
+- `max_deleted_loc: 300`
+
+**Revised Task 5 verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
 
 ---
 
