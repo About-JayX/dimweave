@@ -82,12 +82,11 @@ pub async fn start_runtime(
                         Ok(updates) => {
                             for update in updates {
                                 offset = Some(update.update_id + 1);
-                                cfg.last_update_id = Some(update.update_id);
                                 super::runtime_handlers::handle_update(
                                     &state, &app, &client, &token, &mut cfg, &update,
                                 ).await;
+                                commit_update_cursor(&mut cfg, update.update_id, &config_path);
                             }
-                            let _ = config::save_config(&config_path, &cfg);
                         }
                         Err(e) => {
                             gui::emit_system_log(
@@ -108,6 +107,18 @@ pub async fn start_runtime(
         config_tx,
         shutdown_tx: Some(shutdown_tx),
     })
+}
+
+/// Advance the cursor to `update_id` and immediately persist to disk.
+/// Called after each update is processed so that a crash between updates
+/// replays at most the next unprocessed update, not the entire batch.
+pub(crate) fn commit_update_cursor(
+    cfg: &mut TelegramConfig,
+    update_id: i64,
+    config_path: &std::path::Path,
+) {
+    cfg.last_update_id = Some(update_id);
+    let _ = config::save_config(config_path, cfg);
 }
 
 /// Merge lifecycle-pushed config into the runtime's in-memory copy.
