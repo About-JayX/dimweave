@@ -288,6 +288,20 @@ Rules:
 - `max_added_loc: 580`
 - `max_deleted_loc: 220`
 
+## Plan Revision 4 — 2026-04-13
+
+**Reason:** Task 3 acceptance criterion 2 requires Codex live state to move into a task-local Codex slot. That slot belongs in `src-tauri/src/daemon/task_runtime.rs`, which was omitted from the original Task 3 scope.
+
+**Added to Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/task_runtime.rs`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 14`
+- `max_added_loc: 620`
+- `max_deleted_loc: 220`
+
 ---
 
 ### Task 2: Move Claude runtime state into task-local slots
@@ -351,6 +365,7 @@ Rules:
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/commands.rs`
 - `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/task_runtime.rs`
 - `src-tauri/src/daemon/state_runtime.rs`
 - `src-tauri/src/daemon/ports.rs`
 - `src-tauri/src/daemon/codex/port_pool.rs`
@@ -362,8 +377,8 @@ Rules:
 - `src-tauri/src/daemon/provider/codex_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 
-**max_files_changed:** `13`
-**max_added_loc:** `560`
+**max_files_changed:** `14`
+**max_added_loc:** `620`
 **max_deleted_loc:** `220`
 
 **verification_commands:**
