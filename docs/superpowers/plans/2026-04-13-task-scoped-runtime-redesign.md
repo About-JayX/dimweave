@@ -519,6 +519,7 @@ Rules:
 - `src-tauri/src/daemon/state_snapshot.rs`
 - `src-tauri/src/daemon/types_dto.rs`
 - `src-tauri/src/daemon/types_tests.rs`
+- `src-tauri/src/commands_artifact.rs`
 - `src/stores/task-store/types.ts`
 - `src/stores/task-store/index.ts`
 - `src/stores/task-store/events.ts`
@@ -582,6 +583,7 @@ Task 5 also needs targeted Rust verification for those contract changes.
 - `src-tauri/src/daemon/state_snapshot.rs`
 - `src-tauri/src/daemon/types_dto.rs`
 - `src-tauri/src/daemon/types_tests.rs`
+- `src-tauri/src/commands_artifact.rs`
 
 **Revised Task 5 budgets:**
 
@@ -602,6 +604,14 @@ Task 5 also needs targeted Rust verification for those contract changes.
 
 - `src/components/WorkspaceEntryOverlay.tsx`
 - `src/components/WorkspaceEntryOverlay.test.tsx`
+
+## Plan Revision 11 — 2026-04-13
+
+**Reason:** Task 5 needed `src-tauri/src/commands_artifact.rs` for a compile-fix update after `TaskSnapshot` gained `provider_summary`. This is a mechanical test-only ripple from the approved DTO contract change.
+
+**Added to Task 5 allowed_files:**
+
+- `src-tauri/src/commands_artifact.rs`
 
 ---
 
