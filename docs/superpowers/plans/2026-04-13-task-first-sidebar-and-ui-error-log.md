@@ -177,6 +177,21 @@
 - `max_added_loc: 1040`
 - `max_deleted_loc: 320`
 
+## Plan Revision 2 — 2026-04-14
+
+**Reason:** Task 3’s create-mode draft setup needs an explicit draft-aware agent-status layer and a non-global role selector path. `src/components/AgentStatus/index.tsx` was already required to thread draft workspace/config state into the embedded panels, and `src/components/AgentStatus/RoleSelect.tsx` is required to stop create-mode role changes from mutating daemon/global state before confirmation.
+
+**Added to Task 3 allowed_files:**
+
+- `src/components/AgentStatus/index.tsx`
+- `src/components/AgentStatus/RoleSelect.tsx`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 29`
+- `max_added_loc: 1120`
+- `max_deleted_loc: 340`
+
 ## Task 4: Separate UI error logs from runtime logs and stop automatic remount loops
 
 **task_id:** `ui-error-log-and-boundary-recovery`
