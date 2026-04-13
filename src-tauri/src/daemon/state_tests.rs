@@ -1070,3 +1070,84 @@ fn claude_task_slot_invalidate_task_a_preserves_task_b_online() {
     assert!(s.claude_sdk_ws_tx.is_some(),
         "singleton ws_tx must be recomputed from surviving slots");
 }
+
+// ── Regression: Finding 4 — invalidate must not detach another task's task_graph binding ──
+
+#[test]
+fn claude_task_slot_invalidate_task_a_preserves_task_b_graph_binding() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    // Create Claude sessions in task_graph for both tasks
+    let sess_a = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t1.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Claude,
+        role: crate::daemon::task_graph::types::SessionRole::Lead,
+        cwd: "/ws/a",
+        title: "Claude A",
+    });
+    s.task_graph.set_lead_session(&t1.task_id, &sess_a.session_id);
+
+    let sess_b = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t2.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Claude,
+        role: crate::daemon::task_graph::types::SessionRole::Lead,
+        cwd: "/ws/b",
+        title: "Claude B",
+    });
+    s.task_graph.set_lead_session(&t2.task_id, &sess_b.session_id);
+
+    // Launch Claude for both tasks (Task B last → owns global claude_connection mirror)
+    let epoch1 = s.begin_claude_task_launch(&t1.task_id, "nonce-1".into()).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t1.task_id, epoch1, "nonce-1", tx1);
+
+    let epoch2 = s.begin_claude_task_launch(&t2.task_id, "nonce-2".into()).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&t2.task_id, epoch2, "nonce-2", tx2);
+
+    // Simulate runtime.rs: Task B sets the global claude_connection mirror
+    s.set_provider_connection("claude", crate::daemon::types::ProviderConnectionState {
+        provider: crate::daemon::task_graph::types::Provider::Claude,
+        external_session_id: sess_b.session_id.clone(),
+        cwd: "/ws/b".into(),
+        connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+    });
+
+    // Invalidate Task A — must NOT touch Task B's task_graph binding
+    s.invalidate_claude_task_session(&t1.task_id);
+
+    // Task B's lead_session_id must be preserved
+    let t2_task = s.task_graph.get_task(&t2.task_id).unwrap();
+    assert_eq!(
+        t2_task.lead_session_id.as_deref(),
+        Some(sess_b.session_id.as_str()),
+        "Task B lead_session_id must not be cleared by Task A invalidation"
+    );
+
+    // Task B's session must still be Active
+    let t2_sess = s.task_graph.get_session(&sess_b.session_id).unwrap();
+    assert_eq!(
+        t2_sess.status,
+        crate::daemon::task_graph::types::SessionStatus::Active,
+        "Task B session must not be paused by Task A invalidation"
+    );
+
+    // Task A's session should be paused and lead cleared
+    let t1_task = s.task_graph.get_task(&t1.task_id).unwrap();
+    assert!(
+        t1_task.lead_session_id.is_none(),
+        "Task A lead_session_id should be cleared"
+    );
+    let t1_sess = s.task_graph.get_session(&sess_a.session_id).unwrap();
+    assert_eq!(
+        t1_sess.status,
+        crate::daemon::task_graph::types::SessionStatus::Paused,
+        "Task A session should be paused"
+    );
+}

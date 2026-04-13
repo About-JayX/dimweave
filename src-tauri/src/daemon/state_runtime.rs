@@ -1,5 +1,5 @@
 use super::*;
-use crate::daemon::task_graph::types::SessionStatus;
+use crate::daemon::task_graph::types::{Provider, SessionStatus};
 
 impl DaemonState {
     fn detach_provider_binding(&mut self, agent: &str) -> Option<String> {
@@ -20,6 +20,28 @@ impl DaemonState {
             .clear_coder_session_if_matches(&session.task_id, &session.session_id);
         self.auto_save_task_graph();
         Some(session.task_id)
+    }
+
+    /// Detach only the Claude sessions belonging to a specific task.
+    /// Unlike `detach_provider_binding`, this does NOT read the global
+    /// `claude_connection` mirror, so it cannot affect another task's binding.
+    fn detach_claude_sessions_for_task(&mut self, task_id: &str) {
+        let session_ids: Vec<String> = self
+            .task_graph
+            .sessions_for_task(task_id)
+            .into_iter()
+            .filter(|s| s.provider == Provider::Claude)
+            .map(|s| s.session_id.clone())
+            .collect();
+        if session_ids.is_empty() {
+            return;
+        }
+        for sid in &session_ids {
+            let _ = self.task_graph.update_session_status(sid, SessionStatus::Paused);
+            let _ = self.task_graph.clear_lead_session_if_matches(task_id, sid);
+            let _ = self.task_graph.clear_coder_session_if_matches(task_id, sid);
+        }
+        self.auto_save_task_graph();
     }
 
     pub fn codex_session_epoch(&self) -> u64 {
@@ -291,8 +313,11 @@ impl DaemonState {
         if !self.any_claude_task_online() {
             self.invalidate_claude_sdk_session()
         } else {
-            // Detach provider binding for this task only
-            self.detach_provider_binding("claude")
+            // Detach only the requested task's Claude sessions in task_graph;
+            // do NOT touch the global claude_connection mirror (it may belong to another task).
+            self.detach_claude_sessions_for_task(task_id);
+            self.recompute_claude_singleton_ws_tx();
+            Some(task_id.to_string())
         }
     }
 
