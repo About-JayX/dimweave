@@ -1,19 +1,31 @@
 use crate::daemon::{
-    task_graph::types::Task,
+    task_graph::types::{Provider, Task},
     types::{SessionTreeSnapshot, TaskSnapshot},
     DaemonCmd,
 };
 use crate::DaemonSender;
 use tauri::State;
 
+fn parse_provider(s: &str) -> Result<Provider, String> {
+    match s {
+        "claude" => Ok(Provider::Claude),
+        "codex" => Ok(Provider::Codex),
+        _ => Err(format!("unknown provider: {s}")),
+    }
+}
+
 #[tauri::command]
 pub async fn daemon_create_task(
     workspace: String,
     title: String,
+    lead_provider: Option<String>,
+    coder_provider: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<Task, String> {
-    // Validate git root at the command boundary
     crate::daemon::task_workspace::validate_git_root(&workspace)?;
+
+    let lp = lead_provider.map(|s| parse_provider(&s)).transpose()?;
+    let cp = coder_provider.map(|s| parse_provider(&s)).transpose()?;
 
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
@@ -21,6 +33,8 @@ pub async fn daemon_create_task(
         .send(DaemonCmd::CreateTask {
             workspace,
             title,
+            lead_provider: lp,
+            coder_provider: cp,
             reply: reply_tx,
         })
         .await
@@ -28,6 +42,31 @@ pub async fn daemon_create_task(
     reply_rx
         .await
         .map_err(|_| "daemon dropped create_task reply".to_string())?
+}
+
+#[tauri::command]
+pub async fn daemon_update_task_config(
+    task_id: String,
+    lead_provider: String,
+    coder_provider: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<Task, String> {
+    let lp = parse_provider(&lead_provider)?;
+    let cp = parse_provider(&coder_provider)?;
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::UpdateTaskConfig {
+            task_id,
+            lead_provider: lp,
+            coder_provider: cp,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped update_task_config reply".to_string())?
 }
 
 #[tauri::command]

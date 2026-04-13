@@ -51,6 +51,48 @@ impl TaskGraphStore {
         task
     }
 
+    /// Create a new task with explicit provider bindings.
+    pub fn create_task_with_config(
+        &mut self,
+        workspace_root: &str,
+        title: &str,
+        lead_provider: Provider,
+        coder_provider: Provider,
+    ) -> Task {
+        let now = chrono::Utc::now().timestamp_millis() as u64;
+        let task = Task {
+            task_id: self.next_id_str("task"),
+            workspace_root: workspace_root.to_string(),
+            title: title.to_string(),
+            status: TaskStatus::Draft,
+            lead_session_id: None,
+            current_coder_session_id: None,
+            lead_provider,
+            coder_provider,
+            created_at: now,
+            updated_at: now,
+        };
+        self.tasks.insert(task.task_id.clone(), task.clone());
+        task
+    }
+
+    /// Update provider bindings for a task. Returns false if not found.
+    pub fn update_task_providers(
+        &mut self,
+        task_id: &str,
+        lead_provider: Provider,
+        coder_provider: Provider,
+    ) -> bool {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            task.lead_provider = lead_provider;
+            task.coder_provider = coder_provider;
+            task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Retrieve a task by ID.
     pub fn get_task(&self, task_id: &str) -> Option<&Task> {
         self.tasks.get(task_id)

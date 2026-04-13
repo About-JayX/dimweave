@@ -60,6 +60,14 @@ pub enum DaemonCmd {
     CreateTask {
         workspace: String,
         title: String,
+        lead_provider: Option<Provider>,
+        coder_provider: Option<Provider>,
+        reply: oneshot::Sender<Result<Task, String>>,
+    },
+    UpdateTaskConfig {
+        task_id: String,
+        lead_provider: Provider,
+        coder_provider: Provider,
         reply: oneshot::Sender<Result<Task, String>>,
     },
     ListTasks {

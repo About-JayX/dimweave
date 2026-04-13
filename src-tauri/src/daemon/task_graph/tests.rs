@@ -69,6 +69,33 @@ fn task_provider_fields_serialize_round_trip() {
     assert_eq!(de.coder_provider, Provider::Codex);
 }
 
+// ── Task config contract ───────────────────────────────────
+
+#[test]
+fn create_task_with_config_stores_custom_providers() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task_with_config("/ws", "Custom", Provider::Codex, Provider::Claude);
+    assert_eq!(task.lead_provider, Provider::Codex);
+    assert_eq!(task.coder_provider, Provider::Claude);
+    assert_eq!(task.status, TaskStatus::Draft);
+}
+
+#[test]
+fn update_task_providers_changes_bindings() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    assert!(store.update_task_providers(&task.task_id, Provider::Codex, Provider::Claude));
+    let t = store.get_task(&task.task_id).unwrap();
+    assert_eq!(t.lead_provider, Provider::Codex);
+    assert_eq!(t.coder_provider, Provider::Claude);
+}
+
+#[test]
+fn update_task_providers_returns_false_for_missing() {
+    let mut store = TaskGraphStore::new();
+    assert!(!store.update_task_providers("nonexistent", Provider::Claude, Provider::Codex));
+}
+
 // ── Session CRUD ────────────────────────────────────────────
 
 #[test]

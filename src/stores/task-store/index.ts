@@ -5,6 +5,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionRole,
+  TaskConfig,
   TaskProviderSummary,
   TaskStoreData,
   TaskInfo,
@@ -110,6 +111,40 @@ export function createLoadWorkspaceTasksAction(
   };
 }
 
+export function createConfiguredTaskAction(
+  set: ProviderHistorySetter,
+  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+) {
+  return async (workspace: string, title: string, config: TaskConfig): Promise<TaskInfo> => {
+    const task = await invokeImpl<TaskInfo>("daemon_create_task", {
+      workspace,
+      title,
+      leadProvider: config.leadProvider,
+      coderProvider: config.coderProvider,
+    });
+    set((s) => ({
+      activeTaskId: task.taskId,
+      tasks: { ...s.tasks, [task.taskId]: task },
+    }));
+    return task;
+  };
+}
+
+export function createUpdateTaskConfigAction(
+  set: ProviderHistorySetter,
+  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+) {
+  return async (taskId: string, config: TaskConfig): Promise<TaskInfo> => {
+    const task = await invokeImpl<TaskInfo>("daemon_update_task_config", {
+      taskId,
+      leadProvider: config.leadProvider,
+      coderProvider: config.coderProvider,
+    });
+    set((s) => ({ tasks: { ...s.tasks, [task.taskId]: task } }));
+    return task;
+  };
+}
+
 export function createStartWorkspaceTaskAction(
   set: ProviderHistorySetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
@@ -210,6 +245,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
 
   const fetchProviderHistory = createFetchProviderHistoryAction(set as any);
   const loadWorkspaceTasks = createLoadWorkspaceTasksAction(set as any);
+  const configuredTask = createConfiguredTaskAction(set as any);
+  const updateTaskConfig = createUpdateTaskConfigAction(set as any);
   const startWorkspaceTask = createStartWorkspaceTaskAction(set as any);
 
   return {
@@ -246,6 +283,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       return task;
     },
 
+    createConfiguredTask: configuredTask,
+    updateTaskConfig,
     startWorkspaceTask,
 
     selectTask: async (taskId) => {

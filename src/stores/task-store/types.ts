@@ -130,10 +130,17 @@ export interface TaskStoreData {
   lastSave: SaveStatus | null;
 }
 
+export interface TaskConfig {
+  leadProvider: Provider;
+  coderProvider: Provider;
+}
+
 export interface TaskStoreState extends TaskStoreData {
   setSelectedWorkspace: (workspace: string | null) => void;
   loadWorkspaceTasks: (workspace: string) => Promise<void>;
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
+  createConfiguredTask: (workspace: string, title: string, config: TaskConfig) => Promise<TaskInfo>;
+  updateTaskConfig: (taskId: string, config: TaskConfig) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
   setReplyTarget: (target: ReplyTarget) => void;

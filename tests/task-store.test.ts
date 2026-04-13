@@ -10,6 +10,8 @@ import {
   createStartWorkspaceTaskAction,
   createFetchProviderHistoryAction,
   createLoadWorkspaceTasksAction,
+  createConfiguredTaskAction,
+  createUpdateTaskConfigAction,
   deriveWorkspaceTaskTitle,
   setReplyTargetPatch,
   snapshotToPatch,
@@ -502,5 +504,43 @@ describe("createStartWorkspaceTaskAction", () => {
     expect(state.activeTaskId).toBe("t2");
     expect(state.tasks.t1?.workspaceRoot).toBe("/ws");
     expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
+  });
+});
+
+describe("createConfiguredTaskAction", () => {
+  test("passes provider config to daemon and sets task active", async () => {
+    const task = makeTask("t1", "Configured");
+    let state = emptyState();
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const create = createConfiguredTaskAction(set, async (_cmd, args) => {
+      expect(args).toEqual({
+        workspace: "/ws",
+        title: "repo",
+        leadProvider: "codex",
+        coderProvider: "claude",
+      });
+      return task;
+    });
+    await create("/ws", "repo", { leadProvider: "codex", coderProvider: "claude" });
+    expect(state.activeTaskId).toBe("t1");
+    expect(state.tasks.t1?.title).toBe("Configured");
+  });
+});
+
+describe("createUpdateTaskConfigAction", () => {
+  test("updates provider bindings for a task", async () => {
+    const updated = { ...makeTask("t1"), leadProvider: "codex" as const };
+    let state = { ...emptyState(), activeTaskId: "t1", tasks: { t1: makeTask("t1") } };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const update = createUpdateTaskConfigAction(set, async (_cmd, args) => {
+      expect(args).toEqual({ taskId: "t1", leadProvider: "codex", coderProvider: "claude" });
+      return updated;
+    });
+    await update("t1", { leadProvider: "codex", coderProvider: "claude" });
+    expect(state.tasks.t1?.leadProvider).toBe("codex");
   });
 });

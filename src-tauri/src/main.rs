@@ -147,6 +147,7 @@ fn main() {
             commands::daemon_respond_permission,
             commands::daemon_get_status_snapshot,
             commands_task::daemon_create_task,
+            commands_task::daemon_update_task_config,
             commands_task::daemon_list_tasks,
             commands_task::daemon_select_task,
             commands_task::daemon_clear_active_task,

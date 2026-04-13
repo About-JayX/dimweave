@@ -663,13 +663,22 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             DaemonCmd::CreateTask {
                 workspace,
                 title,
+                lead_provider,
+                coder_provider,
                 reply,
             } => {
                 // 1. Create task (workspace_root = repo root initially)
-                let task = state
-                    .write()
-                    .await
-                    .create_and_select_task(&workspace, &title);
+                let task = {
+                    let mut s = state.write().await;
+                    let t = match (lead_provider, coder_provider) {
+                        (Some(lp), Some(cp)) => {
+                            s.task_graph.create_task_with_config(&workspace, &title, lp, cp)
+                        }
+                        _ => s.task_graph.create_task(&workspace, &title),
+                    };
+                    s.active_task_id = Some(t.task_id.clone());
+                    t
+                };
                 let task_id = task.task_id.clone();
 
                 // 2. Create isolated worktree, update workspace_root + init runtime
@@ -710,6 +719,33 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             &format!("[Daemon] task worktree creation failed: {e}"),
                         );
                     }
+                }
+                let _ = reply.send(result);
+            }
+            DaemonCmd::UpdateTaskConfig {
+                task_id,
+                lead_provider,
+                coder_provider,
+                reply,
+            } => {
+                let mut s = state.write().await;
+                let ok = s.task_graph.update_task_providers(
+                    &task_id, lead_provider, coder_provider,
+                );
+                let result = if ok {
+                    match s.task_graph.get_task(&task_id).cloned() {
+                        Some(t) => Ok(t),
+                        None => Err("task disappeared after update".to_string()),
+                    }
+                } else {
+                    Err(format!("task {task_id} not found"))
+                };
+                drop(s);
+                if result.is_ok() {
+                    if let Ok(()) = state.read().await.save_task_graph() {
+                        gui::emit_task_save_status(&app, true, None, &task_id);
+                    }
+                    emit_task_context_events(&state, &app, &task_id).await;
                 }
                 let _ = reply.send(result);
             }
