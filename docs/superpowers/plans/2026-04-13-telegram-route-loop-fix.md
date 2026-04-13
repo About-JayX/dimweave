@@ -48,11 +48,11 @@
 
 ## CM Memory
 
-| Task | Planned commit message | Verification | Memory |
-|------|------------------------|--------------|--------|
-| Task 1 | `fix: persist telegram update cursor after each message` | `cargo test --manifest-path src-tauri/Cargo.toml telegram -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml daemon::telegram_lifecycle_tests:: -- --nocapture`; `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` | Shrink the Telegram replay window by persisting `last_update_id` after each handled update instead of after the full batch. |
-| Task 2 | `fix: ignore telegram bot self-messages` | same as above | Prevent bot-authored messages from being routed back in as user input. |
-| Task 3 | `fix: dedupe recent telegram updates in runtime` | same as above | Add an in-memory guard against immediate replay of recently seen update ids. |
+| Task | Commit | Summary | Verification | Status |
+|------|--------|---------|--------------|--------|
+| Task 1 — cursor persistence | `38370b3d` | Extract `commit_update_cursor()`; call per-update inside the for loop; 3 new lifecycle tests (persist, advance, mid-batch crash sim) | `cargo test telegram` ✅ 36 passed | accepted |
+| Task 2 — bot self-filter | `de2d06fa` | Add `bot_user_id` field to `TelegramConfig` (`#[serde(default)]`); persist `bot.id` on connect; add `is_bot_own_message()` predicate; guard `handle_update()` after `paired_chat_id` check; 6 new tests | `cargo test telegram` ✅ 36 passed | accepted |
+| Task 3 — dedupe guard | `82c0c866` | Add `RecentUpdateGuard` (VecDeque+HashSet, capacity=64); wire `check_and_insert()` before `handle_update` + `commit_update_cursor` in update loop; 5 new tests (new/dup/independent/eviction/capacity) | `cargo test telegram` ✅ 41 passed; `cargo test routing_` ✅ 10 passed | accepted |
 
 ---
 
