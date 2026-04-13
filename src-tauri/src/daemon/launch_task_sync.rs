@@ -36,6 +36,7 @@ pub fn sync_claude_launch_into_task(
 
 pub fn sync_codex_launch_into_task(
     state: &mut DaemonState,
+    task_id: &str,
     role_id: &str,
     cwd: &str,
     thread_id: &str,
@@ -49,9 +50,8 @@ pub fn sync_codex_launch_into_task(
         // resume_session() switches active_task_id to the session's task.
         state.resume_session(&existing_session_id).ok()
     } else {
-        // Unknown thread: register on the currently active task.
-        let tid = state.active_task_id.clone().unwrap_or_default();
-        crate::daemon::provider::codex::register_on_launch(state, &tid, role_id, cwd, thread_id);
-        state.active_task_id.clone()
+        // Unknown thread: register on the explicit task_id from the launch.
+        crate::daemon::provider::codex::register_on_launch(state, task_id, role_id, cwd, thread_id);
+        Some(task_id.to_string())
     }
 }

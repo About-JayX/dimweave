@@ -404,6 +404,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     let mut daemon = state.write().await;
                                     launch_task_sync::sync_codex_launch_into_task(
                                         &mut daemon,
+                                        &resolved_task_id,
                                         &resume_role,
                                         &resume_cwd,
                                         &resumed_thread_id,

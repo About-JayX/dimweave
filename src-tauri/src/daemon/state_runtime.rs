@@ -426,12 +426,13 @@ impl DaemonState {
         Some(slot.session_epoch)
     }
 
-    /// Attach a Codex inject channel to a specific task's slot.
+    /// Attach a Codex inject channel and connection to a specific task's slot.
     pub fn attach_codex_task_session(
         &mut self,
         task_id: &str,
         epoch: u64,
         tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+        connection: Option<crate::daemon::types::ProviderConnectionState>,
     ) -> bool {
         let Some(slot) = self.task_runtimes.get_mut(task_id)
             .and_then(|rt| rt.codex_slot.as_mut())
@@ -442,8 +443,12 @@ impl DaemonState {
             return false;
         }
         slot.inject_tx = Some(tx.clone());
-        // Sync singleton mirror — routing.rs reads codex_inject_tx directly
+        slot.connection = connection.clone();
+        // Sync singleton mirrors — routing.rs reads codex_inject_tx directly
         self.codex_inject_tx = Some(tx);
+        if let Some(conn) = connection {
+            self.codex_connection = Some(conn);
+        }
         true
     }
 
@@ -464,7 +469,9 @@ impl DaemonState {
             return None;
         }
         slot.inject_tx = None;
+        slot.connection = None;
         self.recompute_codex_singleton_inject_tx();
+        self.recompute_codex_singleton_connection();
         if !self.any_codex_task_online() {
             self.clear_provider_connection("codex")
         } else {
@@ -480,12 +487,14 @@ impl DaemonState {
         {
             slot.session_epoch = slot.session_epoch.wrapping_add(1);
             slot.inject_tx = None;
+            slot.connection = None;
         }
         if !self.any_codex_task_online() {
             self.invalidate_codex_session()
         } else {
             self.detach_codex_sessions_for_task(task_id);
             self.recompute_codex_singleton_inject_tx();
+            self.recompute_codex_singleton_connection();
             Some(task_id.to_string())
         }
     }
@@ -522,6 +531,14 @@ impl DaemonState {
         self.codex_inject_tx = self.task_runtimes.values()
             .filter_map(|rt| rt.codex_slot.as_ref())
             .find_map(|slot| slot.inject_tx.clone());
+    }
+
+    /// Recompute singleton `codex_connection` from task slots.
+    fn recompute_codex_singleton_connection(&mut self) {
+        self.codex_connection = self.task_runtimes.values()
+            .filter_map(|rt| rt.codex_slot.as_ref())
+            .filter(|slot| slot.is_online())
+            .find_map(|slot| slot.connection.clone());
     }
 
     pub fn codex_task_epoch(&self, task_id: &str) -> Option<u64> {

@@ -203,7 +203,7 @@ fn sync_codex_launch_resumes_known_history_session() {
     s.set_active_task(Some(task_current.task_id.clone()));
 
     let returned_task_id =
-        sync_codex_launch_into_task(&mut s, "coder", "/ws", "thread_hist_1");
+        sync_codex_launch_into_task(&mut s, &task_current.task_id, "coder", "/ws", "thread_hist_1");
 
     assert_eq!(
         returned_task_id.as_deref(),
@@ -232,7 +232,7 @@ fn sync_codex_launch_registers_unknown_thread_on_active_task() {
     let task = s.task_graph.create_task("/ws", "Active Task");
     s.set_active_task(Some(task.task_id.clone()));
 
-    let returned = sync_codex_launch_into_task(&mut s, "coder", "/ws", "thread_new");
+    let returned = sync_codex_launch_into_task(&mut s, &task.task_id, "coder", "/ws", "thread_new");
 
     assert_eq!(returned.as_deref(), Some(task.task_id.as_str()));
     assert!(s

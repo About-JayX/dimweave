@@ -1179,7 +1179,7 @@ fn codex_task_slot_attach_marks_online() {
     let epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
     let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
 
-    assert!(s.attach_codex_task_session(&task.task_id, epoch, tx));
+    assert!(s.attach_codex_task_session(&task.task_id, epoch, tx, None));
     assert!(s.is_codex_task_online(&task.task_id));
     assert!(s.is_codex_online());
 }
@@ -1193,7 +1193,7 @@ fn codex_task_slot_attach_rejects_stale_epoch() {
     let _current_epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
     let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
 
-    assert!(!s.attach_codex_task_session(&task.task_id, stale_epoch, tx));
+    assert!(!s.attach_codex_task_session(&task.task_id, stale_epoch, tx, None));
     assert!(!s.is_codex_task_online(&task.task_id));
 }
 
@@ -1204,7 +1204,7 @@ fn codex_task_slot_clear_only_matching_epoch() {
     s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
     let epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
     let (tx, _rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&task.task_id, epoch, tx);
+    s.attach_codex_task_session(&task.task_id, epoch, tx, None);
 
     // Stale epoch cannot clear
     assert!(s.clear_codex_task_session(&task.task_id, epoch.wrapping_sub(1)).is_none());
@@ -1224,11 +1224,11 @@ fn codex_task_slot_cross_task_isolation() {
 
     let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
     let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1, None);
 
     let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
     let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2, None);
 
     // Both online
     assert!(s.is_codex_task_online(&t1.task_id));
@@ -1253,10 +1253,10 @@ fn codex_task_slot_used_ports_only_returns_online_slots() {
 
     let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
     let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1, None);
     let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
     let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2, None);
 
     assert_eq!(s.codex_used_ports().len(), 2);
 
@@ -1298,11 +1298,11 @@ fn codex_task_slot_invalidate_preserves_task_b_graph_binding() {
 
     let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
     let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1, None);
 
     let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
     let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2, None);
 
     // Invalidate Task A — must NOT touch Task B's task_graph binding
     s.invalidate_codex_task_session(&t1.task_id);
@@ -1355,23 +1355,28 @@ fn codex_task_slot_clear_preserves_task_b_graph_binding() {
     });
     s.task_graph.set_coder_session(&t2.task_id, &sess_b.session_id);
 
-    // Launch both tasks with Codex slots
+    // Launch both tasks with Codex slots and distinct connections
+    let conn_a = crate::daemon::types::ProviderConnectionState {
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        external_session_id: "thread_a".to_string(),
+        cwd: "/ws/a".to_string(),
+        connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+    };
     let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
     let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1, Some(conn_a));
+    s.task_graph.set_external_session_id(&sess_a.session_id, "thread_a");
 
-    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
-    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
-    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
-
-    // Task B launched last, so it owns the singleton codex_connection mirror.
-    // Simulate codex_connection pointing to Task B's external session.
-    s.codex_connection = Some(crate::daemon::types::ProviderConnectionState {
+    let conn_b = crate::daemon::types::ProviderConnectionState {
         provider: crate::daemon::task_graph::types::Provider::Codex,
         external_session_id: "thread_b".to_string(),
         cwd: "/ws/b".to_string(),
         connection_mode: crate::daemon::types::ProviderConnectionMode::New,
-    });
+    };
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    // Task B launched last → its connection becomes the singleton mirror
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2, Some(conn_b));
     s.task_graph.set_external_session_id(&sess_b.session_id, "thread_b");
 
     // Clear Task A session (simulates Task A process exit / health-monitor cleanup)
@@ -1402,4 +1407,63 @@ fn codex_task_slot_clear_preserves_task_b_graph_binding() {
         !s.is_codex_task_online(&t1.task_id),
         "Task A Codex slot should be offline after clear"
     );
+    // Singleton mirror should now reflect Task B's connection
+    let singleton = s.provider_connection("codex").expect("singleton should survive");
+    assert_eq!(singleton.external_session_id, "thread_b");
+}
+
+#[test]
+fn codex_task_slot_distinct_connection_ownership() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    let conn_a = crate::daemon::types::ProviderConnectionState {
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        external_session_id: "thread_a".to_string(),
+        cwd: "/ws/a".to_string(),
+        connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+    };
+    let conn_b = crate::daemon::types::ProviderConnectionState {
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        external_session_id: "thread_b".to_string(),
+        cwd: "/ws/b".to_string(),
+        connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+    };
+
+    let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1, Some(conn_a.clone()));
+
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2, Some(conn_b.clone()));
+
+    // Each task slot retains its own connection
+    let slot_a = s.task_runtimes.get(&t1.task_id).unwrap()
+        .codex_slot.as_ref().unwrap();
+    assert_eq!(slot_a.connection.as_ref().unwrap().external_session_id, "thread_a");
+
+    let slot_b = s.task_runtimes.get(&t2.task_id).unwrap()
+        .codex_slot.as_ref().unwrap();
+    assert_eq!(slot_b.connection.as_ref().unwrap().external_session_id, "thread_b");
+
+    // Singleton mirror points to the last-attached (Task B)
+    let singleton = s.provider_connection("codex").unwrap();
+    assert_eq!(singleton.external_session_id, "thread_b");
+
+    // Clear Task B — singleton should fall back to Task A's connection
+    s.clear_codex_task_session(&t2.task_id, epoch2);
+    let singleton = s.provider_connection("codex").unwrap();
+    assert_eq!(
+        singleton.external_session_id, "thread_a",
+        "singleton must fall back to remaining online slot's connection"
+    );
+
+    // Task A's slot connection unchanged
+    let slot_a = s.task_runtimes.get(&t1.task_id).unwrap()
+        .codex_slot.as_ref().unwrap();
+    assert_eq!(slot_a.connection.as_ref().unwrap().external_session_id, "thread_a");
 }

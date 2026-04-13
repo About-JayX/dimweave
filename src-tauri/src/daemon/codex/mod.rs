@@ -253,7 +253,6 @@ async fn launch(
     let (attached, mut buffered, provider_session) = {
         let mut s = state.write().await;
         s.codex_role = role_id.clone();
-        let attached = s.attach_codex_task_session(&task_id, launch_epoch, inject_tx.clone());
         let provider_session = crate::daemon::types::ProviderConnectionState {
             provider: crate::daemon::task_graph::types::Provider::Codex,
             external_session_id: thread_id.clone(),
@@ -264,8 +263,10 @@ async fn launch(
                 crate::daemon::types::ProviderConnectionMode::Resumed
             },
         };
+        let attached = s.attach_codex_task_session(
+            &task_id, launch_epoch, inject_tx.clone(), Some(provider_session.clone()),
+        );
         let buffered = if attached {
-            s.set_provider_connection("codex", provider_session.clone());
             if is_new_session {
                 crate::daemon::provider::codex::register_on_launch(
                     &mut s, &task_id, &role_id, &cwd, &thread_id,

@@ -39,6 +39,7 @@ pub struct CodexTaskSlot {
     pub session_epoch: u64,
     pub inject_tx: Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>>,
     pub port: u16,
+    pub connection: Option<crate::daemon::types::ProviderConnectionState>,
 }
 
 impl CodexTaskSlot {
@@ -47,6 +48,7 @@ impl CodexTaskSlot {
             session_epoch: 0,
             inject_tx: None,
             port,
+            connection: None,
         }
     }
 
