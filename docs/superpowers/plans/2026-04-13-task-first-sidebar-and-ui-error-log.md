@@ -162,6 +162,21 @@
 - `bun run build`
 - `git diff --check`
 
+## Plan Revision 1 — 2026-04-13
+
+**Reason:** Task 3’s approved UX requires new tasks to default their title to the generated `task_id`, while the create dialog intentionally removed title editing. That makes the backend task-graph create path part of Task 3’s minimal fix boundary so blank-title creates can be normalized to `task_id` at creation time.
+
+**Added to Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/tests.rs`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 27`
+- `max_added_loc: 1040`
+- `max_deleted_loc: 320`
+
 ## Task 4: Separate UI error logs from runtime logs and stop automatic remount loops
 
 **task_id:** `ui-error-log-and-boundary-recovery`
