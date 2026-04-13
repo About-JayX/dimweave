@@ -653,23 +653,53 @@ Task 5 also needs targeted Rust verification for those contract changes.
 - `src-tauri/src/daemon/types_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 - `src-tauri/src/daemon/state_snapshot_tests.rs`
+- `src-tauri/src/daemon/provider/claude_tests.rs`
+- `src-tauri/src/daemon/provider/codex_tests.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
 - `docs/agents/codex-chain.md`
 - `docs/agents/claude-chain.md`
 - `docs/superpowers/specs/2026-04-13-task-scoped-runtime-redesign-design.md`
 - `docs/superpowers/plans/2026-04-13-task-scoped-runtime-redesign.md`
 
-**max_files_changed:** `12`
-**max_added_loc:** `260`
-**max_deleted_loc:** `220`
+**max_files_changed:** `15`
+**max_added_loc:** `320`
+**max_deleted_loc:** `260`
 
 **verification_commands:**
 
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml runtime_final_cleanup -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
 - `bun run build`
 - `git diff --check`
+
+## Plan Revision 13 — 2026-04-13
+
+**Reason:** Baseline verification already proved the full `daemon::state::state_tests::` module contains a pre-existing unrelated failure (`online_role_conflict_only_blocks_live_other_agent`). Task 6 therefore cannot use `cargo test daemon:: -- --nocapture` as an acceptance gate. The final cleanup stage also needs explicit scope for provider/routing test updates if singleton cleanup changes assertion surfaces.
+
+**Added to Task 6 allowed_files:**
+
+- `src-tauri/src/daemon/provider/claude_tests.rs`
+- `src-tauri/src/daemon/provider/codex_tests.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+
+**Revised Task 6 budgets:**
+
+- `max_files_changed: 15`
+- `max_added_loc: 320`
+- `max_deleted_loc: 260`
+
+**Revised Task 6 verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml runtime_final_cleanup -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
 
 ## Rollout Notes
 
