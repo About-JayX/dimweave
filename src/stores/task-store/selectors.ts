@@ -4,6 +4,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionInfo,
+  TaskProviderSessionInfo,
   TaskProviderSummary,
   TaskStoreState,
 } from "./types";
@@ -47,6 +48,8 @@ export interface TaskProviderBindings {
   coderProvider: Provider;
   leadOnline: boolean;
   coderOnline: boolean;
+  leadProviderSession?: TaskProviderSessionInfo | null;
+  coderProviderSession?: TaskProviderSessionInfo | null;
 }
 
 const DEFAULT_BINDINGS: TaskProviderBindings = {
@@ -67,6 +70,8 @@ export function selectActiveTaskProviderBindings(
     coderProvider: task.coderProvider,
     leadOnline: summary?.leadOnline ?? false,
     coderOnline: summary?.coderOnline ?? false,
+    leadProviderSession: summary?.leadProviderSession ?? null,
+    coderProviderSession: summary?.coderProviderSession ?? null,
   };
 }
 

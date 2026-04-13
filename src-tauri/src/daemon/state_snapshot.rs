@@ -121,12 +121,24 @@ impl DaemonState {
             crate::daemon::task_graph::types::Provider::Claude => "claude",
             crate::daemon::task_graph::types::Provider::Codex => "codex",
         };
+        let lead_online = self.is_task_agent_online(task_id, lead_agent);
+        let coder_online = self.is_task_agent_online(task_id, coder_agent);
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
             lead_provider: format!("{:?}", task.lead_provider).to_lowercase(),
             coder_provider: format!("{:?}", task.coder_provider).to_lowercase(),
-            lead_online: self.is_task_agent_online(task_id, lead_agent),
-            coder_online: self.is_task_agent_online(task_id, coder_agent),
+            lead_online,
+            coder_online,
+            lead_provider_session: if lead_online {
+                self.provider_connection(lead_agent)
+            } else {
+                None
+            },
+            coder_provider_session: if coder_online {
+                self.provider_connection(coder_agent)
+            } else {
+                None
+            },
         })
     }
 

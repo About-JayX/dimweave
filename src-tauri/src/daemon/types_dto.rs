@@ -37,7 +37,8 @@ pub struct OnlineAgentInfo {
 }
 
 /// Per-task provider binding summary (AC5).
-/// Exposes which provider handles each role and whether it is currently online.
+/// Exposes which provider handles each role, whether it is currently online,
+/// and the live provider session info for each role.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskProviderSummary {
@@ -46,4 +47,8 @@ pub struct TaskProviderSummary {
     pub coder_provider: String,
     pub lead_online: bool,
     pub coder_online: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lead_provider_session: Option<crate::daemon::types::ProviderConnectionState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coder_provider_session: Option<crate::daemon::types::ProviderConnectionState>,
 }

@@ -72,12 +72,21 @@ export interface ArtifactInfo {
   createdAt: number;
 }
 
+export interface TaskProviderSessionInfo {
+  provider: "claude" | "codex";
+  externalSessionId: string;
+  cwd: string;
+  connectionMode: "new" | "resumed";
+}
+
 export interface TaskProviderSummary {
   taskId: string;
   leadProvider: string;
   coderProvider: string;
   leadOnline: boolean;
   coderOnline: boolean;
+  leadProviderSession?: TaskProviderSessionInfo | null;
+  coderProviderSession?: TaskProviderSessionInfo | null;
 }
 
 // Event payloads from gui_task.rs

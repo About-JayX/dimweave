@@ -21,7 +21,7 @@ export function AgentStatusPanel() {
 
   const bindings = useTaskStore(selectActiveTaskProviderBindings);
 
-  // Derive per-task connected state from task-scoped provider bindings
+  // Derive per-task connected state and provider session from task-scoped bindings
   const claudeOnlineForTask =
     (bindings.leadProvider === "claude" && bindings.leadOnline) ||
     (bindings.coderProvider === "claude" && bindings.coderOnline);
@@ -29,13 +29,15 @@ export function AgentStatusPanel() {
     (bindings.leadProvider === "codex" && bindings.leadOnline) ||
     (bindings.coderProvider === "codex" && bindings.coderOnline);
 
-  // Only surface provider session info when the provider is online for the active task
-  const claudeProviderSession = claudeOnlineForTask
-    ? agents.claude?.providerSession
-    : undefined;
-  const codexProviderSession = codexOnlineForTask
-    ? agents.codex?.providerSession
-    : undefined;
+  // Provider session info from the task-scoped summary, not global agents mirror
+  const claudeProviderSession =
+    (bindings.leadProvider === "claude" ? bindings.leadProviderSession : null) ??
+    (bindings.coderProvider === "claude" ? bindings.coderProviderSession : null) ??
+    undefined;
+  const codexProviderSession =
+    (bindings.leadProvider === "codex" ? bindings.leadProviderSession : null) ??
+    (bindings.coderProvider === "codex" ? bindings.coderProviderSession : null) ??
+    undefined;
 
   useEffect(() => {
     fetchProfile();
