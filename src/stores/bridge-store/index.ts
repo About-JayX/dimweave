@@ -9,7 +9,7 @@ import {
 } from "./helpers";
 import { syncStatusSnapshot } from "./sync";
 
-export type { TerminalLine, BridgeState } from "./types";
+export type { TerminalLine, UiError, BridgeState } from "./types";
 
 export const useBridgeStore = create<BridgeState>((set, get) => {
   initListeners(set);
@@ -28,6 +28,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       codex: { name: "codex", displayName: "Codex", status: "disconnected" },
     },
     terminalLines: [],
+    uiErrors: [],
     permissionPrompts: [],
     permissionError: null,
     runtimeHealth: null,
@@ -130,6 +131,16 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
         throw error;
       }
     },
+
+    pushUiError: (message, componentStack) => {
+      set((s) => ({
+        uiErrors: [
+          ...s.uiErrors,
+          { id: nextLogId(), message, componentStack, timestamp: Date.now() },
+        ],
+      }));
+    },
+    clearUiErrors: () => set({ uiErrors: [] }),
 
     setRole: (agent, role) => {
       const cmd =

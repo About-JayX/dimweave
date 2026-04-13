@@ -67,4 +67,34 @@ describe("ShellTopBar", () => {
 
     expect(html).toContain('aria-label="Search messages"');
   });
+
+  test("error badge not rendered when count is zero in logs mode", () => {
+    const html = renderToStaticMarkup(
+      <ShellTopBar
+        workspaceLabel="/repo" currentWorkspace="/repo"
+        selectedWorkspace={null} recentWorkspaces={[]}
+        workspaceActionError={null} surfaceMode="logs"
+        logLineCount={5} errorCount={0} onClear={() => {}}
+        onChooseWorkspace={() => {}} onSelectRecentWorkspace={() => {}}
+        onContinueIntoWorkspace={() => {}}
+      />,
+    );
+    // bg-destructive/8 is specific to the error badge styling
+    expect(html).not.toContain("bg-destructive/8");
+  });
+
+  test("error badge is a clickable button with onErrorBadgeClick", () => {
+    const html = renderToStaticMarkup(
+      <ShellTopBar
+        workspaceLabel="/repo" currentWorkspace="/repo"
+        selectedWorkspace={null} recentWorkspaces={[]}
+        workspaceActionError={null} surfaceMode="logs"
+        logLineCount={5} errorCount={3} onClear={() => {}}
+        onChooseWorkspace={() => {}} onSelectRecentWorkspace={() => {}}
+        onContinueIntoWorkspace={() => {}} onErrorBadgeClick={() => {}}
+      />,
+    );
+    expect(html).toContain("<button");
+    expect(html).toContain("3");
+  });
 });

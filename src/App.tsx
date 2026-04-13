@@ -14,9 +14,10 @@ import {
 } from "./components/shell-layout-state";
 import { useBridgeStore } from "./stores/bridge-store";
 import {
-  selectMessages,
-  selectPermissionPromptCount,
+  selectMessages, selectPermissionPromptCount,
+  selectTerminalLineCount, selectUiErrorCount,
 } from "./stores/bridge-store/selectors";
+import { ErrorLogDialog } from "./components/ErrorLogDialog";
 import { useFeishuProjectStore } from "./stores/feishu-project-store";
 import { activeItemCount } from "./components/BugInboxPanel/view-model";
 import { useTaskStore } from "./stores/task-store";
@@ -60,17 +61,14 @@ export default function App() {
   const approvalCount = useBridgeStore(selectPermissionPromptCount);
   const bugItems = useFeishuProjectStore((s) => s.items);
   const bugCount = useMemo(() => activeItemCount(bugItems), [bugItems]);
-  const allTerminalLines = useBridgeStore((s) => s.terminalLines);
+  const logLineCount = useBridgeStore(selectTerminalLineCount);
+  const uiErrorCount = useBridgeStore(selectUiErrorCount);
+  const uiErrors = useBridgeStore((s) => s.uiErrors);
+  const clearUiErrors = useBridgeStore((s) => s.clearUiErrors);
   const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
-  const chatMessages = useMemo(
-    () => filterRenderableChatMessages(messages),
-    [messages],
-  );
-  const errorCount = useMemo(
-    () => allTerminalLines.filter((l) => l.kind === "error").length,
-    [allTerminalLines],
-  );
+  const chatMessages = useMemo(() => filterRenderableChatMessages(messages), [messages]);
+  const [errorLogOpen, setErrorLogOpen] = useState(false);
 
   useEffect(() => {
     if (!bootstrapComplete || recentWorkspacesLoaded) {
@@ -168,8 +166,9 @@ export default function App() {
             recentWorkspaces={recentWorkspaces}
             workspaceActionError={workspaceActionError}
             surfaceMode={shellLayout.mainSurface}
-            logLineCount={allTerminalLines.length}
-            errorCount={errorCount}
+            logLineCount={logLineCount}
+            errorCount={uiErrorCount}
+            onErrorBadgeClick={() => setErrorLogOpen(true)}
             onClear={clearMessages}
             onSearchToggle={() => setSearchOpen((v) => !v)}
             onChooseWorkspace={handleChooseWorkspace}
@@ -184,6 +183,7 @@ export default function App() {
           {shellLayout.mainSurface === "chat" && <ReplyInput />}
         </main>
       </div>
+      <ErrorLogDialog open={errorLogOpen} errors={uiErrors} onClose={() => setErrorLogOpen(false)} onClear={clearUiErrors} />
       {!storeSelectedWorkspace && (
         <WorkspaceEntryOverlay
           selected={selectedWorkspace}

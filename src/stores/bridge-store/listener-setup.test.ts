@@ -19,6 +19,7 @@ function baseState(): BridgeState {
     messages: [],
     agents: {},
     terminalLines: [],
+    uiErrors: [],
     permissionPrompts: [],
     permissionError: null,
     runtimeHealth: null,
@@ -50,6 +51,8 @@ function baseState(): BridgeState {
     stopCodexTui: () => {},
     respondToPermission: async () => {},
     applyConfig: async () => {},
+    pushUiError: () => {},
+    clearUiErrors: () => {},
     setRole: () => {},
     cleanup: () => {},
   };
@@ -217,5 +220,44 @@ describe("reduceAgentStatus role sync", () => {
       role: "coder",
     });
     expect(next.claudeRole).toBe("lead");
+  });
+});
+
+describe("uiErrors queue", () => {
+  test("uiErrors is separate from terminalLines", () => {
+    const state = baseState();
+    expect(state.uiErrors).toEqual([]);
+    expect(state.terminalLines).toEqual([]);
+    // Pushing a terminal error should not affect uiErrors
+    const withTerminal = {
+      ...state,
+      terminalLines: [
+        { id: 1, agent: "system", kind: "error" as const, line: "runtime err", timestamp: 1 },
+      ],
+    };
+    expect(withTerminal.uiErrors).toEqual([]);
+  });
+
+  test("selectUiErrorCount returns uiErrors length", async () => {
+    const { selectUiErrorCount } = await import("./selectors");
+    const state = {
+      ...baseState(),
+      uiErrors: [
+        { id: 1, message: "err1", timestamp: 1 },
+        { id: 2, message: "err2", timestamp: 2 },
+      ],
+    };
+    expect(selectUiErrorCount(state)).toBe(2);
+  });
+
+  test("selectTerminalLineCount returns terminalLines length", async () => {
+    const { selectTerminalLineCount } = await import("./selectors");
+    const state = {
+      ...baseState(),
+      terminalLines: [
+        { id: 1, agent: "system", kind: "text" as const, line: "log", timestamp: 1 },
+      ],
+    };
+    expect(selectTerminalLineCount(state)).toBe(1);
   });
 });

@@ -15,6 +15,7 @@ interface ShellTopBarProps {
   errorCount: number;
   onClear: () => void;
   onSearchToggle?: () => void;
+  onErrorBadgeClick?: () => void;
   onChooseWorkspace: () => void;
   onSelectRecentWorkspace: (workspace: WorkspaceCandidate) => void;
   onContinueIntoWorkspace: () => void;
@@ -31,6 +32,7 @@ export function ShellTopBar({
   errorCount,
   onClear,
   onSearchToggle,
+  onErrorBadgeClick,
   onChooseWorkspace,
   onSelectRecentWorkspace,
   onContinueIntoWorkspace,
@@ -51,12 +53,22 @@ export function ShellTopBar({
             {logLineCount}
           </span>
         )}
-        {surfaceMode === "logs" && errorCount > 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/8 px-2 py-0.5 text-[10px] font-medium text-destructive">
-            <TerminalSquare className="size-3" />
-            {errorCount}
-          </span>
-        )}
+        {errorCount > 0 &&
+          (onErrorBadgeClick ? (
+            <button
+              type="button"
+              onClick={onErrorBadgeClick}
+              className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/8 px-2 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/15"
+            >
+              <TerminalSquare className="size-3" />
+              {errorCount}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/8 px-2 py-0.5 text-[10px] font-medium text-destructive">
+              <TerminalSquare className="size-3" />
+              {errorCount}
+            </span>
+          ))}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

@@ -16,6 +16,13 @@ export interface TerminalLine {
   timestamp: number;
 }
 
+export interface UiError {
+  id: number;
+  message: string;
+  componentStack?: string;
+  timestamp: number;
+}
+
 export interface CodexStreamState {
   thinking: boolean;
   currentDelta: string;
@@ -42,6 +49,7 @@ export interface BridgeState {
   messages: BridgeMessage[];
   agents: Record<string, AgentInfo>;
   terminalLines: TerminalLine[];
+  uiErrors: UiError[];
   permissionPrompts: PermissionPrompt[];
   permissionError: PermissionResolutionError | null;
   runtimeHealth: RuntimeHealthInfo | null;
@@ -73,6 +81,8 @@ export interface BridgeState {
     resumeThreadId?: string;
     taskId?: string;
   }) => Promise<void>;
+  pushUiError: (message: string, componentStack?: string) => void;
+  clearUiErrors: () => void;
   setRole: (agent: "claude" | "codex", role: string) => void;
   cleanup: () => void;
 }

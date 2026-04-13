@@ -43,3 +43,15 @@ export function selectTerminalErrorCount(state: BridgeState) {
   }
   return count;
 }
+
+export function selectTerminalLineCount(state: BridgeState) {
+  return state.terminalLines.length;
+}
+
+export function selectUiErrors(state: BridgeState) {
+  return state.uiErrors;
+}
+
+export function selectUiErrorCount(state: BridgeState) {
+  return state.uiErrors.length;
+}

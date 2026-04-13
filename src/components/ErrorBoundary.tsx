@@ -1,8 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
 
-let _logId = 1_000_000;
-
 interface Props {
   children: ReactNode;
 }
@@ -20,26 +18,35 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary]", error, info.componentStack);
-    const message = `[UI] ${error.message}${info.componentStack ? `\n${info.componentStack.slice(0, 300)}` : ""}`;
-    useBridgeStore.setState((s) => ({
-      terminalLines: [
-        ...s.terminalLines.slice(-200),
-        {
-          id: ++_logId,
-          agent: "system",
-          kind: "error" as const,
-          line: message,
-          timestamp: Date.now(),
-        },
-      ],
-    }));
-    // Auto-recover on next frame
-    requestAnimationFrame(() => this.setState({ hasError: false }));
+    useBridgeStore.getState().pushUiError(
+      error.message,
+      info.componentStack?.slice(0, 300) ?? undefined,
+    );
   }
+
+  handleRetry = () => {
+    this.setState({ hasError: false });
+  };
 
   render() {
     if (this.state.hasError) {
-      return this.props.children;
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
+          <p className="text-sm font-medium text-destructive">
+            Something went wrong
+          </p>
+          <p className="text-xs text-muted-foreground">
+            A UI error occurred. Check the error log for details.
+          </p>
+          <button
+            type="button"
+            onClick={this.handleRetry}
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Retry
+          </button>
+        </div>
+      );
     }
     return this.props.children;
   }
