@@ -202,7 +202,7 @@ Rules:
 | Task 2 | `e3497bf6` | Move Claude SDK lifecycle state into `ClaudeTaskSlot`, thread explicit `task_id` through launch/reconnect/sync paths, and add focused `claude_task_slot` coverage. **Accepted: `e3497bf6`**, follow-up **`e708538f`** fixes cross-task nonce/event/invalidation isolation, follow-up **`b3ca85f4`** fixes task-graph binding isolation during task-local invalidation. | `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture` ✅ 17 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::control::claude_sdk_handler::tests:: -- --nocapture` ✅ 9 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture` ✅ 38 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_task_slot -- --nocapture` ✅ 12 passed; `git diff --check` ✅ | accepted |
 | Task 3 | `5f8773fa` | Move Codex runtime state into task-local slots and add a reservation-aware port pool. **Accepted: `5f8773fa`**, follow-up **`e93cd0b5`** fixes task-graph binding isolation for clear paths, follow-up **`f4225782`** threads explicit `task_id` through resume sync and stores task-local connection ownership, follow-up **`4d5fab2a`** replaces singleton `CodexHandle` with task-keyed handle ownership and adds reservation tracking, follow-up **`f269bdb6`** wires `reserve -> promote -> release` and natural-exit notifications, follow-up **`5aa7b7fc`** makes lease ownership launch-id-aware and extracts focused port-pool tests. | `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture` ✅ 18 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex_task_slot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex_port_pool -- --nocapture` ✅ 15 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture` ✅ 50 passed; `git diff --check` ✅ | accepted |
 | Task 4 | `14dd2b70` | Make routing and provider-originated message stamping task-scoped. **Accepted: `14dd2b70`**, follow-up **`0a661996`** fixes task-local channel delivery, threads explicit `task_id` through Codex/Claude provider event workers, and makes task-scoped status derived from task-local runtime slots. | `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 19 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_shared_role_tests:: -- --nocapture` ✅ 0 matched; `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_user_target_tests:: -- --nocapture` ✅ 0 matched; `cargo test --manifest-path src-tauri/Cargo.toml task_runtime_routing -- --nocapture` ✅ 7 passed; `cargo test --manifest-path src-tauri/Cargo.toml types_tests -- --nocapture` ✅ 0 matched; `git diff --check` ✅ | accepted |
-| Task 5 | `pending_commit` | Update frontend launch/status/message flows to true task scope | Use Task 5 verification commands | planned |
+| Task 5 | `737746b5` | Make frontend launch/send/status/message flows task-scoped, thread explicit `taskId` through the send path, store task-keyed runtime summaries, and align workspace-entry copy with dedicated task workspace semantics. **Accepted: `737746b5`**, follow-up **`636a4107`** fixes task-scoped target resolution and task-scoped provider-session summary, follow-up **`1bf37121`** aligns workspace-entry semantics, follow-up **`f90707d0`** derives provider session labels from task-local slots. | `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 22 passed; `bun test tests/task-store.test.ts tests/task-panel-view-model.test.ts` ✅ 32 passed; `bun test src/components/ReplyInput/index.test.tsx src/components/MessagePanel/index.test.tsx` ✅ 11 passed; `bun test src/components/TaskPanel/TaskHeader.test.tsx src/components/TaskPanel/ArtifactTimeline.test.tsx` ✅ 5 passed; `bun test src/components/ClaudePanel/connect-state.test.ts src/components/ClaudePanel/launch-request.test.ts src/components/AgentStatus/codex-launch-config.test.ts src/components/WorkspaceEntryOverlay.test.tsx` ✅ 10 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 6 | `pending_commit` | Remove/quarantine singleton shims and document the final model | Use Task 6 verification commands | planned |
 
 ---
@@ -520,6 +520,7 @@ Rules:
 - `src-tauri/src/daemon/types_dto.rs`
 - `src-tauri/src/daemon/types_tests.rs`
 - `src-tauri/src/commands_artifact.rs`
+- `src-tauri/src/daemon/routing_user_input_tests.rs`
 - `src/stores/task-store/types.ts`
 - `src/stores/task-store/index.ts`
 - `src/stores/task-store/events.ts`
@@ -539,7 +540,11 @@ Rules:
 - `src/components/TaskPanel/TaskHeader.tsx`
 - `src/components/TaskPanel/view-model.ts`
 - `src/components/AgentStatus/index.tsx`
+- `src/components/AgentStatus/CodexPanel.tsx`
+- `src/components/AgentStatus/codex-launch-config.ts`
 - `src/components/AgentStatus/provider-session-view-model.ts`
+- `src/components/ClaudePanel/launch-request.ts`
+- `src/types.ts`
 - `tests/task-store.test.ts`
 - `tests/task-panel-view-model.test.ts`
 - `src/components/ReplyInput/index.test.tsx`
@@ -612,6 +617,18 @@ Task 5 also needs targeted Rust verification for those contract changes.
 **Added to Task 5 allowed_files:**
 
 - `src-tauri/src/commands_artifact.rs`
+
+## Plan Revision 12 — 2026-04-13
+
+**Reason:** Task 5 also needed several direct implementation files that were missed in the earlier scope map: the extracted `routing_user_input` test module, Codex panel/config files that thread `taskId`, the shared Claude launch-request builder, and the shared frontend `BridgeMessage` type carrying `taskId/sessionId`.
+
+**Added to Task 5 allowed_files:**
+
+- `src-tauri/src/daemon/routing_user_input_tests.rs`
+- `src/components/AgentStatus/CodexPanel.tsx`
+- `src/components/AgentStatus/codex-launch-config.ts`
+- `src/components/ClaudePanel/launch-request.ts`
+- `src/types.ts`
 
 ---
 
