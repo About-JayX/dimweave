@@ -56,12 +56,13 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Lead provider");
     expect(html).toContain("Coder provider");
     expect(html).toContain("Create");
+    expect(html).toContain("Create &amp; Connect");
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain("Runtime control");
   });
 
-  test("renders edit-mode modal with agent configuration panels", async () => {
+  test("renders edit-mode modal without Create & Connect", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -79,6 +80,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Lead provider");
     expect(html).toContain('role="dialog"');
     expect(html).toContain("Runtime control");
+    expect(html).not.toContain("Create &amp; Connect");
   });
 
   test("does not render content when closed", async () => {

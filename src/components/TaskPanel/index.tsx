@@ -1,5 +1,8 @@
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { buildCodexLaunchConfig } from "@/components/AgentStatus/codex-launch-config";
+import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
 import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
@@ -15,7 +18,6 @@ import {
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
-import { launchProvidersAfterCreate } from "./launch-after-create";
 import { useArtifactDetail } from "./use-artifact-detail";
 import {
   buildArtifactTimeline,
@@ -66,15 +68,30 @@ export function TaskPanel() {
             leadProvider: payload.leadProvider,
             coderProvider: payload.coderProvider,
           });
-          await launchProvidersAfterCreate({
-            taskId: newTask.taskId,
-            workspace: selectedWorkspace,
-            claudeRole,
-            claudeConfig: payload.claudeConfig,
-            codexConfig: payload.codexConfig,
-            resumeSession,
-            applyConfig,
-          });
+          if (payload.requestLaunch) {
+            const tid = newTask.taskId;
+            const cwd = selectedWorkspace;
+            const cc = payload.claudeConfig;
+            if (cc) {
+              const a = cc.historyAction;
+              if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+              else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
+                claudeRole, cwd, model: cc.model, effort: cc.effort,
+                resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
+                taskId: tid,
+              }));
+            }
+            const cx = payload.codexConfig;
+            if (cx) {
+              const a = cx.historyAction;
+              if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+              else await applyConfig(buildCodexLaunchConfig({
+                model: cx.model, reasoningEffort: cx.effort, cwd,
+                resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined,
+                taskId: tid,
+              }));
+            }
+          }
         } catch {
           /* task creation or launch error — UI updates via store */
         }

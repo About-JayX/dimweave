@@ -10,6 +10,7 @@ export interface TaskSetupSubmitPayload {
   coderProvider: Provider;
   claudeConfig: AgentDraftConfig | null;
   codexConfig: AgentDraftConfig | null;
+  requestLaunch: boolean;
 }
 
 interface TaskSetupDialogProps {
@@ -86,8 +87,14 @@ export function TaskSetupDialog({
   const submitLabel = mode === "create" ? "Create" : "Save";
   const draftMode = mode === "create";
 
-  const handleSubmit = () => {
-    onSubmit({ leadProvider, coderProvider, claudeConfig, codexConfig });
+  const submit = (launch: boolean) => {
+    onSubmit({
+      leadProvider,
+      coderProvider,
+      claudeConfig,
+      codexConfig,
+      requestLaunch: launch,
+    });
     onOpenChange(false);
   };
 
@@ -125,9 +132,18 @@ export function TaskSetupDialog({
           >
             Cancel
           </button>
+          {draftMode && (
+            <button
+              type="button"
+              onClick={() => submit(true)}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              Create &amp; Connect
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => submit(false)}
             className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             {submitLabel}
