@@ -185,6 +185,8 @@
 
 - `src/components/AgentStatus/index.tsx`
 - `src/components/AgentStatus/RoleSelect.tsx`
+- `src/components/AgentStatus/CodexHeader.tsx`
+- `src/components/TaskPanel/use-artifact-detail.ts`
 
 **Revised Task 3 budgets:**
 
