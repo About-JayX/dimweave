@@ -265,6 +265,15 @@ Rules:
 - `max_added_loc: 520`
 - `max_deleted_loc: 180`
 
+## Plan Revision 2 — 2026-04-13
+
+**Reason:** Baseline verification proved `daemon::state::state_tests::` contains a pre-existing unrelated failure (`online_role_conflict_only_blocks_live_other_agent`). Task 2 and Task 3 therefore use focused new test prefixes instead of the entire `state_tests` module, so acceptance stays on task-local Claude/Codex runtime behavior only.
+
+**Revised verification focus for Task 2 / Task 3:**
+
+- Task 2 must add and run focused tests matched by `claude_task_slot`.
+- Task 3 must add and run focused tests matched by `codex_task_slot` and `codex_port_pool`.
+
 ---
 
 ### Task 2: Move Claude runtime state into task-local slots
@@ -305,7 +314,7 @@ Rules:
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::control::claude_sdk_handler::tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_task_slot -- --nocapture`
 - `git diff --check`
 
 ---
@@ -345,8 +354,9 @@ Rules:
 **verification_commands:**
 
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml codex_task_slot -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml codex_port_pool -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture`
 - `git diff --check`
 
 ---
