@@ -34,3 +34,15 @@ pub struct OnlineAgentInfo {
     pub role: String,
     pub model_source: String,
 }
+
+/// Per-task provider binding summary (AC5).
+/// Exposes which provider handles each role and whether it is currently online.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskProviderSummary {
+    pub task_id: String,
+    pub lead_provider: String,
+    pub coder_provider: String,
+    pub lead_online: bool,
+    pub coder_online: bool,
+}

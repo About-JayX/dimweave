@@ -73,6 +73,67 @@ impl DaemonState {
         result
     }
 
+    /// Returns online agents filtered by a specific task's provider bindings.
+    /// Only includes agents that serve a role in the given task.
+    pub fn task_scoped_online_agents(&self, task_id: &str) -> Vec<OnlineAgentInfo> {
+        let Some(task) = self.task_graph.get_task(task_id) else {
+            return self.online_agents_snapshot();
+        };
+        let mut result = Vec::new();
+        let lead_agent = match task.lead_provider {
+            crate::daemon::task_graph::types::Provider::Claude => "claude",
+            crate::daemon::task_graph::types::Provider::Codex => "codex",
+        };
+        let coder_agent = match task.coder_provider {
+            crate::daemon::task_graph::types::Provider::Claude => "claude",
+            crate::daemon::task_graph::types::Provider::Codex => "codex",
+        };
+        if self.is_agent_online(lead_agent) {
+            result.push(OnlineAgentInfo {
+                agent_id: lead_agent.into(),
+                role: "lead".into(),
+                model_source: lead_agent.into(),
+            });
+        }
+        if self.is_agent_online(coder_agent) && coder_agent != lead_agent {
+            result.push(OnlineAgentInfo {
+                agent_id: coder_agent.into(),
+                role: "coder".into(),
+                model_source: coder_agent.into(),
+            });
+        } else if self.is_agent_online(coder_agent) && coder_agent == lead_agent {
+            // Same agent handles both roles — include once with the lead entry
+            // already added above; add coder only if we want dual entries.
+            result.push(OnlineAgentInfo {
+                agent_id: coder_agent.into(),
+                role: "coder".into(),
+                model_source: coder_agent.into(),
+            });
+        }
+        result
+    }
+
+    /// Provider binding summary for a specific task (AC5).
+    pub fn task_provider_summary(
+        &self,
+        task_id: &str,
+    ) -> Option<crate::daemon::types::TaskProviderSummary> {
+        let task = self.task_graph.get_task(task_id)?;
+        Some(crate::daemon::types::TaskProviderSummary {
+            task_id: task.task_id.clone(),
+            lead_provider: format!("{:?}", task.lead_provider).to_lowercase(),
+            coder_provider: format!("{:?}", task.coder_provider).to_lowercase(),
+            lead_online: self.is_agent_online(match task.lead_provider {
+                crate::daemon::task_graph::types::Provider::Claude => "claude",
+                crate::daemon::task_graph::types::Provider::Codex => "codex",
+            }),
+            coder_online: self.is_agent_online(match task.coder_provider {
+                crate::daemon::task_graph::types::Provider::Claude => "claude",
+                crate::daemon::task_graph::types::Provider::Codex => "codex",
+            }),
+        })
+    }
+
     /// Snapshot of the active task with its sessions and artifacts.
     pub fn task_snapshot(&self) -> Option<TaskSnapshot> {
         let task_id = self.active_task_id.as_ref()?;

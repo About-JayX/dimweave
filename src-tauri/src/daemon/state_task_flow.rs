@@ -137,6 +137,17 @@ impl DaemonState {
         let Some(task_id) = self.active_task_id.as_deref() else {
             return;
         };
+        self.stamp_message_context_for_task(task_id, role, message);
+    }
+
+    /// Stamp a message with a specific task's context instead of the active task.
+    /// Used by provider-originated messages to bind to the owning task runtime.
+    pub fn stamp_message_context_for_task(
+        &self,
+        task_id: &str,
+        role: &str,
+        message: &mut BridgeMessage,
+    ) {
         let Some(task) = self.task_graph.get_task(task_id) else {
             return;
         };
@@ -146,6 +157,52 @@ impl DaemonState {
             "coder" => task.current_coder_session_id.clone(),
             _ => None,
         };
+    }
+
+    /// Find the task_id that owns the currently active Codex connection.
+    /// Scans per-task runtime slots first, falls back to active_task_id.
+    pub fn codex_owning_task_id(&self) -> Option<String> {
+        for (task_id, rt) in &self.task_runtimes {
+            if rt.codex_slot.as_ref().map_or(false, |s| s.is_online()) {
+                return Some(task_id.clone());
+            }
+        }
+        self.active_task_id.clone()
+    }
+
+    /// Find the task_id that owns the currently active Claude connection.
+    /// Scans per-task runtime slots first, falls back to active_task_id.
+    pub fn claude_owning_task_id(&self) -> Option<String> {
+        for (task_id, rt) in &self.task_runtimes {
+            if rt.claude_slot.as_ref().map_or(false, |s| s.is_online()) {
+                return Some(task_id.clone());
+            }
+        }
+        self.active_task_id.clone()
+    }
+
+    /// Find the owning task for a specific agent ("claude" or "codex").
+    pub fn agent_owning_task_id(&self, agent: &str) -> Option<String> {
+        match agent {
+            "claude" => self.claude_owning_task_id(),
+            "codex" => self.codex_owning_task_id(),
+            _ => self.active_task_id.clone(),
+        }
+    }
+
+    /// Resolve which agent name ("claude"/"codex") handles a given role for a task,
+    /// based on the task's persisted `lead_provider`/`coder_provider`.
+    pub fn resolve_task_provider_agent(&self, task_id: &str, role: &str) -> Option<&'static str> {
+        let task = self.task_graph.get_task(task_id)?;
+        let provider = match role {
+            "lead" => &task.lead_provider,
+            "coder" => &task.coder_provider,
+            _ => return None,
+        };
+        match provider {
+            Provider::Claude => Some("claude"),
+            Provider::Codex => Some("codex"),
+        }
     }
 
     pub fn prepare_task_routing(&mut self, msg: &BridgeMessage) -> TaskRoutingDecision {

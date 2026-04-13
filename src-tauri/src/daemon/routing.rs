@@ -53,15 +53,34 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         NeedBuffer,
     }
 
-    // Collect online candidates for the target role, then pick the first.
-    // This avoids the sequential if-else bug where an offline Claude with a
-    // cached role would shadow an online Codex holding the same role.
+    // Resolve the target agent for the message.
+    //
+    // Task-first routing (AC1/AC2): when a message carries a task_id, resolve
+    // the target provider through the task's persisted lead_provider/coder_provider
+    // instead of the global claude_role/codex_role singletons. This ensures that
+    // messages stamped against a specific task reach the correct provider even
+    // when the active task or global role assignment has changed.
     let (target, emit_claude_thinking) = {
         let s = state.read().await;
         let emit_claude_thinking =
             routing_display::should_emit_claude_thinking_pre(&msg, &s.claude_role);
-        let claude_matches = s.claude_role == msg.to;
-        let codex_matches = s.codex_role == msg.to;
+
+        // Task-first: resolve agent from task's provider binding
+        let task_resolved_agent = msg
+            .task_id
+            .as_deref()
+            .and_then(|tid| s.resolve_task_provider_agent(tid, &msg.to));
+
+        let claude_matches = match task_resolved_agent {
+            Some("claude") => true,
+            Some(_) => false,
+            None => s.claude_role == msg.to,
+        };
+        let codex_matches = match task_resolved_agent {
+            Some("codex") => true,
+            Some(_) => false,
+            None => s.codex_role == msg.to,
+        };
 
         if !claude_matches && !codex_matches {
             if crate::daemon::is_valid_agent_role(&msg.to) {

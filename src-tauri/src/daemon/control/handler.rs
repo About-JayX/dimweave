@@ -136,10 +136,14 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     message.sender_agent_id = Some(id.to_string());
                     let status = message.status.unwrap_or(MessageStatus::Done);
                     message.status = Some(status);
-                    state
-                        .read()
-                        .await
-                        .stamp_message_context(&role, &mut message);
+                    {
+                        let s = state.read().await;
+                        if let Some(task_id) = s.agent_owning_task_id(id) {
+                            s.stamp_message_context_for_task(&task_id, &role, &mut message);
+                        } else {
+                            s.stamp_message_context(&role, &mut message);
+                        }
+                    }
                     if id == "claude" {
                         gui::emit_system_log(
                             &app,

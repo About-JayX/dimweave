@@ -265,3 +265,101 @@ fn task_session_mismatch_buffer_message_is_not_reported_as_offline() {
     assert!(text.contains("task session"));
     assert!(!text.contains("offline"));
 }
+
+// ── task_runtime_routing: AC1/AC2 task-first provider resolution ────
+
+#[tokio::test]
+async fn task_first_routing_resolves_codex_coder_via_task_provider() {
+    use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
+    use crate::daemon::types::ProviderConnectionMode;
+
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (codex_tx, mut codex_rx) = tokio::sync::mpsc::channel(8);
+    {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "Task");
+        s.active_task_id = Some(task.task_id.clone());
+        // Create a Codex coder session for the task
+        let sess = s.task_graph.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder",
+        });
+        s.task_graph
+            .set_coder_session(&task.task_id, &sess.session_id);
+        s.task_graph
+            .set_external_session_id(&sess.session_id, "thread_1");
+        // Wire Codex online
+        s.codex_inject_tx = Some(codex_tx);
+        s.codex_role = "coder".into();
+        s.set_provider_connection(
+            "codex",
+            crate::daemon::types::ProviderConnectionState {
+                provider: Provider::Codex,
+                external_session_id: "thread_1".into(),
+                cwd: "/ws".into(),
+                connection_mode: ProviderConnectionMode::New,
+            },
+        );
+    }
+
+    // Message with task_id targets "coder" — should route to Codex via task provider
+    let task_id = state.read().await.active_task_id.clone().unwrap();
+    let msg = BridgeMessage {
+        id: "task-route-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "task-scoped coder message must reach Codex"
+    );
+    assert!(codex_rx.try_recv().is_ok());
+}
+
+#[tokio::test]
+async fn task_first_routing_uses_global_role_without_task_id() {
+    // Without task_id, routing falls back to global claude_role/codex_role
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (codex_tx, mut codex_rx) = tokio::sync::mpsc::channel(8);
+    {
+        let mut s = state.write().await;
+        s.codex_inject_tx = Some(codex_tx);
+        s.codex_role = "coder".into();
+    }
+    let msg = BridgeMessage {
+        id: "global-route-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "global role fallback must still work"
+    );
+    assert!(codex_rx.try_recv().is_ok());
+}

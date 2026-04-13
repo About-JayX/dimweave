@@ -71,14 +71,21 @@ async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHa
     let Some(mut msg) = build_reply_message(args, from) else {
         return format!("Ignored empty message to {to}");
     };
-    state.read().await.stamp_message_context(from, &mut msg);
+    {
+        let s = state.read().await;
+        if let Some(task_id) = s.codex_owning_task_id() {
+            s.stamp_message_context_for_task(&task_id, from, &mut msg);
+        } else {
+            s.stamp_message_context(from, &mut msg);
+        }
+    }
 
     crate::daemon::routing::route_message(state, app, msg).await;
     format!("Message sent to {to}")
 }
 
 async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
-    let task_id = state.read().await.active_task_id.clone();
+    let task_id = state.read().await.codex_owning_task_id();
     let msgs = state
         .write()
         .await
@@ -95,7 +102,11 @@ async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
 
 async fn handle_get_status(state: &SharedState) -> String {
     let s = state.read().await;
-    let snapshot = s.online_agents_snapshot();
+    let task_id = s.codex_owning_task_id();
+    let snapshot = match task_id.as_deref() {
+        Some(tid) => s.task_scoped_online_agents(tid),
+        None => s.online_agents_snapshot(),
+    };
     serde_json::to_string(&json!({ "online_agents": snapshot }))
         .unwrap_or_else(|_| r#"{"online_agents":[]}"#.to_string())
 }

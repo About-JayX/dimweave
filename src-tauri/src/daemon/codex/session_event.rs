@@ -175,7 +175,14 @@ async fn handle_completed_agent_message(
             text: parsed.message.clone(),
         },
     );
-    state.read().await.stamp_message_context(role_id, &mut msg);
+    {
+        let s = state.read().await;
+        if let Some(task_id) = s.codex_owning_task_id() {
+            s.stamp_message_context_for_task(&task_id, role_id, &mut msg);
+        } else {
+            s.stamp_message_context(role_id, &mut msg);
+        }
+    }
     eprintln!("[Codex] route {} → {}", role_id, msg.to);
     routing::route_message(state, app, msg).await;
 }

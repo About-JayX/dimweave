@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 // Re-export frontend DTOs so existing `use daemon::types::X` paths keep working.
-pub use super::types_dto::{HistoryEntry, OnlineAgentInfo, SessionTreeSnapshot, TaskSnapshot};
+pub use super::types_dto::{
+    HistoryEntry, OnlineAgentInfo, SessionTreeSnapshot, TaskProviderSummary, TaskSnapshot,
+};
 #[path = "types_runtime.rs"]
 mod types_runtime;
 pub use types_runtime::{RuntimeHealthLevel, RuntimeHealthStatus};

@@ -1467,3 +1467,119 @@ fn codex_task_slot_distinct_connection_ownership() {
         .codex_slot.as_ref().unwrap();
     assert_eq!(slot_a.connection.as_ref().unwrap().external_session_id, "thread_a");
 }
+
+// ── task_runtime_routing: AC3 stamp_message_context_for_task ────────
+
+#[test]
+fn stamp_message_context_for_task_uses_explicit_task_not_active() {
+    use crate::daemon::task_graph::types::{Provider, SessionRole};
+    let mut s = DaemonState::new();
+    let task_a = s.task_graph.create_task("/ws", "Task A");
+    let task_b = s.task_graph.create_task("/ws", "Task B");
+    let sess_a = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task_a.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder A",
+    });
+    s.task_graph
+        .set_coder_session(&task_a.task_id, &sess_a.session_id);
+    let sess_b = s.task_graph.create_session(CreateSessionParams {
+        task_id: &task_b.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder B",
+    });
+    s.task_graph
+        .set_coder_session(&task_b.task_id, &sess_b.session_id);
+    // active_task_id is task B
+    s.active_task_id = Some(task_b.task_id.clone());
+
+    let mut msg = BridgeMessage::system("test", "user");
+    s.stamp_message_context_for_task(&task_a.task_id, "coder", &mut msg);
+
+    assert_eq!(msg.task_id.as_deref(), Some(task_a.task_id.as_str()));
+    assert_eq!(msg.session_id.as_deref(), Some(sess_a.session_id.as_str()));
+}
+
+// ── task_runtime_routing: codex_owning_task_id ──────────────────────
+
+#[test]
+fn codex_owning_task_id_returns_online_slot_task() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.active_task_id = Some(task.task_id.clone());
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let epoch = s.begin_codex_task_launch(&task.task_id, 4500).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    s.attach_codex_task_session(&task.task_id, epoch, tx, None);
+
+    assert_eq!(s.codex_owning_task_id().as_deref(), Some(task.task_id.as_str()));
+}
+
+#[test]
+fn codex_owning_task_id_falls_back_to_active_task() {
+    let mut s = DaemonState::new();
+    s.active_task_id = Some("fallback_task".into());
+    assert_eq!(s.codex_owning_task_id().as_deref(), Some("fallback_task"));
+}
+
+// ── task_runtime_routing: resolve_task_provider_agent ────────────────
+
+#[test]
+fn resolve_task_provider_agent_maps_lead_and_coder() {
+    use crate::daemon::task_graph::types::Provider;
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    // Default: lead=Claude, coder=Codex
+    assert_eq!(
+        s.resolve_task_provider_agent(&task.task_id, "lead"),
+        Some("claude"),
+    );
+    assert_eq!(
+        s.resolve_task_provider_agent(&task.task_id, "coder"),
+        Some("codex"),
+    );
+    assert_eq!(s.resolve_task_provider_agent(&task.task_id, "user"), None);
+}
+
+// ── task_runtime_routing: task_scoped_online_agents ──────────────────
+
+#[test]
+fn task_scoped_online_agents_filters_by_provider_binding() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    // Default bindings: lead=Claude, coder=Codex
+    // Wire both agents online
+    let (claude_tx, _) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    s.attached_agents
+        .insert("claude".into(), AgentSender::new(claude_tx, 0));
+    s.claude_sdk_ws_tx = Some(tokio::sync::mpsc::channel(1).0);
+    let (codex_tx, _) = tokio::sync::mpsc::channel(1);
+    s.codex_inject_tx = Some(codex_tx);
+
+    let agents = s.task_scoped_online_agents(&task.task_id);
+    assert_eq!(agents.len(), 2);
+    assert!(agents.iter().any(|a| a.agent_id == "claude" && a.role == "lead"));
+    assert!(agents.iter().any(|a| a.agent_id == "codex" && a.role == "coder"));
+}
+
+// ── task_runtime_routing: task_provider_summary ──────────────────────
+
+#[test]
+fn task_provider_summary_returns_binding_and_online_status() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    // Only Claude online
+    s.claude_sdk_ws_tx = Some(tokio::sync::mpsc::channel(1).0);
+
+    let summary = s.task_provider_summary(&task.task_id).unwrap();
+    assert_eq!(summary.lead_provider, "claude");
+    assert_eq!(summary.coder_provider, "codex");
+    assert!(summary.lead_online);
+    assert!(!summary.coder_online);
+}
