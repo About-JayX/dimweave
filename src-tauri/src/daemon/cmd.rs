@@ -57,7 +57,7 @@ pub enum DaemonCmd {
     CreateTask {
         workspace: String,
         title: String,
-        reply: oneshot::Sender<Task>,
+        reply: oneshot::Sender<Result<Task, String>>,
     },
     ListTasks {
         workspace: Option<String>,

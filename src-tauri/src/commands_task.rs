@@ -12,6 +12,9 @@ pub async fn daemon_create_task(
     title: String,
     sender: State<'_, DaemonSender>,
 ) -> Result<Task, String> {
+    // Validate git root at the command boundary
+    crate::daemon::task_workspace::validate_git_root(&workspace)?;
+
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender
         .0
@@ -24,7 +27,7 @@ pub async fn daemon_create_task(
         .map_err(|e| e.to_string())?;
     reply_rx
         .await
-        .map_err(|_| "daemon dropped create_task reply".to_string())
+        .map_err(|_| "daemon dropped create_task reply".to_string())?
 }
 
 #[tauri::command]

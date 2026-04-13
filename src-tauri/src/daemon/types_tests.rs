@@ -67,6 +67,8 @@ fn task_snapshot_serializes_camel_case() {
             status: TaskStatus::Implementing,
             lead_session_id: Some("s1".into()),
             current_coder_session_id: Some("s2".into()),
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 1000,
             updated_at: 2000,
         },
@@ -106,6 +108,8 @@ fn task_snapshot_roundtrip() {
             status: TaskStatus::Draft,
             lead_session_id: None,
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 100,
             updated_at: 200,
         },
@@ -116,6 +120,7 @@ fn task_snapshot_roundtrip() {
     let decoded: TaskSnapshot = serde_json::from_str(&json_str).unwrap();
     assert_eq!(decoded.task.task_id, "t1");
     assert_eq!(decoded.task.status, TaskStatus::Draft);
+    assert_eq!(decoded.task.lead_provider, Provider::Claude);
 }
 
 #[test]
@@ -155,6 +160,8 @@ fn history_entry_serializes_camel_case() {
             status: TaskStatus::Done,
             lead_session_id: None,
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 100,
             updated_at: 200,
         },

@@ -13,6 +13,8 @@ fn create_task_returns_draft_status() {
     assert!(!task.task_id.is_empty());
     assert!(task.lead_session_id.is_none());
     assert!(task.current_coder_session_id.is_none());
+    assert_eq!(task.lead_provider, Provider::Claude);
+    assert_eq!(task.coder_provider, Provider::Codex);
 }
 
 #[test]
@@ -46,6 +48,25 @@ fn list_tasks_returns_all() {
     store.create_task("/ws", "A");
     store.create_task("/ws", "B");
     assert_eq!(store.list_tasks().len(), 2);
+}
+
+#[test]
+fn update_workspace_root_changes_path() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/repo", "T1");
+    assert!(store.update_workspace_root(&task.task_id, "/repo/.worktrees/tasks/t1"));
+    let t = store.get_task(&task.task_id).unwrap();
+    assert_eq!(t.workspace_root, "/repo/.worktrees/tasks/t1");
+}
+
+#[test]
+fn task_provider_fields_serialize_round_trip() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Providers");
+    let json = serde_json::to_string(&task).unwrap();
+    let de: Task = serde_json::from_str(&json).unwrap();
+    assert_eq!(de.lead_provider, Provider::Claude);
+    assert_eq!(de.coder_provider, Provider::Codex);
 }
 
 // ── Session CRUD ────────────────────────────────────────────

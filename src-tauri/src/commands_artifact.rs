@@ -109,7 +109,7 @@ pub async fn daemon_get_artifact_detail(
 mod tests {
     use super::{artifact_visible_in_snapshot, preview_from_bytes, MAX_PREVIEW_BYTES};
     use crate::daemon::{
-        task_graph::types::{Artifact, ArtifactKind, Task, TaskStatus},
+        task_graph::types::{Artifact, ArtifactKind, Provider, Task, TaskStatus},
         types::TaskSnapshot,
     };
 
@@ -122,6 +122,8 @@ mod tests {
                 status: TaskStatus::Draft,
                 lead_session_id: None,
                 current_coder_session_id: None,
+                lead_provider: Provider::Claude,
+                coder_provider: Provider::Codex,
                 created_at: 1,
                 updated_at: 1,
             },

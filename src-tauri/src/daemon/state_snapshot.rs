@@ -119,6 +119,32 @@ impl DaemonState {
         task
     }
 
+    /// Register a per-task runtime after worktree creation.
+    pub fn init_task_runtime(&mut self, task_id: &str, workspace_root: std::path::PathBuf) {
+        self.task_runtimes.insert(
+            task_id.to_string(),
+            crate::daemon::task_runtime::TaskRuntime::new(
+                task_id.to_string(),
+                workspace_root,
+            ),
+        );
+    }
+
+    /// Look up the runtime for a given task.
+    pub fn get_task_runtime(&self, task_id: &str) -> Option<&crate::daemon::task_runtime::TaskRuntime> {
+        self.task_runtimes.get(task_id)
+    }
+
+    /// Rollback a partially-created task: remove from task graph, clear
+    /// active_task_id if it matches, and remove any task_runtime entry.
+    pub fn rollback_task_creation(&mut self, task_id: &str) {
+        self.task_graph.remove_task(task_id);
+        if self.active_task_id.as_deref() == Some(task_id) {
+            self.active_task_id = None;
+        }
+        self.task_runtimes.remove(task_id);
+    }
+
     /// Select an existing task as active. Returns error if not found.
     pub fn select_task(&mut self, task_id: &str) -> Result<Task, String> {
         if let Some(task) = self.task_graph.get_task(task_id) {

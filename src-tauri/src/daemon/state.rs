@@ -1,6 +1,7 @@
 use crate::daemon::{
     session_manager::SessionManager,
     task_graph::TaskGraphStore,
+    task_runtime::TaskRuntime,
     types::{
         AgentRuntimeStatus, BridgeMessage, DaemonStatusSnapshot, OnlineAgentInfo,
         PermissionBehavior, PermissionRequest, PermissionVerdict, ProviderConnectionState,
@@ -70,6 +71,8 @@ pub struct DaemonState {
     /// Normalized task/session/artifact graph.
     pub task_graph: TaskGraphStore,
     pub active_task_id: Option<String>,
+    /// Per-task runtime state, keyed by task_id.
+    pub task_runtimes: HashMap<String, TaskRuntime>,
     pub telegram_outbound_tx: Option<tokio::sync::mpsc::Sender<crate::telegram::types::TelegramOutbound>>,
     pub telegram_paired_chat_id: Option<i64>,
     pub telegram_notifications_enabled: bool,
@@ -107,6 +110,7 @@ impl Default for DaemonState {
             next_agent_gen: 0,
             task_graph: TaskGraphStore::new(),
             active_task_id: None,
+            task_runtimes: HashMap::new(),
             telegram_outbound_tx: None,
             telegram_paired_chat_id: None,
             telegram_notifications_enabled: false,

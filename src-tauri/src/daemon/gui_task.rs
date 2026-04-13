@@ -1,4 +1,4 @@
-use crate::daemon::task_graph::types::{Artifact, SessionHandle, Task};
+use crate::daemon::task_graph::types::{Artifact, Provider, SessionHandle, Task};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -230,6 +230,8 @@ mod tests {
             status: TaskStatus::Planning,
             lead_session_id: None,
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 100,
             updated_at: 200,
         };
@@ -247,6 +249,8 @@ mod tests {
             status: TaskStatus::Implementing,
             lead_session_id: None,
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 100,
             updated_at: 200,
         };
@@ -269,6 +273,8 @@ mod tests {
             status: TaskStatus::Reviewing,
             lead_session_id: Some("sess_1".into()),
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: 100,
             updated_at: 200,
         }

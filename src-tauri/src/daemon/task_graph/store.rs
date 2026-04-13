@@ -42,6 +42,8 @@ impl TaskGraphStore {
             status: TaskStatus::Draft,
             lead_session_id: None,
             current_coder_session_id: None,
+            lead_provider: Provider::Claude,
+            coder_provider: Provider::Codex,
             created_at: now,
             updated_at: now,
         };
@@ -68,6 +70,22 @@ impl TaskGraphStore {
     /// List all tasks.
     pub fn list_tasks(&self) -> Vec<&Task> {
         self.tasks.values().collect()
+    }
+
+    /// Update workspace_root for a task (e.g. after worktree creation).
+    pub fn update_workspace_root(&mut self, task_id: &str, workspace_root: &str) -> bool {
+        if let Some(task) = self.tasks.get_mut(task_id) {
+            task.workspace_root = workspace_root.to_string();
+            task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove a task by ID. Returns true if the task existed.
+    pub fn remove_task(&mut self, task_id: &str) -> bool {
+        self.tasks.remove(task_id).is_some()
     }
 
     /// Set the lead session for a task.

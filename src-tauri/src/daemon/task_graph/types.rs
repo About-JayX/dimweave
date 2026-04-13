@@ -54,6 +54,10 @@ pub struct Task {
     pub status: TaskStatus,
     pub lead_session_id: Option<String>,
     pub current_coder_session_id: Option<String>,
+    #[serde(default = "default_lead_provider")]
+    pub lead_provider: Provider,
+    #[serde(default = "default_coder_provider")]
+    pub coder_provider: Provider,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -96,6 +100,14 @@ pub struct CreateSessionParams<'a> {
     pub role: SessionRole,
     pub cwd: &'a str,
     pub title: &'a str,
+}
+
+fn default_lead_provider() -> Provider {
+    Provider::Claude
+}
+
+fn default_coder_provider() -> Provider {
+    Provider::Codex
 }
 
 /// Parameters for creating a new artifact.

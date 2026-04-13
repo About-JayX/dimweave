@@ -2,6 +2,24 @@ use super::*;
 use crate::daemon::types::{OnlineAgentInfo, RuntimeHealthLevel, RuntimeHealthStatus};
 
 #[test]
+fn init_and_get_task_runtime() {
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "RT Test");
+    assert!(s.get_task_runtime(&task.task_id).is_none());
+
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws/tasks/t1"));
+    let rt = s.get_task_runtime(&task.task_id).expect("runtime exists");
+    assert_eq!(rt.task_id, task.task_id);
+    assert_eq!(rt.workspace_root, std::path::PathBuf::from("/ws/tasks/t1"));
+}
+
+#[test]
+fn task_runtimes_empty_by_default() {
+    let s = DaemonState::new();
+    assert!(s.task_runtimes.is_empty());
+}
+
+#[test]
 fn online_agents_snapshot_empty_when_no_agents() {
     let s = DaemonState::new();
     let snapshot = s.online_agents_snapshot();
@@ -111,4 +129,23 @@ fn status_snapshot_includes_runtime_health() {
             message: "Claude reconnect failed after 5 attempts".into(),
         })
     );
+}
+
+#[test]
+fn rollback_task_creation_cleans_up_all_state() {
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "Rollback Test");
+    let task_id = task.task_id.clone();
+    s.init_task_runtime(&task_id, std::path::PathBuf::from("/ws/tasks/t1"));
+
+    // Verify state exists before rollback
+    assert!(s.task_graph.get_task(&task_id).is_some());
+    assert_eq!(s.active_task_id.as_deref(), Some(task_id.as_str()));
+    assert!(s.get_task_runtime(&task_id).is_some());
+
+    s.rollback_task_creation(&task_id);
+
+    assert!(s.task_graph.get_task(&task_id).is_none());
+    assert!(s.active_task_id.is_none());
+    assert!(s.get_task_runtime(&task_id).is_none());
 }

@@ -22,6 +22,8 @@ pub mod feishu_project_task_link;
 mod telegram_lifecycle;
 pub mod state;
 pub mod task_graph;
+pub mod task_runtime;
+pub mod task_workspace;
 pub mod types;
 pub mod types_dto;
 
@@ -541,24 +543,53 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 title,
                 reply,
             } => {
+                // 1. Create task (workspace_root = repo root initially)
                 let task = state
                     .write()
                     .await
                     .create_and_select_task(&workspace, &title);
-                // Verify persistence succeeded (auto_save inside create is
-                // fire-and-forget; re-save to get a reliable result).
-                let save_result = state.read().await.save_task_graph();
-                match save_result {
-                    Ok(()) => gui::emit_task_save_status(&app, true, None, &task.task_id),
-                    Err(e) => gui::emit_task_save_status(
-                        &app,
-                        false,
-                        Some(e.to_string()),
-                        &task.task_id,
-                    ),
+                let task_id = task.task_id.clone();
+
+                // 2. Create isolated worktree, update workspace_root + init runtime
+                let result = match task_workspace::create_task_worktree(
+                    std::path::Path::new(&workspace),
+                    &task_id,
+                ) {
+                    Ok(wt_path) => {
+                        let mut s = state.write().await;
+                        s.task_graph.update_workspace_root(
+                            &task_id,
+                            &wt_path.to_string_lossy(),
+                        );
+                        s.init_task_runtime(&task_id, wt_path);
+                        let updated = s.task_graph.get_task(&task_id).cloned()
+                            .ok_or_else(|| "task disappeared".to_string());
+                        updated
+                    }
+                    Err(e) => Err(e),
+                };
+
+                match &result {
+                    Ok(_task) => {
+                        let save_result = state.read().await.save_task_graph();
+                        match save_result {
+                            Ok(()) => gui::emit_task_save_status(&app, true, None, &task_id),
+                            Err(e) => gui::emit_task_save_status(
+                                &app, false, Some(e.to_string()), &task_id,
+                            ),
+                        }
+                        emit_task_context_events(&state, &app, &task_id).await;
+                    }
+                    Err(e) => {
+                        state.write().await.rollback_task_creation(&task_id);
+                        gui::emit_system_log(
+                            &app,
+                            "error",
+                            &format!("[Daemon] task worktree creation failed: {e}"),
+                        );
+                    }
                 }
-                emit_task_context_events(&state, &app, &task.task_id).await;
-                let _ = reply.send(task);
+                let _ = reply.send(result);
             }
             DaemonCmd::ListTasks { workspace, reply } => {
                 let _ = reply.send(state.read().await.task_list(workspace.as_deref()));
