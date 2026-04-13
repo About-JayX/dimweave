@@ -446,7 +446,9 @@ Rules:
 - `src-tauri/src/daemon/routing_target_session.rs`
 - `src-tauri/src/daemon/control/handler.rs`
 - `src-tauri/src/daemon/control/claude_sdk_handler_processing.rs`
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
 - `src-tauri/src/daemon/codex/handler.rs`
+- `src-tauri/src/daemon/codex/session.rs`
 - `src-tauri/src/daemon/codex/session_event.rs`
 - `src-tauri/src/daemon/gui_task.rs`
 - `src-tauri/src/daemon/types.rs`
@@ -458,8 +460,8 @@ Rules:
 - `src-tauri/src/daemon/routing_user_target_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 
-**max_files_changed:** `21`
-**max_added_loc:** `660`
+**max_files_changed:** `23`
+**max_added_loc:** `900`
 **max_deleted_loc:** `300`
 
 **verification_commands:**
@@ -478,6 +480,21 @@ Rules:
 **Revised verification focus for Task 4:**
 
 - Task 4 must add and run focused tests matched by `task_runtime_routing`.
+
+## Plan Revision 8 — 2026-04-13
+
+**Reason:** Lead review found Task 4 cannot satisfy provider-originated message ownership with the original file set. Codex tool/session events need explicit task context threaded from `src-tauri/src/daemon/codex/session.rs`, and Claude SDK event processing needs explicit task context threaded from `src-tauri/src/daemon/claude_sdk/runtime.rs`.
+
+**Added to Task 4 allowed_files:**
+
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
+- `src-tauri/src/daemon/codex/session.rs`
+
+**Revised Task 4 budgets:**
+
+- `max_files_changed: 23`
+- `max_added_loc: 900`
+- `max_deleted_loc: 300`
 
 ---
 
