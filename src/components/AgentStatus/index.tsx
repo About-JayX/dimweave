@@ -20,6 +20,10 @@ interface AgentStatusPanelProps {
   draftCoderProvider?: Provider;
   onClaudeDraftChange?: (config: AgentDraftConfig) => void;
   onCodexDraftChange?: (config: AgentDraftConfig) => void;
+  draftClaudeRole?: string;
+  draftCodexRole?: string;
+  onDraftClaudeRoleChange?: (role: string) => void;
+  onDraftCodexRoleChange?: (role: string) => void;
 }
 
 export function AgentStatusPanel({
@@ -29,6 +33,10 @@ export function AgentStatusPanel({
   draftCoderProvider,
   onClaudeDraftChange,
   onCodexDraftChange,
+  draftClaudeRole,
+  draftCodexRole,
+  onDraftClaudeRoleChange,
+  onDraftCodexRoleChange,
 }: AgentStatusPanelProps) {
   const agents = useBridgeStore(selectAgents);
   const connected = useBridgeStore(selectConnected);
@@ -118,6 +126,8 @@ export function AgentStatusPanel({
           workspace={workspace}
           draftMode={draftMode}
           onDraftChange={onClaudeDraftChange}
+          draftRole={draftClaudeRole}
+          onDraftRoleChange={onDraftClaudeRoleChange}
         />
         <CodexPanel
           codexTuiRunning={codexOnlineForTask}
@@ -130,6 +140,8 @@ export function AgentStatusPanel({
           workspace={workspace}
           draftMode={draftMode}
           onDraftChange={onCodexDraftChange}
+          draftRole={draftCodexRole}
+          onDraftRoleChange={onDraftCodexRoleChange}
         />
         {Object.entries(agents).some(
           ([key]) => key !== "claude" && key !== "codex",

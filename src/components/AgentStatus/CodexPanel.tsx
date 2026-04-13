@@ -46,6 +46,8 @@ interface CodexPanelProps {
   workspace?: string;
   draftMode?: boolean;
   onDraftChange?: (config: AgentDraftConfig) => void;
+  draftRole?: string;
+  onDraftRoleChange?: (role: string) => void;
 }
 
 export function CodexPanel({
@@ -59,6 +61,8 @@ export function CodexPanel({
   workspace,
   draftMode = false,
   onDraftChange,
+  draftRole,
+  onDraftRoleChange,
 }: CodexPanelProps) {
   const models = useCodexAccountStore((s) => s.models);
   const fetchModels = useCodexAccountStore((s) => s.fetchModels);
@@ -280,6 +284,8 @@ export function CodexPanel({
       <CodexHeader
         running={codexTuiRunning}
         connectionLabel={connectionLabel}
+        draftRole={draftRole}
+        onDraftRoleChange={onDraftRoleChange}
       />
 
       {locked && usage && (

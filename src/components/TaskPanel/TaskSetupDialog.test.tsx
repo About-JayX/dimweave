@@ -115,6 +115,28 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Providers");
   });
 
+  test("create-mode role selection is dialog-local, not global store", async () => {
+    // Rendering create-mode must NOT invoke daemon_set_*_role commands.
+    // Roles live in dialog useState; cancel discards them without side effects.
+    const roleCmds: string[] = [];
+    const orig = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
+    (globalThis as any).window.__TAURI_INTERNALS__.invoke = async (cmd: string, ...rest: any[]) => {
+      if (cmd === "daemon_set_claude_role" || cmd === "daemon_set_codex_role")
+        roleCmds.push(cmd);
+      return orig(cmd, ...rest);
+    };
+    try {
+      const { TaskSetupDialog } = await import("./TaskSetupDialog");
+      renderToStaticMarkup(
+        <TaskSetupDialog mode="create" workspace="/repo" open={true}
+          onOpenChange={() => {}} onSubmit={() => {}} />,
+      );
+      expect(roleCmds).toEqual([]);
+    } finally {
+      (globalThis as any).window.__TAURI_INTERNALS__.invoke = orig;
+    }
+  });
+
   test("launch gate: only providers bound to task bindings are selected", () => {
     // Mirrors the gating logic in TaskPanel handleSetupSubmit
     const cases: { lead: string; coder: string; expectClaude: boolean; expectCodex: boolean }[] = [

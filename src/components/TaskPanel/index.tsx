@@ -33,7 +33,6 @@ export function TaskPanel() {
   const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
   const createConfiguredTask = useTaskStore((s) => s.createConfiguredTask);
   const updateTaskConfig = useTaskStore((s) => s.updateTaskConfig);
-  const claudeRole = useBridgeStore((s) => s.claudeRole);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
@@ -71,6 +70,8 @@ export function TaskPanel() {
           if (payload.requestLaunch) {
             const tid = newTask.taskId;
             const cwd = selectedWorkspace;
+            await invoke("daemon_set_claude_role", { role: payload.claudeRole });
+            await invoke("daemon_set_codex_role", { role: payload.codexRole });
             const wantsClaude = payload.leadProvider === "claude" || payload.coderProvider === "claude";
             const wantsCodex = payload.leadProvider === "codex" || payload.coderProvider === "codex";
             const cc = wantsClaude ? payload.claudeConfig : null;
@@ -78,7 +79,7 @@ export function TaskPanel() {
               const a = cc.historyAction;
               if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
               else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
-                claudeRole, cwd, model: cc.model, effort: cc.effort,
+                claudeRole: payload.claudeRole, cwd, model: cc.model, effort: cc.effort,
                 resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
                 taskId: tid,
               }));
@@ -106,7 +107,6 @@ export function TaskPanel() {
     },
     [
       applyConfig,
-      claudeRole,
       createConfiguredTask,
       dialogMode,
       resumeSession,

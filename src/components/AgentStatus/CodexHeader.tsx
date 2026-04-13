@@ -6,9 +6,16 @@ import type { ConnectionLabel } from "./provider-session-view-model";
 interface CodexHeaderProps {
   running: boolean;
   connectionLabel: ConnectionLabel | null;
+  draftRole?: string;
+  onDraftRoleChange?: (role: string) => void;
 }
 
-export function CodexHeader({ running, connectionLabel }: CodexHeaderProps) {
+export function CodexHeader({
+  running,
+  connectionLabel,
+  draftRole,
+  onDraftRoleChange,
+}: CodexHeaderProps) {
   return (
     <>
       <div className="flex items-center justify-between">

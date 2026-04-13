@@ -11,16 +11,20 @@ const ALL_ROLES = [
 export function RoleSelect({
   agent,
   disabled,
+  draftValue,
+  onDraftChange,
 }: {
   agent: "claude" | "codex";
   disabled?: boolean;
+  draftValue?: string;
+  onDraftChange?: (value: string) => void;
 }) {
   const claudeRole = useBridgeStore((s) => s.claudeRole);
   const codexRole = useBridgeStore((s) => s.codexRole);
   const agents = useBridgeStore((s) => s.agents);
   const setRole = useBridgeStore((s) => s.setRole);
 
-  const role = agent === "claude" ? claudeRole : codexRole;
+  const role = draftValue ?? (agent === "claude" ? claudeRole : codexRole);
   const otherAgent = agent === "claude" ? "codex" : "claude";
   const otherRole = agent === "claude" ? codexRole : claudeRole;
   const otherOnline = agents[otherAgent]?.status === "connected";
@@ -38,7 +42,7 @@ export function RoleSelect({
     <CyberSelect
       value={role}
       options={options}
-      onChange={(v) => setRole(agent, v)}
+      onChange={onDraftChange ?? ((v) => setRole(agent, v))}
       disabled={disabled}
       placeholder={!role ? "Select role" : undefined}
     />

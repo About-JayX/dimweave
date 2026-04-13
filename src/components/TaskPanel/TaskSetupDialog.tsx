@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { AgentDraftConfig } from "@/components/AgentStatus/provider-session-view-model";
+import { useBridgeStore } from "@/stores/bridge-store";
 import type { Provider } from "@/stores/task-store/types";
 
 export type TaskSetupMode = "create" | "edit";
@@ -10,6 +11,8 @@ export interface TaskSetupSubmitPayload {
   coderProvider: Provider;
   claudeConfig: AgentDraftConfig | null;
   codexConfig: AgentDraftConfig | null;
+  claudeRole: string;
+  codexRole: string;
   requestLaunch: boolean;
 }
 
@@ -69,6 +72,10 @@ export function TaskSetupDialog({
     null,
   );
   const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
+  const initClaudeRole = useBridgeStore((s) => s.claudeRole);
+  const initCodexRole = useBridgeStore((s) => s.codexRole);
+  const [draftClaudeRole, setDraftClaudeRole] = useState(initClaudeRole);
+  const [draftCodexRole, setDraftCodexRole] = useState(initCodexRole);
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -93,6 +100,8 @@ export function TaskSetupDialog({
       coderProvider,
       claudeConfig,
       codexConfig,
+      claudeRole: draftClaudeRole,
+      codexRole: draftCodexRole,
       requestLaunch: launch,
     });
     onOpenChange(false);
@@ -157,6 +166,10 @@ export function TaskSetupDialog({
           draftCoderProvider={coderProvider}
           onClaudeDraftChange={setClaudeConfig}
           onCodexDraftChange={setCodexConfig}
+          draftClaudeRole={draftMode ? draftClaudeRole : undefined}
+          draftCodexRole={draftMode ? draftCodexRole : undefined}
+          onDraftClaudeRoleChange={draftMode ? setDraftClaudeRole : undefined}
+          onDraftCodexRoleChange={draftMode ? setDraftCodexRole : undefined}
         />
       </div>
     </div>

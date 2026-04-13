@@ -36,6 +36,8 @@ interface ClaudePanelProps {
   workspace?: string;
   draftMode?: boolean;
   onDraftChange?: (config: AgentDraftConfig) => void;
+  draftRole?: string;
+  onDraftRoleChange?: (role: string) => void;
 }
 
 export function ClaudePanel({
@@ -44,6 +46,8 @@ export function ClaudePanel({
   workspace,
   draftMode = false,
   onDraftChange,
+  draftRole,
+  onDraftRoleChange,
 }: ClaudePanelProps) {
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
@@ -211,6 +215,8 @@ export function ClaudePanel({
         <RoleSelect
           agent="claude"
           disabled={connected || connecting || disconnecting}
+          draftValue={draftRole}
+          onDraftChange={onDraftRoleChange}
         />
       </div>
 
