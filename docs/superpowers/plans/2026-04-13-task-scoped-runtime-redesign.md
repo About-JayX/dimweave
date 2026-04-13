@@ -529,6 +529,8 @@ Rules:
 - `src/stores/bridge-store/selectors.ts`
 - `src/stores/bridge-store/sync.ts`
 - `src/components/workspace-entry-state.ts`
+- `src/components/WorkspaceEntryOverlay.tsx`
+- `src/components/WorkspaceEntryOverlay.test.tsx`
 - `src/components/ClaudePanel/index.tsx`
 - `src/components/ReplyInput/index.tsx`
 - `src/components/MessagePanel/index.tsx`
@@ -591,6 +593,15 @@ Task 5 also needs targeted Rust verification for those contract changes.
 
 - `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
+
+## Plan Revision 10 — 2026-04-13
+
+**Reason:** Lead review found Task 5 still needed to align the workspace-entry copy with the approved “dedicated task workspace” product semantics. That requires the overlay component and its test file.
+
+**Added to Task 5 allowed_files:**
+
+- `src/components/WorkspaceEntryOverlay.tsx`
+- `src/components/WorkspaceEntryOverlay.test.tsx`
 
 ---
 
