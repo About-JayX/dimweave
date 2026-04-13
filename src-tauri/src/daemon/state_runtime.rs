@@ -448,6 +448,8 @@ impl DaemonState {
     }
 
     /// Clear Codex session for a specific task if epoch matches.
+    /// Uses task-specific graph cleanup to avoid cross-task pollution
+    /// through the singleton `codex_connection` mirror.
     pub fn clear_codex_task_session(
         &mut self,
         task_id: &str,
@@ -463,7 +465,12 @@ impl DaemonState {
         }
         slot.inject_tx = None;
         self.recompute_codex_singleton_inject_tx();
-        self.clear_provider_connection("codex")
+        if !self.any_codex_task_online() {
+            self.clear_provider_connection("codex")
+        } else {
+            self.detach_codex_sessions_for_task(task_id);
+            Some(task_id.to_string())
+        }
     }
 
     /// Invalidate Codex session for a specific task.

@@ -1325,3 +1325,81 @@ fn codex_task_slot_invalidate_preserves_task_b_graph_binding() {
         "Task A coder_session_id should be cleared"
     );
 }
+
+#[test]
+fn codex_task_slot_clear_preserves_task_b_graph_binding() {
+    let mut s = DaemonState::new();
+    let t1 = s.task_graph.create_task("/ws/a", "T1");
+    let t2 = s.task_graph.create_task("/ws/b", "T2");
+    s.init_task_runtime(&t1.task_id, std::path::PathBuf::from("/ws/a"));
+    s.init_task_runtime(&t2.task_id, std::path::PathBuf::from("/ws/b"));
+
+    // Create and bind Codex sessions for both tasks
+    let sess_a = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t1.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        role: crate::daemon::task_graph::types::SessionRole::Coder,
+        cwd: "/ws/a",
+        title: "Codex A",
+    });
+    s.task_graph.set_coder_session(&t1.task_id, &sess_a.session_id);
+
+    let sess_b = s.task_graph.create_session(CreateSessionParams {
+        task_id: &t2.task_id,
+        parent_session_id: None,
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        role: crate::daemon::task_graph::types::SessionRole::Coder,
+        cwd: "/ws/b",
+        title: "Codex B",
+    });
+    s.task_graph.set_coder_session(&t2.task_id, &sess_b.session_id);
+
+    // Launch both tasks with Codex slots
+    let epoch1 = s.begin_codex_task_launch(&t1.task_id, 4500).unwrap();
+    let (tx1, _rx1) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t1.task_id, epoch1, tx1);
+
+    let epoch2 = s.begin_codex_task_launch(&t2.task_id, 4501).unwrap();
+    let (tx2, _rx2) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.attach_codex_task_session(&t2.task_id, epoch2, tx2);
+
+    // Task B launched last, so it owns the singleton codex_connection mirror.
+    // Simulate codex_connection pointing to Task B's external session.
+    s.codex_connection = Some(crate::daemon::types::ProviderConnectionState {
+        provider: crate::daemon::task_graph::types::Provider::Codex,
+        external_session_id: "thread_b".to_string(),
+        cwd: "/ws/b".to_string(),
+        connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+    });
+    s.task_graph.set_external_session_id(&sess_b.session_id, "thread_b");
+
+    // Clear Task A session (simulates Task A process exit / health-monitor cleanup)
+    let cleared = s.clear_codex_task_session(&t1.task_id, epoch1);
+    assert!(cleared.is_some(), "clear should succeed for matching epoch");
+
+    // Task B's coder_session_id must NOT be cleared
+    let t2_task = s.task_graph.get_task(&t2.task_id).unwrap();
+    assert_eq!(
+        t2_task.current_coder_session_id.as_deref(),
+        Some(sess_b.session_id.as_str()),
+        "Task B coder_session_id must not be cleared by Task A cleanup"
+    );
+    // Task B's session must still be Active
+    let t2_sess = s.task_graph.get_session(&sess_b.session_id).unwrap();
+    assert_eq!(
+        t2_sess.status,
+        crate::daemon::task_graph::types::SessionStatus::Active,
+        "Task B session must not be paused by Task A cleanup"
+    );
+    // Task B Codex slot must still be online
+    assert!(
+        s.is_codex_task_online(&t2.task_id),
+        "Task B Codex slot must remain online"
+    );
+    // Task A should be offline
+    assert!(
+        !s.is_codex_task_online(&t1.task_id),
+        "Task A Codex slot should be offline after clear"
+    );
+}
