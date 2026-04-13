@@ -132,6 +132,7 @@ export interface TaskStoreData {
 
 export interface TaskStoreState extends TaskStoreData {
   setSelectedWorkspace: (workspace: string | null) => void;
+  loadWorkspaceTasks: (workspace: string) => Promise<void>;
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;

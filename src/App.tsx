@@ -163,7 +163,7 @@ export default function App() {
         <main className="flex min-w-0 flex-1 flex-col animate-in fade-in duration-500">
           <ShellTopBar
             workspaceLabel={workspaceLabel}
-            currentWorkspace={activeTask?.workspaceRoot ?? null}
+            currentWorkspace={activeTask?.workspaceRoot ?? storeSelectedWorkspace}
             selectedWorkspace={selectedWorkspace}
             recentWorkspaces={recentWorkspaces}
             workspaceActionError={workspaceActionError}

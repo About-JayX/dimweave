@@ -9,6 +9,7 @@ import {
   bootstrapTaskStore,
   createStartWorkspaceTaskAction,
   createFetchProviderHistoryAction,
+  createLoadWorkspaceTasksAction,
   deriveWorkspaceTaskTitle,
   setReplyTargetPatch,
   snapshotToPatch,
@@ -427,6 +428,25 @@ describe("createFetchProviderHistoryAction", () => {
     ]);
 
     expect(invokeCalls).toBe(2);
+  });
+});
+
+describe("createLoadWorkspaceTasksAction", () => {
+  test("merges tasks from daemon_list_tasks into store", async () => {
+    const t1 = { ...makeTask("t1", "A"), workspaceRoot: "/ws" };
+    const t2 = { ...makeTask("t2", "B"), workspaceRoot: "/ws" };
+    let state = { ...emptyState(), tasks: { t0: makeTask("t0", "Existing") } };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const load = createLoadWorkspaceTasksAction(set, async (_cmd, args) => {
+      expect(args).toEqual({ workspace: "/ws" });
+      return [t1, t2];
+    });
+    await load("/ws");
+    expect(state.tasks.t0?.title).toBe("Existing");
+    expect(state.tasks.t1?.title).toBe("A");
+    expect(state.tasks.t2?.title).toBe("B");
   });
 });
 

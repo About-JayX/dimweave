@@ -96,6 +96,20 @@ export function deriveWorkspaceTaskTitle(workspace: string) {
   return parts.at(-1) || workspace;
 }
 
+export function createLoadWorkspaceTasksAction(
+  set: ProviderHistorySetter,
+  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+) {
+  return async (workspace: string): Promise<void> => {
+    const tasks = await invokeImpl<TaskInfo[]>("daemon_list_tasks", { workspace });
+    set((s) => {
+      const merged = { ...s.tasks };
+      for (const t of tasks) merged[t.taskId] = t;
+      return { tasks: merged };
+    });
+  };
+}
+
 export function createStartWorkspaceTaskAction(
   set: ProviderHistorySetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
@@ -195,6 +209,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
   }
 
   const fetchProviderHistory = createFetchProviderHistoryAction(set as any);
+  const loadWorkspaceTasks = createLoadWorkspaceTasksAction(set as any);
   const startWorkspaceTask = createStartWorkspaceTaskAction(set as any);
 
   return {
@@ -212,7 +227,12 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     bootstrapError: null,
     lastSave: null,
 
-    setSelectedWorkspace: (workspace) => set(() => ({ selectedWorkspace: workspace })),
+    setSelectedWorkspace: (workspace) => {
+      set(() => ({ selectedWorkspace: workspace }));
+      if (workspace) void loadWorkspaceTasks(workspace);
+    },
+
+    loadWorkspaceTasks,
 
     createTask: async (workspace, title) => {
       const task = await invoke<TaskInfo>("daemon_create_task", {
