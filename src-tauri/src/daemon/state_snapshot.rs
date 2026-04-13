@@ -88,22 +88,16 @@ impl DaemonState {
             crate::daemon::task_graph::types::Provider::Claude => "claude",
             crate::daemon::task_graph::types::Provider::Codex => "codex",
         };
-        if self.is_agent_online(lead_agent) {
+        let is_lead_online = self.is_task_agent_online(task_id, lead_agent);
+        let is_coder_online = self.is_task_agent_online(task_id, coder_agent);
+        if is_lead_online {
             result.push(OnlineAgentInfo {
                 agent_id: lead_agent.into(),
                 role: "lead".into(),
                 model_source: lead_agent.into(),
             });
         }
-        if self.is_agent_online(coder_agent) && coder_agent != lead_agent {
-            result.push(OnlineAgentInfo {
-                agent_id: coder_agent.into(),
-                role: "coder".into(),
-                model_source: coder_agent.into(),
-            });
-        } else if self.is_agent_online(coder_agent) && coder_agent == lead_agent {
-            // Same agent handles both roles — include once with the lead entry
-            // already added above; add coder only if we want dual entries.
+        if is_coder_online {
             result.push(OnlineAgentInfo {
                 agent_id: coder_agent.into(),
                 role: "coder".into(),
@@ -119,18 +113,20 @@ impl DaemonState {
         task_id: &str,
     ) -> Option<crate::daemon::types::TaskProviderSummary> {
         let task = self.task_graph.get_task(task_id)?;
+        let lead_agent = match task.lead_provider {
+            crate::daemon::task_graph::types::Provider::Claude => "claude",
+            crate::daemon::task_graph::types::Provider::Codex => "codex",
+        };
+        let coder_agent = match task.coder_provider {
+            crate::daemon::task_graph::types::Provider::Claude => "claude",
+            crate::daemon::task_graph::types::Provider::Codex => "codex",
+        };
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
             lead_provider: format!("{:?}", task.lead_provider).to_lowercase(),
             coder_provider: format!("{:?}", task.coder_provider).to_lowercase(),
-            lead_online: self.is_agent_online(match task.lead_provider {
-                crate::daemon::task_graph::types::Provider::Claude => "claude",
-                crate::daemon::task_graph::types::Provider::Codex => "codex",
-            }),
-            coder_online: self.is_agent_online(match task.coder_provider {
-                crate::daemon::task_graph::types::Provider::Claude => "claude",
-                crate::daemon::task_graph::types::Provider::Codex => "codex",
-            }),
+            lead_online: self.is_task_agent_online(task_id, lead_agent),
+            coder_online: self.is_task_agent_online(task_id, coder_agent),
         })
     }
 

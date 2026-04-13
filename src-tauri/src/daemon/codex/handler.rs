@@ -15,14 +15,15 @@ pub async fn handle_dynamic_tool(
     tool_name: &str,
     args: &Value,
     role_id: &str,
+    task_id: &str,
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsSend,
 ) {
     let result_text = match tool_name {
-        "reply" => handle_reply(args, role_id, state, app).await,
-        "check_messages" => handle_check_messages(role_id, state).await,
-        "get_status" => handle_get_status(state).await,
+        "reply" => handle_reply(args, role_id, task_id, state, app).await,
+        "check_messages" => handle_check_messages(role_id, task_id, state).await,
+        "get_status" => handle_get_status(task_id, state).await,
         other => format!("Unknown tool: {other}"),
     };
 
@@ -66,30 +67,31 @@ fn build_reply_message(args: &Value, from: &str) -> Option<BridgeMessage> {
     })
 }
 
-async fn handle_reply(args: &Value, from: &str, state: &SharedState, app: &AppHandle) -> String {
+async fn handle_reply(
+    args: &Value,
+    from: &str,
+    task_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) -> String {
     let to = args["to"].as_str().unwrap_or("user");
     let Some(mut msg) = build_reply_message(args, from) else {
         return format!("Ignored empty message to {to}");
     };
     {
         let s = state.read().await;
-        if let Some(task_id) = s.codex_owning_task_id() {
-            s.stamp_message_context_for_task(&task_id, from, &mut msg);
-        } else {
-            s.stamp_message_context(from, &mut msg);
-        }
+        s.stamp_message_context_for_task(task_id, from, &mut msg);
     }
 
     crate::daemon::routing::route_message(state, app, msg).await;
     format!("Message sent to {to}")
 }
 
-async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
-    let task_id = state.read().await.codex_owning_task_id();
+async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState) -> String {
     let msgs = state
         .write()
         .await
-        .take_buffered_for_task(role_id, task_id.as_deref());
+        .take_buffered_for_task(role_id, Some(task_id));
     if msgs.is_empty() {
         return "No new messages.".to_string();
     }
@@ -100,13 +102,9 @@ async fn handle_check_messages(role_id: &str, state: &SharedState) -> String {
         .join("\n")
 }
 
-async fn handle_get_status(state: &SharedState) -> String {
+async fn handle_get_status(task_id: &str, state: &SharedState) -> String {
     let s = state.read().await;
-    let task_id = s.codex_owning_task_id();
-    let snapshot = match task_id.as_deref() {
-        Some(tid) => s.task_scoped_online_agents(tid),
-        None => s.online_agents_snapshot(),
-    };
+    let snapshot = s.task_scoped_online_agents(task_id);
     serde_json::to_string(&json!({ "online_agents": snapshot }))
         .unwrap_or_else(|_| r#"{"online_agents":[]}"#.to_string())
 }
@@ -155,7 +153,7 @@ mod tests {
     #[tokio::test]
     async fn get_status_returns_valid_json() {
         let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
-        let status = handle_get_status(&state).await;
+        let status = handle_get_status("", &state).await;
         let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
         assert!(
             v["online_agents"].is_array(),
@@ -169,7 +167,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
         state.write().await.codex_inject_tx = Some(tx);
 
-        let status = handle_get_status(&state).await;
+        let status = handle_get_status("", &state).await;
         let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
         let agents = v["online_agents"].as_array().expect("must be array");
         assert_eq!(agents.len(), 1);
@@ -185,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn get_status_empty_when_no_agents_online() {
         let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
-        let status = handle_get_status(&state).await;
+        let status = handle_get_status("", &state).await;
         let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
         let agents = v["online_agents"].as_array().expect("must be array");
         assert!(agents.is_empty(), "no agents should be online by default");

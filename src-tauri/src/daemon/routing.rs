@@ -106,9 +106,13 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 };
             }
             // Collect online candidates for the target role.
+            // Task-local channels take priority when msg carries a task_id.
             // Prefer Claude SDK WS over bridge for Claude delivery.
+            let task_id = msg.task_id.as_deref();
             let claude_sdk_tx = if claude_matches && s.agent_matches_task_message("claude", &msg) {
-                s.claude_sdk_ws_tx.clone()
+                task_id
+                    .and_then(|tid| s.claude_task_ws_tx(tid))
+                    .or_else(|| s.claude_sdk_ws_tx.clone())
             } else {
                 None
             };
@@ -121,7 +125,9 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 None
             };
             let codex_tx = if codex_matches && s.agent_matches_task_message("codex", &msg) {
-                s.codex_inject_tx.clone()
+                task_id
+                    .and_then(|tid| s.codex_task_inject_tx(tid))
+                    .or_else(|| s.codex_inject_tx.clone())
             } else {
                 None
             };

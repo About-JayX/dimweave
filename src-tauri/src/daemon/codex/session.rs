@@ -110,6 +110,7 @@ async fn run_with_reconnect(
             &thread_id,
             session_epoch,
             role_id,
+            task_id,
             state,
             app,
             inject_rx,
@@ -214,6 +215,7 @@ async fn event_loop(
     thread_id: &str,
     session_epoch: u64,
     role_id: &str,
+    task_id: &str,
     state: &SharedState,
     app: &AppHandle,
     inject_rx: &mut mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
@@ -237,7 +239,7 @@ async fn event_loop(
                     .unwrap_or("");
                 let route_ok = routed_turns.is_routed_turn(turn_id);
                 handle_codex_event(
-                    &v, role_id, route_ok, state, app, ws_tx, &mut stream_preview,
+                    &v, role_id, task_id, route_ok, state, app, ws_tx, &mut stream_preview,
                 ).await;
                 if v["method"].as_str() == Some("turn/completed") {
                     routed_turns.complete_turn(turn_id);

@@ -553,6 +553,15 @@ impl DaemonState {
             .map_or(false, |slot| slot.is_online())
     }
 
+    /// Check if an agent's task-local slot is online.
+    pub fn is_task_agent_online(&self, task_id: &str, agent: &str) -> bool {
+        match agent {
+            "claude" => self.is_claude_task_online(task_id),
+            "codex" => self.is_codex_task_online(task_id),
+            _ => false,
+        }
+    }
+
     pub fn codex_task_inject_tx(
         &self,
         task_id: &str,

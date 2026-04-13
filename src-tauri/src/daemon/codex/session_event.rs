@@ -15,6 +15,7 @@ use tauri::AppHandle;
 pub(super) async fn handle_codex_event(
     v: &Value,
     role_id: &str,
+    task_id: &str,
     schema_route_enabled: bool,
     state: &SharedState,
     app: &AppHandle,
@@ -25,7 +26,7 @@ pub(super) async fn handle_codex_event(
         return;
     };
     match method {
-        "item/tool/call" => handle_tool_call(v, role_id, state, app, ws_tx).await,
+        "item/tool/call" => handle_tool_call(v, role_id, task_id, state, app, ws_tx).await,
         "turn/started" => {
             stream_preview.reset();
             gui::emit_codex_stream(app, CodexStreamPayload::Thinking);
@@ -80,6 +81,7 @@ pub(super) async fn handle_codex_event(
             handle_completed_agent_message(
                 v,
                 role_id,
+                task_id,
                 schema_route_enabled,
                 state,
                 app,
@@ -104,6 +106,7 @@ pub(super) async fn handle_codex_event(
 async fn handle_tool_call(
     v: &Value,
     role_id: &str,
+    task_id: &str,
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsTx,
@@ -113,7 +116,7 @@ async fn handle_tool_call(
         .or_else(|| v["params"]["name"].as_str());
     if let (Some(id), Some(name)) = (v["id"].as_u64(), name) {
         let args = v["params"]["arguments"].clone();
-        handler::handle_dynamic_tool(id, name, &args, role_id, state, app, ws_tx).await;
+        handler::handle_dynamic_tool(id, name, &args, role_id, task_id, state, app, ws_tx).await;
     }
 }
 
@@ -142,6 +145,7 @@ fn build_completed_output_message(
 async fn handle_completed_agent_message(
     v: &Value,
     role_id: &str,
+    task_id: &str,
     schema_route_enabled: bool,
     state: &SharedState,
     app: &AppHandle,
@@ -177,11 +181,7 @@ async fn handle_completed_agent_message(
     );
     {
         let s = state.read().await;
-        if let Some(task_id) = s.codex_owning_task_id() {
-            s.stamp_message_context_for_task(&task_id, role_id, &mut msg);
-        } else {
-            s.stamp_message_context(role_id, &mut msg);
-        }
+        s.stamp_message_context_for_task(task_id, role_id, &mut msg);
     }
     eprintln!("[Codex] route {} → {}", role_id, msg.to);
     routing::route_message(state, app, msg).await;

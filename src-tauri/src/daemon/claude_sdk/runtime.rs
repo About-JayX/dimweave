@@ -56,12 +56,14 @@ async fn prepare_launch_channels(
     };
     let event_state = state.clone();
     let event_app = app.clone();
+    let event_task_id = task_id.to_string();
     tokio::spawn(async move {
         while let Some(events) = event_rx.recv().await {
             crate::daemon::control::claude_sdk_handler::process_sdk_events(
                 &event_state,
                 &event_app,
                 events,
+                &event_task_id,
             )
             .await;
         }

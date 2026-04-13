@@ -1547,20 +1547,30 @@ fn resolve_task_provider_agent_maps_lead_and_coder() {
     assert_eq!(s.resolve_task_provider_agent(&task.task_id, "user"), None);
 }
 
-// ── task_runtime_routing: task_scoped_online_agents ──────────────────
+// ── task_runtime_routing: task-slot online agents & provider summary ──
+
+fn wire_claude_task_slot_online(s: &mut DaemonState, task_id: &str) {
+    let rt = s.task_runtimes.get_mut(task_id).expect("task runtime");
+    let mut slot = crate::daemon::task_runtime::ClaudeTaskSlot::new();
+    slot.ws_tx = Some(tokio::sync::mpsc::channel(1).0);
+    rt.claude_slot = Some(slot);
+}
+
+fn wire_codex_task_slot_online(s: &mut DaemonState, task_id: &str) {
+    let rt = s.task_runtimes.get_mut(task_id).expect("task runtime");
+    let mut slot = crate::daemon::task_runtime::CodexTaskSlot::new(4500);
+    slot.inject_tx = Some(tokio::sync::mpsc::channel(1).0);
+    rt.codex_slot = Some(slot);
+}
 
 #[test]
-fn task_scoped_online_agents_filters_by_provider_binding() {
+fn task_runtime_routing_scoped_online_agents_uses_task_slots() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
     // Default bindings: lead=Claude, coder=Codex
-    // Wire both agents online
-    let (claude_tx, _) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    s.attached_agents
-        .insert("claude".into(), AgentSender::new(claude_tx, 0));
-    s.claude_sdk_ws_tx = Some(tokio::sync::mpsc::channel(1).0);
-    let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.codex_inject_tx = Some(codex_tx);
+    wire_claude_task_slot_online(&mut s, &task.task_id);
+    wire_codex_task_slot_online(&mut s, &task.task_id);
 
     let agents = s.task_scoped_online_agents(&task.task_id);
     assert_eq!(agents.len(), 2);
@@ -1568,18 +1578,47 @@ fn task_scoped_online_agents_filters_by_provider_binding() {
     assert!(agents.iter().any(|a| a.agent_id == "codex" && a.role == "coder"));
 }
 
-// ── task_runtime_routing: task_provider_summary ──────────────────────
-
 #[test]
-fn task_provider_summary_returns_binding_and_online_status() {
+fn task_runtime_routing_scoped_online_agents_excludes_offline_slot() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "Task");
-    // Only Claude online
-    s.claude_sdk_ws_tx = Some(tokio::sync::mpsc::channel(1).0);
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    // Only Claude task-local slot is online; Codex is offline
+    wire_claude_task_slot_online(&mut s, &task.task_id);
+    // Wire Codex globally (should NOT count for task-scoped)
+    s.codex_inject_tx = Some(tokio::sync::mpsc::channel(1).0);
+
+    let agents = s.task_scoped_online_agents(&task.task_id);
+    assert_eq!(agents.len(), 1, "only task-local Claude slot should show");
+    assert_eq!(agents[0].agent_id, "claude");
+    assert_eq!(agents[0].role, "lead");
+}
+
+#[test]
+fn task_runtime_routing_provider_summary_uses_task_slots() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    // Only Claude task-local slot is online
+    wire_claude_task_slot_online(&mut s, &task.task_id);
 
     let summary = s.task_provider_summary(&task.task_id).unwrap();
     assert_eq!(summary.lead_provider, "claude");
     assert_eq!(summary.coder_provider, "codex");
     assert!(summary.lead_online);
-    assert!(!summary.coder_online);
+    assert!(!summary.coder_online, "Codex task slot is not wired");
+}
+
+#[test]
+fn task_runtime_routing_provider_summary_ignores_global_channels() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Task");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    // Wire global channels but NOT task-local slots
+    s.claude_sdk_ws_tx = Some(tokio::sync::mpsc::channel(1).0);
+    s.codex_inject_tx = Some(tokio::sync::mpsc::channel(1).0);
+
+    let summary = s.task_provider_summary(&task.task_id).unwrap();
+    assert!(!summary.lead_online, "global Claude should not count");
+    assert!(!summary.coder_online, "global Codex should not count");
 }

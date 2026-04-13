@@ -269,6 +269,193 @@ fn task_session_mismatch_buffer_message_is_not_reported_as_offline() {
 // ── task_runtime_routing: AC1/AC2 task-first provider resolution ────
 
 #[tokio::test]
+async fn task_runtime_routing_delivers_via_task_local_codex_channel() {
+    use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
+    use crate::daemon::task_runtime::{CodexTaskSlot, TaskRuntime};
+    use crate::daemon::types::ProviderConnectionMode;
+
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (task_codex_tx, mut task_codex_rx) = tokio::sync::mpsc::channel(8);
+    let (global_codex_tx, mut global_codex_rx) = tokio::sync::mpsc::channel(8);
+    let task_id;
+    {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "Task");
+        task_id = task.task_id.clone();
+        s.active_task_id = Some(task.task_id.clone());
+        let sess = s.task_graph.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder",
+        });
+        s.task_graph
+            .set_coder_session(&task.task_id, &sess.session_id);
+        s.task_graph
+            .set_external_session_id(&sess.session_id, "thread_1");
+        // Wire task-local Codex slot
+        s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+        let rt = s.task_runtimes.get_mut(&task.task_id).unwrap();
+        let mut slot = CodexTaskSlot::new(4500);
+        slot.inject_tx = Some(task_codex_tx);
+        slot.connection = Some(crate::daemon::types::ProviderConnectionState {
+            provider: Provider::Codex,
+            external_session_id: "thread_1".into(),
+            cwd: "/ws".into(),
+            connection_mode: ProviderConnectionMode::New,
+        });
+        rt.codex_slot = Some(slot);
+        // Also wire global (should NOT be used for task-scoped messages)
+        s.codex_inject_tx = Some(global_codex_tx);
+        s.codex_role = "coder".into();
+        s.set_provider_connection(
+            "codex",
+            crate::daemon::types::ProviderConnectionState {
+                provider: Provider::Codex,
+                external_session_id: "thread_1".into(),
+                cwd: "/ws".into(),
+                connection_mode: ProviderConnectionMode::New,
+            },
+        );
+    }
+    let msg = BridgeMessage {
+        id: "task-local-codex-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "task-scoped message must be delivered"
+    );
+    assert!(
+        task_codex_rx.try_recv().is_ok(),
+        "must use task-local Codex channel"
+    );
+    assert!(
+        global_codex_rx.try_recv().is_err(),
+        "must NOT use global Codex channel"
+    );
+}
+
+#[tokio::test]
+async fn task_runtime_routing_delivers_via_task_local_claude_channel() {
+    use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
+    use crate::daemon::task_runtime::{ClaudeTaskSlot, TaskRuntime};
+
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (task_claude_tx, mut task_claude_rx) = tokio::sync::mpsc::channel(8);
+    let (global_claude_tx, mut global_claude_rx) = tokio::sync::mpsc::channel(8);
+    let task_id;
+    {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "Task");
+        task_id = task.task_id.clone();
+        s.active_task_id = Some(task.task_id.clone());
+        let sess = s.task_graph.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            cwd: "/ws",
+            title: "Lead",
+        });
+        s.task_graph
+            .set_lead_session(&task.task_id, &sess.session_id);
+        s.task_graph
+            .set_external_session_id(&sess.session_id, "sess_1");
+        // Wire task-local Claude slot
+        s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+        let rt = s.task_runtimes.get_mut(&task.task_id).unwrap();
+        let mut slot = ClaudeTaskSlot::new();
+        slot.ws_tx = Some(task_claude_tx);
+        rt.claude_slot = Some(slot);
+        // Also wire global (should NOT be used for task-scoped messages)
+        s.claude_sdk_ws_tx = Some(global_claude_tx);
+        s.claude_role = "lead".into();
+        s.set_provider_connection(
+            "claude",
+            crate::daemon::types::ProviderConnectionState {
+                provider: Provider::Claude,
+                external_session_id: "sess_1".into(),
+                cwd: "/ws".into(),
+                connection_mode: crate::daemon::types::ProviderConnectionMode::New,
+            },
+        );
+    }
+    let msg = BridgeMessage {
+        id: "task-local-claude-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "lead".into(),
+        content: "plan the task".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "task-scoped message must be delivered"
+    );
+    assert!(
+        task_claude_rx.try_recv().is_ok(),
+        "must use task-local Claude channel"
+    );
+    assert!(
+        global_claude_rx.try_recv().is_err(),
+        "must NOT use global Claude channel"
+    );
+}
+
+#[tokio::test]
+async fn task_runtime_routing_falls_back_to_global_without_task_id() {
+    // Without task_id, routing should use global channels
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (global_codex_tx, mut global_codex_rx) = tokio::sync::mpsc::channel(8);
+    {
+        let mut s = state.write().await;
+        s.codex_inject_tx = Some(global_codex_tx);
+        s.codex_role = "coder".into();
+    }
+    let msg = BridgeMessage {
+        id: "global-fallback-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(matches!(result, RouteResult::Delivered));
+    assert!(global_codex_rx.try_recv().is_ok());
+}
+
+#[tokio::test]
 async fn task_first_routing_resolves_codex_coder_via_task_provider() {
     use crate::daemon::task_graph::types::{CreateSessionParams, Provider, SessionRole};
     use crate::daemon::types::ProviderConnectionMode;

@@ -1,18 +1,41 @@
-use crate::daemon::{gui, SharedState};
+use crate::daemon::{gui, state::DaemonState, SharedState};
 use tauri::AppHandle;
+
+/// Resolve which role Claude serves for a task from the task's provider bindings.
+/// Falls back to the global `claude_role` if the task is not found.
+fn resolve_claude_role_for_task(s: &DaemonState, task_id: &str) -> String {
+    if let Some(task) = s.task_graph.get_task(task_id) {
+        if task.lead_provider == crate::daemon::task_graph::types::Provider::Claude {
+            return "lead".into();
+        }
+        if task.coder_provider == crate::daemon::task_graph::types::Provider::Claude {
+            return "coder".into();
+        }
+    }
+    s.claude_role.clone()
+}
 
 pub(crate) async fn process_sdk_events(
     state: &SharedState,
     app: &AppHandle,
     events: Vec<serde_json::Value>,
+    task_id: &str,
 ) {
     for event in events {
-        process_sdk_event(state, app, event).await;
+        process_sdk_event(state, app, event, task_id).await;
     }
 }
 
-async fn process_sdk_event(state: &SharedState, app: &AppHandle, event: serde_json::Value) {
-    let role = state.read().await.claude_role.clone();
+async fn process_sdk_event(
+    state: &SharedState,
+    app: &AppHandle,
+    event: serde_json::Value,
+    task_id: &str,
+) {
+    let role = {
+        let s = state.read().await;
+        resolve_claude_role_for_task(&s, task_id)
+    };
     gui::emit_system_log(
         app,
         "info",
