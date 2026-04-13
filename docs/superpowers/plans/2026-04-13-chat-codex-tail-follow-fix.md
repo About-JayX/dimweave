@@ -47,9 +47,10 @@
 
 ## CM Memory
 
-| Task | Planned commit message | Verification | Memory |
-|------|------------------------|--------------|--------|
-| Task 1 | `fix: follow codex tail indicators with last-item pinning` | `bun test src/components/MessagePanel/view-model.test.ts src/components/MessagePanel/MessageList.test.tsx src/components/MessagePanel/index.test.tsx`; `bun run build` | Split bottom-pin behavior by structure: draft bubble growth uses scroller bottom, footer/tail indicators use last-item/tail pinning. |
+| Task | Commit | Verification | Memory |
+|------|--------|--------------|--------|
+| Task 1 (initial) | `2705da97` fix: extend stream-tail bottom pin to cover Codex footer indicator | 48 tests ✅ · build ✅ | Added `shouldScrollOnStreamTail` covering both Claude draft and Codex `codexVisible` flip. Root cause found in review: `codexVisible` is a boolean that stays `true` throughout streaming — dep change never re-fires. |
+| Task 1 (rework) | `dd7f2bcb` fix: subscribe to Codex streaming content for continuous footer bottom pin | 48 tests ✅ · build ✅ | Added `codexStreamTail = currentDelta\|activity\|reasoning\|commandOutput` subscription in `MessageList`; added to anchor effect deps. Mirrors `claudePreviewText` pattern. User accepted: "没问题". |
 
 ---
 
