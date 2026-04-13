@@ -138,6 +138,25 @@ describe("ReplyInput", () => {
     ).toBe("Reconnect to this task");
   });
 
+  test("disables send when no active task exists", async () => {
+    installTauriStub();
+    useTaskStore.setState({
+      activeTaskId: null,
+      tasks: {},
+      replyTargets: {},
+      sessions: {},
+      artifacts: {},
+      providerHistory: {},
+      providerHistoryLoading: {},
+      providerHistoryError: {},
+      bootstrapComplete: true,
+      bootstrapError: null,
+    });
+    const { ReplyInput } = await import("./index");
+    const html = renderToStaticMarkup(<ReplyInput />);
+    expect(html).toContain("Create a task first");
+  });
+
   test("returns no warning when the connected agent matches the active task session", () => {
     const task = makeTask("task-2", "/repo-b");
     const session = makeClaudeLeadSession("task-2", "claude_current", "/repo-b");

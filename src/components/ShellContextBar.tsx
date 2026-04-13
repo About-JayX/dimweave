@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
   AlertTriangle,
-  Bot,
   MessageSquare,
   Moon,
   Sun,
@@ -36,7 +35,6 @@ const NAV_ITEMS: Array<{
   icon: typeof Workflow;
 }> = [
   { id: "task", label: "Task context", icon: Workflow },
-  { id: "agents", label: "Agents", icon: Bot },
   { id: "approvals", label: "Approvals", icon: AlertTriangle },
   { id: "bugs", label: "Tools", icon: Wrench },
   { id: "logs", label: "Logs", icon: TerminalSquare },

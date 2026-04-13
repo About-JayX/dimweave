@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, Workflow, Wrench } from "lucide-react";
-import { AgentStatusPanel } from "./AgentStatus";
+import { AlertTriangle, Workflow, Wrench } from "lucide-react";
 import { ToolsPanel } from "./ToolsPanel";
 import { TaskPanel } from "./TaskPanel";
 import { PermissionQueue } from "./MessagePanel/PermissionQueue";
@@ -123,11 +122,6 @@ export function TaskContextPopover({
       title: task?.title ?? "Task workspace",
       icon: Workflow,
     },
-    agents: {
-      eyebrow: "Agents",
-      title: "Runtime control",
-      icon: Bot,
-    },
     approvals: {
       eyebrow: "Approvals",
       title: "Permission queue",
@@ -139,7 +133,7 @@ export function TaskContextPopover({
       icon: Wrench,
     },
   } satisfies Record<
-    ShellSidebarPane,
+    Exclude<ShellSidebarPane, "agents">,
     { eyebrow: string; title: string; icon: typeof Workflow }
   >;
   const activeMeta = activePane ? paneMeta[activePane] : paneMeta.task;
@@ -191,17 +185,6 @@ export function TaskContextPopover({
               )}
             >
               <TaskPanel />
-            </div>
-          )}
-
-          {mountedPanes.includes("agents") && (
-            <div
-              className={cn(
-                "h-full overflow-y-auto px-4 py-4 text-[12px] text-muted-foreground/78",
-                activePane === "agents" ? "block" : "hidden",
-              )}
-            >
-              <AgentStatusPanel />
             </div>
           )}
 

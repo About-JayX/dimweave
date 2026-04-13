@@ -76,29 +76,6 @@ describe("TaskContextPopover", () => {
     );
   });
 
-  test("renders the agents pane when requested", async () => {
-    installTauriStub();
-    const { TaskContextPopover } = await import("./TaskContextPopover");
-    const html = renderToStaticMarkup(
-      <TaskContextPopover
-        activePane="agents"
-        onClose={() => {}}
-        task={{
-          taskId: "task-1",
-          title: "Refine shell header",
-          workspaceRoot: "/Users/jason/Desktop/figma",
-          status: "implementing",
-          createdAt: 1,
-          updatedAt: 1,
-        }}
-      />,
-    );
-
-    expect(html).toContain("Agents");
-    expect(html).toContain("Runtime control");
-    expect(html).not.toContain("Task workspace");
-  });
-
   test("renders approvals inside the shared shell drawer", async () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");

@@ -45,7 +45,7 @@ export function ReplyInputFooter({
             {activeTaskTitle}
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/55">No active task</span>
+          <span className="text-[10px] text-muted-foreground/55">Create a task first</span>
         )}
         {taskSessionWarning ? (
           <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-600">

@@ -36,6 +36,13 @@ describe("TaskHeader", () => {
     expect(html).toContain("amber");
   });
 
+  test("renders an edit-task button", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
+    );
+    expect(html).toContain("Edit task");
+  });
+
   test("does not render review badge when absent", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, {
