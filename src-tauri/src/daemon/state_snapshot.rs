@@ -130,12 +130,12 @@ impl DaemonState {
             lead_online,
             coder_online,
             lead_provider_session: if lead_online {
-                self.provider_connection(lead_agent)
+                self.task_provider_connection(task_id, lead_agent)
             } else {
                 None
             },
             coder_provider_session: if coder_online {
-                self.provider_connection(coder_agent)
+                self.task_provider_connection(task_id, coder_agent)
             } else {
                 None
             },

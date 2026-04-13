@@ -12,6 +12,7 @@ pub struct ClaudeTaskSlot {
     pub ready_tx: Option<oneshot::Sender<mpsc::Sender<String>>>,
     pub preview_buffer: String,
     pub preview_flush_scheduled: bool,
+    pub connection: Option<crate::daemon::types::ProviderConnectionState>,
 }
 
 impl ClaudeTaskSlot {
@@ -26,6 +27,7 @@ impl ClaudeTaskSlot {
             ready_tx: None,
             preview_buffer: String::new(),
             preview_flush_scheduled: false,
+            connection: None,
         }
     }
 

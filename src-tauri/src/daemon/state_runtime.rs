@@ -605,6 +605,20 @@ impl DaemonState {
         }
     }
 
+    /// Task-local provider connection from the task's own runtime slot.
+    pub fn task_provider_connection(
+        &self,
+        task_id: &str,
+        agent: &str,
+    ) -> Option<ProviderConnectionState> {
+        let rt = self.task_runtimes.get(task_id)?;
+        match agent {
+            "claude" => rt.claude_slot.as_ref()?.connection.clone(),
+            "codex" => rt.codex_slot.as_ref()?.connection.clone(),
+            _ => None,
+        }
+    }
+
     pub fn set_provider_connection(&mut self, agent: &str, connection: ProviderConnectionState) {
         match agent {
             "claude" => self.claude_connection = Some(connection),

@@ -136,6 +136,11 @@ pub async fn spawn_runtime(
     {
         let mut s = state.write().await;
         s.set_provider_connection("claude", provider_session.clone());
+        if let Some(rt) = s.task_runtimes.get_mut(task_id) {
+            if let Some(slot) = rt.claude_slot.as_mut() {
+                slot.connection = Some(provider_session.clone());
+            }
+        }
         s.claude_role = role_id.clone();
         s.clear_runtime_health();
     }
