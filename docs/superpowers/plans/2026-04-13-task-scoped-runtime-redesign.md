@@ -302,6 +302,20 @@ Rules:
 - `max_added_loc: 620`
 - `max_deleted_loc: 220`
 
+## Plan Revision 5 — 2026-04-13
+
+**Reason:** Task 3 changed `src-tauri/src/daemon/launch_task_sync.rs` to keep the Codex launch registration path compiling after `provider::codex::register_on_launch` switched to explicit `task_id`. That file is a direct part of the approved launch binding path and must be in Task 3 scope.
+
+**Added to Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/launch_task_sync.rs`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 15`
+- `max_added_loc: 620`
+- `max_deleted_loc: 220`
+
 ---
 
 ### Task 2: Move Claude runtime state into task-local slots
@@ -365,6 +379,7 @@ Rules:
 - `src-tauri/src/daemon/cmd.rs`
 - `src-tauri/src/commands.rs`
 - `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/launch_task_sync.rs`
 - `src-tauri/src/daemon/task_runtime.rs`
 - `src-tauri/src/daemon/state_runtime.rs`
 - `src-tauri/src/daemon/ports.rs`
@@ -377,7 +392,7 @@ Rules:
 - `src-tauri/src/daemon/provider/codex_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 
-**max_files_changed:** `14`
+**max_files_changed:** `15`
 **max_added_loc:** `620`
 **max_deleted_loc:** `220`
 
