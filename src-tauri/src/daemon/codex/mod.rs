@@ -21,7 +21,7 @@ pub struct CodexHandle {
     session_mgr: Arc<Mutex<crate::daemon::session_manager::SessionManager>>,
     session_id: String,
     cancel: CancellationToken,
-    port: u16,
+    pub port: u16,
 }
 
 pub struct StartOpts {

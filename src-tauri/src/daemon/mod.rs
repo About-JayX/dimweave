@@ -76,14 +76,37 @@ async fn apply_role(
     }
 }
 
-async fn stop_codex_session(
-    codex_handle: &mut Option<codex::CodexHandle>,
+async fn stop_codex_for_task(
+    codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
+    port_pool: &mut codex::port_pool::CodexPortPool,
+    task_id: &str,
     state: &SharedState,
     app: &AppHandle,
 ) {
-    if let Some(h) = codex_handle.take() {
+    if let Some(h) = codex_handles.remove(task_id) {
+        port_pool.release(h.port, task_id);
         h.stop().await;
     }
+    let tid = state.write().await.invalidate_codex_task_session(task_id);
+    if !state.read().await.is_codex_online() {
+        gui::emit_agent_status(app, "codex", false, None, None);
+    }
+    if let Some(tid) = tid {
+        emit_task_context_events(state, app, &tid).await;
+    }
+}
+
+async fn stop_all_codex_sessions(
+    codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
+    port_pool: &mut codex::port_pool::CodexPortPool,
+    state: &SharedState,
+    app: &AppHandle,
+) {
+    let task_ids: Vec<String> = codex_handles.keys().cloned().collect();
+    for tid in task_ids {
+        stop_codex_for_task(codex_handles, port_pool, &tid, state, app).await;
+    }
+    // Fallback: clear singleton state if no task handles remain
     let task_id = state.write().await.invalidate_codex_session();
     gui::emit_agent_status(app, "codex", false, None, None);
     if let Some(task_id) = task_id {
@@ -178,7 +201,8 @@ async fn attach_provider_history(
     external_id: String,
     cwd: String,
     role: crate::daemon::task_graph::types::SessionRole,
-    codex_handle: &mut Option<codex::CodexHandle>,
+    codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
+    codex_port_pool: &mut codex::port_pool::CodexPortPool,
     claude_sdk_handle: &mut Option<claude_sdk::ClaudeSdkHandle>,
     state: &SharedState,
     app: &AppHandle,
@@ -255,12 +279,12 @@ async fn attach_provider_history(
                     "role '{role_id}' already in use by online {conflict_agent}"
                 ));
             }
-            stop_codex_session(codex_handle, state, app).await;
             let attach_task_id = state.read().await.active_task_id.clone()
                 .ok_or_else(|| "no active task selected".to_string())?;
-            let pool = codex::port_pool::CodexPortPool::new(ports::PortConfig::from_env().codex);
-            let allocated_port = pool
-                .allocate(&state.read().await.codex_used_ports())
+            // Stop only this task's existing Codex session if any
+            stop_codex_for_task(codex_handles, codex_port_pool, &attach_task_id, state, app).await;
+            let allocated_port = codex_port_pool
+                .reserve(&attach_task_id)
                 .ok_or("no Codex port available in pool")?;
             let launch_epoch = {
                 let mut s = state.write().await;
@@ -281,7 +305,7 @@ async fn attach_provider_history(
             )
             .await
             .map_err(|err| err.to_string())?;
-            *codex_handle = Some(handle);
+            codex_handles.insert(attach_task_id.clone(), handle);
             {
                 let mut daemon = state.write().await;
                 crate::daemon::provider::codex::register_on_launch(
@@ -321,8 +345,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     feishu_project_lifecycle::hydrate_store(&state).await;
     let mut feishu_project_handle: Option<crate::feishu_project::runtime::FeishuProjectHandle> =
         feishu_project_lifecycle::auto_start(&state, &app).await;
-    let codex_port_pool = codex::port_pool::CodexPortPool::new(codex_port);
-    let mut codex_handle: Option<codex::CodexHandle> = None;
+    let mut codex_port_pool = codex::port_pool::CodexPortPool::new(codex_port);
+    let mut codex_handles: std::collections::HashMap<String, codex::CodexHandle> = std::collections::HashMap::new();
     let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> =
         telegram_lifecycle::auto_start(&state, &app).await;
@@ -340,12 +364,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 resume_thread_id,
                 reply,
             } => {
-                stop_codex_session(&mut codex_handle, &state, &app).await;
                 let resolved_task_id = if task_id.is_empty() {
                     state.read().await.active_task_id.clone().unwrap_or_default()
                 } else {
                     task_id
                 };
+                // Stop only this task's existing Codex session, not other tasks'
+                stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resolved_task_id, &state, &app).await;
                 if let Some(conflict_agent) = {
                     let daemon = state.read().await;
                     daemon.online_role_conflict("codex", &role_id)
@@ -360,9 +385,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(err));
                     continue;
                 }
-                let allocated_port = match codex_port_pool
-                    .allocate(&state.read().await.codex_used_ports())
-                {
+                let allocated_port = match codex_port_pool.reserve(&resolved_task_id) {
                     Some(p) => p,
                     None => {
                         gui::emit_system_log(
@@ -399,7 +422,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         .await
                         {
                             Ok(h) => {
-                                codex_handle = Some(h);
+                                codex_handles.insert(resolved_task_id.clone(), h);
                                 let task_id = {
                                     let mut daemon = state.write().await;
                                     launch_task_sync::sync_codex_launch_into_task(
@@ -416,6 +439,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 Ok(())
                             }
                             Err(e) => {
+                                codex_port_pool.release(allocated_port, &resolved_task_id);
                                 gui::emit_agent_status(&app, "codex", false, None, None);
                                 gui::emit_system_log(
                                     &app,
@@ -442,13 +466,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     .await
                     {
                         Ok(h) => {
-                            codex_handle = Some(h);
+                            codex_handles.insert(resolved_task_id.clone(), h);
                             if let Some(task_id) = state.read().await.active_task_id.clone() {
                                 emit_task_context_events(&state, &app, &task_id).await;
                             }
                             Ok(())
                         }
                         Err(e) => {
+                            codex_port_pool.release(allocated_port, &resolved_task_id);
                             gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,
@@ -461,7 +486,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 };
                 let _ = reply.send(launch_result);
             }
-            DaemonCmd::StopCodex => stop_codex_session(&mut codex_handle, &state, &app).await,
+            DaemonCmd::StopCodex => {
+                // StopCodex stops all Codex sessions (user-initiated global stop)
+                stop_all_codex_sessions(&mut codex_handles, &mut codex_port_pool, &state, &app).await;
+            }
             DaemonCmd::LaunchClaudeSdk {
                 task_id,
                 role_id,
@@ -532,7 +560,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 if let Some(mut h) = feishu_project_handle.take() {
                     h.stop().await;
                 }
-                stop_codex_session(&mut codex_handle, &state, &app).await;
+                stop_all_codex_sessions(&mut codex_handles, &mut codex_port_pool, &state, &app).await;
                 stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
                 let session_mgr = { state.read().await.session_mgr.clone() };
                 session_mgr.lock().await.cleanup_all();
@@ -703,11 +731,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         let target = crate::daemon::provider::codex::build_resume_target(&sess);
                         match target {
                             Ok(target) => {
-                                stop_codex_session(&mut codex_handle, &state, &app).await;
                                 let resume_task_id = sess.task_id.clone();
-                                let pool = codex::port_pool::CodexPortPool::new(codex_port);
-                                let alloc = pool
-                                    .allocate(&state.read().await.codex_used_ports())
+                                stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resume_task_id, &state, &app).await;
+                                let alloc = codex_port_pool
+                                    .reserve(&resume_task_id)
                                     .ok_or_else(|| "no Codex port available".to_string());
                                 match alloc {
                                     Err(e) => Err(e),
@@ -724,7 +751,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 .to_string();
                                 match codex::resume(
                                     codex::ResumeOpts {
-                                        task_id: resume_task_id,
+                                        task_id: resume_task_id.clone(),
                                         role_id,
                                         cwd: target.cwd,
                                         thread_id: target.external_id,
@@ -737,10 +764,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 .await
                                 {
                                     Ok(handle) => {
-                                        codex_handle = Some(handle);
+                                        codex_handles.insert(resume_task_id, handle);
                                         state.write().await.resume_session(&session_id)
                                     }
-                                    Err(err) => Err(err.to_string()),
+                                    Err(err) => {
+                                        codex_port_pool.release(allocated_port, &sess.task_id);
+                                        Err(err.to_string())
+                                    }
                                 }
                                     }
                                 }
@@ -825,7 +855,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     external_id,
                     cwd,
                     role,
-                    &mut codex_handle,
+                    &mut codex_handles,
+                    &mut codex_port_pool,
                     &mut claude_sdk_handle,
                     &state,
                     &app,
