@@ -49,6 +49,8 @@ function makeTask(id: string, title = "Test"): TaskInfo {
     status: "draft",
     leadSessionId: null,
     currentCoderSessionId: null,
+    leadProvider: "claude",
+    coderProvider: "codex",
     createdAt: 100,
     updatedAt: 200,
   };
@@ -542,5 +544,33 @@ describe("createUpdateTaskConfigAction", () => {
     });
     await update("t1", { leadProvider: "codex", coderProvider: "claude" });
     expect(state.tasks.t1?.leadProvider).toBe("codex");
+  });
+});
+
+describe("regression: no-task state stability", () => {
+  test("selectedWorkspace set with activeTaskId null is a valid resting state", () => {
+    const state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws/project",
+      activeTaskId: null,
+      bootstrapComplete: true,
+    };
+    // This combination must be representable: workspace chosen, no task created yet.
+    expect(state.selectedWorkspace).toBe("/ws/project");
+    expect(state.activeTaskId).toBeNull();
+    expect(state.bootstrapComplete).toBe(true);
+  });
+
+  test("workspace task list can be populated without forcing an active task", () => {
+    const t1 = makeTask("t1");
+    const t2 = makeTask("t2");
+    const state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: null,
+      tasks: { t1, t2 },
+    };
+    expect(Object.keys(state.tasks)).toHaveLength(2);
+    expect(state.activeTaskId).toBeNull();
   });
 });

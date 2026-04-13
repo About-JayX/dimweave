@@ -65,4 +65,24 @@ describe("ErrorBoundary", () => {
     // terminalLines should NOT grow from this
     expect(after.terminalLines.length).toBe(before);
   });
+
+  test("regression: persistent errors stay in fallback, no auto-retry loop", async () => {
+    const { ErrorBoundary } = await import("./ErrorBoundary");
+    // getDerivedStateFromError is called by React before componentDidCatch
+    expect(ErrorBoundary.getDerivedStateFromError()).toEqual({ hasError: true });
+    const instance = new ErrorBoundary({ children: <div>Child</div> });
+    // Simulate React's error lifecycle: getDerivedStateFromError sets state first
+    instance.state = ErrorBoundary.getDerivedStateFromError();
+    // Then componentDidCatch runs — repeated calls must not clear the error state
+    for (let i = 0; i < 3; i++) {
+      instance.componentDidCatch(new Error(`crash ${i}`), {
+        componentStack: "\n    at Broken",
+      } as any);
+    }
+    // State must remain in error — no requestAnimationFrame auto-reset
+    expect(instance.state.hasError).toBe(true);
+    const html = renderToStaticMarkup(instance.render() as React.ReactElement);
+    expect(html).toContain("Retry");
+    expect(html).not.toContain("Child");
+  });
 });
