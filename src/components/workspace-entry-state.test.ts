@@ -45,18 +45,25 @@ describe("loadRecentWorkspaces", () => {
 });
 
 describe("continueIntoSelectedWorkspace", () => {
-  test("still starts a fresh task when the selected workspace matches the current one", async () => {
-    const started: string[] = [];
+  test("sets the selected workspace without creating a task", () => {
+    const workspacesSet: string[] = [];
 
-    const nextRecent = await continueIntoSelectedWorkspace({
+    const nextRecent = continueIntoSelectedWorkspace({
       selected: recent("/repo-a"),
       recentWorkspaces: ["/repo-b"],
-      startWorkspaceTask: async (workspace) => {
-        started.push(workspace);
-      },
+      setSelectedWorkspace: (ws) => { workspacesSet.push(ws); },
     });
 
-    expect(started).toEqual(["/repo-a"]);
+    expect(workspacesSet).toEqual(["/repo-a"]);
     expect(nextRecent).toEqual(["/repo-a", "/repo-b"]);
+  });
+
+  test("returns null when no workspace is selected", () => {
+    const result = continueIntoSelectedWorkspace({
+      selected: null,
+      recentWorkspaces: [],
+      setSelectedWorkspace: () => {},
+    });
+    expect(result).toBeNull();
   });
 });

@@ -2,20 +2,17 @@ export type WorkspaceCandidate =
   | { type: "picked"; path: string }
   | { type: "recent"; path: string };
 
-export async function continueIntoSelectedWorkspace({
+export function continueIntoSelectedWorkspace({
   selected,
   recentWorkspaces,
-  startWorkspaceTask,
+  setSelectedWorkspace,
 }: {
   selected: WorkspaceCandidate | null;
   recentWorkspaces: string[];
-  startWorkspaceTask: (workspace: string) => Promise<void>;
-}): Promise<string[] | null> {
-  if (!selected) {
-    return null;
-  }
-
-  await startWorkspaceTask(selected.path);
+  setSelectedWorkspace: (workspace: string) => void;
+}): string[] | null {
+  if (!selected) return null;
+  setSelectedWorkspace(selected.path);
   return pushRecentWorkspace(recentWorkspaces, selected.path);
 }
 

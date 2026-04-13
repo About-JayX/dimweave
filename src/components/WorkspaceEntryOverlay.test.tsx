@@ -24,8 +24,8 @@ describe("WorkspaceEntryOverlay", () => {
       />,
     );
 
-    expect(html).toContain("Choose a task workspace");
-    expect(html).toContain("dedicated task context");
+    expect(html).toContain("Choose a workspace");
+    expect(html).toContain("Select a project directory");
     expect(html).toContain("Choose folder...");
     expect(html).toContain("Continue");
     expect(html).toContain("disabled");

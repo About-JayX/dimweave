@@ -26,6 +26,7 @@ type TaskSnapshot = {
 type TaskSetter = (
   fn: (state: {
     activeTaskId: string | null;
+    selectedWorkspace: string | null;
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
@@ -37,6 +38,7 @@ type TaskSetter = (
     bootstrapError: string | null;
   }) => Partial<{
     activeTaskId: string | null;
+    selectedWorkspace: string | null;
     tasks: Record<string, TaskInfo>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
@@ -54,6 +56,7 @@ export function snapshotToPatch(snap: TaskSnapshot) {
     snap.providerSummary ? { [snap.task.taskId]: snap.providerSummary } : {};
   return {
     activeTaskId: snap.task.taskId,
+    selectedWorkspace: snap.task.workspaceRoot,
     tasks: { [snap.task.taskId]: snap.task },
     sessions: { [snap.task.taskId]: snap.sessions },
     artifacts: { [snap.task.taskId]: snap.artifacts },
@@ -196,6 +199,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
 
   return {
     activeTaskId: null,
+    selectedWorkspace: null,
     tasks: {},
     replyTargets: {},
     sessions: {},
@@ -207,6 +211,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     bootstrapComplete: false,
     bootstrapError: null,
     lastSave: null,
+
+    setSelectedWorkspace: (workspace) => set(() => ({ selectedWorkspace: workspace })),
 
     createTask: async (workspace, title) => {
       const task = await invoke<TaskInfo>("daemon_create_task", {

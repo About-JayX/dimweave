@@ -47,11 +47,14 @@ export default function App() {
     string | null
   >(null);
   const activeTask = useTaskStore(selectActiveTask);
+  const storeSelectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
+  const storeSetSelectedWorkspace = useTaskStore((s) => s.setSelectedWorkspace);
   const bootstrapComplete = useTaskStore((s) => s.bootstrapComplete);
   const bootstrapError = useTaskStore((s) => s.bootstrapError);
-  const startWorkspaceTask = useTaskStore((s) => s.startWorkspaceTask);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
-  const workspaceLabel = resolveShellWorkspaceLabel(activeTask?.workspaceRoot);
+  const workspaceLabel = resolveShellWorkspaceLabel(
+    activeTask?.workspaceRoot ?? storeSelectedWorkspace,
+  );
 
   const messages = useBridgeStore(selectMessages);
   const approvalCount = useBridgeStore(selectPermissionPromptCount);
@@ -87,14 +90,6 @@ export default function App() {
     setRecentWorkspacesLoaded(true);
   }, [bootstrapComplete, recentWorkspacesLoaded]);
 
-  useEffect(() => {
-    if (!activeTask) {
-      return;
-    }
-    setSelectedWorkspace(null);
-    setWorkspaceActionError(null);
-  }, [activeTask]);
-
   const handleChooseWorkspace = useCallback(async () => {
     setWorkspaceActionError(null);
     const picked = await pickDirectory();
@@ -116,30 +111,22 @@ export default function App() {
     [],
   );
 
-  const handleContinueIntoWorkspace = useCallback(async () => {
+  const handleContinueIntoWorkspace = useCallback(() => {
+    setWorkspaceActionError(null);
+    const nextRecent = continueIntoSelectedWorkspace({
+      selected: selectedWorkspace,
+      recentWorkspaces,
+      setSelectedWorkspace: storeSetSelectedWorkspace,
+    });
+    if (!nextRecent) return;
+    setRecentWorkspaces(nextRecent);
     try {
-      setWorkspaceActionError(null);
-      const nextRecent = await continueIntoSelectedWorkspace({
-        selected: selectedWorkspace,
-        recentWorkspaces,
-        startWorkspaceTask,
-      });
-      if (!nextRecent) {
-        return;
-      }
-      setRecentWorkspaces(nextRecent);
-      try {
-        localStorage.setItem(
-          RECENT_WORKSPACES_STORAGE_KEY,
-          JSON.stringify(nextRecent),
-        );
-      } catch {}
-    } catch (error) {
-      setWorkspaceActionError(
-        error instanceof Error ? error.message : String(error),
+      localStorage.setItem(
+        RECENT_WORKSPACES_STORAGE_KEY,
+        JSON.stringify(nextRecent),
       );
-    }
-  }, [recentWorkspaces, selectedWorkspace, startWorkspaceTask]);
+    } catch {}
+  }, [recentWorkspaces, selectedWorkspace, storeSetSelectedWorkspace]);
 
   if (bootstrapError) {
     return <AppBootstrapGate status="error" message={bootstrapError} />;
@@ -197,8 +184,7 @@ export default function App() {
           {shellLayout.mainSurface === "chat" && <ReplyInput />}
         </main>
       </div>
-      {!activeTask && (
-        // Launch always re-enters through explicit workspace selection.
+      {!storeSelectedWorkspace && (
         <WorkspaceEntryOverlay
           selected={selectedWorkspace}
           recentWorkspaces={recentWorkspaces}

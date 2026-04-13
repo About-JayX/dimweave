@@ -23,15 +23,18 @@ import type {
 function emptyState(): TaskStoreData {
   return {
     activeTaskId: null,
+    selectedWorkspace: null,
     tasks: {},
     replyTargets: {},
     sessions: {},
     artifacts: {},
+    providerSummaries: {},
     providerHistory: {},
     providerHistoryLoading: {},
     providerHistoryError: {},
     bootstrapComplete: false,
     bootstrapError: null,
+    lastSave: null,
   };
 }
 
@@ -265,6 +268,39 @@ describe("bootstrapTaskStore", () => {
     ]);
     expect(hydrationPatch?.tasks?.t1?.title).toBe("Hydrated");
     expect(hydrationPatch?.sessions?.t1?.[0]?.sessionId).toBe("s1");
+  });
+
+  test("sets selectedWorkspace from snapshot task workspace", async () => {
+    const task = { ...makeTask("t1"), workspaceRoot: "/ws/repo" };
+    const calls: Partial<TaskStoreData>[] = [];
+
+    await bootstrapTaskStore(
+      (fn) => { calls.push(fn(emptyState())); },
+      async (cmd) => {
+        if (cmd === "daemon_clear_active_task") return undefined as never;
+        return { task, sessions: [], artifacts: [] };
+      },
+      async () => [() => {}],
+    );
+
+    const hydration = calls.find((p) => p.activeTaskId === "t1");
+    expect(hydration?.selectedWorkspace).toBe("/ws/repo");
+  });
+
+  test("leaves selectedWorkspace null when no snapshot", async () => {
+    const calls: Partial<TaskStoreData>[] = [];
+
+    await bootstrapTaskStore(
+      (fn) => { calls.push(fn(emptyState())); },
+      async (cmd) => {
+        if (cmd === "daemon_get_task_snapshot") return null;
+        return undefined as never;
+      },
+      async () => [() => {}],
+    );
+
+    const wsPatches = calls.filter((p) => p.selectedWorkspace !== undefined);
+    expect(wsPatches.every((p) => p.selectedWorkspace === null)).toBe(true);
   });
 
   test("clears active task before hydrating snapshot", async () => {

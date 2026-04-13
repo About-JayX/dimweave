@@ -33,10 +33,10 @@ export function WorkspaceEntryOverlay({
           Dimweave
         </div>
         <h1 className="mt-5 text-center text-3xl font-semibold">
-          Choose a task workspace
+          Choose a workspace
         </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Select a project directory to create a dedicated task context.
+          Select a project directory.
         </p>
 
         <div className="mt-8 space-y-3">

@@ -116,6 +116,7 @@ export interface SaveStatus {
 
 export interface TaskStoreData {
   activeTaskId: string | null;
+  selectedWorkspace: string | null;
   tasks: Record<string, TaskInfo>;
   replyTargets: Record<string, ReplyTarget>;
   sessions: Record<string, SessionInfo[]>;
@@ -130,6 +131,7 @@ export interface TaskStoreData {
 }
 
 export interface TaskStoreState extends TaskStoreData {
+  setSelectedWorkspace: (workspace: string | null) => void;
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
