@@ -96,6 +96,20 @@ fn update_task_providers_returns_false_for_missing() {
     assert!(!store.update_task_providers("nonexistent", Provider::Claude, Provider::Codex));
 }
 
+#[test]
+fn create_task_empty_title_defaults_to_task_id() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "");
+    assert_eq!(task.title, task.task_id);
+}
+
+#[test]
+fn create_task_with_config_empty_title_defaults_to_task_id() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task_with_config("/ws", "", Provider::Claude, Provider::Codex);
+    assert_eq!(task.title, task.task_id);
+}
+
 // ── Session CRUD ────────────────────────────────────────────
 
 #[test]

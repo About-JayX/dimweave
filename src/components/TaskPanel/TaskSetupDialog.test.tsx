@@ -37,7 +37,7 @@ Object.assign(globalThis, {
 });
 
 describe("TaskSetupDialog", () => {
-  test("renders create-mode dialog with provider selectors", async () => {
+  test("renders create-mode dialog with provider selectors and agent panels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
@@ -53,6 +53,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Coder provider");
     expect(html).toContain("Create");
     expect(html).not.toContain("Title");
+    expect(html).toContain("Runtime control");
   });
 
   test("renders edit-mode dialog with agent configuration panels", async () => {

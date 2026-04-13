@@ -105,7 +105,7 @@ export function TaskSetupDialog({
         </button>
       </div>
 
-      {mode === "edit" && <AgentStatusPanel />}
+      <AgentStatusPanel />
     </div>
   );
 }

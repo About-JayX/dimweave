@@ -33,12 +33,15 @@ impl TaskGraphStore {
     }
 
     /// Create a new task in Draft status.
+    /// If `title` is empty, the generated `task_id` is used as the title.
     pub fn create_task(&mut self, workspace_root: &str, title: &str) -> Task {
         let now = chrono::Utc::now().timestamp_millis() as u64;
+        let task_id = self.next_id_str("task");
+        let effective_title = if title.is_empty() { task_id.clone() } else { title.to_string() };
         let task = Task {
-            task_id: self.next_id_str("task"),
+            task_id,
             workspace_root: workspace_root.to_string(),
-            title: title.to_string(),
+            title: effective_title,
             status: TaskStatus::Draft,
             lead_session_id: None,
             current_coder_session_id: None,
@@ -52,6 +55,7 @@ impl TaskGraphStore {
     }
 
     /// Create a new task with explicit provider bindings.
+    /// If `title` is empty, the generated `task_id` is used as the title.
     pub fn create_task_with_config(
         &mut self,
         workspace_root: &str,
@@ -60,10 +64,12 @@ impl TaskGraphStore {
         coder_provider: Provider,
     ) -> Task {
         let now = chrono::Utc::now().timestamp_millis() as u64;
+        let task_id = self.next_id_str("task");
+        let effective_title = if title.is_empty() { task_id.clone() } else { title.to_string() };
         let task = Task {
-            task_id: self.next_id_str("task"),
+            task_id,
             workspace_root: workspace_root.to_string(),
-            title: title.to_string(),
+            title: effective_title,
             status: TaskStatus::Draft,
             lead_session_id: None,
             current_coder_session_id: None,
