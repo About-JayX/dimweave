@@ -60,8 +60,7 @@ const DEFAULT_BINDINGS: TaskProviderBindings = {
   coderOnline: false,
 };
 
-// Memoization cache for selectActiveTaskProviderBindings — prevents
-// Zustand snapshot equality check from triggering infinite re-renders.
+// Memoization cache — stable reference prevents Zustand infinite re-renders.
 let _prevTaskId: string | null = null;
 let _prevTask: TaskInfo | null | undefined = undefined;
 let _prevSummary: TaskProviderSummary | undefined = undefined;

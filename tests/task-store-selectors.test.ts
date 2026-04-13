@@ -2,112 +2,64 @@ import { describe, expect, test } from "bun:test";
 import { selectActiveTaskProviderBindings } from "../src/stores/task-store/selectors";
 import type { TaskStoreState } from "../src/stores/task-store/types";
 
-function makeState(overrides: Partial<TaskStoreState> = {}): TaskStoreState {
-  return {
-    activeTaskId: null,
-    tasks: {},
-    replyTargets: {},
-    sessions: {},
-    artifacts: {},
-    providerSummaries: {},
-    providerHistory: {},
-    providerHistoryLoading: {},
-    providerHistoryError: {},
-    bootstrapComplete: false,
-    bootstrapError: null,
-    lastSave: null,
-    createTask: async () => ({}) as any,
-    startWorkspaceTask: async () => ({}) as any,
-    selectTask: async () => {},
-    setReplyTarget: () => {},
-    fetchSnapshot: async () => {},
-    fetchProviderHistory: async () => {},
-    resumeSession: async () => {},
-    attachProviderHistory: async () => {},
-    cleanup: () => {},
-    ...overrides,
-  };
+const NOOP = () => {};
+const NOOP_ASYNC = async () => ({}) as any;
+const STUB_ACTIONS = {
+  createTask: NOOP_ASYNC, startWorkspaceTask: NOOP_ASYNC,
+  selectTask: NOOP_ASYNC, setReplyTarget: NOOP, fetchSnapshot: NOOP_ASYNC,
+  fetchProviderHistory: NOOP_ASYNC, resumeSession: NOOP_ASYNC,
+  attachProviderHistory: NOOP_ASYNC, cleanup: NOOP,
+} as unknown as Pick<TaskStoreState, "createTask" | "startWorkspaceTask" | "selectTask" | "setReplyTarget" | "fetchSnapshot" | "fetchProviderHistory" | "resumeSession" | "attachProviderHistory" | "cleanup">;
+
+const EMPTY_DATA = {
+  activeTaskId: null, tasks: {}, replyTargets: {}, sessions: {},
+  artifacts: {}, providerSummaries: {}, providerHistory: {},
+  providerHistoryLoading: {}, providerHistoryError: {},
+  bootstrapComplete: false, bootstrapError: null, lastSave: null,
+};
+
+function makeState(o: Partial<TaskStoreState> = {}): TaskStoreState {
+  return { ...EMPTY_DATA, ...STUB_ACTIONS, ...o } as TaskStoreState;
 }
+
+const TASK_T1 = {
+  taskId: "t1", workspaceRoot: "/ws", title: "Task",
+  status: "implementing" as const, leadProvider: "claude" as const,
+  coderProvider: "codex" as const, createdAt: 0, updatedAt: 0,
+};
+const SUMMARY_T1 = {
+  taskId: "t1", leadProvider: "claude", coderProvider: "codex",
+  leadOnline: false, coderOnline: false,
+};
 
 describe("selectActiveTaskProviderBindings", () => {
   test("returns stable reference for unchanged state", () => {
-    const state = makeState({
-      activeTaskId: "t1",
-      tasks: {
-        t1: {
-          taskId: "t1",
-          workspaceRoot: "/ws",
-          title: "Task",
-          status: "implementing",
-          leadProvider: "claude",
-          coderProvider: "codex",
-          createdAt: 0,
-          updatedAt: 0,
-        },
-      },
-      providerSummaries: {
-        t1: {
-          taskId: "t1",
-          leadProvider: "claude",
-          coderProvider: "codex",
-          leadOnline: true,
-          coderOnline: false,
-        },
-      },
+    const s = makeState({
+      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      providerSummaries: { t1: { ...SUMMARY_T1, leadOnline: true } },
     });
-
-    const a = selectActiveTaskProviderBindings(state);
-    const b = selectActiveTaskProviderBindings(state);
-    expect(a).toBe(b); // strict reference equality
+    expect(selectActiveTaskProviderBindings(s)).toBe(selectActiveTaskProviderBindings(s));
   });
 
   test("returns DEFAULT_BINDINGS for no active task", () => {
-    const state = makeState();
-    const a = selectActiveTaskProviderBindings(state);
-    const b = selectActiveTaskProviderBindings(state);
-    expect(a).toBe(b);
-    expect(a.leadProvider).toBe("claude");
-    expect(a.coderProvider).toBe("codex");
+    const s = makeState();
+    const a = selectActiveTaskProviderBindings(s);
+    expect(selectActiveTaskProviderBindings(s)).toBe(a);
     expect(a.leadOnline).toBe(false);
     expect(a.coderOnline).toBe(false);
   });
 
   test("updates when provider summary changes", () => {
-    const task = {
-      taskId: "t1",
-      workspaceRoot: "/ws",
-      title: "Task",
-      status: "implementing" as const,
-      leadProvider: "claude" as const,
-      coderProvider: "codex" as const,
-      createdAt: 0,
-      updatedAt: 0,
-    };
-    const summary1 = {
-      taskId: "t1",
-      leadProvider: "claude",
-      coderProvider: "codex",
-      leadOnline: false,
-      coderOnline: false,
-    };
-    const summary2 = {
-      ...summary1,
-      leadOnline: true,
-    };
-
-    const state1 = makeState({
-      activeTaskId: "t1",
-      tasks: { t1: task },
-      providerSummaries: { t1: summary1 },
+    const s1 = makeState({
+      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      providerSummaries: { t1: SUMMARY_T1 },
     });
-    const state2 = makeState({
-      activeTaskId: "t1",
-      tasks: { t1: task },
-      providerSummaries: { t1: summary2 },
+    const s2 = makeState({
+      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      providerSummaries: { t1: { ...SUMMARY_T1, leadOnline: true } },
     });
-
-    const a = selectActiveTaskProviderBindings(state1);
-    const b = selectActiveTaskProviderBindings(state2);
+    const a = selectActiveTaskProviderBindings(s1);
+    const b = selectActiveTaskProviderBindings(s2);
     expect(a).not.toBe(b);
     expect(a.leadOnline).toBe(false);
     expect(b.leadOnline).toBe(true);
