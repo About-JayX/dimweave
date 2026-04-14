@@ -393,53 +393,63 @@ fn session_serialization_round_trip() {
     assert_eq!(de.provider, Provider::Claude);
 }
 
-// ── Persistence round-trip ─────────────────────────────────
+// ── SQLite persistence round-trip ─────────────────────────
 
 use std::path::PathBuf;
 
-fn tmp_persist_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("dimweave_test_{name}_{}.json", std::process::id()))
+fn tmp_db_path(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("dimweave_test_{name}_{}.db", std::process::id()))
 }
 
 struct CleanupFile(PathBuf);
 impl Drop for CleanupFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+        // WAL/SHM files
+        let _ = std::fs::remove_file(self.0.with_extension("db-wal"));
+        let _ = std::fs::remove_file(self.0.with_extension("db-shm"));
     }
 }
 
 #[test]
 fn persist_save_and_load_round_trip() {
-    let path = tmp_persist_path("round_trip");
+    let path = tmp_db_path("round_trip");
     let _cleanup = CleanupFile(path.clone());
 
-    let mut store = TaskGraphStore::with_persist_path(path.clone());
-    let task = store.create_task("/ws", "Persist Me");
-    let tid = task.task_id.clone();
-    let sess = store.create_session(CreateSessionParams {
-        task_id: &tid,
-        parent_session_id: None,
-        provider: Provider::Codex,
-        role: SessionRole::Coder,
-        cwd: "/ws",
-        title: "Coder S",
-        agent_id: None,
-    });
-    let sid = sess.session_id.clone();
-    let art = store.add_artifact(CreateArtifactParams {
-        task_id: &tid,
-        session_id: &sid,
-        kind: ArtifactKind::Plan,
-        title: "Plan v1",
-        content_ref: "plan.md",
-    });
-    let aid = art.artifact_id.clone();
-    store.save().expect("save should succeed");
+    let tid;
+    let sid;
+    let aid;
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        let task = store.create_task("/ws", "Persist Me");
+        tid = task.task_id.clone();
+        let sess = store.create_session(CreateSessionParams {
+            task_id: &tid,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder S",
+            agent_id: None,
+        });
+        sid = sess.session_id.clone();
+        let art = store.add_artifact(CreateArtifactParams {
+            task_id: &tid,
+            session_id: &sid,
+            kind: ArtifactKind::Plan,
+            title: "Plan v1",
+            content_ref: "plan.md",
+        });
+        aid = art.artifact_id.clone();
+        store.save().expect("save should succeed");
+    }
 
-    // Load into a fresh store from the same path
-    let loaded = TaskGraphStore::load(&path).expect("load should succeed");
+    // Re-open the database into a fresh store
+    let loaded = TaskGraphStore::open(&path).expect("reopen should succeed");
     let t = loaded.get_task(&tid).expect("task should exist");
     assert_eq!(t.title, "Persist Me");
+    assert_eq!(t.project_root, "/ws");
+    assert_eq!(t.workspace_root, "/ws");
     let s = loaded.get_session(&sid).expect("session should exist");
     assert_eq!(s.provider, Provider::Codex);
     let a = loaded.get_artifact(&aid).expect("artifact should exist");
@@ -447,68 +457,112 @@ fn persist_save_and_load_round_trip() {
 }
 
 #[test]
-fn persist_load_missing_file_returns_empty_store() {
-    let path = tmp_persist_path("missing");
+fn persist_open_missing_file_creates_empty_store() {
+    let path = tmp_db_path("missing");
     let _ = std::fs::remove_file(&path); // ensure absent
-    let store = TaskGraphStore::load(&path).expect("load missing should succeed");
+    let _cleanup = CleanupFile(path.clone());
+    let store = TaskGraphStore::open(&path).expect("open missing should succeed");
     assert_eq!(store.list_tasks().len(), 0);
 }
 
 #[test]
 fn persist_preserves_next_id_counter() {
-    let path = tmp_persist_path("next_id");
+    let path = tmp_db_path("next_id");
     let _cleanup = CleanupFile(path.clone());
 
-    let mut store = TaskGraphStore::with_persist_path(path.clone());
-    store.create_task("/ws", "T1");
-    store.create_task("/ws", "T2");
-    store.save().unwrap();
+    let existing_ids: Vec<String>;
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        store.create_task("/ws", "T1");
+        store.create_task("/ws", "T2");
+        existing_ids = store.list_tasks().iter().map(|t| t.task_id.clone()).collect();
+        store.save().unwrap();
+    }
 
-    let mut loaded = TaskGraphStore::load(&path).unwrap();
+    let mut loaded = TaskGraphStore::open(&path).unwrap();
     let t3 = loaded.create_task("/ws", "T3");
-    // next_id must not collide with existing IDs
-    assert_ne!(t3.task_id, store.list_tasks()[0].task_id);
-    assert_ne!(t3.task_id, store.list_tasks()[1].task_id);
+    assert!(!existing_ids.contains(&t3.task_id));
 }
 
 #[test]
 fn persist_parent_child_relationship_survives() {
-    let path = tmp_persist_path("parent_child");
+    let path = tmp_db_path("parent_child");
     let _cleanup = CleanupFile(path.clone());
 
-    let mut store = TaskGraphStore::with_persist_path(path.clone());
-    let task = store.create_task("/ws", "T1");
-    let lead = store.create_session(CreateSessionParams {
-        task_id: &task.task_id,
-        parent_session_id: None,
-        provider: Provider::Claude,
-        role: SessionRole::Lead,
-        cwd: "/ws",
-        title: "Lead",
-        agent_id: None,
-    });
-    let lid = lead.session_id.clone();
-    store.create_session(CreateSessionParams {
-        task_id: &task.task_id,
-        parent_session_id: Some(&lid),
-        provider: Provider::Codex,
-        role: SessionRole::Coder,
-        cwd: "/ws",
-        title: "Coder",
-        agent_id: None,
-    });
-    store.save().unwrap();
+    let tid;
+    let lid;
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        let task = store.create_task("/ws", "T1");
+        tid = task.task_id.clone();
+        let lead = store.create_session(CreateSessionParams {
+            task_id: &tid,
+            parent_session_id: None,
+            provider: Provider::Claude,
+            role: SessionRole::Lead,
+            cwd: "/ws",
+            title: "Lead",
+            agent_id: None,
+        });
+        lid = lead.session_id.clone();
+        store.create_session(CreateSessionParams {
+            task_id: &tid,
+            parent_session_id: Some(&lid),
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder",
+            agent_id: None,
+        });
+        store.save().unwrap();
+    }
 
-    let loaded = TaskGraphStore::load(&path).unwrap();
+    let loaded = TaskGraphStore::open(&path).unwrap();
     assert_eq!(loaded.children_of_session(&lid).len(), 1);
-    assert_eq!(loaded.sessions_for_task(&task.task_id).len(), 2);
+    assert_eq!(loaded.sessions_for_task(&tid).len(), 2);
 }
 
 #[test]
-fn persist_no_path_save_is_noop() {
-    let store = TaskGraphStore::new(); // no persist_path
-                                       // save on in-memory-only store should succeed (no-op)
+fn persist_no_db_save_is_noop() {
+    let store = TaskGraphStore::new(); // no db
     store.save().expect("noop save should succeed");
+}
+
+#[test]
+fn persist_project_root_and_workspace_root_are_independent() {
+    let path = tmp_db_path("root_split");
+    let _cleanup = CleanupFile(path.clone());
+
+    let tid;
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        let task = store.create_task("/project", "Split");
+        tid = task.task_id.clone();
+        assert_eq!(task.project_root, "/project");
+        assert_eq!(task.workspace_root, "/project");
+        store.update_workspace_root(&tid, "/project/.worktrees/feat-x");
+        store.save().unwrap();
+    }
+
+    let loaded = TaskGraphStore::open(&path).unwrap();
+    let t = loaded.get_task(&tid).unwrap();
+    assert_eq!(t.project_root, "/project");
+    assert_eq!(t.workspace_root, "/project/.worktrees/feat-x");
+}
+
+#[test]
+fn persist_tasks_for_workspace_uses_project_root() {
+    let mut store = TaskGraphStore::new();
+    let t1 = store.create_task("/project", "T1");
+    store.update_workspace_root(&t1.task_id, "/project/.worktrees/a");
+    let _t2 = store.create_task("/project", "T2");
+    let _t3 = store.create_task("/other", "T3");
+    // Both t1 and t2 have project_root="/project" so they should appear
+    let ws_tasks = store.tasks_for_workspace("/project");
+    assert_eq!(ws_tasks.len(), 2);
+    // t3 belongs to a different project
+    let other_tasks = store.tasks_for_workspace("/other");
+    assert_eq!(other_tasks.len(), 1);
 }
 
 #[test]
@@ -856,17 +910,17 @@ fn update_task_agent_clears_display_name() {
 
 #[test]
 fn persist_task_agents_round_trip() {
-    let path = tmp_persist_path("agents_roundtrip");
+    let path = tmp_db_path("agents_roundtrip");
     let _cleanup = CleanupFile(path.clone());
     {
-        let mut store = TaskGraphStore::with_persist_path(path.clone());
+        let mut store = TaskGraphStore::open(&path).unwrap();
         let task = store.create_task("/ws", "Persist Agents");
         store.add_task_agent(&task.task_id, Provider::Claude, "lead");
         store.add_task_agent(&task.task_id, Provider::Codex, "coder");
         store.save().unwrap();
     }
     {
-        let store = TaskGraphStore::load(&path).unwrap();
+        let store = TaskGraphStore::open(&path).unwrap();
         let tasks = store.list_tasks();
         assert_eq!(tasks.len(), 1);
         let agents = store.agents_for_task(&tasks[0].task_id);
@@ -876,12 +930,16 @@ fn persist_task_agents_round_trip() {
 
 #[test]
 fn persist_migration_runs_on_old_format_load() {
-    let path = tmp_persist_path("migration_on_load");
+    let path = tmp_db_path("migration_on_load");
     let _cleanup = CleanupFile(path.clone());
-    // Write an old-format snapshot with sessions (occupancy evidence)
+    let task_id;
+    // Write a store with sessions (occupancy evidence)
     {
-        let mut store = TaskGraphStore::with_persist_path(path.clone());
-        let task = store.create_task_with_config("/ws", "OldFormat", Provider::Codex, Provider::Claude);
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        let task = store.create_task_with_config(
+            "/ws", "OldFormat", Provider::Codex, Provider::Claude,
+        );
+        task_id = task.task_id.clone();
         let lead_sess = store.create_session(CreateSessionParams {
             task_id: &task.task_id,
             parent_session_id: None,
@@ -889,8 +947,8 @@ fn persist_migration_runs_on_old_format_load() {
             role: SessionRole::Lead,
             cwd: "/ws",
             title: "Lead",
-        agent_id: None,
-    });
+            agent_id: None,
+        });
         store.set_lead_session(&task.task_id, &lead_sess.session_id);
         let coder_sess = store.create_session(CreateSessionParams {
             task_id: &task.task_id,
@@ -899,23 +957,20 @@ fn persist_migration_runs_on_old_format_load() {
             role: SessionRole::Coder,
             cwd: "/ws",
             title: "Coder",
-        agent_id: None,
-    });
+            agent_id: None,
+        });
         store.set_coder_session(&task.task_id, &coder_sess.session_id);
         store.save().unwrap();
     }
-    // Remove agents by saving raw JSON without the field
+    // Remove agents from SQLite to simulate old format without agents
     {
-        let data = std::fs::read_to_string(&path).unwrap();
-        let mut val: serde_json::Value = serde_json::from_str(&data).unwrap();
-        val.as_object_mut().unwrap().remove("task_agents");
-        std::fs::write(&path, serde_json::to_string_pretty(&val).unwrap()).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute("DELETE FROM task_agents", []).unwrap();
     }
-    // Load should trigger migration using session evidence
+    // Reopen — open() triggers migrate_legacy_agents via session evidence
     {
-        let store = TaskGraphStore::load(&path).unwrap();
-        let tasks = store.list_tasks();
-        let agents = store.agents_for_task(&tasks[0].task_id);
+        let store = TaskGraphStore::open(&path).unwrap();
+        let agents = store.agents_for_task(&task_id);
         assert_eq!(agents.len(), 2);
         let lead = agents.iter().find(|a| a.role == "lead").unwrap();
         assert_eq!(lead.provider, Provider::Codex);

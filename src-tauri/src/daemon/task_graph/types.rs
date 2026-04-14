@@ -49,6 +49,14 @@ pub enum ArtifactKind {
 #[serde(rename_all = "camelCase")]
 pub struct Task {
     pub task_id: String,
+    /// The immutable project root directory (e.g. the git repo root).
+    /// Tasks in the same project share this value so they appear in the
+    /// same workspace list even if each task has its own worktree.
+    pub project_root: String,
+    /// The runtime working directory for this specific task. May differ
+    /// from `project_root` when the task uses a dedicated git worktree.
+    /// Defaults to `project_root` when no worktree has been assigned.
+    #[serde(default)]
     pub workspace_root: String,
     pub title: String,
     pub status: TaskStatus,

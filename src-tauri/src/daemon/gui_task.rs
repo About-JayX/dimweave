@@ -256,6 +256,7 @@ mod tests {
     fn task_updated_payload_matches_task_shape() {
         let task = Task {
             task_id: "task_1".into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Planning,
@@ -275,6 +276,7 @@ mod tests {
     fn build_task_change_events_emits_task_and_review_when_task_changes() {
         let before = Task {
             task_id: "task_1".into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Implementing,
@@ -299,6 +301,7 @@ mod tests {
         use crate::daemon::task_graph::types::TaskStatus;
         Task {
             task_id: task_id.into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Reviewing,

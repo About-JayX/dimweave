@@ -28,6 +28,7 @@ rand = "0.9"
 tauri-plugin-clipboard = "2.1.11"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

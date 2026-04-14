@@ -62,6 +62,7 @@ fn task_snapshot_serializes_camel_case() {
     let snap = TaskSnapshot {
         task: Task {
             task_id: "task_1".into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "Test".into(),
             status: TaskStatus::Implementing,
@@ -117,6 +118,7 @@ fn task_snapshot_roundtrip() {
     let snap = TaskSnapshot {
         task: Task {
             task_id: "t1".into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Draft,
@@ -173,6 +175,7 @@ fn history_entry_serializes_camel_case() {
     let entry = HistoryEntry {
         task: Task {
             task_id: "t1".into(),
+            project_root: "/ws".into(),
             workspace_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Done,

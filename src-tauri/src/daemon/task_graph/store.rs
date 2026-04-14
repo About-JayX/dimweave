@@ -1,17 +1,18 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::types::*;
 
 /// Central in-memory store for the task graph domain.
-/// Optionally backed by a JSON file for persistence.
+/// Optionally backed by a SQLite database for persistence.
 pub struct TaskGraphStore {
     pub(super) tasks: HashMap<String, Task>,
     pub(super) sessions: HashMap<String, SessionHandle>,
     pub(super) artifacts: HashMap<String, Artifact>,
     pub(super) task_agents: HashMap<String, TaskAgent>,
     pub(super) next_id: u64,
-    pub(super) persist_path: Option<PathBuf>,
+    pub(super) db_path: Option<PathBuf>,
+    pub(super) db: Option<std::sync::Mutex<rusqlite::Connection>>,
 }
 
 impl TaskGraphStore {
@@ -22,26 +23,26 @@ impl TaskGraphStore {
             artifacts: HashMap::new(),
             task_agents: HashMap::new(),
             next_id: 0,
-            persist_path: None,
+            db_path: None,
+            db: None,
         }
     }
 
-    /// Create a store that will persist to the given path.
-    pub fn with_persist_path(path: PathBuf) -> Self {
-        Self {
-            persist_path: Some(path),
-            ..Self::new()
-        }
+    /// Return the database path (if backed by SQLite).
+    pub fn db_path(&self) -> Option<&Path> {
+        self.db_path.as_deref()
     }
 
     /// Create a new task in Draft status.
-    /// If `title` is empty, the generated `task_id` is used as the title.
+    /// `workspace_root` is treated as both the project root and the initial
+    /// working directory. If `title` is empty, the generated `task_id` is used.
     pub fn create_task(&mut self, workspace_root: &str, title: &str) -> Task {
         let now = chrono::Utc::now().timestamp_millis() as u64;
         let task_id = self.next_id_str("task");
         let effective_title = if title.is_empty() { task_id.clone() } else { title.to_string() };
         let task = Task {
             task_id,
+            project_root: workspace_root.to_string(),
             workspace_root: workspace_root.to_string(),
             title: effective_title,
             status: TaskStatus::Draft,
@@ -70,6 +71,7 @@ impl TaskGraphStore {
         let effective_title = if title.is_empty() { task_id.clone() } else { title.to_string() };
         let task = Task {
             task_id,
+            project_root: workspace_root.to_string(),
             workspace_root: workspace_root.to_string(),
             title: effective_title,
             status: TaskStatus::Draft,
