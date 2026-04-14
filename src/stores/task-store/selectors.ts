@@ -151,6 +151,25 @@ export function selectActiveTaskRoleOptions(state: TaskStoreState): string[] {
   return roles;
 }
 
+// Memoization for workspace task list (newest-first ordering for accordion)
+const EMPTY_TASKS: TaskInfo[] = [];
+let _wsPrevWorkspace: string | null | undefined;
+let _wsPrevTasks: Record<string, TaskInfo> | undefined;
+let _wsPrevResult: TaskInfo[] = EMPTY_TASKS;
+
+export function selectWorkspaceTasks(state: TaskStoreState): TaskInfo[] {
+  const ws = state.selectedWorkspace;
+  if (!ws) return EMPTY_TASKS;
+  if (ws === _wsPrevWorkspace && state.tasks === _wsPrevTasks) return _wsPrevResult;
+  _wsPrevWorkspace = ws;
+  _wsPrevTasks = state.tasks;
+  const filtered = Object.values(state.tasks)
+    .filter((t) => t.workspaceRoot === ws)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  _wsPrevResult = filtered.length > 0 ? filtered : EMPTY_TASKS;
+  return _wsPrevResult;
+}
+
 export function selectDefaultReplyTarget(state: TaskStoreState): string {
   const roles = selectActiveTaskRoleOptions(state);
   if (roles.includes("lead")) return "lead";

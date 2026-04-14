@@ -22,6 +22,7 @@ import {
   selectActiveTaskAgents,
   selectActiveTaskRoleOptions,
   selectDefaultReplyTarget,
+  selectWorkspaceTasks,
 } from "../src/stores/task-store/selectors";
 import type {
   ProviderHistoryInfo,
@@ -958,5 +959,105 @@ describe("reduceTaskAgentsChanged", () => {
     });
     expect(patch.taskAgents?.["t1"]).toHaveLength(0);
     expect(patch.taskAgents?.["t2"]).toHaveLength(1);
+  });
+});
+
+// ── selectWorkspaceTasks (multi-task accordion) ───────────
+
+describe("selectWorkspaceTasks", () => {
+  test("returns tasks for the selected workspace ordered newest-first", () => {
+    const t1 = { ...makeTask("t1"), createdAt: 100 };
+    const t2 = { ...makeTask("t2"), createdAt: 300 };
+    const t3 = { ...makeTask("t3"), createdAt: 200 };
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      tasks: { t1, t2, t3 },
+    } as unknown as TaskStoreState;
+    const result = selectWorkspaceTasks(state);
+    expect(result.map((t) => t.taskId)).toEqual(["t2", "t3", "t1"]);
+  });
+
+  test("excludes tasks from other workspaces", () => {
+    const t1 = { ...makeTask("t1"), workspaceRoot: "/ws" };
+    const t2 = { ...makeTask("t2"), workspaceRoot: "/other" };
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      tasks: { t1, t2 },
+    } as unknown as TaskStoreState;
+    const result = selectWorkspaceTasks(state);
+    expect(result).toHaveLength(1);
+    expect(result[0].taskId).toBe("t1");
+  });
+
+  test("returns empty array when no workspace selected", () => {
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: null,
+      tasks: { t1: makeTask("t1") },
+    } as unknown as TaskStoreState;
+    expect(selectWorkspaceTasks(state)).toEqual([]);
+  });
+
+  test("returns empty array when no tasks exist for workspace", () => {
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      tasks: {},
+    } as unknown as TaskStoreState;
+    expect(selectWorkspaceTasks(state)).toEqual([]);
+  });
+
+  test("returns stable reference for unchanged state", () => {
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      tasks: { t1: makeTask("t1") },
+    } as unknown as TaskStoreState;
+    const a = selectWorkspaceTasks(state);
+    const b = selectWorkspaceTasks(state);
+    expect(a).toBe(b);
+  });
+});
+
+describe("active-task expansion (accordion sync)", () => {
+  test("activeTaskId identifies the expanded task in workspace list", () => {
+    const t1 = { ...makeTask("t1"), createdAt: 100 };
+    const t2 = { ...makeTask("t2"), createdAt: 200 };
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1, t2 },
+    } as unknown as TaskStoreState;
+    const list = selectWorkspaceTasks(state);
+    expect(list.some((t) => t.taskId === state.activeTaskId)).toBe(true);
+  });
+
+  test("no second truth source needed: expanded === activeTaskId", () => {
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t2",
+      tasks: { t1: makeTask("t1"), t2: makeTask("t2") },
+    } as unknown as TaskStoreState;
+    const list = selectWorkspaceTasks(state);
+    for (const task of list) {
+      const isExpanded = task.taskId === state.activeTaskId;
+      expect(isExpanded).toBe(task.taskId === "t2");
+    }
+  });
+
+  test("null activeTaskId means no task is expanded", () => {
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: null,
+      tasks: { t1: makeTask("t1") },
+    } as unknown as TaskStoreState;
+    const list = selectWorkspaceTasks(state);
+    expect(list.length).toBe(1);
+    expect(list[0].taskId === state.activeTaskId).toBe(false);
   });
 });
