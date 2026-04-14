@@ -1811,3 +1811,122 @@ fn agent_id_routing_task_scoped_online_agents_uses_task_agents() {
     assert_eq!(online[0].agent_id, "claude");
     assert_eq!(online[0].role, "lead", "role should come from task_agents, not singleton");
 }
+
+// ── agent_runtime_ownership: agent_id-keyed runtime slots ──────
+
+#[test]
+fn agent_runtime_ownership_slot_stores_agent_id() {
+    let mut slot = crate::daemon::task_runtime::ClaudeTaskSlot::new();
+    assert!(slot.agent_id.is_none(), "new slot has no agent_id");
+    slot.agent_id = Some("agent_123".into());
+    assert_eq!(slot.agent_id.as_deref(), Some("agent_123"));
+}
+
+#[test]
+fn agent_runtime_ownership_multi_claude_in_same_task() {
+    let mut rt = crate::daemon::task_runtime::TaskRuntime::new("t1".into(), "/ws".into());
+    // First agent gets the default claude_slot
+    let slot_a = rt.get_or_create_claude_slot("agent_a");
+    slot_a.ws_tx = Some(tokio::sync::mpsc::channel::<String>(1).0);
+    // Second agent goes into extra_claude_slots
+    let _slot_b = rt.get_or_create_codex_slot("agent_b", 4501);
+    // Verify independent lookup
+    assert!(rt.claude_slot_by_agent("agent_a").unwrap().is_online());
+    assert!(rt.codex_slot_by_agent("agent_b").is_some());
+    assert!(rt.claude_slot_by_agent("nonexistent").is_none());
+}
+
+#[test]
+fn agent_runtime_ownership_two_claude_agents_independent() {
+    let mut rt = crate::daemon::task_runtime::TaskRuntime::new("t1".into(), "/ws".into());
+    let slot_a = rt.get_or_create_claude_slot("agent_a");
+    slot_a.ws_tx = Some(tokio::sync::mpsc::channel::<String>(1).0);
+    let _slot_b = rt.get_or_create_claude_slot("agent_b");
+    // agent_a is online, agent_b is not
+    assert!(rt.claude_slot_by_agent("agent_a").unwrap().is_online());
+    assert!(!rt.claude_slot_by_agent("agent_b").unwrap().is_online());
+    // compat field stays usable
+    assert!(rt.claude_slot.as_ref().unwrap().is_online());
+}
+
+#[test]
+fn agent_runtime_ownership_nonce_resolves_to_agent_id() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.init_task_runtime(&task.task_id, "/ws".into());
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let agent_id = s.task_graph.agents_for_task(&task.task_id)[0]
+        .agent_id
+        .clone();
+    let nonce = "nonce-resolve".to_string();
+    s.begin_claude_task_launch_for_agent(&task.task_id, &agent_id, nonce.clone());
+    let (tid, aid) = s
+        .find_task_and_agent_for_claude_nonce(&nonce)
+        .unwrap();
+    assert_eq!(tid, task.task_id);
+    assert_eq!(aid, agent_id);
+}
+
+#[test]
+fn agent_runtime_ownership_launch_binds_agent_id_to_slot() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.init_task_runtime(&task.task_id, "/ws".into());
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let agent_id = s.task_graph.agents_for_task(&task.task_id)[0]
+        .agent_id
+        .clone();
+    let nonce = "nonce-bind".to_string();
+    let epoch = s
+        .begin_claude_task_launch_for_agent(&task.task_id, &agent_id, nonce.clone())
+        .unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws_for_agent(&task.task_id, &agent_id, epoch, &nonce, tx);
+    let rt = s.get_task_runtime(&task.task_id).unwrap();
+    let slot = rt.claude_slot_by_agent(&agent_id).unwrap();
+    assert_eq!(slot.agent_id.as_deref(), Some(agent_id.as_str()));
+    assert!(slot.is_online());
+}
+
+#[test]
+fn agent_runtime_ownership_invalidate_preserves_other_agent() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.init_task_runtime(&task.task_id, "/ws".into());
+    let agent_a = s
+        .task_graph
+        .add_task_agent(&task.task_id, Provider::Claude, "lead")
+        .agent_id
+        .clone();
+    let agent_b = s
+        .task_graph
+        .add_task_agent(&task.task_id, Provider::Claude, "coder")
+        .agent_id
+        .clone();
+    // Launch agent_a
+    let nonce_a = "nonce-a".to_string();
+    let epoch_a = s
+        .begin_claude_task_launch_for_agent(&task.task_id, &agent_a, nonce_a.clone())
+        .unwrap();
+    let (tx_a, _) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws_for_agent(&task.task_id, &agent_a, epoch_a, &nonce_a, tx_a);
+    // Launch agent_b
+    let nonce_b = "nonce-b".to_string();
+    let epoch_b = s
+        .begin_claude_task_launch_for_agent(&task.task_id, &agent_b, nonce_b.clone())
+        .unwrap();
+    let (tx_b, _) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws_for_agent(&task.task_id, &agent_b, epoch_b, &nonce_b, tx_b);
+    // Invalidate only agent_a
+    s.invalidate_claude_agent_session(&task.task_id, &agent_a);
+    let rt = s.get_task_runtime(&task.task_id).unwrap();
+    assert!(
+        !rt.claude_slot_by_agent(&agent_a)
+            .map_or(false, |s| s.is_online()),
+        "agent_a should be offline"
+    );
+    assert!(
+        rt.claude_slot_by_agent(&agent_b).unwrap().is_online(),
+        "agent_b must survive invalidation of agent_a"
+    );
+}

@@ -206,16 +206,25 @@ impl DaemonState {
     // ── Task-scoped Claude SDK lifecycle ─────────────────────
 
     /// Find which task owns a given Claude launch nonce.
+    /// Works for both agent_id-bound slots and legacy slots without agent_id.
     pub fn find_task_for_claude_nonce(&self, nonce: &str) -> Option<String> {
         self.task_runtimes.iter().find_map(|(tid, rt)| {
-            let slot = rt.claude_slot.as_ref()?;
-            if slot.pending_nonce.as_deref() == Some(nonce)
-                || slot.active_nonce.as_deref() == Some(nonce)
-            {
-                Some(tid.clone())
-            } else {
-                None
-            }
+            let has_nonce = rt.all_claude_slots().any(|slot| {
+                slot.pending_nonce.as_deref() == Some(nonce)
+                    || slot.active_nonce.as_deref() == Some(nonce)
+            });
+            if has_nonce { Some(tid.clone()) } else { None }
+        })
+    }
+
+    /// Find (task_id, agent_id) for a given Claude launch nonce.
+    pub fn find_task_and_agent_for_claude_nonce(
+        &self,
+        nonce: &str,
+    ) -> Option<(String, String)> {
+        self.task_runtimes.iter().find_map(|(tid, rt)| {
+            rt.find_claude_agent_for_nonce(nonce)
+                .map(|aid| (tid.clone(), aid.to_string()))
         })
     }
 
@@ -225,6 +234,24 @@ impl DaemonState {
         let slot = rt.claude_slot.get_or_insert_with(
             crate::daemon::task_runtime::ClaudeTaskSlot::new,
         );
+        slot.session_epoch = slot.session_epoch.wrapping_add(1);
+        slot.pending_nonce = Some(nonce);
+        slot.active_nonce = None;
+        slot.ws_tx = None;
+        slot.preview_buffer.clear();
+        slot.preview_flush_scheduled = false;
+        Some(slot.session_epoch)
+    }
+
+    /// Begin a Claude launch bound to a specific agent_id.
+    pub fn begin_claude_task_launch_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        nonce: String,
+    ) -> Option<u64> {
+        let rt = self.task_runtimes.get_mut(task_id)?;
+        let slot = rt.get_or_create_claude_slot(agent_id);
         slot.session_epoch = slot.session_epoch.wrapping_add(1);
         slot.pending_nonce = Some(nonce);
         slot.active_nonce = None;
@@ -261,6 +288,35 @@ impl DaemonState {
         Some(gen)
     }
 
+    /// Attach a Claude WS connection to a specific agent's slot.
+    pub fn attach_claude_task_ws_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        epoch: u64,
+        launch_nonce: &str,
+        tx: mpsc::Sender<String>,
+    ) -> Option<u64> {
+        let slot = self
+            .task_runtimes
+            .get_mut(task_id)?
+            .claude_slot_by_agent_mut(agent_id)?;
+        if slot.session_epoch != epoch {
+            return None;
+        }
+        if slot.pending_nonce.as_deref() == Some(launch_nonce) {
+            slot.active_nonce = Some(launch_nonce.to_string());
+            slot.pending_nonce = None;
+        } else if slot.active_nonce.as_deref() != Some(launch_nonce) {
+            return None;
+        }
+        slot.ws_generation = slot.ws_generation.wrapping_add(1);
+        slot.ws_tx = Some(tx.clone());
+        let gen = slot.ws_generation;
+        self.claude_sdk_ws_tx = Some(tx);
+        Some(gen)
+    }
+
     /// Clear Claude WS for a specific task's slot.
     pub fn clear_claude_task_ws(
         &mut self,
@@ -287,45 +343,71 @@ impl DaemonState {
     }
 
     /// Recompute singleton `claude_sdk_ws_tx` from task slots.
-    /// Sets it to the first online slot's ws_tx, or None if none online.
+    /// Scans all claude slots (default + extras) across all tasks.
     fn recompute_claude_singleton_ws_tx(&mut self) {
-        self.claude_sdk_ws_tx = self.task_runtimes.values()
-            .filter_map(|rt| rt.claude_slot.as_ref())
+        self.claude_sdk_ws_tx = self
+            .task_runtimes
+            .values()
+            .flat_map(|rt| rt.all_claude_slots())
             .find_map(|slot| slot.ws_tx.clone());
     }
 
     /// Invalidate Claude session for a specific task.
     /// Only clears this task's slot; does NOT blindly wipe global state.
     pub fn invalidate_claude_task_session(&mut self, task_id: &str) -> Option<String> {
-        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.claude_slot.as_mut())
         {
-            slot.session_epoch = slot.session_epoch.wrapping_add(1);
-            slot.ws_tx = None;
-            slot.event_tx = None;
-            slot.ready_tx = None;
-            slot.pending_nonce = None;
-            slot.active_nonce = None;
-            slot.preview_buffer.clear();
-            slot.preview_flush_scheduled = false;
+            Self::reset_claude_slot(slot);
         }
-        // Only clear global state if NO other task has an active Claude slot
         if !self.any_claude_task_online() {
             self.invalidate_claude_sdk_session()
         } else {
-            // Detach only the requested task's Claude sessions in task_graph;
-            // do NOT touch the global claude_connection mirror (it may belong to another task).
             self.detach_claude_sessions_for_task(task_id);
             self.recompute_claude_singleton_ws_tx();
             Some(task_id.to_string())
         }
     }
 
-    /// True if any task runtime has an online Claude slot.
+    /// Invalidate a specific agent's Claude slot without affecting others.
+    pub fn invalidate_claude_agent_session(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Option<String> {
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
+            .and_then(|rt| rt.claude_slot_by_agent_mut(agent_id))
+        {
+            Self::reset_claude_slot(slot);
+        }
+        if !self.any_claude_task_online() {
+            self.invalidate_claude_sdk_session()
+        } else {
+            self.recompute_claude_singleton_ws_tx();
+            Some(task_id.to_string())
+        }
+    }
+
+    fn reset_claude_slot(slot: &mut crate::daemon::task_runtime::ClaudeTaskSlot) {
+        slot.session_epoch = slot.session_epoch.wrapping_add(1);
+        slot.ws_tx = None;
+        slot.event_tx = None;
+        slot.ready_tx = None;
+        slot.pending_nonce = None;
+        slot.active_nonce = None;
+        slot.preview_buffer.clear();
+        slot.preview_flush_scheduled = false;
+    }
+
+    /// True if any task runtime has an online Claude slot (any agent).
     fn any_claude_task_online(&self) -> bool {
-        self.task_runtimes.values().any(|rt| {
-            rt.claude_slot.as_ref().map_or(false, |s| s.is_online())
-        })
+        self.task_runtimes
+            .values()
+            .any(|rt| rt.all_claude_slots().any(|s| s.is_online()))
     }
 
     /// Conditionally invalidate if task epoch matches.
@@ -384,14 +466,21 @@ impl DaemonState {
     }
 
     /// Get the event_tx for whichever task owns this launch nonce.
+    /// Get the event_tx for whichever agent slot owns this launch nonce.
     pub fn claude_task_event_tx_for_nonce(
         &self,
         nonce: &str,
     ) -> Option<mpsc::Sender<Vec<serde_json::Value>>> {
-        let task_id = self.find_task_for_claude_nonce(nonce)?;
-        self.task_runtimes.get(&task_id)?
-            .claude_slot.as_ref()?
-            .event_tx.clone()
+        for rt in self.task_runtimes.values() {
+            for slot in rt.all_claude_slots() {
+                if slot.pending_nonce.as_deref() == Some(nonce)
+                    || slot.active_nonce.as_deref() == Some(nonce)
+                {
+                    return slot.event_tx.clone();
+                }
+            }
+        }
+        None
     }
 
     /// Get the ws_tx for a specific task's Claude slot.
@@ -402,10 +491,12 @@ impl DaemonState {
     }
 
     pub fn is_claude_sdk_online(&self) -> bool {
-        // Primary: any task slot with an active WS
-        if self.task_runtimes.values().any(|rt| {
-            rt.claude_slot.as_ref().map_or(false, |s| s.is_online())
-        }) {
+        // Primary: any task slot (default + extras) with an active WS
+        if self
+            .task_runtimes
+            .values()
+            .any(|rt| rt.all_claude_slots().any(|s| s.is_online()))
+        {
             return true;
         }
         // Fallback: singleton mirror for legacy callers
@@ -519,24 +610,28 @@ impl DaemonState {
         self.auto_save_task_graph();
     }
 
-    /// True if any task runtime has an online Codex slot.
+    /// True if any task runtime has an online Codex slot (any agent).
     fn any_codex_task_online(&self) -> bool {
-        self.task_runtimes.values().any(|rt| {
-            rt.codex_slot.as_ref().map_or(false, |s| s.is_online())
-        })
+        self.task_runtimes
+            .values()
+            .any(|rt| rt.all_codex_slots().any(|s| s.is_online()))
     }
 
-    /// Recompute singleton `codex_inject_tx` from task slots.
+    /// Recompute singleton `codex_inject_tx` from all codex slots.
     fn recompute_codex_singleton_inject_tx(&mut self) {
-        self.codex_inject_tx = self.task_runtimes.values()
-            .filter_map(|rt| rt.codex_slot.as_ref())
+        self.codex_inject_tx = self
+            .task_runtimes
+            .values()
+            .flat_map(|rt| rt.all_codex_slots())
             .find_map(|slot| slot.inject_tx.clone());
     }
 
-    /// Recompute singleton `codex_connection` from task slots.
+    /// Recompute singleton `codex_connection` from all codex slots.
     fn recompute_codex_singleton_connection(&mut self) {
-        self.codex_connection = self.task_runtimes.values()
-            .filter_map(|rt| rt.codex_slot.as_ref())
+        self.codex_connection = self
+            .task_runtimes
+            .values()
+            .flat_map(|rt| rt.all_codex_slots())
             .filter(|slot| slot.is_online())
             .find_map(|slot| slot.connection.clone());
     }
@@ -573,17 +668,20 @@ impl DaemonState {
 
     /// Collect the set of ports currently allocated to *online* Codex task slots.
     pub fn codex_used_ports(&self) -> std::collections::HashSet<u16> {
-        self.task_runtimes.values()
-            .filter_map(|rt| rt.codex_slot.as_ref())
+        self.task_runtimes
+            .values()
+            .flat_map(|rt| rt.all_codex_slots())
             .filter(|slot| slot.is_online())
             .map(|slot| slot.port)
             .collect()
     }
 
     pub fn is_codex_online(&self) -> bool {
-        if self.task_runtimes.values().any(|rt| {
-            rt.codex_slot.as_ref().map_or(false, |s| s.is_online())
-        }) {
+        if self
+            .task_runtimes
+            .values()
+            .any(|rt| rt.all_codex_slots().any(|s| s.is_online()))
+        {
             return true;
         }
         self.codex_inject_tx.is_some()
