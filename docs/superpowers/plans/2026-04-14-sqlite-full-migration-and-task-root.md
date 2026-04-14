@@ -129,6 +129,15 @@ These are direct compile/behavior ripples from the `project_root` + `task_worktr
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::state_tests:: -- --nocapture`
 - `git diff --check`
 
+## Plan Revision 3 — 2026-04-14
+
+**Reason:** Task 2 review established that the original verification filter `daemon::state_tests::` can match zero tests because the actual module path is `daemon::state::state_tests::`. The verification command must use the concrete module path so the buffered-message restart suite really runs during review.
+
+**Revised Task 2 verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml state::state_tests -- --nocapture`
+- `git diff --check`
+
 ## Task 3: Move Telegram and Feishu persisted config/state to SQLite
 
 **task_id:** `sqlite-external-config-persistence`
@@ -251,7 +260,7 @@ These are direct compile/behavior ripples from the `project_root` + `task_worktr
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `ba41b78e`, `ce6211c7` | Replaced task-graph JSON persistence with SQLite, added schema-backed persistence for tasks/sessions/artifacts/task_agents plus meta and buffered-message tables, introduced an explicit root split (`project_root` + `task_worktree_root`), and removed the remaining legacy field naming by renaming `workspace_root` to `task_worktree_root` across the task graph, SQLite schema, and compile ripples. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 55 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | _pending_ | _pending_ | pending |
+| Task 2 | `173672b6` | Added SQLite-backed save/load for persisted buffered messages on top of the new task-graph database, so daemon restart restores buffered messages per task/session instead of losing them after the JSON persistence removal. | `cargo test --manifest-path src-tauri/Cargo.toml state::state_tests -- --nocapture` ✅ 91 passed; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
 | Task 5 | _pending_ | _pending_ | _pending_ | pending |
