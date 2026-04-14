@@ -1,5 +1,9 @@
 # Task-First Sidebar And UI Error Log Design
 
+> **Superseded on 2026-04-14 by:** [2026-04-14-task-agent-identity-role-broadcast-design.md](/Users/jason/floder/agent-bridge/.worktrees/task-agent-identity-redesign/docs/superpowers/specs/2026-04-14-task-agent-identity-role-broadcast-design.md)
+>
+> The single-workspace UX and UI error-log sections remain useful background, but the task/agent model in this spec assumed singleton `lead/coder` slots and should no longer be treated as the target design.
+
 ## Goal
 
 Reshape the current task/agent workflow so the product behaves as `workspace -> task -> agents`, while also stopping UI crashes from presenting as full-page reload/reset loops and giving UI errors a permanent, dedicated review surface.
