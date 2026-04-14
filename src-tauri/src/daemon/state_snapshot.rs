@@ -94,7 +94,7 @@ impl DaemonState {
         let mut result = Vec::new();
         for agent in agents {
             let runtime = provider_runtime(agent.provider);
-            if self.is_task_agent_online(task_id, runtime) {
+            if self.is_task_agent_online_by_id(task_id, &agent.agent_id, runtime) {
                 result.push(OnlineAgentInfo {
                     agent_id: agent.agent_id.clone(),
                     role: agent.role.clone(),
@@ -140,23 +140,36 @@ impl DaemonState {
     ) -> Option<crate::daemon::types::TaskProviderSummary> {
         let task = self.task_graph.get_task(task_id)?;
         let agents = self.task_graph.agents_for_task(task_id);
+        let lead_agent = agents.iter().find(|a| a.role == "lead");
+        let coder_agent = agents.iter().find(|a| a.role == "coder");
         let (lead_runtime, lead_agent_id, coder_runtime, coder_agent_id) =
             if agents.is_empty() {
                 let lead_rt = provider_runtime(task.lead_provider);
                 let coder_rt = provider_runtime(task.coder_provider);
                 (lead_rt, lead_rt.to_string(), coder_rt, coder_rt.to_string())
             } else {
-                let lead = agents.iter().find(|a| a.role == "lead");
-                let coder = agents.iter().find(|a| a.role == "coder");
                 (
-                    lead.map_or("claude", |a| provider_runtime(a.provider)),
-                    lead.map_or_else(|| "claude".into(), |a| a.agent_id.clone()),
-                    coder.map_or("codex", |a| provider_runtime(a.provider)),
-                    coder.map_or_else(|| "codex".into(), |a| a.agent_id.clone()),
+                    lead_agent.map_or("claude", |a| provider_runtime(a.provider)),
+                    lead_agent.map_or_else(|| "claude".into(), |a| a.agent_id.clone()),
+                    coder_agent.map_or("codex", |a| provider_runtime(a.provider)),
+                    coder_agent.map_or_else(|| "codex".into(), |a| a.agent_id.clone()),
                 )
             };
-        let lead_online = self.is_task_agent_online(task_id, lead_runtime);
-        let coder_online = self.is_task_agent_online(task_id, coder_runtime);
+        let (lead_online, coder_online) = if agents.is_empty() {
+            (
+                self.is_task_agent_online(task_id, lead_runtime),
+                self.is_task_agent_online(task_id, coder_runtime),
+            )
+        } else {
+            (
+                lead_agent.map_or(false, |a| {
+                    self.is_task_agent_online_by_id(task_id, &a.agent_id, lead_runtime)
+                }),
+                coder_agent.map_or(false, |a| {
+                    self.is_task_agent_online_by_id(task_id, &a.agent_id, coder_runtime)
+                }),
+            )
+        };
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
             lead_provider: lead_runtime.into(),

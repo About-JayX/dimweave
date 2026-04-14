@@ -16,12 +16,13 @@ pub async fn handle_dynamic_tool(
     args: &Value,
     role_id: &str,
     task_id: &str,
+    agent_id: &str,
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsSend,
 ) {
     let result_text = match tool_name {
-        "reply" => handle_reply(args, role_id, task_id, state, app).await,
+        "reply" => handle_reply(args, role_id, task_id, agent_id, state, app).await,
         "check_messages" => handle_check_messages(role_id, task_id, state).await,
         "get_status" => handle_get_status(task_id, state).await,
         other => format!("Unknown tool: {other}"),
@@ -76,16 +77,13 @@ async fn handle_reply(
     args: &Value,
     from: &str,
     task_id: &str,
+    agent_id: &str,
     state: &SharedState,
     app: &AppHandle,
 ) -> String {
     let to = args["to"].as_str().unwrap_or("user");
-    // Resolve actual Codex identity from task_agents (AC1)
-    let (agent_id, display_source) = {
-        let s = state.read().await;
-        resolve_codex_identity(&s, task_id)
-    };
-    let Some(mut msg) = build_reply_message(args, from, &agent_id, display_source) else {
+    let display_source = "codex";
+    let Some(mut msg) = build_reply_message(args, from, agent_id, display_source) else {
         return format!("Ignored empty message to {to}");
     };
     {
@@ -95,20 +93,6 @@ async fn handle_reply(
 
     crate::daemon::routing::route_message(state, app, msg).await;
     format!("Message sent to {to}")
-}
-
-/// Resolve Codex (agent_id, display_source) from task_agents.
-/// Falls back to ("codex", "codex") for legacy tasks.
-fn resolve_codex_identity(
-    s: &crate::daemon::state::DaemonState,
-    task_id: &str,
-) -> (String, &'static str) {
-    let agents = s.task_graph.agents_for_task(task_id);
-    agents
-        .iter()
-        .find(|a| a.provider == crate::daemon::task_graph::types::Provider::Codex)
-        .map(|a| (a.agent_id.clone(), "codex"))
-        .unwrap_or_else(|| ("codex".into(), "codex"))
 }
 
 async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState) -> String {

@@ -571,6 +571,47 @@ impl DaemonState {
             .ws_tx.clone()
     }
 
+    /// Get the ws_tx for a specific task agent by agent_id.
+    pub fn claude_task_ws_tx_for_agent(
+        &self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Option<mpsc::Sender<String>> {
+        let rt = self.task_runtimes.get(task_id)?;
+        rt.claude_slot_by_agent(agent_id)?.ws_tx.clone()
+    }
+
+    /// Get the inject_tx for a specific task agent by agent_id.
+    pub fn codex_task_inject_tx_for_agent(
+        &self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>> {
+        let rt = self.task_runtimes.get(task_id)?;
+        rt.codex_slot_by_agent(agent_id)?.inject_tx.clone()
+    }
+
+    /// Check if a specific agent (by agent_id) is online for a task.
+    pub fn is_task_agent_online_by_id(
+        &self,
+        task_id: &str,
+        agent_id: &str,
+        runtime: &str,
+    ) -> bool {
+        let Some(rt) = self.task_runtimes.get(task_id) else {
+            return false;
+        };
+        match runtime {
+            "claude" => rt
+                .claude_slot_by_agent(agent_id)
+                .map_or(false, |s| s.is_online()),
+            "codex" => rt
+                .codex_slot_by_agent(agent_id)
+                .map_or(false, |s| s.is_online()),
+            _ => false,
+        }
+    }
+
     pub fn is_claude_sdk_online(&self) -> bool {
         // Primary: any task slot (default + extras) with an active WS
         if self

@@ -13,26 +13,52 @@ fn is_allowed_agent(agent_id: &str) -> bool {
     matches!(agent_id, "claude" | "codex")
 }
 
-/// Resolve (role, agent_id, display_source) from task_agents first, then global singletons.
+/// Resolve (role, agent_id, display_source) from the concrete online slot's
+/// agent_id, then task_agents, then global singletons.
 fn resolve_agent_identity(
     s: &crate::daemon::state::DaemonState,
     runtime_id: &str,
 ) -> (String, String, String) {
-    let provider = match runtime_id {
-        "claude" => Some(crate::daemon::task_graph::types::Provider::Claude),
-        "codex" => Some(crate::daemon::task_graph::types::Provider::Codex),
-        _ => None,
-    };
-    if let Some(prov) = provider {
-        if let Some(task_id) = s.agent_owning_task_id(runtime_id) {
-            let agents = s.task_graph.agents_for_task(&task_id);
-            if let Some(agent) = agents.iter().find(|a| a.provider == prov) {
-                return (
-                    agent.role.clone(),
-                    agent.agent_id.clone(),
-                    runtime_id.to_string(),
-                );
-            }
+    if let Some(task_id) = s.agent_owning_task_id(runtime_id) {
+        // Look up the concrete agent_id from the online runtime slot
+        let concrete_id = match runtime_id {
+            "claude" => s
+                .task_runtimes
+                .get(&task_id)
+                .and_then(|rt| {
+                    rt.all_claude_slots()
+                        .find(|slot| slot.is_online())
+                        .and_then(|slot| slot.agent_id.clone())
+                }),
+            "codex" => s
+                .task_runtimes
+                .get(&task_id)
+                .and_then(|rt| {
+                    rt.all_codex_slots()
+                        .find(|slot| slot.is_online())
+                        .and_then(|slot| slot.agent_id.clone())
+                }),
+            _ => None,
+        };
+        let agents = s.task_graph.agents_for_task(&task_id);
+        // Match by concrete slot agent_id first, then fall back to first provider match
+        let matched = concrete_id
+            .as_deref()
+            .and_then(|cid| agents.iter().find(|a| a.agent_id == cid))
+            .or_else(|| {
+                let prov = match runtime_id {
+                    "claude" => Some(crate::daemon::task_graph::types::Provider::Claude),
+                    "codex" => Some(crate::daemon::task_graph::types::Provider::Codex),
+                    _ => None,
+                };
+                prov.and_then(|p| agents.iter().find(|a| a.provider == p))
+            });
+        if let Some(agent) = matched {
+            return (
+                agent.role.clone(),
+                agent.agent_id.clone(),
+                runtime_id.to_string(),
+            );
         }
     }
     let role = match runtime_id {

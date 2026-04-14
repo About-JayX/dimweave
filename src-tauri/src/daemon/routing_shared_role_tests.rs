@@ -426,6 +426,61 @@ async fn agent_id_routing_broadcast_delivers_to_both_providers_for_same_role() {
     );
 }
 
+/// When a task has two Claude agents with the same role ("coder"), each with its
+/// own per-agent-id slot, a message to "coder" must deliver to BOTH slots.
+/// This proves that routing resolves per-agent-id, not per-provider.
+#[tokio::test]
+async fn agent_id_routing_two_same_provider_agents_both_receive_delivery() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (tx_a, mut rx_a) = tokio::sync::mpsc::channel::<String>(8);
+    let (tx_b, mut rx_b) = tokio::sync::mpsc::channel::<String>(8);
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent_a = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+        let agent_b = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.claude_role = "coder".into();
+        // Init task runtime and create per-agent-id slots
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let slot_a = s.task_runtimes.get_mut(&task.task_id).unwrap()
+            .get_or_create_claude_slot(&agent_a.agent_id);
+        slot_a.ws_tx = Some(tx_a);
+        let slot_b = s.task_runtimes.get_mut(&task.task_id).unwrap()
+            .get_or_create_claude_slot(&agent_b.agent_id);
+        slot_b.ws_tx = Some(tx_b);
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "two-claude-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement feature X".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "two same-provider agents should deliver"
+    );
+    assert!(
+        rx_a.try_recv().is_ok(),
+        "Agent A should receive the message via its own slot"
+    );
+    assert!(
+        rx_b.try_recv().is_ok(),
+        "Agent B should receive the message via its own slot"
+    );
+}
+
 /// When a task has agents but the target role has NO matching agent,
 /// the message should be buffered, not silently rerouted.
 #[tokio::test]

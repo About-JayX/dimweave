@@ -16,6 +16,7 @@ pub(super) async fn handle_codex_event(
     v: &Value,
     role_id: &str,
     task_id: &str,
+    agent_id: &str,
     schema_route_enabled: bool,
     state: &SharedState,
     app: &AppHandle,
@@ -26,7 +27,7 @@ pub(super) async fn handle_codex_event(
         return;
     };
     match method {
-        "item/tool/call" => handle_tool_call(v, role_id, task_id, state, app, ws_tx).await,
+        "item/tool/call" => handle_tool_call(v, role_id, task_id, agent_id, state, app, ws_tx).await,
         "turn/started" => {
             stream_preview.reset();
             gui::emit_codex_stream(app, CodexStreamPayload::Thinking);
@@ -82,6 +83,7 @@ pub(super) async fn handle_codex_event(
                 v,
                 role_id,
                 task_id,
+                agent_id,
                 schema_route_enabled,
                 state,
                 app,
@@ -107,6 +109,7 @@ async fn handle_tool_call(
     v: &Value,
     role_id: &str,
     task_id: &str,
+    agent_id: &str,
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsTx,
@@ -116,7 +119,7 @@ async fn handle_tool_call(
         .or_else(|| v["params"]["name"].as_str());
     if let (Some(id), Some(name)) = (v["id"].as_u64(), name) {
         let args = v["params"]["arguments"].clone();
-        handler::handle_dynamic_tool(id, name, &args, role_id, task_id, state, app, ws_tx).await;
+        handler::handle_dynamic_tool(id, name, &args, role_id, task_id, agent_id, state, app, ws_tx).await;
     }
 }
 
@@ -148,6 +151,7 @@ async fn handle_completed_agent_message(
     v: &Value,
     role_id: &str,
     task_id: &str,
+    agent_id: &str,
     schema_route_enabled: bool,
     state: &SharedState,
     app: &AppHandle,
@@ -166,24 +170,16 @@ async fn handle_completed_agent_message(
         Err(err) => {
             let hint = err.to_string();
             gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
-            let (error_agent_id, error_ds) = {
-                let s = state.read().await;
-                resolve_codex_identity_for_task(&s, task_id)
-            };
             let error_msg = build_msg_with_status(
-                role_id, "user", &hint, MessageStatus::Error, &error_agent_id, error_ds,
+                role_id, "user", &hint, MessageStatus::Error, agent_id, "codex",
             );
             gui::emit_agent_message(app, &error_msg);
             return;
         }
     };
-    // Resolve actual Codex identity from task_agents (AC1)
-    let (agent_id, display_source) = {
-        let s = state.read().await;
-        resolve_codex_identity_for_task(&s, task_id)
-    };
+    let display_source = "codex";
     let Some(mut msg) = build_completed_output_message(
-        role_id, &parsed, schema_route_enabled, &agent_id, display_source,
+        role_id, &parsed, schema_route_enabled, agent_id, display_source,
     ) else {
         return;
     };
@@ -336,20 +332,6 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
         },
         _ => None,
     }
-}
-
-/// Resolve Codex (agent_id, display_source) from task_agents.
-/// Falls back to ("codex", "codex") for legacy tasks.
-fn resolve_codex_identity_for_task(
-    s: &crate::daemon::state::DaemonState,
-    task_id: &str,
-) -> (String, &'static str) {
-    s.task_graph
-        .agents_for_task(task_id)
-        .iter()
-        .find(|a| a.provider == Provider::Codex)
-        .map(|a| (a.agent_id.clone(), "codex"))
-        .unwrap_or_else(|| ("codex".into(), "codex"))
 }
 
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);

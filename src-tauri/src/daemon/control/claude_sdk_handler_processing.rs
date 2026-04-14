@@ -1,31 +1,25 @@
 use crate::daemon::{gui, state::DaemonState, SharedState};
 use tauri::AppHandle;
 
-/// Resolve Claude (role, agent_id, display_source) from task_agents[] first,
-/// then legacy provider bindings, then global `claude_role`.
-fn resolve_claude_identity_for_task(
+/// Resolve the role for a known agent_id from task_agents[], with legacy fallback.
+fn resolve_role_for_claude_agent(
     s: &DaemonState,
     task_id: &str,
-) -> (String, String, &'static str) {
+    agent_id: &str,
+) -> String {
     let agents = s.task_graph.agents_for_task(task_id);
-    if let Some(claude_agent) = agents.iter().find(|a| {
-        a.provider == crate::daemon::task_graph::types::Provider::Claude
-    }) {
-        return (claude_agent.role.clone(), claude_agent.agent_id.clone(), "claude");
+    if let Some(agent) = agents.iter().find(|a| a.agent_id == agent_id) {
+        return agent.role.clone();
     }
     // Legacy fallback: derive role from task provider slots
-    let role = if let Some(task) = s.task_graph.get_task(task_id) {
+    if let Some(task) = s.task_graph.get_task(task_id) {
         if task.lead_provider == crate::daemon::task_graph::types::Provider::Claude {
-            "lead".into()
+            return "lead".into();
         } else if task.coder_provider == crate::daemon::task_graph::types::Provider::Claude {
-            "coder".into()
-        } else {
-            s.claude_role.clone()
+            return "coder".into();
         }
-    } else {
-        s.claude_role.clone()
-    };
-    (role, "claude".into(), "claude")
+    }
+    s.claude_role.clone()
 }
 
 pub(crate) async fn process_sdk_events(
@@ -33,9 +27,10 @@ pub(crate) async fn process_sdk_events(
     app: &AppHandle,
     events: Vec<serde_json::Value>,
     task_id: &str,
+    agent_id: &str,
 ) {
     for event in events {
-        process_sdk_event(state, app, event, task_id).await;
+        process_sdk_event(state, app, event, task_id, agent_id).await;
     }
 }
 
@@ -44,10 +39,11 @@ async fn process_sdk_event(
     app: &AppHandle,
     event: serde_json::Value,
     task_id: &str,
+    agent_id: &str,
 ) {
-    let (role, agent_id, display_source) = {
+    let (role, display_source) = {
         let s = state.read().await;
-        resolve_claude_identity_for_task(&s, task_id)
+        (resolve_role_for_claude_agent(&s, task_id, agent_id), "claude")
     };
     gui::emit_system_log(
         app,
@@ -61,7 +57,7 @@ async fn process_sdk_event(
     crate::daemon::claude_sdk::event_handler::handle_events(
         vec![event],
         &role,
-        &agent_id,
+        agent_id,
         display_source,
         state.clone(),
         app.clone(),

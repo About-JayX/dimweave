@@ -169,10 +169,10 @@ impl DaemonState {
     }
 
     /// Find the task_id that owns the currently active Codex connection.
-    /// Scans per-task runtime slots first, falls back to active_task_id.
+    /// Scans all per-task Codex slots (default + extras), falls back to active_task_id.
     pub fn codex_owning_task_id(&self) -> Option<String> {
         for (task_id, rt) in &self.task_runtimes {
-            if rt.codex_slot.as_ref().map_or(false, |s| s.is_online()) {
+            if rt.all_codex_slots().any(|s| s.is_online()) {
                 return Some(task_id.clone());
             }
         }
@@ -180,10 +180,10 @@ impl DaemonState {
     }
 
     /// Find the task_id that owns the currently active Claude connection.
-    /// Scans per-task runtime slots first, falls back to active_task_id.
+    /// Scans all per-task Claude slots (default + extras), falls back to active_task_id.
     pub fn claude_owning_task_id(&self) -> Option<String> {
         for (task_id, rt) in &self.task_runtimes {
-            if rt.claude_slot.as_ref().map_or(false, |s| s.is_online()) {
+            if rt.all_claude_slots().any(|s| s.is_online()) {
                 return Some(task_id.clone());
             }
         }

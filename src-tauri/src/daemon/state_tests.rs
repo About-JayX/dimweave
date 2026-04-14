@@ -1835,25 +1835,74 @@ fn agent_id_routing_no_task_returns_empty() {
 fn agent_id_routing_task_scoped_online_agents_uses_task_agents() {
     let mut s = DaemonState::new();
     let task = s.task_graph.create_task("/ws", "T");
-    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let claude_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
     s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
 
     s.init_task_runtime(&task.task_id, "/ws".into());
 
-    // Make Claude online for this task
-    let nonce = "nonce-online".to_string();
-    let epoch = s.begin_claude_task_launch(&task.task_id, nonce.clone()).unwrap();
+    // Make Claude online for this task using agent-aware slot
+    let slot = s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&claude_agent.agent_id);
     let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
-    s.attach_claude_task_ws(&task.task_id, epoch, &nonce, tx);
+    slot.ws_tx = Some(tx);
 
     let online = s.task_scoped_online_agents(&task.task_id);
     assert_eq!(online.len(), 1);
-    // agent_id must be the TaskAgent.agent_id, not the runtime name "claude"
-    let agents = s.task_graph.agents_for_task(&task.task_id);
-    let claude_agent = agents.iter().find(|a| a.provider == Provider::Claude).unwrap();
     assert_eq!(online[0].agent_id, claude_agent.agent_id);
     assert_eq!(online[0].model_source, "claude", "model_source is still the runtime name");
     assert_eq!(online[0].role, "lead", "role should come from task_agents, not singleton");
+}
+
+// ── agent_id routing: per-agent-id online checks ─────────────
+
+#[test]
+fn agent_id_routing_online_by_id_distinguishes_two_same_provider_agents() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    let agent_a = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    let agent_b = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+
+    s.init_task_runtime(&task.task_id, "/ws".into());
+    let slot_a = s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_a.agent_id);
+    slot_a.ws_tx = Some(tokio::sync::mpsc::channel::<String>(1).0);
+    // agent_b has a slot but is NOT online (no ws_tx)
+    let _slot_b = s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_b.agent_id);
+
+    assert!(
+        s.is_task_agent_online_by_id(&task.task_id, &agent_a.agent_id, "claude"),
+        "agent_a should be online"
+    );
+    assert!(
+        !s.is_task_agent_online_by_id(&task.task_id, &agent_b.agent_id, "claude"),
+        "agent_b should be offline — no ws_tx"
+    );
+    // Legacy runtime check still reports online (any slot)
+    assert!(
+        s.is_task_agent_online(&task.task_id, "claude"),
+        "provider-level check should be true if any slot is online"
+    );
+}
+
+#[test]
+fn agent_id_routing_task_scoped_online_uses_per_agent_id() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    let agent_a = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    let agent_b = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+
+    s.init_task_runtime(&task.task_id, "/ws".into());
+    // Only agent_a is online
+    let slot_a = s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_a.agent_id);
+    slot_a.ws_tx = Some(tokio::sync::mpsc::channel::<String>(1).0);
+    let _slot_b = s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_b.agent_id);
+
+    let online = s.task_scoped_online_agents(&task.task_id);
+    assert_eq!(online.len(), 1, "only agent_a is online");
+    assert_eq!(online[0].agent_id, agent_a.agent_id);
 }
 
 // ── agent_runtime_ownership: agent_id-keyed runtime slots ──────

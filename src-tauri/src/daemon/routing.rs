@@ -75,30 +75,37 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
             }
         }
         BroadcastResolution::Targets {
-            claude_sdk,
-            claude_bridge,
-            codex,
+            deliveries,
             emit_claude_thinking,
         } => {
-            deliver_broadcast(state, msg, claude_sdk, claude_bridge, codex, emit_claude_thinking)
-                .await
+            deliver_broadcast(state, msg, deliveries, emit_claude_thinking).await
         }
     }
 }
 
 // ── broadcast resolution ──────────────────────────────────────
 
+enum DeliveryChannel {
+    ClaudeSdk(tokio::sync::mpsc::Sender<String>),
+    ClaudeBridge(tokio::sync::mpsc::Sender<ToAgent>),
+    Codex {
+        tx: tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+        items: Vec<serde_json::Value>,
+        from_user: bool,
+    },
+}
+
+struct ResolvedDelivery {
+    #[allow(dead_code)]
+    agent_id: String,
+    channel: DeliveryChannel,
+}
+
 enum BroadcastResolution {
     Dropped,
     NeedBuffer,
     Targets {
-        claude_sdk: Option<tokio::sync::mpsc::Sender<String>>,
-        claude_bridge: Option<tokio::sync::mpsc::Sender<ToAgent>>,
-        codex: Option<(
-            tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>,
-            Vec<serde_json::Value>,
-            bool,
-        )>,
+        deliveries: Vec<ResolvedDelivery>,
         emit_claude_thinking: bool,
     },
 }
@@ -119,16 +126,13 @@ fn resolve_broadcast_targets(
             let agents = s.resolve_task_role_providers(tid, &msg.to);
             if agents.is_empty() {
                 if has_agents {
-                    // task_agents exist but none match the role → buffer (AC4)
                     return BroadcastResolution::NeedBuffer;
                 }
-                // Legacy fallback returned empty → no agent for this role
                 return BroadcastResolution::NeedBuffer;
             }
             (agents, has_agents)
         }
         None => {
-            // No task context: synthesize agents from global role bindings
             let mut agents = Vec::new();
             if s.claude_role == msg.to {
                 agents.push(MatchedTaskAgent {
@@ -156,20 +160,18 @@ fn resolve_broadcast_targets(
     let ta_resolved = task_agents_authoritative;
     let claude_sender_ok =
         msg.from == "user" || msg.from == "system" || msg.from == s.codex_role;
-    // Iterate matched agents and collect unique runtime channels (AC2).
-    // Two agents on the same runtime share one physical channel, so we
-    // dedup at the channel level, but the iteration is per-agent.
-    let mut claude_sdk = None;
-    let mut claude_bridge = None;
-    let mut codex = None;
+
+    // Iterate per-agent and collect deliveries keyed by agent_id (AC1/AC2).
+    // Each agent gets its own channel lookup; no provider-level dedup.
+    let mut deliveries: Vec<ResolvedDelivery> = Vec::new();
     let mut any_sender_gated = false;
 
     for agent in &matched_agents {
+        if deliveries.iter().any(|d| d.agent_id == agent.agent_id) {
+            continue;
+        }
         match agent.runtime {
             "claude" => {
-                if claude_sdk.is_some() || claude_bridge.is_some() {
-                    continue;
-                }
                 if !claude_sender_ok {
                     any_sender_gated = true;
                     continue;
@@ -178,34 +180,47 @@ fn resolve_broadcast_targets(
                     continue;
                 }
                 let sdk_tx = task_id
-                    .and_then(|tid| s.claude_task_ws_tx(tid))
+                    .and_then(|tid| s.claude_task_ws_tx_for_agent(tid, &agent.agent_id))
+                    .or_else(|| task_id.and_then(|tid| s.claude_task_ws_tx(tid)))
                     .or_else(|| s.claude_sdk_ws_tx.clone());
-                if sdk_tx.is_some() {
-                    claude_sdk = sdk_tx;
-                } else {
-                    claude_bridge =
-                        s.attached_agents.get("claude").map(|a| a.tx.clone());
+                if let Some(tx) = sdk_tx {
+                    deliveries.push(ResolvedDelivery {
+                        agent_id: agent.agent_id.clone(),
+                        channel: DeliveryChannel::ClaudeSdk(tx),
+                    });
+                } else if let Some(bridge) =
+                    s.attached_agents.get("claude").map(|a| a.tx.clone())
+                {
+                    deliveries.push(ResolvedDelivery {
+                        agent_id: agent.agent_id.clone(),
+                        channel: DeliveryChannel::ClaudeBridge(bridge),
+                    });
                 }
             }
             "codex" => {
-                if codex.is_some() {
-                    continue;
-                }
                 if !should_deliver_to_agent(s, "codex", msg, ta_resolved) {
                     continue;
                 }
                 let tx = task_id
-                    .and_then(|tid| s.codex_task_inject_tx(tid))
+                    .and_then(|tid| s.codex_task_inject_tx_for_agent(tid, &agent.agent_id))
+                    .or_else(|| task_id.and_then(|tid| s.codex_task_inject_tx(tid)))
                     .or_else(|| s.codex_inject_tx.clone());
-                codex =
-                    tx.map(|t| (t, build_codex_input_items(msg), msg.from == "user"));
+                if let Some(tx) = tx {
+                    deliveries.push(ResolvedDelivery {
+                        agent_id: agent.agent_id.clone(),
+                        channel: DeliveryChannel::Codex {
+                            tx,
+                            items: build_codex_input_items(msg),
+                            from_user: msg.from == "user",
+                        },
+                    });
+                }
             }
             _ => {}
         }
     }
 
-    if claude_sdk.is_none() && claude_bridge.is_none() && codex.is_none() {
-        // All matched agents were sender-gated → drop (not bufferable)
+    if deliveries.is_empty() {
         if any_sender_gated
             && !matched_agents.iter().any(|a| a.runtime == "codex")
         {
@@ -215,9 +230,7 @@ fn resolve_broadcast_targets(
     }
 
     BroadcastResolution::Targets {
-        claude_sdk,
-        claude_bridge,
-        codex,
+        deliveries,
         emit_claude_thinking,
     }
 }
@@ -242,42 +255,47 @@ fn should_deliver_to_agent(
 async fn deliver_broadcast(
     state: &SharedState,
     msg: BridgeMessage,
-    claude_sdk: Option<tokio::sync::mpsc::Sender<String>>,
-    claude_bridge: Option<tokio::sync::mpsc::Sender<ToAgent>>,
-    codex: Option<(
-        tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>,
-        Vec<serde_json::Value>,
-        bool,
-    )>,
+    deliveries: Vec<ResolvedDelivery>,
     emit_claude_thinking: bool,
 ) -> RouteOutcome {
     let mut any_delivered = false;
+    let mut needs_claude_turn = false;
 
-    // Deliver to Claude (SDK preferred, then bridge)
-    if let Some(tx) = claude_sdk {
-        let ndjson = format_ndjson_user_message(&msg).await;
-        if tx.send(ndjson).await.is_ok() {
-            state.write().await.prepare_claude_response_turn();
-            any_delivered = true;
-        }
-    } else if let Some(tx) = claude_bridge {
-        if tx
-            .send(ToAgent::RoutedMessage {
-                message: msg.clone(),
-            })
-            .await
-            .is_ok()
-        {
-            state.write().await.prepare_claude_response_turn();
-            any_delivered = true;
+    for delivery in deliveries {
+        match delivery.channel {
+            DeliveryChannel::ClaudeSdk(tx) => {
+                let ndjson = format_ndjson_user_message(&msg).await;
+                if tx.send(ndjson).await.is_ok() {
+                    needs_claude_turn = true;
+                    any_delivered = true;
+                }
+            }
+            DeliveryChannel::ClaudeBridge(tx) => {
+                if tx
+                    .send(ToAgent::RoutedMessage {
+                        message: msg.clone(),
+                    })
+                    .await
+                    .is_ok()
+                {
+                    needs_claude_turn = true;
+                    any_delivered = true;
+                }
+            }
+            DeliveryChannel::Codex {
+                tx,
+                items,
+                from_user,
+            } => {
+                if tx.send((items, from_user)).await.is_ok() {
+                    any_delivered = true;
+                }
+            }
         }
     }
 
-    // Deliver to Codex (independent of Claude — broadcast)
-    if let Some((tx, items, from_user)) = codex {
-        if tx.send((items, from_user)).await.is_ok() {
-            any_delivered = true;
-        }
+    if needs_claude_turn {
+        state.write().await.prepare_claude_response_turn();
     }
 
     if any_delivered {
