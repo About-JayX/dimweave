@@ -92,7 +92,7 @@ impl DaemonState {
             };
             if self.is_task_agent_online(task_id, runtime_name) {
                 result.push(OnlineAgentInfo {
-                    agent_id: runtime_name.into(),
+                    agent_id: agent.agent_id.clone(),
                     role: agent.role.clone(),
                     model_source: runtime_name.into(),
                 });
@@ -134,25 +134,43 @@ impl DaemonState {
     }
 
     /// Provider binding summary for a specific task (AC5).
+    /// Uses task_agents[] when available; falls back to legacy slots.
     pub fn task_provider_summary(
         &self,
         task_id: &str,
     ) -> Option<crate::daemon::types::TaskProviderSummary> {
         let task = self.task_graph.get_task(task_id)?;
-        let lead_agent = match task.lead_provider {
-            crate::daemon::task_graph::types::Provider::Claude => "claude",
-            crate::daemon::task_graph::types::Provider::Codex => "codex",
-        };
-        let coder_agent = match task.coder_provider {
-            crate::daemon::task_graph::types::Provider::Claude => "claude",
-            crate::daemon::task_graph::types::Provider::Codex => "codex",
+        let agents = self.task_graph.agents_for_task(task_id);
+        let (lead_agent, coder_agent) = if agents.is_empty() {
+            let lead = match task.lead_provider {
+                crate::daemon::task_graph::types::Provider::Claude => "claude",
+                crate::daemon::task_graph::types::Provider::Codex => "codex",
+            };
+            let coder = match task.coder_provider {
+                crate::daemon::task_graph::types::Provider::Claude => "claude",
+                crate::daemon::task_graph::types::Provider::Codex => "codex",
+            };
+            (lead, coder)
+        } else {
+            let lead = agents.iter().find(|a| a.role == "lead");
+            let coder = agents.iter().find(|a| a.role == "coder");
+            (
+                lead.map_or("claude", |a| match a.provider {
+                    crate::daemon::task_graph::types::Provider::Claude => "claude",
+                    crate::daemon::task_graph::types::Provider::Codex => "codex",
+                }),
+                coder.map_or("codex", |a| match a.provider {
+                    crate::daemon::task_graph::types::Provider::Claude => "claude",
+                    crate::daemon::task_graph::types::Provider::Codex => "codex",
+                }),
+            )
         };
         let lead_online = self.is_task_agent_online(task_id, lead_agent);
         let coder_online = self.is_task_agent_online(task_id, coder_agent);
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
-            lead_provider: format!("{:?}", task.lead_provider).to_lowercase(),
-            coder_provider: format!("{:?}", task.coder_provider).to_lowercase(),
+            lead_provider: lead_agent.into(),
+            coder_provider: coder_agent.into(),
             lead_online,
             coder_online,
             lead_provider_session: if lead_online {

@@ -4,13 +4,13 @@ use serde_json::json;
 
 #[test]
 fn in_progress_sdk_text_does_not_create_visible_gui_message() {
-    let msg = build_direct_sdk_gui_message("lead", "partial reply", MessageStatus::InProgress);
+    let msg = build_direct_sdk_gui_message("lead", "partial reply", MessageStatus::InProgress, "agent-1");
     assert!(msg.is_none());
 }
 
 #[test]
 fn terminal_sdk_text_creates_visible_gui_message() {
-    let msg = build_direct_sdk_gui_message("lead", "final reply", MessageStatus::Done)
+    let msg = build_direct_sdk_gui_message("lead", "final reply", MessageStatus::Done, "agent-1")
         .expect("done messages should be visible");
 
     assert_eq!(msg.from, "lead");
@@ -18,6 +18,7 @@ fn terminal_sdk_text_creates_visible_gui_message() {
     assert_eq!(msg.to, "user");
     assert_eq!(msg.content, "final reply");
     assert_eq!(msg.status, Some(MessageStatus::Done));
+    assert_eq!(msg.sender_agent_id.as_deref(), Some("agent-1"));
 }
 
 #[test]

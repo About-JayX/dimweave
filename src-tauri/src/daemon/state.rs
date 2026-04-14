@@ -157,6 +157,7 @@ mod state_snapshot;
 mod state_snapshot_tests;
 #[path = "state_task_flow.rs"]
 mod state_task_flow;
+pub(crate) use state_task_flow::MatchedTaskAgent;
 #[cfg(test)]
 #[path = "state_task_snapshot_tests.rs"]
 mod state_task_snapshot_tests;

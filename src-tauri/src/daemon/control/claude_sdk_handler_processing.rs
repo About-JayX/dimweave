@@ -1,9 +1,15 @@
 use crate::daemon::{gui, state::DaemonState, SharedState};
 use tauri::AppHandle;
 
-/// Resolve which role Claude serves for a task from the task's provider bindings.
-/// Falls back to the global `claude_role` if the task is not found.
+/// Resolve which role Claude serves for a task from task_agents[] first,
+/// then legacy provider bindings, then global `claude_role`.
 fn resolve_claude_role_for_task(s: &DaemonState, task_id: &str) -> String {
+    let agents = s.task_graph.agents_for_task(task_id);
+    if let Some(claude_agent) = agents.iter().find(|a| {
+        a.provider == crate::daemon::task_graph::types::Provider::Claude
+    }) {
+        return claude_agent.role.clone();
+    }
     if let Some(task) = s.task_graph.get_task(task_id) {
         if task.lead_provider == crate::daemon::task_graph::types::Provider::Claude {
             return "lead".into();
@@ -13,6 +19,16 @@ fn resolve_claude_role_for_task(s: &DaemonState, task_id: &str) -> String {
         }
     }
     s.claude_role.clone()
+}
+
+/// Resolve Claude agent_id from task_agents, falling back to "claude".
+fn resolve_claude_agent_id_for_task(s: &DaemonState, task_id: &str) -> String {
+    s.task_graph
+        .agents_for_task(task_id)
+        .iter()
+        .find(|a| a.provider == crate::daemon::task_graph::types::Provider::Claude)
+        .map(|a| a.agent_id.clone())
+        .unwrap_or_else(|| "claude".into())
 }
 
 pub(crate) async fn process_sdk_events(
@@ -32,9 +48,11 @@ async fn process_sdk_event(
     event: serde_json::Value,
     task_id: &str,
 ) {
-    let role = {
+    let (role, agent_id) = {
         let s = state.read().await;
-        resolve_claude_role_for_task(&s, task_id)
+        let role = resolve_claude_role_for_task(&s, task_id);
+        let agent_id = resolve_claude_agent_id_for_task(&s, task_id);
+        (role, agent_id)
     };
     gui::emit_system_log(
         app,
@@ -48,6 +66,7 @@ async fn process_sdk_event(
     crate::daemon::claude_sdk::event_handler::handle_events(
         vec![event],
         &role,
+        &agent_id,
         state.clone(),
         app.clone(),
     )

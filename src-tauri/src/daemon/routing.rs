@@ -123,7 +123,10 @@ fn resolve_broadcast_targets(
     };
 
     let (claude_matches, codex_matches) = match &task_providers {
-        Some(p) if !p.is_empty() => (p.contains(&"claude"), p.contains(&"codex")),
+        Some(p) if !p.is_empty() => (
+            p.iter().any(|m| m.runtime == "claude"),
+            p.iter().any(|m| m.runtime == "codex"),
+        ),
         Some(_) if task_agents_authoritative => {
             // task_agents exist but none match the role → buffer (AC4)
             return BroadcastResolution::NeedBuffer;

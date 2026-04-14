@@ -111,7 +111,7 @@ pub fn resolve_user_targets_for_task(
             state
                 .resolve_task_role_providers(task_id, role)
                 .iter()
-                .any(|agent| state.is_task_agent_online(task_id, agent))
+                .any(|m| state.is_task_agent_online(task_id, m.runtime))
         })
         .collect()
 }

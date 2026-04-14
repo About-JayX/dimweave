@@ -25,16 +25,22 @@ mod stream;
 mod tests;
 
 /// Dispatch a batch of events from Claude's HTTP POST.
-pub async fn handle_events(events: Vec<Value>, role: &str, state: SharedState, app: AppHandle) {
+pub async fn handle_events(
+    events: Vec<Value>,
+    role: &str,
+    agent_id: &str,
+    state: SharedState,
+    app: AppHandle,
+) {
     for event in events {
         let Some(event_type) = event["type"].as_str() else {
             continue;
         };
         match event_type {
-            "assistant" => handle_assistant(&event, role, &state, &app).await,
+            "assistant" => handle_assistant(&event, role, agent_id, &state, &app).await,
             "control_request" => handle_control_request(&event, &state, &app).await,
             "system" => handle_system(&event, &app),
-            "result" => handle_result(&event, role, &state, &app).await,
+            "result" => handle_result(&event, role, agent_id, &state, &app).await,
             "user" | "keep_alive" | "control_cancel_request" => { /* echo / heartbeat / cancel — ignore */
             }
             "stream_event" => handle_stream_event(&event, &state, &app).await,
@@ -71,15 +77,18 @@ pub async fn handle_events(events: Vec<Value>, role: &str, state: SharedState, a
     }
 }
 
-async fn handle_assistant(event: &Value, role: &str, state: &SharedState, app: &AppHandle) {
+async fn handle_assistant(
+    event: &Value,
+    role: &str,
+    agent_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
     let text = extract_assistant_text(event);
     if text.is_empty() || !begin_sdk_direct_text_turn_if_allowed(state).await {
         return;
     }
-    // SDK fallback intentionally keeps in-progress text out of chat bubbles.
-    // Assistant chunks only lock in direct-routing ownership for this turn so a
-    // late bridge attach cannot steal the final visible result mid-turn.
-    if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::InProgress) {
+    if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::InProgress, agent_id) {
         routing::route_message(state, app, msg).await;
     }
 }
@@ -156,7 +165,13 @@ fn handle_system(event: &Value, app: &AppHandle) {
     );
 }
 
-async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &AppHandle) {
+async fn handle_result(
+    event: &Value,
+    role: &str,
+    agent_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
     flush_pending_preview_batch(state, app).await;
     // Extract final text if present in result
     let text = event["result"]
@@ -192,7 +207,7 @@ async fn handle_result(event: &Value, role: &str, state: &SharedState, app: &App
                 role
             ),
         );
-        if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::Done) {
+        if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::Done, agent_id) {
             routing::route_message(state, app, msg).await;
         }
     }

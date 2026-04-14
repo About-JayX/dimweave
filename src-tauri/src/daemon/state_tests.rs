@@ -1,5 +1,10 @@
 use super::*;
+use crate::daemon::state::MatchedTaskAgent;
 use crate::daemon::task_graph::types::{CreateSessionParams, Provider};
+
+fn matched(agent_id: &str, runtime: &'static str) -> MatchedTaskAgent {
+    MatchedTaskAgent { agent_id: agent_id.into(), runtime }
+}
 
 fn temp_state_path(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -1744,8 +1749,14 @@ fn agent_id_routing_resolve_role_providers_from_task_agents() {
     s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
     s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
 
-    assert_eq!(s.resolve_task_role_providers(&task.task_id, "lead"), vec!["claude"]);
-    assert_eq!(s.resolve_task_role_providers(&task.task_id, "coder"), vec!["codex"]);
+    let leads = s.resolve_task_role_providers(&task.task_id, "lead");
+    assert_eq!(leads.len(), 1);
+    assert_eq!(leads[0].runtime, "claude");
+    assert!(!leads[0].agent_id.is_empty(), "agent_id must be preserved");
+
+    let coders = s.resolve_task_role_providers(&task.task_id, "coder");
+    assert_eq!(coders.len(), 1);
+    assert_eq!(coders[0].runtime, "codex");
 }
 
 #[test]
@@ -1757,8 +1768,23 @@ fn agent_id_routing_broadcast_same_role_both_providers() {
 
     let coders = s.resolve_task_role_providers(&task.task_id, "coder");
     assert_eq!(coders.len(), 2);
-    assert!(coders.contains(&"claude"));
-    assert!(coders.contains(&"codex"));
+    assert!(coders.iter().any(|m| m.runtime == "claude"));
+    assert!(coders.iter().any(|m| m.runtime == "codex"));
+}
+
+#[test]
+fn agent_id_routing_same_provider_same_role_not_collapsed() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    // Two Claude agents both with role "coder" — must NOT collapse to one entry
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+
+    let coders = s.resolve_task_role_providers(&task.task_id, "coder");
+    assert_eq!(coders.len(), 2, "same-provider same-role must not collapse");
+    assert_ne!(coders[0].agent_id, coders[1].agent_id, "each must have unique agent_id");
+    assert_eq!(coders[0].runtime, "claude");
+    assert_eq!(coders[1].runtime, "claude");
 }
 
 #[test]
@@ -1790,7 +1816,9 @@ fn agent_id_routing_extensible_role_resolves() {
     let task = s.task_graph.create_task("/ws", "T");
     s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "reviewer");
 
-    assert_eq!(s.resolve_task_role_providers(&task.task_id, "reviewer"), vec!["claude"]);
+    let reviewers = s.resolve_task_role_providers(&task.task_id, "reviewer");
+    assert_eq!(reviewers.len(), 1);
+    assert_eq!(reviewers[0].runtime, "claude");
     assert_eq!(s.resolve_task_provider_agent(&task.task_id, "reviewer"), Some("claude"));
 }
 
@@ -1820,7 +1848,11 @@ fn agent_id_routing_task_scoped_online_agents_uses_task_agents() {
 
     let online = s.task_scoped_online_agents(&task.task_id);
     assert_eq!(online.len(), 1);
-    assert_eq!(online[0].agent_id, "claude");
+    // agent_id must be the TaskAgent.agent_id, not the runtime name "claude"
+    let agents = s.task_graph.agents_for_task(&task.task_id);
+    let claude_agent = agents.iter().find(|a| a.provider == Provider::Claude).unwrap();
+    assert_eq!(online[0].agent_id, claude_agent.agent_id);
+    assert_eq!(online[0].model_source, "claude", "model_source is still the runtime name");
     assert_eq!(online[0].role, "lead", "role should come from task_agents, not singleton");
 }
 

@@ -13,6 +13,32 @@ fn is_allowed_agent(agent_id: &str) -> bool {
     matches!(agent_id, "claude" | "codex")
 }
 
+/// Resolve (role, agent_id) from task_agents first, then global singletons.
+fn resolve_agent_identity(
+    s: &crate::daemon::state::DaemonState,
+    runtime_id: &str,
+) -> (String, String) {
+    let provider = match runtime_id {
+        "claude" => Some(crate::daemon::task_graph::types::Provider::Claude),
+        "codex" => Some(crate::daemon::task_graph::types::Provider::Codex),
+        _ => None,
+    };
+    if let Some(prov) = provider {
+        if let Some(task_id) = s.agent_owning_task_id(runtime_id) {
+            let agents = s.task_graph.agents_for_task(&task_id);
+            if let Some(agent) = agents.iter().find(|a| a.provider == prov) {
+                return (agent.role.clone(), agent.agent_id.clone());
+            }
+        }
+    }
+    let role = match runtime_id {
+        "claude" => s.claude_role.clone(),
+        "codex" => s.codex_role.clone(),
+        _ => runtime_id.to_string(),
+    };
+    (role, runtime_id.to_string())
+}
+
 fn claude_terminal_reply_claims_visible_result(
     message: &crate::daemon::types::BridgeMessage,
 ) -> bool {
@@ -123,17 +149,15 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 let mut suppress_message = false;
                 let mut bridge_claimed_delivery = false;
                 if let Some(id) = agent_id.as_deref() {
-                    let role = {
+                    // Resolve role and agent_id from task_agents first (AC1),
+                    // then fall back to global singleton roles.
+                    let (role, real_agent_id) = {
                         let s = state.read().await;
-                        match id {
-                            "claude" => s.claude_role.clone(),
-                            "codex" => s.codex_role.clone(),
-                            _ => id.to_string(),
-                        }
+                        resolve_agent_identity(&s, id)
                     };
                     message.from = role.clone();
                     message.display_source = Some(id.to_string());
-                    message.sender_agent_id = Some(id.to_string());
+                    message.sender_agent_id = Some(real_agent_id);
                     let status = message.status.unwrap_or(MessageStatus::Done);
                     message.status = Some(status);
                     {

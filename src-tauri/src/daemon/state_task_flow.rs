@@ -4,6 +4,15 @@ use crate::daemon::orchestrator::task_flow;
 use crate::daemon::task_graph::types::{Provider, SessionHandle};
 use crate::daemon::types::BridgeMessage;
 
+/// A concrete task agent matched during role resolution.
+/// Preserves the `agent_id` from `TaskAgent` so routing and snapshots
+/// can distinguish same-provider same-role agents (AC1/AC2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchedTaskAgent {
+    pub agent_id: String,
+    pub runtime: &'static str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRoutingDecision {
     pub is_allowed: bool,
@@ -190,57 +199,64 @@ impl DaemonState {
         }
     }
 
-    /// Resolve all runtime agent names ("claude"/"codex") serving a given role
-    /// in a task, using `task_agents[]` as primary truth.
+    /// Resolve all matched task agents serving a given role, preserving
+    /// concrete `agent_id` from `task_agents[]` (AC1/AC2).
     /// Falls back to singleton `lead_provider`/`coder_provider` when no
     /// task_agents exist (transitional compat for pre-migration tasks).
-    pub fn resolve_task_role_providers(&self, task_id: &str, role: &str) -> Vec<&'static str> {
+    pub fn resolve_task_role_providers(
+        &self,
+        task_id: &str,
+        role: &str,
+    ) -> Vec<MatchedTaskAgent> {
         let agents = self.task_graph.agents_for_task(task_id);
         if agents.is_empty() {
             return self.resolve_role_providers_legacy(task_id, role);
         }
-        let mut has_claude = false;
-        let mut has_codex = false;
-        for a in agents {
-            if a.role != role {
-                continue;
-            }
-            match a.provider {
-                Provider::Claude => has_claude = true,
-                Provider::Codex => has_codex = true,
-            }
-        }
-        let mut result = Vec::with_capacity(2);
-        if has_claude {
-            result.push("claude");
-        }
-        if has_codex {
-            result.push("codex");
-        }
-        result
+        agents
+            .iter()
+            .filter(|a| a.role == role)
+            .map(|a| MatchedTaskAgent {
+                agent_id: a.agent_id.clone(),
+                runtime: match a.provider {
+                    Provider::Claude => "claude",
+                    Provider::Codex => "codex",
+                },
+            })
+            .collect()
     }
 
     /// Legacy singleton fallback for tasks without task_agents.
-    fn resolve_role_providers_legacy(&self, task_id: &str, role: &str) -> Vec<&'static str> {
+    fn resolve_role_providers_legacy(
+        &self,
+        task_id: &str,
+        role: &str,
+    ) -> Vec<MatchedTaskAgent> {
         let Some(task) = self.task_graph.get_task(task_id) else {
             return vec![];
         };
-        let provider = match role {
-            "lead" => &task.lead_provider,
-            "coder" => &task.coder_provider,
+        let (_provider, runtime) = match role {
+            "lead" => (&task.lead_provider, match task.lead_provider {
+                Provider::Claude => "claude",
+                Provider::Codex => "codex",
+            }),
+            "coder" => (&task.coder_provider, match task.coder_provider {
+                Provider::Claude => "claude",
+                Provider::Codex => "codex",
+            }),
             _ => return vec![],
         };
-        vec![match provider {
-            Provider::Claude => "claude",
-            Provider::Codex => "codex",
+        vec![MatchedTaskAgent {
+            agent_id: runtime.to_string(),
+            runtime,
         }]
     }
 
-    /// Compat wrapper: resolve the first agent for a role (delegates to task_agents).
+    /// Compat wrapper: resolve the first runtime name for a role.
     pub fn resolve_task_provider_agent(&self, task_id: &str, role: &str) -> Option<&'static str> {
         self.resolve_task_role_providers(task_id, role)
             .into_iter()
             .next()
+            .map(|m| m.runtime)
     }
 
     pub fn prepare_task_routing(&mut self, msg: &BridgeMessage) -> TaskRoutingDecision {
