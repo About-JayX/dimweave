@@ -2,7 +2,6 @@ import type {
   ArtifactInfo,
   Provider,
   ProviderHistoryInfo,
-  ReplyTarget,
   SessionInfo,
   TaskAgentInfo,
   TaskInfo,
@@ -21,10 +20,9 @@ export function selectActiveTask(state: TaskStoreState) {
   return state.activeTaskId ? state.tasks[state.activeTaskId] ?? null : null;
 }
 
-export function selectActiveReplyTarget(state: TaskStoreState): ReplyTarget {
-  return state.activeTaskId
-    ? state.replyTargets[state.activeTaskId] ?? "auto"
-    : "auto";
+export function selectActiveReplyTarget(state: TaskStoreState): string {
+  if (!state.activeTaskId) return "auto";
+  return state.replyTargets[state.activeTaskId] ?? selectDefaultReplyTarget(state);
 }
 
 export function selectActiveTaskSessions(state: TaskStoreState) {

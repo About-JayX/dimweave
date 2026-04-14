@@ -17,6 +17,7 @@ import {
   snapshotToPatch,
 } from "../src/stores/task-store";
 import {
+  selectActiveReplyTarget,
   selectActiveTaskAgents,
   selectActiveTaskRoleOptions,
   selectDefaultReplyTarget,
@@ -745,5 +746,78 @@ describe("selectDefaultReplyTarget", () => {
   test("defaults to auto when no active task", () => {
     const state = { ...emptyState() } as unknown as TaskStoreState;
     expect(selectDefaultReplyTarget(state)).toBe("auto");
+  });
+});
+
+describe("selectActiveReplyTarget (live default-target rule)", () => {
+  test("uses lead as default when no stored target and lead agent exists", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("lead");
+  });
+
+  test("uses first ordered role as default when no lead and no stored target", () => {
+    const agents = [
+      makeAgent("a1", "t1", "codex", "reviewer", 0),
+      makeAgent("a2", "t1", "claude", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("reviewer");
+  });
+
+  test("returns auto when no agents and no stored target", () => {
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [] },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("auto");
+  });
+
+  test("returns stored target when explicitly set", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+      replyTargets: { t1: "coder" },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("coder");
+  });
+
+  test("returns auto when no active task", () => {
+    const state = { ...emptyState() } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("auto");
+  });
+
+  test("supports extensible role names", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "architect", 0),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(state)).toBe("architect");
   });
 });

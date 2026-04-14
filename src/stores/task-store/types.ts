@@ -11,7 +11,7 @@ export type TaskStatus =
 export type SessionStatus = "active" | "paused" | "completed" | "error";
 export type Provider = "claude" | "codex";
 export type SessionRole = "lead" | "coder";
-export type ReplyTarget = "auto" | "lead" | "coder";
+export type ReplyTarget = string;
 export type ArtifactKind =
   | "research"
   | "plan"
