@@ -189,3 +189,13 @@ This means:
 - multi-task list no longer collapses when creating additional tasks in one project
 - agent reorder persists correctly through SQLite-backed storage
 - Telegram/Feishu config persistence no longer relies on standalone JSON files
+
+## Status — Accepted
+
+All acceptance criteria verified and accepted through Tasks 1–5 of the implementation plan:
+
+- Task graph JSON persistence replaced with SQLite schema (tasks, task_agents, sessions, artifacts, buffered_messages, meta) — Task 1
+- Buffered messages persist through daemon restart via SQLite — Task 2
+- Telegram config and Feishu config/inbox moved from standalone JSON to shared `config.db` — Task 3
+- Frontend workspace selection aligned to `projectRoot`; multi-task list no longer collapses — Task 4
+- Agent drag-and-drop reorder verified against SQLite-backed persistence — Task 5
