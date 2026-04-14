@@ -39,7 +39,12 @@ pub async fn handle_dynamic_tool(
     }
 }
 
-fn build_reply_message(args: &Value, from: &str, agent_id: &str) -> Option<BridgeMessage> {
+fn build_reply_message(
+    args: &Value,
+    from: &str,
+    agent_id: &str,
+    display_source: &str,
+) -> Option<BridgeMessage> {
     let to = args["to"].as_str().unwrap_or("user");
     let text = args["text"].as_str().unwrap_or("");
     if text.trim().is_empty() {
@@ -53,7 +58,7 @@ fn build_reply_message(args: &Value, from: &str, agent_id: &str) -> Option<Bridg
     Some(BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
-        display_source: Some("codex".into()),
+        display_source: Some(display_source.to_string()),
         to: to.to_string(),
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
@@ -75,12 +80,12 @@ async fn handle_reply(
     app: &AppHandle,
 ) -> String {
     let to = args["to"].as_str().unwrap_or("user");
-    // Resolve actual agent_id from task_agents (AC1)
-    let agent_id = {
+    // Resolve actual Codex identity from task_agents (AC1)
+    let (agent_id, display_source) = {
         let s = state.read().await;
-        resolve_codex_agent_id(&s, task_id)
+        resolve_codex_identity(&s, task_id)
     };
-    let Some(mut msg) = build_reply_message(args, from, &agent_id) else {
+    let Some(mut msg) = build_reply_message(args, from, &agent_id, display_source) else {
         return format!("Ignored empty message to {to}");
     };
     {
@@ -92,17 +97,18 @@ async fn handle_reply(
     format!("Message sent to {to}")
 }
 
-/// Resolve Codex agent_id from task_agents, falling back to "codex".
-fn resolve_codex_agent_id(
+/// Resolve Codex (agent_id, display_source) from task_agents.
+/// Falls back to ("codex", "codex") for legacy tasks.
+fn resolve_codex_identity(
     s: &crate::daemon::state::DaemonState,
     task_id: &str,
-) -> String {
+) -> (String, &'static str) {
     let agents = s.task_graph.agents_for_task(task_id);
     agents
         .iter()
         .find(|a| a.provider == crate::daemon::task_graph::types::Provider::Codex)
-        .map(|a| a.agent_id.clone())
-        .unwrap_or_else(|| "codex".into())
+        .map(|a| (a.agent_id.clone(), "codex"))
+        .unwrap_or_else(|| ("codex".into(), "codex"))
 }
 
 async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState) -> String {
@@ -142,7 +148,7 @@ mod tests {
             "status": "error"
         });
 
-        let msg = build_reply_message(&args, "lead", "codex-agent-1").expect("message");
+        let msg = build_reply_message(&args, "lead", "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Error));
     }
@@ -154,7 +160,7 @@ mod tests {
             "text": "take task 2"
         });
 
-        let msg = build_reply_message(&args, "lead", "codex-agent-1").expect("message");
+        let msg = build_reply_message(&args, "lead", "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.status, Some(MessageStatus::Done));
     }
 
@@ -165,7 +171,7 @@ mod tests {
             "text": "   "
         });
 
-        assert!(build_reply_message(&args, "lead", "codex-agent-1").is_none());
+        assert!(build_reply_message(&args, "lead", "codex-agent-1", "codex").is_none());
     }
 
     #[tokio::test]

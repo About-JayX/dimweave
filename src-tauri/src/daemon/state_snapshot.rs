@@ -1,6 +1,13 @@
 use super::*;
-use crate::daemon::task_graph::types::{SessionRole, SessionStatus, Task};
+use crate::daemon::task_graph::types::{Provider, SessionRole, SessionStatus, Task};
 use crate::daemon::types::{HistoryEntry, SessionTreeSnapshot, TaskSnapshot};
+
+fn provider_runtime(p: Provider) -> &'static str {
+    match p {
+        Provider::Claude => "claude",
+        Provider::Codex => "codex",
+    }
+}
 
 impl DaemonState {
     pub fn status_snapshot(&self) -> DaemonStatusSnapshot {
@@ -86,15 +93,12 @@ impl DaemonState {
         }
         let mut result = Vec::new();
         for agent in agents {
-            let runtime_name: &str = match agent.provider {
-                crate::daemon::task_graph::types::Provider::Claude => "claude",
-                crate::daemon::task_graph::types::Provider::Codex => "codex",
-            };
-            if self.is_task_agent_online(task_id, runtime_name) {
+            let runtime = provider_runtime(agent.provider);
+            if self.is_task_agent_online(task_id, runtime) {
                 result.push(OnlineAgentInfo {
                     agent_id: agent.agent_id.clone(),
                     role: agent.role.clone(),
-                    model_source: runtime_name.into(),
+                    model_source: runtime.into(),
                 });
             }
         }
@@ -108,26 +112,20 @@ impl DaemonState {
         task: &Task,
     ) -> Vec<OnlineAgentInfo> {
         let mut result = Vec::new();
-        let lead_agent = match task.lead_provider {
-            crate::daemon::task_graph::types::Provider::Claude => "claude",
-            crate::daemon::task_graph::types::Provider::Codex => "codex",
-        };
-        let coder_agent = match task.coder_provider {
-            crate::daemon::task_graph::types::Provider::Claude => "claude",
-            crate::daemon::task_graph::types::Provider::Codex => "codex",
-        };
-        if self.is_task_agent_online(task_id, lead_agent) {
+        let lead_rt = provider_runtime(task.lead_provider);
+        let coder_rt = provider_runtime(task.coder_provider);
+        if self.is_task_agent_online(task_id, lead_rt) {
             result.push(OnlineAgentInfo {
-                agent_id: lead_agent.into(),
+                agent_id: lead_rt.into(),
                 role: "lead".into(),
-                model_source: lead_agent.into(),
+                model_source: lead_rt.into(),
             });
         }
-        if self.is_task_agent_online(task_id, coder_agent) {
+        if self.is_task_agent_online(task_id, coder_rt) {
             result.push(OnlineAgentInfo {
-                agent_id: coder_agent.into(),
+                agent_id: coder_rt.into(),
                 role: "coder".into(),
-                model_source: coder_agent.into(),
+                model_source: coder_rt.into(),
             });
         }
         result
@@ -135,51 +133,45 @@ impl DaemonState {
 
     /// Provider binding summary for a specific task (AC5).
     /// Uses task_agents[] when available; falls back to legacy slots.
+    /// Returns concrete agent_ids from task_agents, not provider-level names.
     pub fn task_provider_summary(
         &self,
         task_id: &str,
     ) -> Option<crate::daemon::types::TaskProviderSummary> {
         let task = self.task_graph.get_task(task_id)?;
         let agents = self.task_graph.agents_for_task(task_id);
-        let (lead_agent, coder_agent) = if agents.is_empty() {
-            let lead = match task.lead_provider {
-                crate::daemon::task_graph::types::Provider::Claude => "claude",
-                crate::daemon::task_graph::types::Provider::Codex => "codex",
+        let (lead_runtime, lead_agent_id, coder_runtime, coder_agent_id) =
+            if agents.is_empty() {
+                let lead_rt = provider_runtime(task.lead_provider);
+                let coder_rt = provider_runtime(task.coder_provider);
+                (lead_rt, lead_rt.to_string(), coder_rt, coder_rt.to_string())
+            } else {
+                let lead = agents.iter().find(|a| a.role == "lead");
+                let coder = agents.iter().find(|a| a.role == "coder");
+                (
+                    lead.map_or("claude", |a| provider_runtime(a.provider)),
+                    lead.map_or_else(|| "claude".into(), |a| a.agent_id.clone()),
+                    coder.map_or("codex", |a| provider_runtime(a.provider)),
+                    coder.map_or_else(|| "codex".into(), |a| a.agent_id.clone()),
+                )
             };
-            let coder = match task.coder_provider {
-                crate::daemon::task_graph::types::Provider::Claude => "claude",
-                crate::daemon::task_graph::types::Provider::Codex => "codex",
-            };
-            (lead, coder)
-        } else {
-            let lead = agents.iter().find(|a| a.role == "lead");
-            let coder = agents.iter().find(|a| a.role == "coder");
-            (
-                lead.map_or("claude", |a| match a.provider {
-                    crate::daemon::task_graph::types::Provider::Claude => "claude",
-                    crate::daemon::task_graph::types::Provider::Codex => "codex",
-                }),
-                coder.map_or("codex", |a| match a.provider {
-                    crate::daemon::task_graph::types::Provider::Claude => "claude",
-                    crate::daemon::task_graph::types::Provider::Codex => "codex",
-                }),
-            )
-        };
-        let lead_online = self.is_task_agent_online(task_id, lead_agent);
-        let coder_online = self.is_task_agent_online(task_id, coder_agent);
+        let lead_online = self.is_task_agent_online(task_id, lead_runtime);
+        let coder_online = self.is_task_agent_online(task_id, coder_runtime);
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
-            lead_provider: lead_agent.into(),
-            coder_provider: coder_agent.into(),
+            lead_provider: lead_runtime.into(),
+            coder_provider: coder_runtime.into(),
+            lead_agent_id,
+            coder_agent_id,
             lead_online,
             coder_online,
             lead_provider_session: if lead_online {
-                self.task_provider_connection(task_id, lead_agent)
+                self.task_provider_connection(task_id, lead_runtime)
             } else {
                 None
             },
             coder_provider_session: if coder_online {
-                self.task_provider_connection(task_id, coder_agent)
+                self.task_provider_connection(task_id, coder_runtime)
             } else {
                 None
             },

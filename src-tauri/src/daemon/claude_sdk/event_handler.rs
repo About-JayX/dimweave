@@ -29,6 +29,7 @@ pub async fn handle_events(
     events: Vec<Value>,
     role: &str,
     agent_id: &str,
+    display_source: &str,
     state: SharedState,
     app: AppHandle,
 ) {
@@ -37,10 +38,10 @@ pub async fn handle_events(
             continue;
         };
         match event_type {
-            "assistant" => handle_assistant(&event, role, agent_id, &state, &app).await,
+            "assistant" => handle_assistant(&event, role, agent_id, display_source, &state, &app).await,
             "control_request" => handle_control_request(&event, &state, &app).await,
             "system" => handle_system(&event, &app),
-            "result" => handle_result(&event, role, agent_id, &state, &app).await,
+            "result" => handle_result(&event, role, agent_id, display_source, &state, &app).await,
             "user" | "keep_alive" | "control_cancel_request" => { /* echo / heartbeat / cancel — ignore */
             }
             "stream_event" => handle_stream_event(&event, &state, &app).await,
@@ -81,6 +82,7 @@ async fn handle_assistant(
     event: &Value,
     role: &str,
     agent_id: &str,
+    display_source: &str,
     state: &SharedState,
     app: &AppHandle,
 ) {
@@ -88,7 +90,7 @@ async fn handle_assistant(
     if text.is_empty() || !begin_sdk_direct_text_turn_if_allowed(state).await {
         return;
     }
-    if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::InProgress, agent_id) {
+    if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::InProgress, agent_id, display_source) {
         routing::route_message(state, app, msg).await;
     }
 }
@@ -169,6 +171,7 @@ async fn handle_result(
     event: &Value,
     role: &str,
     agent_id: &str,
+    display_source: &str,
     state: &SharedState,
     app: &AppHandle,
 ) {
@@ -207,7 +210,7 @@ async fn handle_result(
                 role
             ),
         );
-        if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::Done, agent_id) {
+        if let Some(msg) = build_direct_sdk_gui_message(role, &text, MessageStatus::Done, agent_id, display_source) {
             routing::route_message(state, app, msg).await;
         }
     }

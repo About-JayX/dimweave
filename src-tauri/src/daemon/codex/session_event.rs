@@ -125,6 +125,7 @@ fn build_completed_output_message(
     parsed: &ParsedOutput,
     schema_route_enabled: bool,
     agent_id: &str,
+    display_source: &str,
 ) -> Option<BridgeMessage> {
     if !should_emit_final_message(&parsed.message) {
         return None;
@@ -140,7 +141,7 @@ fn build_completed_output_message(
         "user"
     };
 
-    Some(build_msg_with_status(role_id, target, &parsed.message, parsed.status, agent_id))
+    Some(build_msg_with_status(role_id, target, &parsed.message, parsed.status, agent_id, display_source))
 }
 
 async fn handle_completed_agent_message(
@@ -165,24 +166,24 @@ async fn handle_completed_agent_message(
         Err(err) => {
             let hint = err.to_string();
             gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
-            let error_agent_id = {
+            let (error_agent_id, error_ds) = {
                 let s = state.read().await;
-                resolve_codex_agent_id_for_task(&s, task_id)
+                resolve_codex_identity_for_task(&s, task_id)
             };
             let error_msg = build_msg_with_status(
-                role_id, "user", &hint, MessageStatus::Error, &error_agent_id,
+                role_id, "user", &hint, MessageStatus::Error, &error_agent_id, error_ds,
             );
             gui::emit_agent_message(app, &error_msg);
             return;
         }
     };
-    // Resolve actual Codex agent_id from task_agents (AC1)
-    let agent_id = {
+    // Resolve actual Codex identity from task_agents (AC1)
+    let (agent_id, display_source) = {
         let s = state.read().await;
-        resolve_codex_agent_id_for_task(&s, task_id)
+        resolve_codex_identity_for_task(&s, task_id)
     };
     let Some(mut msg) = build_completed_output_message(
-        role_id, &parsed, schema_route_enabled, &agent_id,
+        role_id, &parsed, schema_route_enabled, &agent_id, display_source,
     ) else {
         return;
     };
@@ -337,17 +338,18 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
     }
 }
 
-/// Resolve Codex agent_id from task_agents, falling back to "codex".
-fn resolve_codex_agent_id_for_task(
+/// Resolve Codex (agent_id, display_source) from task_agents.
+/// Falls back to ("codex", "codex") for legacy tasks.
+fn resolve_codex_identity_for_task(
     s: &crate::daemon::state::DaemonState,
     task_id: &str,
-) -> String {
+) -> (String, &'static str) {
     s.task_graph
         .agents_for_task(task_id)
         .iter()
         .find(|a| a.provider == Provider::Codex)
-        .map(|a| a.agent_id.clone())
-        .unwrap_or_else(|| "codex".into())
+        .map(|a| (a.agent_id.clone(), "codex"))
+        .unwrap_or_else(|| ("codex".into(), "codex"))
 }
 
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -358,12 +360,13 @@ fn build_msg_with_status(
     content: &str,
     status: MessageStatus,
     agent_id: &str,
+    display_source: &str,
 ) -> BridgeMessage {
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     BridgeMessage {
         id: format!("codex_{}_{seq}", chrono::Utc::now().timestamp_millis()),
         from: from.to_string(),
-        display_source: Some("codex".into()),
+        display_source: Some(display_source.to_string()),
         to: to.to_string(),
         content: content.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
@@ -390,7 +393,7 @@ mod tests {
             status: MessageStatus::Done,
         };
 
-        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1").expect("message");
+        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
     }
@@ -403,7 +406,7 @@ mod tests {
             status: MessageStatus::Done,
         };
 
-        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1").expect("message");
+        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
     }
 
@@ -415,7 +418,7 @@ mod tests {
             status: MessageStatus::InProgress,
         };
 
-        let msg = build_completed_output_message("coder", &parsed, false, "codex-agent-1").expect("message");
+        let msg = build_completed_output_message("coder", &parsed, false, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
     }
 
@@ -427,7 +430,7 @@ mod tests {
             status: MessageStatus::Done,
         };
 
-        assert!(build_completed_output_message("lead", &parsed, true, "codex-agent-1").is_none());
+        assert!(build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").is_none());
     }
 
     #[test]

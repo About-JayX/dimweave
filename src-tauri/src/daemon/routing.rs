@@ -107,86 +107,110 @@ fn resolve_broadcast_targets(
     s: &crate::daemon::state::DaemonState,
     msg: &BridgeMessage,
 ) -> BroadcastResolution {
+    use crate::daemon::state::MatchedTaskAgent;
     let emit_claude_thinking =
         routing_display::should_emit_claude_thinking_pre(msg, &s.claude_role);
 
-    // Task-first: resolve providers from task_agents[].
-    // Track whether task_agents (not singleton fallback) provided the resolution,
-    // so session matching is only skipped for the authoritative new model.
-    let (task_providers, task_agents_authoritative) = match msg.task_id.as_deref() {
+    // Resolve matched agents for the target role.
+    // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
+    let (matched_agents, task_agents_authoritative) = match msg.task_id.as_deref() {
         Some(tid) => {
             let has_agents = !s.task_graph.agents_for_task(tid).is_empty();
-            let providers = s.resolve_task_role_providers(tid, &msg.to);
-            (Some(providers), has_agents)
+            let agents = s.resolve_task_role_providers(tid, &msg.to);
+            if agents.is_empty() {
+                if has_agents {
+                    // task_agents exist but none match the role → buffer (AC4)
+                    return BroadcastResolution::NeedBuffer;
+                }
+                // Legacy fallback returned empty → no agent for this role
+                return BroadcastResolution::NeedBuffer;
+            }
+            (agents, has_agents)
         }
-        None => (None, false),
+        None => {
+            // No task context: synthesize agents from global role bindings
+            let mut agents = Vec::new();
+            if s.claude_role == msg.to {
+                agents.push(MatchedTaskAgent {
+                    agent_id: "claude".into(),
+                    runtime: "claude",
+                });
+            }
+            if s.codex_role == msg.to {
+                agents.push(MatchedTaskAgent {
+                    agent_id: "codex".into(),
+                    runtime: "codex",
+                });
+            }
+            if agents.is_empty() {
+                if crate::daemon::is_valid_agent_role(&msg.to) {
+                    return BroadcastResolution::NeedBuffer;
+                }
+                return BroadcastResolution::Dropped;
+            }
+            (agents, false)
+        }
     };
-
-    let (claude_matches, codex_matches) = match &task_providers {
-        Some(p) if !p.is_empty() => (
-            p.iter().any(|m| m.runtime == "claude"),
-            p.iter().any(|m| m.runtime == "codex"),
-        ),
-        Some(_) if task_agents_authoritative => {
-            // task_agents exist but none match the role → buffer (AC4)
-            return BroadcastResolution::NeedBuffer;
-        }
-        Some(_) => {
-            // Legacy fallback returned empty → no agent for this role
-            return BroadcastResolution::NeedBuffer;
-        }
-        None => (s.claude_role == msg.to, s.codex_role == msg.to),
-    };
-
-    if !claude_matches && !codex_matches {
-        if crate::daemon::is_valid_agent_role(&msg.to) {
-            return BroadcastResolution::NeedBuffer;
-        }
-        return BroadcastResolution::Dropped;
-    }
-
-    // Sender gating: Claude only accepts user/system/current codex_role
-    let claude_sender_gated = claude_matches
-        && msg.from != "user"
-        && msg.from != "system"
-        && msg.from != s.codex_role;
-
-    if claude_sender_gated && !codex_matches {
-        return BroadcastResolution::Dropped;
-    }
 
     let task_id = msg.task_id.as_deref();
-    // Only skip legacy session check when task_agents[] genuinely resolved the providers
     let ta_resolved = task_agents_authoritative;
+    let claude_sender_ok =
+        msg.from == "user" || msg.from == "system" || msg.from == s.codex_role;
+    // Iterate matched agents and collect unique runtime channels (AC2).
+    // Two agents on the same runtime share one physical channel, so we
+    // dedup at the channel level, but the iteration is per-agent.
+    let mut claude_sdk = None;
+    let mut claude_bridge = None;
+    let mut codex = None;
+    let mut any_sender_gated = false;
 
-    // Collect Claude channel (SDK preferred over bridge)
-    let (claude_sdk, claude_bridge) = if claude_matches
-        && !claude_sender_gated
-        && should_deliver_to_agent(s, "claude", msg, ta_resolved)
-    {
-        let sdk_tx = task_id
-            .and_then(|tid| s.claude_task_ws_tx(tid))
-            .or_else(|| s.claude_sdk_ws_tx.clone());
-        if sdk_tx.is_some() {
-            (sdk_tx, None)
-        } else {
-            (None, s.attached_agents.get("claude").map(|a| a.tx.clone()))
+    for agent in &matched_agents {
+        match agent.runtime {
+            "claude" => {
+                if claude_sdk.is_some() || claude_bridge.is_some() {
+                    continue;
+                }
+                if !claude_sender_ok {
+                    any_sender_gated = true;
+                    continue;
+                }
+                if !should_deliver_to_agent(s, "claude", msg, ta_resolved) {
+                    continue;
+                }
+                let sdk_tx = task_id
+                    .and_then(|tid| s.claude_task_ws_tx(tid))
+                    .or_else(|| s.claude_sdk_ws_tx.clone());
+                if sdk_tx.is_some() {
+                    claude_sdk = sdk_tx;
+                } else {
+                    claude_bridge =
+                        s.attached_agents.get("claude").map(|a| a.tx.clone());
+                }
+            }
+            "codex" => {
+                if codex.is_some() {
+                    continue;
+                }
+                if !should_deliver_to_agent(s, "codex", msg, ta_resolved) {
+                    continue;
+                }
+                let tx = task_id
+                    .and_then(|tid| s.codex_task_inject_tx(tid))
+                    .or_else(|| s.codex_inject_tx.clone());
+                codex =
+                    tx.map(|t| (t, build_codex_input_items(msg), msg.from == "user"));
+            }
+            _ => {}
         }
-    } else {
-        (None, None)
-    };
-
-    // Collect Codex channel
-    let codex = if codex_matches && should_deliver_to_agent(s, "codex", msg, ta_resolved) {
-        let tx = task_id
-            .and_then(|tid| s.codex_task_inject_tx(tid))
-            .or_else(|| s.codex_inject_tx.clone());
-        tx.map(|t| (t, build_codex_input_items(msg), msg.from == "user"))
-    } else {
-        None
-    };
+    }
 
     if claude_sdk.is_none() && claude_bridge.is_none() && codex.is_none() {
+        // All matched agents were sender-gated → drop (not bufferable)
+        if any_sender_gated
+            && !matched_agents.iter().any(|a| a.runtime == "codex")
+        {
+            return BroadcastResolution::Dropped;
+        }
         return BroadcastResolution::NeedBuffer;
     }
 

@@ -20,6 +20,7 @@ pub(super) fn build_direct_sdk_gui_message(
     text: &str,
     status: MessageStatus,
     agent_id: &str,
+    display_source: &str,
 ) -> Option<BridgeMessage> {
     // Direct SDK fallback only renders terminal text. UI already exposes a
     // single Claude thinking indicator, so surfacing partial assistant chunks
@@ -35,7 +36,7 @@ pub(super) fn build_direct_sdk_gui_message(
     Some(BridgeMessage {
         id: format!("{prefix}_{}", chrono::Utc::now().timestamp_millis()),
         from: role.to_string(),
-        display_source: Some("claude".to_string()),
+        display_source: Some(display_source.to_string()),
         to: "user".to_string(),
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,

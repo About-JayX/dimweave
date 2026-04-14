@@ -41,12 +41,16 @@ pub struct OnlineAgentInfo {
 /// Per-task provider binding summary (AC5).
 /// Exposes which provider handles each role, whether it is currently online,
 /// and the live provider session info for each role.
+/// `lead_agent_id` / `coder_agent_id` carry the concrete `TaskAgent.agent_id`
+/// when task_agents[] are present, falling back to provider name for legacy tasks.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskProviderSummary {
     pub task_id: String,
     pub lead_provider: String,
     pub coder_provider: String,
+    pub lead_agent_id: String,
+    pub coder_agent_id: String,
     pub lead_online: bool,
     pub coder_online: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
