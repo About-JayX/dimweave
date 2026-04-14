@@ -339,6 +339,15 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `max_added_loc: 1040`
 - `max_deleted_loc: 360`
 
+## Plan Revision 8 — 2026-04-14
+
+**Reason:** Task 3 rework needs two runtime-side helper paths that were omitted from the revised scope: `state_runtime.rs` now supplies per-agent channel/online lookups used by routing and task-scoped snapshots, and `claude_sdk/runtime.rs` must thread concrete `agent_id` into the Claude event-processing chain. These files are directly on the acceptance path for agent-id broadcast delivery and provider-origin ownership.
+
+**Added to revised Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/state_runtime.rs`
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
+
 ## Revised Task 5: Rebuild task pane agent management around `task_agents[]`
 
 **task_id:** `task-pane-agent-list-and-dialog`
