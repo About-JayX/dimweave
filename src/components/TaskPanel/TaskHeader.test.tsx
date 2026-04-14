@@ -95,4 +95,18 @@ describe("TaskHeader", () => {
     expect(html).toContain("lead:");
     expect(html).toContain("coder:");
   });
+
+  test("renders edit-task button when onEditTask is provided", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
+    );
+    expect(html).toContain("Edit task");
+  });
+
+  test("does not render edit-task button when onEditTask is absent", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).not.toContain("Edit task");
+  });
 });

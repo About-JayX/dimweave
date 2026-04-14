@@ -46,6 +46,36 @@ function makeAgent(
   };
 }
 
+describe("computeDragReorder", () => {
+  test("moves item forward", async () => {
+    const { computeDragReorder } = await import("./TaskAgentList");
+    expect(computeDragReorder(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
+  });
+
+  test("moves item backward", async () => {
+    const { computeDragReorder } = await import("./TaskAgentList");
+    expect(computeDragReorder(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+  });
+
+  test("returns null when source equals target", async () => {
+    const { computeDragReorder } = await import("./TaskAgentList");
+    expect(computeDragReorder(["a", "b"], 1, 1)).toBeNull();
+  });
+
+  test("does not mutate original array", async () => {
+    const { computeDragReorder } = await import("./TaskAgentList");
+    const ids = ["a", "b", "c"];
+    computeDragReorder(ids, 0, 2);
+    expect(ids).toEqual(["a", "b", "c"]);
+  });
+
+  test("adjacent swap works", async () => {
+    const { computeDragReorder } = await import("./TaskAgentList");
+    expect(computeDragReorder(["a", "b", "c"], 0, 1)).toEqual(["b", "a", "c"]);
+    expect(computeDragReorder(["a", "b", "c"], 1, 0)).toEqual(["b", "a", "c"]);
+  });
+});
+
 describe("TaskAgentList", () => {
   test("renders null when no active task", async () => {
     mockStoreState = { activeTaskId: null, tasks: {}, taskAgents: {} };

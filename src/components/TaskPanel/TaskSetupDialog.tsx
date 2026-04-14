@@ -16,11 +16,15 @@ export interface TaskSetupSubmitPayload {
   requestLaunch: boolean;
 }
 
+export type TaskSetupMode = "create" | "edit";
+
 interface TaskSetupDialogProps {
+  mode?: TaskSetupMode;
   workspace: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: TaskSetupSubmitPayload) => void;
+  initialAgents?: AgentDef[];
 }
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
@@ -68,12 +72,16 @@ function AgentDefRow({
 }
 
 export function TaskSetupDialog({
+  mode = "create",
   workspace,
   open,
   onOpenChange,
   onSubmit,
+  initialAgents,
 }: TaskSetupDialogProps) {
-  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(DEFAULT_AGENTS);
+  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(
+    initialAgents ?? DEFAULT_AGENTS,
+  );
   const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(null);
   const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
 
@@ -127,7 +135,9 @@ export function TaskSetupDialog({
         aria-modal="true"
         className="relative z-10 w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-xl border border-border/50 bg-card p-4 shadow-xl space-y-3"
       >
-        <h3 className="text-sm font-semibold text-foreground">New Task</h3>
+        <h3 className="text-sm font-semibold text-foreground">
+          {mode === "edit" ? "Edit Task" : "New Task"}
+        </h3>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -152,39 +162,35 @@ export function TaskSetupDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
+          <button type="button" onClick={handleClose}
+            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={() => submit(true)}
-            disabled={validAgents.length === 0}
-            className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
-          >
-            Create &amp; Connect
-          </button>
-          <button
-            type="button"
-            onClick={() => submit(false)}
-            disabled={validAgents.length === 0}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
-          >
-            Create
-          </button>
+          {mode === "edit" ? (
+            <button type="button" onClick={() => submit(false)}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              Save
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => submit(true)} disabled={validAgents.length === 0}
+                className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40">
+                Create &amp; Connect
+              </button>
+              <button type="button" onClick={() => submit(false)}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+                Create
+              </button>
+            </>
+          )}
         </div>
 
-        <AgentStatusPanel
-          workspace={workspace}
-          draftMode
-          draftLeadProvider={draftLeadProvider}
-          draftCoderProvider={draftCoderProvider}
-          onClaudeDraftChange={hasClaude ? setClaudeConfig : undefined}
-          onCodexDraftChange={hasCodex ? setCodexConfig : undefined}
-        />
+        {mode === "create" && (
+          <AgentStatusPanel workspace={workspace} draftMode
+            draftLeadProvider={draftLeadProvider} draftCoderProvider={draftCoderProvider}
+            onClaudeDraftChange={hasClaude ? setClaudeConfig : undefined}
+            onCodexDraftChange={hasCodex ? setCodexConfig : undefined} />
+        )}
       </div>
     </div>
   );

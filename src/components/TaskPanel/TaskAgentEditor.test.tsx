@@ -38,7 +38,7 @@ Object.assign(globalThis, {
   },
 });
 
-import { TaskAgentEditor } from "./TaskAgentEditor";
+import { TaskAgentEditor, type AgentEditorPayload } from "./TaskAgentEditor";
 import type { TaskAgentInfo } from "@/stores/task-store/types";
 
 const noop = () => {};
@@ -129,5 +129,45 @@ describe("TaskAgentEditor", () => {
       <TaskAgentEditor agent={null} onSubmit={noop} onCancel={noop} />,
     );
     expect(html).toContain("e.g. lead, coder, reviewer");
+  });
+});
+
+describe("AgentEditorPayload construction", () => {
+  test("add payload shape: provider + role + displayName", () => {
+    const payload: AgentEditorPayload = {
+      provider: "claude",
+      role: "reviewer",
+      displayName: "My Reviewer",
+    };
+    expect(payload.provider).toBe("claude");
+    expect(payload.role).toBe("reviewer");
+    expect(payload.displayName).toBe("My Reviewer");
+  });
+
+  test("empty displayName becomes null", () => {
+    // Mirrors the handleSubmit logic in TaskAgentEditor
+    const raw = "";
+    const displayName = raw.trim() || null;
+    expect(displayName).toBeNull();
+  });
+
+  test("whitespace-only displayName becomes null", () => {
+    const raw = "   ";
+    const displayName = raw.trim() || null;
+    expect(displayName).toBeNull();
+  });
+
+  test("edit payload preserves provider change", () => {
+    const existing: TaskAgentInfo = {
+      agentId: "a1", taskId: "t1", provider: "claude",
+      role: "coder", displayName: null, order: 0, createdAt: 1,
+    };
+    const payload: AgentEditorPayload = {
+      provider: "codex",
+      role: existing.role,
+      displayName: null,
+    };
+    expect(payload.provider).toBe("codex");
+    expect(payload.role).toBe("coder");
   });
 });

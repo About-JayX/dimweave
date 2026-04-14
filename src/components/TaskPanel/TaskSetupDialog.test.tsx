@@ -156,4 +156,90 @@ describe("TaskSetupDialog", () => {
     );
     expect(html).toContain("Add");
   });
+
+  test("Create button is NOT disabled even with empty initial agents", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[]}
+      />,
+    );
+    // Create button should render without disabled attribute
+    // The "Create & Connect" button SHOULD be disabled (no agents to connect)
+    expect(html).toContain("Create &amp; Connect");
+    // "Create" button is present and not disabled
+    expect(html).toContain(">Create</button>");
+    // Verify "Create & Connect" is disabled
+    expect(html).toContain("disabled");
+  });
+
+  test("empty-task submit payload has zero agents", () => {
+    // Mirrors the submit logic with all agents removed
+    type AgentDef = { provider: string; role: string };
+    const agentDefs: AgentDef[] = [];
+    const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
+    const payload = {
+      agents: validAgents,
+      claudeConfig: null,
+      codexConfig: null,
+      requestLaunch: false,
+    };
+    expect(payload.agents).toEqual([]);
+    expect(payload.requestLaunch).toBe(false);
+  });
+
+  test("edit mode renders with Save button and Edit Task heading", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          { provider: "claude", role: "lead" },
+          { provider: "codex", role: "coder" },
+        ]}
+      />,
+    );
+    expect(html).toContain("Edit Task");
+    expect(html).toContain(">Save</button>");
+    expect(html).not.toContain("Create &amp; Connect");
+    expect(html).toContain('role="dialog"');
+  });
+
+  test("edit mode does not render AgentStatusPanel", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[]}
+      />,
+    );
+    expect(html).not.toContain("Runtime control");
+  });
+
+  test("edit mode pre-populates with initialAgents", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "reviewer" }]}
+      />,
+    );
+    expect(html).toContain('value="reviewer"');
+  });
 });

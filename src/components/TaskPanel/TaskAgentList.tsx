@@ -8,6 +8,19 @@ import {
 import type { TaskAgentInfo } from "@/stores/task-store/types";
 import { TaskAgentEditor, type AgentEditorPayload } from "./TaskAgentEditor";
 
+/** Pure reorder logic — exported for testing. */
+export function computeDragReorder(
+  agentIds: string[],
+  sourceIndex: number,
+  targetIndex: number,
+): string[] | null {
+  if (sourceIndex === targetIndex) return null;
+  const ids = [...agentIds];
+  const [moved] = ids.splice(sourceIndex, 1);
+  ids.splice(targetIndex, 0, moved);
+  return ids;
+}
+
 const PROVIDER_STYLES: Record<string, string> = {
   claude: "border-claude/30 bg-claude/8 text-claude/80",
   codex: "border-codex/30 bg-codex/8 text-codex/80",
@@ -78,46 +91,32 @@ export function TaskAgentList() {
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const handleAdd = useCallback(() => {
-    setEditingAgent(null);
-    setEditorOpen(true);
-  }, []);
-
-  const handleEdit = useCallback((agent: TaskAgentInfo) => {
+  const openEditor = useCallback((agent: TaskAgentInfo | null) => {
     setEditingAgent(agent);
     setEditorOpen(true);
   }, []);
 
-  const handleRemove = useCallback(
-    (agentId: string) => void removeTaskAgent(agentId),
-    [removeTaskAgent],
-  );
+  const handleDragStart = useCallback((index: number, e: React.DragEvent) => {
+    dragIndexRef.current = index;
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
 
-  const handleDragStart = useCallback(
-    (index: number, e: React.DragEvent) => {
-      dragIndexRef.current = index;
-      e.dataTransfer.effectAllowed = "move";
-    },
-    [],
-  );
-
-  const handleDragOver = useCallback(
-    (index: number, e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      setDragOverIndex(index);
-    },
-    [],
-  );
+  const handleDragOver = useCallback((index: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  }, []);
 
   const handleDrop = useCallback(
     (targetIndex: number) => {
       const sourceIndex = dragIndexRef.current;
-      if (sourceIndex === null || sourceIndex === targetIndex || !task) return;
-      const ids = agents.map((a) => a.agentId);
-      const [moved] = ids.splice(sourceIndex, 1);
-      ids.splice(targetIndex, 0, moved);
-      void reorderTaskAgents(task.taskId, ids);
+      if (sourceIndex === null || !task) return;
+      const reordered = computeDragReorder(
+        agents.map((a) => a.agentId),
+        sourceIndex,
+        targetIndex,
+      );
+      if (reordered) void reorderTaskAgents(task.taskId, reordered);
       dragIndexRef.current = null;
       setDragOverIndex(null);
     },
@@ -156,7 +155,7 @@ export function TaskAgentList() {
         </span>
         <button
           type="button"
-          onClick={handleAdd}
+          onClick={() => openEditor(null)}
           className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           data-testid="add-agent-btn"
         >
@@ -174,8 +173,8 @@ export function TaskAgentList() {
             <AgentRow
               key={agent.agentId}
               agent={agent}
-              onEdit={() => handleEdit(agent)}
-              onRemove={() => handleRemove(agent.agentId)}
+              onEdit={() => openEditor(agent)}
+              onRemove={() => void removeTaskAgent(agent.agentId)}
               onDragStart={(e) => handleDragStart(i, e)}
               onDragOver={(e) => handleDragOver(i, e)}
               onDrop={() => handleDrop(i)}

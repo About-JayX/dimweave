@@ -1,3 +1,4 @@
+import { Settings2 } from "lucide-react";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTaskAgents,
@@ -55,9 +56,11 @@ function SaveIndicator() {
 export function TaskHeader({
   task,
   reviewBadge,
+  onEditTask,
 }: {
   task: TaskInfo;
   reviewBadge?: ReviewBadge | null;
+  onEditTask?: () => void;
 }) {
   const summary = useTaskStore(selectProviderSummary);
   const agents = useTaskStore(selectActiveTaskAgents);
@@ -119,6 +122,17 @@ export function TaskHeader({
             >
               {reviewBadge.label}
             </span>
+          )}
+          {onEditTask && (
+            <button
+              type="button"
+              onClick={onEditTask}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Edit task"
+            >
+              <Settings2 className="size-3" />
+              Edit task
+            </button>
           )}
         </div>
       </div>

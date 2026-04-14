@@ -7,6 +7,7 @@ import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
+  selectActiveTaskAgents,
   selectActiveTaskArtifacts,
   selectActiveTaskSessions,
 } from "@/stores/task-store/selectors";
@@ -16,6 +17,7 @@ import { TaskAgentList } from "./TaskAgentList";
 import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   TaskSetupDialog,
+  type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
 import { useArtifactDetail } from "./use-artifact-detail";
@@ -31,10 +33,13 @@ export function TaskPanel() {
   const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
   const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
+  const agents = useTaskStore(selectActiveTaskAgents);
   const createTask = useTaskStore((s) => s.createTask);
   const addTaskAgent = useTaskStore((s) => s.addTaskAgent);
+  const removeTaskAgent = useTaskStore((s) => s.removeTaskAgent);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const sessionRows = useMemo(
     () => buildSessionTreeRows(taskSessions, task),
     [task, taskSessions],
@@ -105,6 +110,36 @@ export function TaskPanel() {
     [addTaskAgent, applyConfig, createTask, resumeSession, selectedWorkspace],
   );
 
+  const handleEditSubmit = useCallback(
+    async (payload: TaskSetupSubmitPayload) => {
+      if (!task) return;
+      try {
+        for (const a of agents) {
+          await removeTaskAgent(a.agentId);
+        }
+        for (const def of payload.agents) {
+          await addTaskAgent(task.taskId, def.provider, def.role);
+        }
+      } catch {
+        /* edit error — UI updates via store */
+      }
+    },
+    [addTaskAgent, agents, removeTaskAgent, task],
+  );
+
+  const openDialog = useCallback((m: TaskSetupMode) => {
+    setDialogMode(m);
+    setDialogOpen(true);
+  }, []);
+
+  const handleDialogSubmit = useCallback(
+    (payload: TaskSetupSubmitPayload) => {
+      void (dialogMode === "edit" ? handleEditSubmit(payload) : handleSetupSubmit(payload));
+      setDialogOpen(false);
+    },
+    [dialogMode, handleEditSubmit, handleSetupSubmit],
+  );
+
   const reviewBadge: ReviewBadge | null =
     task?.status === "reviewing" ? { label: "Review", tone: "warning" } : null;
 
@@ -117,7 +152,7 @@ export function TaskPanel() {
         {selectedWorkspace && !dialogOpen && (
           <button
             type="button"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => openDialog("create")}
             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/10"
           >
             <Plus className="size-3.5" />
@@ -126,10 +161,11 @@ export function TaskPanel() {
         )}
         {dialogOpen && selectedWorkspace && (
           <TaskSetupDialog
+            mode="create"
             workspace={selectedWorkspace}
             open={dialogOpen}
             onOpenChange={setDialogOpen}
-            onSubmit={handleSetupSubmit}
+            onSubmit={handleDialogSubmit}
           />
         )}
       </div>
@@ -138,7 +174,7 @@ export function TaskPanel() {
 
   return (
     <div className="space-y-3">
-      <TaskHeader task={task} reviewBadge={reviewBadge} />
+      <TaskHeader task={task} reviewBadge={reviewBadge} onEditTask={() => openDialog("edit")} />
       <TaskAgentList />
       <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
         <SessionTree rows={sessionRows} onResume={handleResume} />
@@ -153,6 +189,11 @@ export function TaskPanel() {
           onSelect={setSelectedArtifactId}
         />
       </div>
+      {dialogOpen && task.workspaceRoot && (
+        <TaskSetupDialog mode={dialogMode} workspace={task.workspaceRoot}
+          open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
+          initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role })) : undefined} />
+      )}
     </div>
   );
 }
