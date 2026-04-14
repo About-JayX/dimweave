@@ -465,7 +465,88 @@ impl DaemonState {
             .ready_tx.take()
     }
 
-    /// Get the event_tx for whichever task owns this launch nonce.
+    /// Store ready_tx and event_tx in a specific agent's Claude slot.
+    pub fn set_claude_task_channels_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        ready_tx: tokio::sync::oneshot::Sender<mpsc::Sender<String>>,
+        event_tx: mpsc::Sender<Vec<serde_json::Value>>,
+    ) {
+        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.claude_slot_by_agent_mut(agent_id))
+        {
+            slot.ready_tx = Some(ready_tx);
+            slot.event_tx = Some(event_tx);
+        }
+    }
+
+    /// Take the ready_tx from a specific agent's Claude slot.
+    pub fn take_claude_task_ready_tx_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>> {
+        self.task_runtimes.get_mut(task_id)?
+            .claude_slot_by_agent_mut(agent_id)?
+            .ready_tx.take()
+    }
+
+    /// Get epoch for a specific agent's Claude slot.
+    pub fn claude_task_epoch_for_agent(&self, task_id: &str, agent_id: &str) -> Option<u64> {
+        self.task_runtimes.get(task_id)?
+            .claude_slot_by_agent(agent_id)
+            .map(|s| s.session_epoch)
+    }
+
+    /// Clear WS for a specific agent's Claude slot.
+    pub fn clear_claude_task_ws_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        epoch: u64,
+        launch_nonce: &str,
+        ws_generation: u64,
+    ) -> bool {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.claude_slot_by_agent_mut(agent_id))
+        else {
+            return false;
+        };
+        if slot.session_epoch != epoch
+            || slot.active_nonce.as_deref() != Some(launch_nonce)
+            || slot.ws_generation != ws_generation
+        {
+            return false;
+        }
+        slot.ws_tx = None;
+        self.recompute_claude_singleton_ws_tx();
+        true
+    }
+
+    /// Conditionally invalidate if agent epoch matches.
+    pub fn invalidate_claude_agent_session_if_current(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        epoch: u64,
+    ) -> Option<String> {
+        let matches = self.task_runtimes.get(task_id)
+            .and_then(|rt| rt.claude_slot_by_agent(agent_id))
+            .map_or(false, |slot| slot.session_epoch == epoch);
+        if !matches {
+            return None;
+        }
+        self.invalidate_claude_agent_session(task_id, agent_id)
+    }
+
+    /// Check if a specific agent's Claude slot is online.
+    pub fn is_claude_agent_online(&self, task_id: &str, agent_id: &str) -> bool {
+        self.task_runtimes.get(task_id)
+            .and_then(|rt| rt.claude_slot_by_agent(agent_id))
+            .map_or(false, |slot| slot.is_online())
+    }
+
     /// Get the event_tx for whichever agent slot owns this launch nonce.
     pub fn claude_task_event_tx_for_nonce(
         &self,
@@ -575,6 +656,97 @@ impl DaemonState {
     pub fn invalidate_codex_task_session(&mut self, task_id: &str) -> Option<String> {
         if let Some(slot) = self.task_runtimes.get_mut(task_id)
             .and_then(|rt| rt.codex_slot.as_mut())
+        {
+            slot.session_epoch = slot.session_epoch.wrapping_add(1);
+            slot.inject_tx = None;
+            slot.connection = None;
+        }
+        if !self.any_codex_task_online() {
+            self.invalidate_codex_session()
+        } else {
+            self.detach_codex_sessions_for_task(task_id);
+            self.recompute_codex_singleton_inject_tx();
+            self.recompute_codex_singleton_connection();
+            Some(task_id.to_string())
+        }
+    }
+
+    /// Begin Codex launch bound to a specific agent_id.
+    pub fn begin_codex_task_launch_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        port: u16,
+    ) -> Option<u64> {
+        let rt = self.task_runtimes.get_mut(task_id)?;
+        let slot = rt.get_or_create_codex_slot(agent_id, port);
+        slot.session_epoch = slot.session_epoch.wrapping_add(1);
+        slot.inject_tx = None;
+        slot.port = port;
+        Some(slot.session_epoch)
+    }
+
+    /// Attach Codex session for a specific agent.
+    pub fn attach_codex_task_session_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        epoch: u64,
+        tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+        connection: Option<crate::daemon::types::ProviderConnectionState>,
+    ) -> bool {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
+        else {
+            return false;
+        };
+        if slot.session_epoch != epoch {
+            return false;
+        }
+        slot.inject_tx = Some(tx.clone());
+        slot.connection = connection.clone();
+        self.codex_inject_tx = Some(tx);
+        if let Some(conn) = connection {
+            self.codex_connection = Some(conn);
+        }
+        true
+    }
+
+    /// Clear Codex session for a specific agent if epoch matches.
+    pub fn clear_codex_task_session_for_agent(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+        epoch: u64,
+    ) -> Option<String> {
+        let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
+        else {
+            return None;
+        };
+        if slot.session_epoch != epoch {
+            return None;
+        }
+        slot.inject_tx = None;
+        slot.connection = None;
+        self.recompute_codex_singleton_inject_tx();
+        self.recompute_codex_singleton_connection();
+        if !self.any_codex_task_online() {
+            self.clear_provider_connection("codex")
+        } else {
+            self.detach_codex_sessions_for_task(task_id);
+            Some(task_id.to_string())
+        }
+    }
+
+    /// Invalidate Codex session for a specific agent.
+    pub fn invalidate_codex_agent_session(
+        &mut self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Option<String> {
+        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+            .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
         {
             slot.session_epoch = slot.session_epoch.wrapping_add(1);
             slot.inject_tx = None;

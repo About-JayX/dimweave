@@ -46,11 +46,12 @@ impl ClaudeSdkHandle {
 pub async fn launch(
     opts: ClaudeLaunchOpts,
     task_id: String,
+    agent_id: String,
     state: SharedState,
     app: AppHandle,
 ) -> anyhow::Result<ClaudeSdkHandle> {
     let cancel = CancellationToken::new();
-    let (child_arc, epoch) = spawn_runtime(&opts, &task_id, state.clone(), app.clone()).await?;
+    let (child_arc, epoch) = spawn_runtime(&opts, &task_id, &agent_id, state.clone(), app.clone()).await?;
     let monitor_cancel = cancel.clone();
     let monitor_app = app.clone();
     let monitor_state = state.clone();
@@ -58,13 +59,14 @@ pub async fn launch(
     let monitor_opts = opts.clone();
     let monitor_child = child_arc.clone();
     let monitor_task_id = task_id;
+    let monitor_agent_id = agent_id;
     tokio::spawn(async move {
         let mut current_child = monitor_child;
         let mut current_epoch = epoch;
         loop {
             tokio::select! {
                 _ = monitor_cancel.cancelled() => return,
-                ws_lost = wait_for_ws_disconnect(&monitor_state, &monitor_task_id, current_epoch) => {
+                ws_lost = wait_for_ws_disconnect(&monitor_state, &monitor_task_id, &monitor_agent_id, current_epoch) => {
                     if !ws_lost {
                         return;
                     }
@@ -73,6 +75,7 @@ pub async fn launch(
                         &mut current_epoch,
                         &monitor_opts,
                         &monitor_task_id,
+                        &monitor_agent_id,
                         &monitor_state,
                         &monitor_app,
                         &monitor_cancel,
@@ -83,10 +86,10 @@ pub async fn launch(
                 _ = poll_child_exit(&current_child, true) => {
                     let (is_current, affected_task_id) = {
                         let mut s = monitor_state.write().await;
-                        let is_current = s.claude_task_epoch(&monitor_task_id)
+                        let is_current = s.claude_task_epoch_for_agent(&monitor_task_id, &monitor_agent_id)
                             == Some(current_epoch);
-                        let tid = s.invalidate_claude_task_session_if_current(
-                            &monitor_task_id, current_epoch,
+                        let tid = s.invalidate_claude_agent_session_if_current(
+                            &monitor_task_id, &monitor_agent_id, current_epoch,
                         );
                         (is_current, tid)
                     };

@@ -26,6 +26,7 @@ pub async fn run(
     port: u16,
     session_epoch: u64,
     task_id: String,
+    agent_id: String,
     opts: SessionOpts,
     state: SharedState,
     app: AppHandle,
@@ -41,6 +42,7 @@ pub async fn run(
                 port,
                 session_epoch,
                 &task_id,
+                &agent_id,
                 &opts.role_id,
                 &state,
                 &app,
@@ -61,6 +63,7 @@ pub async fn resume(
     port: u16,
     session_epoch: u64,
     task_id: String,
+    agent_id: String,
     role_id: String,
     thread_id: String,
     state: SharedState,
@@ -76,6 +79,7 @@ pub async fn resume(
                 port,
                 session_epoch,
                 &task_id,
+                &agent_id,
                 &role_id,
                 &state,
                 &app,
@@ -96,6 +100,7 @@ async fn run_with_reconnect(
     port: u16,
     session_epoch: u64,
     task_id: &str,
+    agent_id: &str,
     role_id: &str,
     state: &SharedState,
     app: &AppHandle,
@@ -157,7 +162,7 @@ async fn run_with_reconnect(
     }
     let cleanup = {
         let mut s = state.write().await;
-        let cleared = s.clear_codex_task_session(task_id, session_epoch);
+        let cleared = s.clear_codex_task_session_for_agent(task_id, agent_id, session_epoch);
         let any_online = s.is_codex_online();
         (cleared, any_online)
     };

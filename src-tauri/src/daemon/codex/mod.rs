@@ -37,6 +37,7 @@ pub struct CodexHandle {
 
 pub struct StartOpts {
     pub task_id: String,
+    pub agent_id: String,
     pub role_id: String,
     pub cwd: String,
     pub model: Option<String>,
@@ -47,6 +48,7 @@ pub struct StartOpts {
 
 pub struct ResumeOpts {
     pub task_id: String,
+    pub agent_id: String,
     pub role_id: String,
     pub cwd: String,
     pub thread_id: String,
@@ -81,6 +83,7 @@ pub async fn start(
 ) -> anyhow::Result<CodexHandle> {
     let StartOpts {
         task_id,
+        agent_id,
         role_id,
         cwd,
         model,
@@ -102,6 +105,7 @@ pub async fn start(
     launch(
         LaunchMode::New(session_opts),
         task_id,
+        agent_id,
         role_id,
         cwd,
         launch_epoch,
@@ -123,6 +127,7 @@ pub async fn resume(
 ) -> anyhow::Result<CodexHandle> {
     let ResumeOpts {
         task_id,
+        agent_id,
         role_id,
         cwd,
         thread_id,
@@ -136,6 +141,7 @@ pub async fn resume(
             thread_id,
         },
         task_id,
+        agent_id,
         role_id,
         cwd,
         launch_epoch,
@@ -165,6 +171,7 @@ fn resolve_role_launch_config(role_id: &str) -> (String, String, bool, Option<St
 async fn launch(
     mode: LaunchMode,
     task_id: String,
+    agent_id: String,
     role_id: String,
     cwd: String,
     launch_epoch: u64,
@@ -237,6 +244,7 @@ async fn launch(
     let cancel_session = cancel.clone();
     let is_new_session = matches!(&mode, LaunchMode::New(_));
     let task_id_session = task_id.clone();
+    let agent_id_session = agent_id.clone();
     let session_exit_tx = exit_tx.clone();
     let session_exit_port = codex_port;
     let session_exit_task_id = task_id.clone();
@@ -247,10 +255,10 @@ async fn launch(
             _ = async {
                 match mode {
                     LaunchMode::New(opts) => {
-                        session::run(codex_port, launch_epoch, task_id_session, opts, state2, app2, inject_rx, ready_tx).await;
+                        session::run(codex_port, launch_epoch, task_id_session, agent_id_session, opts, state2, app2, inject_rx, ready_tx).await;
                     }
                     LaunchMode::Resume { role_id, thread_id } => {
-                        session::resume(codex_port, launch_epoch, task_id_session, role_id, thread_id, state2, app2, inject_rx, ready_tx).await;
+                        session::resume(codex_port, launch_epoch, task_id_session, agent_id_session, role_id, thread_id, state2, app2, inject_rx, ready_tx).await;
                     }
                 }
             } => {}
@@ -289,8 +297,8 @@ async fn launch(
                 crate::daemon::types::ProviderConnectionMode::Resumed
             },
         };
-        let attached = s.attach_codex_task_session(
-            &task_id, launch_epoch, inject_tx.clone(), Some(provider_session.clone()),
+        let attached = s.attach_codex_task_session_for_agent(
+            &task_id, &agent_id, launch_epoch, inject_tx.clone(), Some(provider_session.clone()),
         );
         let buffered = if attached {
             if is_new_session {
@@ -347,6 +355,7 @@ async fn launch(
     spawn_health_monitor(
         child_arc.clone(),
         task_id.clone(),
+        agent_id,
         launch_epoch,
         codex_port,
         exit_tx,

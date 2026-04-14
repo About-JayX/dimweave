@@ -177,6 +177,22 @@ impl TaskRuntime {
         self.extra_codex_slots.get(agent_id)
     }
 
+    /// Find a Codex slot mutably by agent_id.
+    pub fn codex_slot_by_agent_mut(
+        &mut self,
+        agent_id: &str,
+    ) -> Option<&mut CodexTaskSlot> {
+        let is_default = self
+            .codex_slot
+            .as_ref()
+            .and_then(|s| s.agent_id.as_deref())
+            == Some(agent_id);
+        if is_default {
+            return self.codex_slot.as_mut();
+        }
+        self.extra_codex_slots.get_mut(agent_id)
+    }
+
     /// Iterate all Claude slots (default + extras).
     pub fn all_claude_slots(&self) -> impl Iterator<Item = &ClaudeTaskSlot> {
         self.claude_slot.iter().chain(self.extra_claude_slots.values())

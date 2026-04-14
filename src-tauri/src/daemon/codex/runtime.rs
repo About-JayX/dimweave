@@ -42,6 +42,7 @@ where
 pub(super) fn spawn_health_monitor(
     child: Arc<Mutex<Option<tokio::process::Child>>>,
     task_id: String,
+    agent_id: String,
     session_epoch: u64,
     port: u16,
     exit_tx: tokio::sync::mpsc::UnboundedSender<super::CodexExitNotice>,
@@ -63,7 +64,7 @@ pub(super) fn spawn_health_monitor(
                         cancel.cancel();
                         let cleanup = {
                             let mut daemon = state.write().await;
-                            let cleared = daemon.clear_codex_task_session(&task_id, session_epoch);
+                            let cleared = daemon.clear_codex_task_session_for_agent(&task_id, &agent_id, session_epoch);
                             let any_online = daemon.is_codex_online();
                             (cleared, any_online)
                         };

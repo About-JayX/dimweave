@@ -130,6 +130,22 @@ async fn stop_claude_sdk_session(
     }
 }
 
+/// Resolve an existing TaskAgent or create one for this task/provider/role.
+fn resolve_or_create_agent_id(
+    state: &mut DaemonState,
+    task_id: &str,
+    provider: task_graph::types::Provider,
+    role: &str,
+) -> String {
+    if let Some(agent) = state.task_graph.agents_for_task(task_id)
+        .iter()
+        .find(|a| a.provider == provider && a.role == role)
+    {
+        return agent.agent_id.clone();
+    }
+    state.task_graph.add_task_agent(task_id, provider, role).agent_id
+}
+
 async fn launch_claude_sdk(
     task_id: &str,
     role_id: &str,
@@ -149,6 +165,12 @@ async fn launch_claude_sdk(
         return Err(err);
     }
     // Previous session is already stopped by the daemon loop caller.
+    let agent_id = {
+        let mut s = state.write().await;
+        resolve_or_create_agent_id(
+            &mut s, task_id, task_graph::types::Provider::Claude, role_id,
+        )
+    };
     let claude_bin = crate::claude_cli::resolve_claude_bin()?;
     let session_id = uuid::Uuid::new_v4().to_string();
     let external_session_id = resume_session_id
@@ -175,7 +197,7 @@ async fn launch_claude_sdk(
         mcp_config: Some(mcp_config),
     };
 
-    match claude_sdk::launch(opts, task_id.to_string(), state.clone(), app.clone()).await {
+    match claude_sdk::launch(opts, task_id.to_string(), agent_id, state.clone(), app.clone()).await {
         Ok(handle) => Ok((handle, external_session_id)),
         Err(e) => {
             gui::emit_agent_status(app, "claude", false, None, None);
@@ -284,25 +306,30 @@ async fn attach_provider_history(
                 .ok_or_else(|| "no active task selected".to_string())?;
             // Stop only this task's existing Codex session if any
             stop_codex_for_task(codex_handles, codex_port_pool, &attach_task_id, state, app).await;
-            let launch_epoch = {
+            let (launch_epoch, resume_agent_id) = {
                 let mut s = state.write().await;
-                s.begin_codex_task_launch(&attach_task_id, 0)
-                    .unwrap_or_else(|| s.begin_codex_launch())
+                let aid = resolve_or_create_agent_id(
+                    &mut s, &attach_task_id, task_graph::types::Provider::Codex, &role_id,
+                );
+                let epoch = s.begin_codex_task_launch_for_agent(&attach_task_id, &aid, 0)
+                    .unwrap_or_else(|| s.begin_codex_launch());
+                (epoch, aid)
             };
             let allocated_port = codex_port_pool
                 .reserve(&attach_task_id, launch_epoch)
                 .ok_or("no Codex port available in pool")?;
             {
                 let mut s = state.write().await;
-                if let Some(rt) = s.task_runtimes.get_mut(&attach_task_id) {
-                    if let Some(ref mut slot) = rt.codex_slot {
-                        slot.port = allocated_port;
-                    }
+                if let Some(slot) = s.task_runtimes.get_mut(&attach_task_id)
+                    .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_agent_id))
+                {
+                    slot.port = allocated_port;
                 }
             }
             let handle = codex::resume(
                 codex::ResumeOpts {
                     task_id: attach_task_id.clone(),
+                    agent_id: resume_agent_id,
                     role_id: role_id.clone(),
                     cwd: cwd.clone(),
                     thread_id: external_id.clone(),
@@ -415,10 +442,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(err));
                     continue;
                 }
-                let launch_epoch = {
+                let (launch_epoch, codex_agent_id) = {
                     let mut s = state.write().await;
-                    s.begin_codex_task_launch(&resolved_task_id, 0)
-                        .unwrap_or_else(|| s.begin_codex_launch())
+                    let aid = resolve_or_create_agent_id(
+                        &mut s, &resolved_task_id, task_graph::types::Provider::Codex, &role_id,
+                    );
+                    let epoch = s.begin_codex_task_launch_for_agent(&resolved_task_id, &aid, 0)
+                        .unwrap_or_else(|| s.begin_codex_launch());
+                    (epoch, aid)
                 };
                 let allocated_port = match codex_port_pool.reserve(&resolved_task_id, launch_epoch) {
                     Some(p) => p,
@@ -432,13 +463,13 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         continue;
                     }
                 };
-                // Update placeholder port in the task slot
+                // Update placeholder port in the agent's task slot
                 {
                     let mut s = state.write().await;
-                    if let Some(rt) = s.task_runtimes.get_mut(&resolved_task_id) {
-                        if let Some(ref mut slot) = rt.codex_slot {
-                            slot.port = allocated_port;
-                        }
+                    if let Some(slot) = s.task_runtimes.get_mut(&resolved_task_id)
+                        .and_then(|rt| rt.codex_slot_by_agent_mut(&codex_agent_id))
+                    {
+                        slot.port = allocated_port;
                     }
                 }
                 let launch_result = match resume_thread_id {
@@ -449,6 +480,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         match codex::resume(
                             codex::ResumeOpts {
                                 task_id: resolved_task_id.clone(),
+                                agent_id: codex_agent_id.clone(),
                                 role_id,
                                 cwd,
                                 thread_id,
@@ -494,6 +526,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     None => match codex::start(
                         codex::StartOpts {
                             task_id: resolved_task_id.clone(),
+                            agent_id: codex_agent_id.clone(),
                             role_id,
                             cwd,
                             model,
@@ -812,10 +845,19 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             Ok(target) => {
                                 let resume_task_id = sess.task_id.clone();
                                 stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resume_task_id, &state, &app).await;
-                                let launch_epoch = {
+                                let (launch_epoch, resume_codex_aid) = {
                                     let mut s = state.write().await;
-                                    s.begin_codex_task_launch(&resume_task_id, 0)
-                                        .unwrap_or_else(|| s.begin_codex_launch())
+                                    let role_str = match target.role {
+                                        crate::daemon::task_graph::types::SessionRole::Lead => "lead",
+                                        crate::daemon::task_graph::types::SessionRole::Coder => "coder",
+                                    };
+                                    let codex_aid = resolve_or_create_agent_id(
+                                        &mut s, &resume_task_id,
+                                        task_graph::types::Provider::Codex, role_str,
+                                    );
+                                    let e = s.begin_codex_task_launch_for_agent(&resume_task_id, &codex_aid, 0)
+                                        .unwrap_or_else(|| s.begin_codex_launch());
+                                    (e, codex_aid)
                                 };
                                 let alloc = codex_port_pool
                                     .reserve(&resume_task_id, launch_epoch)
@@ -826,10 +868,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 // Update placeholder port in the task slot
                                 {
                                     let mut s = state.write().await;
-                                    if let Some(rt) = s.task_runtimes.get_mut(&resume_task_id) {
-                                        if let Some(ref mut slot) = rt.codex_slot {
-                                            slot.port = allocated_port;
-                                        }
+                                    if let Some(slot) = s.task_runtimes.get_mut(&resume_task_id)
+                                        .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_codex_aid))
+                                    {
+                                        slot.port = allocated_port;
                                     }
                                 }
                                 let role_id = match target.role {
@@ -840,6 +882,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 match codex::resume(
                                     codex::ResumeOpts {
                                         task_id: resume_task_id.clone(),
+                                        agent_id: resume_codex_aid,
                                         role_id,
                                         cwd: target.cwd,
                                         thread_id: target.external_id,
