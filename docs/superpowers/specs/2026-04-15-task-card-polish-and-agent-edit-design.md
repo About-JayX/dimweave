@@ -1,6 +1,6 @@
 # Task Card Polish And Agent Edit Dialog Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task pane is now intentionally card-only. The card is the primary task-switching surface, while `Edit Task` is now the only task-pane entry point for agent management.
 

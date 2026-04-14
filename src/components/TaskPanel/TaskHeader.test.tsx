@@ -10,6 +10,7 @@ mock.module("@/stores/task-store", () => ({
     taskAgents: {
       "task-001": [
         { agentId: "a1", taskId: "task-001", provider: "claude", role: "lead", order: 0, createdAt: 1 },
+        { agentId: "a2", taskId: "task-001", provider: "codex", role: "coder", order: 1, createdAt: 2 },
       ],
     },
   }),
@@ -98,6 +99,17 @@ describe("TaskHeader", () => {
       createElement(TaskHeader, { task: baseTask }),
     );
     expect(html).toContain('data-task-status="true"');
+  });
+
+  test("agent pills render in store order (order-persistence regression)", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    const leadIdx = html.indexOf("lead:");
+    const coderIdx = html.indexOf("coder:");
+    expect(leadIdx).toBeGreaterThan(-1);
+    expect(coderIdx).toBeGreaterThan(-1);
+    expect(leadIdx).toBeLessThan(coderIdx);
   });
 });
 
