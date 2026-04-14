@@ -16,7 +16,7 @@ pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS tasks (
             task_id                 TEXT PRIMARY KEY,
             project_root            TEXT NOT NULL,
-            workspace_root          TEXT NOT NULL,
+            task_worktree_root      TEXT NOT NULL,
             title                   TEXT NOT NULL,
             status                  TEXT NOT NULL,
             lead_session_id         TEXT,
@@ -187,7 +187,7 @@ impl TaskGraphStore {
             tx.execute(
                 "INSERT INTO tasks VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
                 params![
-                    t.task_id, t.project_root, t.workspace_root, t.title,
+                    t.task_id, t.project_root, t.task_worktree_root, t.title,
                     status_str(t.status), t.lead_session_id, t.current_coder_session_id,
                     provider_str(t.lead_provider), provider_str(t.coder_provider),
                     t.created_at as i64, t.updated_at as i64,
@@ -241,7 +241,7 @@ impl TaskGraphStore {
         }
         // tasks
         let mut stmt = conn.prepare(
-            "SELECT task_id, project_root, workspace_root, title, status,
+            "SELECT task_id, project_root, task_worktree_root, title, status,
                     lead_session_id, current_coder_session_id,
                     lead_provider, coder_provider, created_at, updated_at
              FROM tasks"
@@ -250,7 +250,7 @@ impl TaskGraphStore {
             Ok(Task {
                 task_id: row.get(0)?,
                 project_root: row.get(1)?,
-                workspace_root: row.get(2)?,
+                task_worktree_root: row.get(2)?,
                 title: row.get(3)?,
                 status: parse_status(&row.get::<_, String>(4)?),
                 lead_session_id: row.get(5)?,

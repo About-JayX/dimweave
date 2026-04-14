@@ -257,7 +257,7 @@ mod tests {
         let task = Task {
             task_id: "task_1".into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Planning,
             lead_session_id: None,
@@ -277,7 +277,7 @@ mod tests {
         let before = Task {
             task_id: "task_1".into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "T1".into(),
             status: TaskStatus::Implementing,
             lead_session_id: None,
@@ -302,7 +302,7 @@ mod tests {
         Task {
             task_id: task_id.into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Reviewing,
             lead_session_id: Some("sess_1".into()),

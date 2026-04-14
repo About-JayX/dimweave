@@ -208,7 +208,7 @@ async fn resolve_workspace(state: &SharedState) -> String {
     // Prefer active task's workspace
     if let Some(ref tid) = s.active_task_id {
         if let Some(task) = s.task_graph.get_task(tid) {
-            return task.workspace_root.clone();
+            return task.task_worktree_root.clone();
         }
     }
     // Fall back to connected provider cwd

@@ -8,7 +8,7 @@ fn create_task_returns_draft_status() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task("/workspace", "My Task");
     assert_eq!(task.status, TaskStatus::Draft);
-    assert_eq!(task.workspace_root, "/workspace");
+    assert_eq!(task.task_worktree_root, "/workspace");
     assert_eq!(task.title, "My Task");
     assert!(!task.task_id.is_empty());
     assert!(task.lead_session_id.is_none());
@@ -51,12 +51,12 @@ fn list_tasks_returns_all() {
 }
 
 #[test]
-fn update_workspace_root_changes_path() {
+fn update_task_worktree_root_changes_path() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task("/repo", "T1");
-    assert!(store.update_workspace_root(&task.task_id, "/repo/.worktrees/tasks/t1"));
+    assert!(store.update_task_worktree_root(&task.task_id, "/repo/.worktrees/tasks/t1"));
     let t = store.get_task(&task.task_id).unwrap();
-    assert_eq!(t.workspace_root, "/repo/.worktrees/tasks/t1");
+    assert_eq!(t.task_worktree_root, "/repo/.worktrees/tasks/t1");
 }
 
 #[test]
@@ -449,7 +449,7 @@ fn persist_save_and_load_round_trip() {
     let t = loaded.get_task(&tid).expect("task should exist");
     assert_eq!(t.title, "Persist Me");
     assert_eq!(t.project_root, "/ws");
-    assert_eq!(t.workspace_root, "/ws");
+    assert_eq!(t.task_worktree_root, "/ws");
     let s = loaded.get_session(&sid).expect("session should exist");
     assert_eq!(s.provider, Provider::Codex);
     let a = loaded.get_artifact(&aid).expect("artifact should exist");
@@ -529,7 +529,7 @@ fn persist_no_db_save_is_noop() {
 }
 
 #[test]
-fn persist_project_root_and_workspace_root_are_independent() {
+fn persist_project_root_and_task_worktree_root_are_independent() {
     let path = tmp_db_path("root_split");
     let _cleanup = CleanupFile(path.clone());
 
@@ -539,22 +539,22 @@ fn persist_project_root_and_workspace_root_are_independent() {
         let task = store.create_task("/project", "Split");
         tid = task.task_id.clone();
         assert_eq!(task.project_root, "/project");
-        assert_eq!(task.workspace_root, "/project");
-        store.update_workspace_root(&tid, "/project/.worktrees/feat-x");
+        assert_eq!(task.task_worktree_root, "/project");
+        store.update_task_worktree_root(&tid, "/project/.worktrees/feat-x");
         store.save().unwrap();
     }
 
     let loaded = TaskGraphStore::open(&path).unwrap();
     let t = loaded.get_task(&tid).unwrap();
     assert_eq!(t.project_root, "/project");
-    assert_eq!(t.workspace_root, "/project/.worktrees/feat-x");
+    assert_eq!(t.task_worktree_root, "/project/.worktrees/feat-x");
 }
 
 #[test]
 fn persist_tasks_for_workspace_uses_project_root() {
     let mut store = TaskGraphStore::new();
     let t1 = store.create_task("/project", "T1");
-    store.update_workspace_root(&t1.task_id, "/project/.worktrees/a");
+    store.update_task_worktree_root(&t1.task_id, "/project/.worktrees/a");
     let _t2 = store.create_task("/project", "T2");
     let _t3 = store.create_task("/other", "T3");
     // Both t1 and t2 have project_root="/project" so they should appear

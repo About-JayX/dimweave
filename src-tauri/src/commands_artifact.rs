@@ -118,7 +118,7 @@ mod tests {
             task: Task {
                 task_id: "task_1".to_string(),
                 project_root: "/workspace".to_string(),
-                workspace_root: "/workspace".to_string(),
+                task_worktree_root: "/workspace".to_string(),
                 title: "Task".to_string(),
                 status: TaskStatus::Draft,
                 lead_session_id: None,

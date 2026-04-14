@@ -43,7 +43,7 @@ impl TaskGraphStore {
         let task = Task {
             task_id,
             project_root: workspace_root.to_string(),
-            workspace_root: workspace_root.to_string(),
+            task_worktree_root: workspace_root.to_string(),
             title: effective_title,
             status: TaskStatus::Draft,
             lead_session_id: None,
@@ -72,7 +72,7 @@ impl TaskGraphStore {
         let task = Task {
             task_id,
             project_root: workspace_root.to_string(),
-            workspace_root: workspace_root.to_string(),
+            task_worktree_root: workspace_root.to_string(),
             title: effective_title,
             status: TaskStatus::Draft,
             lead_session_id: None,
@@ -124,10 +124,10 @@ impl TaskGraphStore {
         self.tasks.values().collect()
     }
 
-    /// Update workspace_root for a task (e.g. after worktree creation).
-    pub fn update_workspace_root(&mut self, task_id: &str, workspace_root: &str) -> bool {
+    /// Update task_worktree_root for a task (e.g. after worktree creation).
+    pub fn update_task_worktree_root(&mut self, task_id: &str, worktree_root: &str) -> bool {
         if let Some(task) = self.tasks.get_mut(task_id) {
-            task.workspace_root = workspace_root.to_string();
+            task.task_worktree_root = worktree_root.to_string();
             task.updated_at = chrono::Utc::now().timestamp_millis() as u64;
             true
         } else {

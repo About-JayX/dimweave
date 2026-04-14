@@ -63,7 +63,7 @@ fn task_snapshot_serializes_camel_case() {
         task: Task {
             task_id: "task_1".into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "Test".into(),
             status: TaskStatus::Implementing,
             lead_session_id: Some("s1".into()),
@@ -119,7 +119,7 @@ fn task_snapshot_roundtrip() {
         task: Task {
             task_id: "t1".into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Draft,
             lead_session_id: None,
@@ -176,7 +176,7 @@ fn history_entry_serializes_camel_case() {
         task: Task {
             task_id: "t1".into(),
             project_root: "/ws".into(),
-            workspace_root: "/ws".into(),
+            task_worktree_root: "/ws".into(),
             title: "T".into(),
             status: TaskStatus::Done,
             lead_session_id: None,

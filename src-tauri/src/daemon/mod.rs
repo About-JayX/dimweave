@@ -727,14 +727,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 };
                 let task_id = task.task_id.clone();
 
-                // 2. Create isolated worktree, update workspace_root + init runtime
+                // 2. Create isolated worktree, update task_worktree_root + init runtime
                 let result = match task_workspace::create_task_worktree(
                     std::path::Path::new(&workspace),
                     &task_id,
                 ) {
                     Ok(wt_path) => {
                         let mut s = state.write().await;
-                        s.task_graph.update_workspace_root(
+                        s.task_graph.update_task_worktree_root(
                             &task_id,
                             &wt_path.to_string_lossy(),
                         );
@@ -828,7 +828,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             .active_task_id
                             .as_ref()
                             .and_then(|task_id| daemon.task_graph.get_task(task_id))
-                            .map(|task| task.workspace_root.clone())
+                            .map(|task| task.task_worktree_root.clone())
                     }
                 };
                 let entries = match workspace {

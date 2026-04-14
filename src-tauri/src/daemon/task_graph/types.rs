@@ -57,7 +57,7 @@ pub struct Task {
     /// from `project_root` when the task uses a dedicated git worktree.
     /// Defaults to `project_root` when no worktree has been assigned.
     #[serde(default)]
-    pub workspace_root: String,
+    pub task_worktree_root: String,
     pub title: String,
     pub status: TaskStatus,
     pub lead_session_id: Option<String>,
