@@ -23,6 +23,14 @@ async fn route_to_user_returns_to_gui() {
 #[tokio::test]
 async fn route_to_claude_from_unknown_sender_drops() {
     let state = Arc::new(RwLock::new(DaemonState::new()));
+    {
+        let mut s = state.write().await;
+        // Claude must be online for sender gating to apply
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        let epoch = s.begin_claude_sdk_launch("nonce-drop".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-drop", tx);
+        s.claude_role = "lead".into();
+    }
     let msg = BridgeMessage {
         id: "msg-1".into(),
         from: "intruder".into(),

@@ -257,11 +257,10 @@ fn online_role_conflict_only_blocks_live_other_agent() {
     s.codex_role = "lead".into();
     assert_eq!(s.online_role_conflict("codex", "lead"), None);
 
-    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
+    // Make Claude online via SDK WS (not attached_agents)
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-conflict".into());
+    s.attach_claude_sdk_ws(epoch, "nonce-conflict", claude_tx);
     assert_eq!(s.online_role_conflict("codex", "lead"), Some("claude"));
 }
 

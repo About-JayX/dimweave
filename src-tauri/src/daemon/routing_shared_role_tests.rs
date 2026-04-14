@@ -151,10 +151,9 @@ async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not
         s.task_graph
             .set_external_session_id(&lead.session_id, "claude_current");
         s.claude_role = "lead".into();
-        s.attached_agents.insert(
-            "claude".into(),
-            crate::daemon::state::AgentSender::new(claude_tx, 0),
-        );
+        // Claude online via SDK WS (is_agent_online checks SDK WS, not attached_agents)
+        let epoch = s.begin_claude_sdk_launch("nonce-stale".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-stale", claude_tx);
         s.set_provider_connection(
             "claude",
             ProviderConnectionState {
@@ -193,16 +192,22 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
     String,
     String,
     String,
-    tokio::sync::mpsc::Receiver<ToAgent>,
+    tokio::sync::mpsc::Receiver<String>,
     tokio::sync::mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
 ) {
+    use crate::daemon::task_graph::types::Provider;
     let state = Arc::new(RwLock::new(DaemonState::new()));
-    let (claude_tx, claude_rx) = tokio::sync::mpsc::channel::<ToAgent>(8);
+    let (claude_tx, claude_rx) = tokio::sync::mpsc::channel::<String>(8);
     let (codex_tx, codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
     let ids = {
         let mut s = state.write().await;
-        let task = s.task_graph.create_task("/repo-b", "repo-b");
+        let task = s.task_graph.create_task_with_config(
+            "/repo-b", "repo-b", Provider::Codex, Provider::Claude,
+        );
         s.active_task_id = Some(task.task_id.clone());
+        // Register task_agents for authoritative routing
+        s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "lead");
+        s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
 
         let lead = s.task_graph.create_session(CreateSessionParams {
             task_id: &task.task_id,
@@ -232,10 +237,9 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
 
         s.claude_role = "coder".into();
         s.codex_role = "lead".into();
-        s.attached_agents.insert(
-            "claude".into(),
-            crate::daemon::state::AgentSender::new(claude_tx, 0),
-        );
+        // Claude online via SDK WS
+        let epoch = s.begin_claude_sdk_launch("nonce-shared".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-shared", claude_tx);
         s.codex_inject_tx = Some(codex_tx);
         s.set_provider_connection(
             "claude",
@@ -328,10 +332,9 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
         s.task_graph
             .set_external_session_id(&lead.session_id, "claude_current");
         s.claude_role = "lead".into();
-        s.attached_agents.insert(
-            "claude".into(),
-            crate::daemon::state::AgentSender::new(claude_tx, 0),
-        );
+        // Claude online via SDK WS (is_agent_online checks SDK WS, not attached_agents)
+        let epoch = s.begin_claude_sdk_launch("nonce-stale-reason".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-stale-reason", claude_tx);
         s.set_provider_connection(
             "claude",
             ProviderConnectionState {

@@ -115,13 +115,14 @@ fn auto_keeps_preferred_task_role_first_but_still_fanouts() {
         .set_external_session_id(&coder.session_id, "codex_current");
     s.task_graph
         .update_task_status(&task.task_id, TaskStatus::Reviewing);
+    // Claude online via SDK WS
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-pref".into());
+    s.attach_claude_sdk_ws(epoch, "nonce-pref", claude_tx);
+    s.claude_role = "lead".into();
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
     s.codex_inject_tx = Some(codex_tx);
+    s.codex_role = "coder".into();
     s.set_provider_connection(
         "claude",
         ProviderConnectionState {
@@ -182,12 +183,11 @@ fn auto_prefers_bound_claude_coder_for_active_task() {
 
     s.claude_role = "coder".into();
     s.codex_role = "lead".into();
+    // Claude online via SDK WS
     let (claude_tx, _) = tokio::sync::mpsc::channel(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-bound".into());
+    s.attach_claude_sdk_ws(epoch, "nonce-bound", claude_tx);
     let (codex_tx, _) = tokio::sync::mpsc::channel(1);
-    s.attached_agents.insert(
-        "claude".into(),
-        crate::daemon::state::AgentSender::new(claude_tx, 0),
-    );
     s.codex_inject_tx = Some(codex_tx);
     s.set_provider_connection(
         "claude",

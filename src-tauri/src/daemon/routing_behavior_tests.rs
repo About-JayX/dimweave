@@ -51,10 +51,11 @@ async fn auto_fanout_delivers_to_both_agents() {
     let (codex_tx, mut codex_rx) = tokio::sync::mpsc::channel(8);
     {
         let mut s = state.write().await;
-        s.attached_agents.insert(
-            "claude".into(),
-            crate::daemon::state::AgentSender::new(claude_tx, 0),
-        );
+        // Claude online via SDK WS
+        let epoch = s.begin_claude_sdk_launch("nonce-fanout".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-fanout", claude_tx);
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
         s.codex_inject_tx = Some(codex_tx);
     }
     let targets = {
