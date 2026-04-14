@@ -144,6 +144,35 @@ describe("TaskSetupDialog", () => {
     expect({ agents: validAgents, requestLaunch: false }.agents).toEqual([]);
   });
 
+  test("dialog shell uses flex column layout without outer scroll", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain("flex flex-col");
+    expect(html).not.toContain("overflow-y-auto max-h-[90vh]");
+  });
+
+  test("provider panels live inside a dedicated inner scroll region", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain('data-scroll-region="true"');
+    expect(html).toContain("overflow-y-auto");
+  });
+
+  test("action buttons are in a fixed footer section", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain('data-dialog-footer="true"');
+  });
+
   test("edit-mode diff logic: update existing, add new, remove deleted", () => {
     // Mirrors the handleEditSubmit diff logic in index.tsx
     type AgentDef = { provider: string; role: string; agentId?: string; displayName?: string | null };

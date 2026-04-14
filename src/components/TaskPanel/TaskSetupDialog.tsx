@@ -128,42 +128,45 @@ export function TaskSetupDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={handleClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-xl border border-border/50 bg-card p-4 shadow-xl space-y-3"
-      >
-        <h3 className="text-sm font-semibold text-foreground">
-          {mode === "edit" ? "Edit Task" : "New Task"}
-        </h3>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Agents</span>
-            <button
-              type="button"
-              onClick={addDef}
-              className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Plus className="size-3" />
-              Add
-            </button>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
+      <div role="dialog" aria-modal="true"
+        className="relative z-10 flex flex-col w-full max-w-lg max-h-[90vh] rounded-xl border border-border/50 bg-card shadow-xl">
+        <div className="shrink-0 px-4 pt-4 pb-2 space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            {mode === "edit" ? "Edit Task" : "New Task"}
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Agents</span>
+              <button
+                type="button"
+                onClick={addDef}
+                className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Plus className="size-3" />
+                Add
+              </button>
+            </div>
+            {agentDefs.map((def, i) => (
+              <AgentDefRow
+                key={i}
+                def={def}
+                onChange={(u) => updateDef(i, u)}
+                onRemove={() => removeDef(i)}
+              />
+            ))}
           </div>
-          {agentDefs.map((def, i) => (
-            <AgentDefRow
-              key={i}
-              def={def}
-              onChange={(u) => updateDef(i, u)}
-              onRemove={() => removeDef(i)}
-            />
-          ))}
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-1">
+        {mode === "create" && (
+          <div data-scroll-region="true" className="min-h-0 flex-1 overflow-y-auto px-4 py-2 scrollbar-thin scrollbar-thumb-border/30 scrollbar-track-transparent">
+            <AgentStatusPanel workspace={workspace} draftMode
+              draftLeadProvider={draftLeadProvider} draftCoderProvider={draftCoderProvider}
+              onClaudeDraftChange={hasClaude ? setClaudeConfig : undefined}
+              onCodexDraftChange={hasCodex ? setCodexConfig : undefined} />
+          </div>
+        )}
+        <div data-dialog-footer="true" className="shrink-0 flex items-center justify-end gap-2 border-t border-border/30 px-4 py-3">
           <button type="button" onClick={handleClose}
             className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             Cancel
@@ -186,13 +189,6 @@ export function TaskSetupDialog({
             </>
           )}
         </div>
-
-        {mode === "create" && (
-          <AgentStatusPanel workspace={workspace} draftMode
-            draftLeadProvider={draftLeadProvider} draftCoderProvider={draftCoderProvider}
-            onClaudeDraftChange={hasClaude ? setClaudeConfig : undefined}
-            onCodexDraftChange={hasCodex ? setCodexConfig : undefined} />
-        )}
       </div>
     </div>
   );
