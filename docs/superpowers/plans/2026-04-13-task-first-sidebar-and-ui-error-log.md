@@ -1,5 +1,9 @@
 # Task-First Sidebar And UI Error Log Implementation Plan
 
+> **Superseded on 2026-04-14 by:** [2026-04-14-task-agent-identity-role-broadcast.md](/Users/jason/floder/agent-bridge/.worktrees/task-agent-identity-redesign/docs/superpowers/plans/2026-04-14-task-agent-identity-role-broadcast.md)
+>
+> The single-workspace and UI error-log work landed successfully, but the task/agent modeling in this plan assumed singleton `lead/coder` task slots. The approved product direction now requires `task_agents[]` with extensible roles and role-broadcast routing, so this plan should no longer be used for future implementation work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Keep the current shell layout, but switch the product flow to `workspace -> task -> agents`, remove the standalone `Agents` pane, and stop UI crashes from appearing as full-page reload/reset loops by introducing a dedicated UI error log dialog and manual retry flow.
