@@ -82,6 +82,26 @@ These changes are mechanical consequences of the approved SQLite + root-split ta
 - `max_added_loc: 780`
 - `max_deleted_loc: 300`
 
+## Plan Revision 2 — 2026-04-14
+
+**Reason:** Task 1 review found two additional mechanical ripples on the approved acceptance path:
+
+- `src-tauri/src/daemon/mod.rs` must call the renamed task-root update API and read the renamed task worktree field
+- `src-tauri/src/daemon/feishu_project_task_link.rs` reads the task execution root and must follow the renamed task worktree field
+
+These are direct compile/behavior ripples from the `project_root` + `task_worktree_root` split and must be in scope.
+
+**Added to Task 1 allowed_files:**
+
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/feishu_project_task_link.rs`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 15`
+- `max_added_loc: 800`
+- `max_deleted_loc: 320`
+
 ## Task 2: Move daemon snapshot buffering to SQLite-backed persistence
 
 **task_id:** `sqlite-daemon-snapshot-persistence`
@@ -230,7 +250,7 @@ These changes are mechanical consequences of the approved SQLite + root-split ta
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | _pending_ | _pending_ | pending |
+| Task 1 | `ba41b78e`, `ce6211c7` | Replaced task-graph JSON persistence with SQLite, added schema-backed persistence for tasks/sessions/artifacts/task_agents plus meta and buffered-message tables, introduced an explicit root split (`project_root` + `task_worktree_root`), and removed the remaining legacy field naming by renaming `workspace_root` to `task_worktree_root` across the task graph, SQLite schema, and compile ripples. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 55 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | _pending_ | _pending_ | pending |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
