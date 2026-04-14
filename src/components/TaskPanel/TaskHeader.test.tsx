@@ -7,9 +7,6 @@ mock.module("@/stores/task-store", () => ({
   useTaskStore: (sel: (s: any) => any) => sel({
     activeTaskId: "task-001",
     lastSave: null,
-    providerSummaries: {
-      "task-001": { taskId: "task-001", leadOnline: false, coderOnline: false },
-    },
     taskAgents: {},
   }),
 }));
@@ -57,12 +54,12 @@ describe("TaskHeader", () => {
     expect(html).not.toContain("Pending Review");
   });
 
-  test("shows fallback provider badges when no task agents configured", () => {
+  test("shows no agent badges when task has zero agents", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask }),
     );
-    expect(html).toContain("lead:");
-    expect(html).toContain("coder:");
+    expect(html).not.toContain("lead:");
+    expect(html).not.toContain("coder:");
   });
 
   test("renders edit-task button when onEditTask is provided", () => {
