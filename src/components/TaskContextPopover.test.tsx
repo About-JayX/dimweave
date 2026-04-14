@@ -76,6 +76,16 @@ describe("TaskContextPopover", () => {
     );
   });
 
+  test("task pane renders no session or artifact sub-panel headings after card-only simplification", async () => {
+    installTauriStub();
+    const { TaskContextPopover } = await import("./TaskContextPopover");
+    const html = renderToStaticMarkup(
+      <TaskContextPopover activePane="task" onClose={() => {}} task={null} />,
+    );
+    expect(html).not.toContain("Sessions");
+    expect(html).not.toContain("Artifacts");
+  });
+
   test("renders approvals inside the shared shell drawer", async () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");

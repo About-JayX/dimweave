@@ -91,6 +91,31 @@ describe("TaskHeader", () => {
   });
 });
 
+describe("card-only selection contract", () => {
+  test("inactive collapsed card exposes role=button for keyboard selection", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, collapsed: true, onClick: () => {} } as any),
+    );
+    expect(html).toContain('role="button"');
+    expect(html).toContain("tabindex");
+  });
+
+  test("active card without onClick has no button role (non-navigable root)", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
+    );
+    expect(html).not.toContain('role="button"');
+  });
+
+  test("Edit task button is reachable on the active card", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
+    );
+    expect(html).toContain("Edit task");
+    expect(html).toContain("<button");
+  });
+});
+
 describe("collapsed accordion header", () => {
   test("marks container with data-collapsed when collapsed", () => {
     const html = renderToStaticMarkup(
