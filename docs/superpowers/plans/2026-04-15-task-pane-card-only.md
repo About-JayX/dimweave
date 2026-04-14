@@ -125,6 +125,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Collapse `TaskPanel` to task-card-only rendering and remove task-pane use of `Agents`, `Sessions`, and `Artifacts` sections. | _pending_ | pending |
+| Task 1 | `2769cb31` | Collapsed `TaskPanel` to card-only rendering by removing the task-pane render path for `TaskAgentList`, `SessionTree`, and `ArtifactTimeline`. Active and inactive tasks now both render only through the task card surface, while `New Task` remains at list level. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 11 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Preserve task selection, `Edit Task`, and right-side message/reply sync after card-only simplification. | _pending_ | pending |
 | Task 3 | _pending_ | Finalize docs and CM evidence for the accepted task-pane simplification. | _pending_ | pending |
