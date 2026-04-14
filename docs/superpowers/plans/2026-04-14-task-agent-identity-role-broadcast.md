@@ -127,9 +127,10 @@
 
 - Live provider/session ownership resolves to concrete `agent_id`, not singleton provider names.
 - Session/runtime structures can represent multiple agents of the same provider inside one task.
+- Normalized session ownership is persisted by `agent_id`, so launch/resume can preserve a stable agent identity.
 - Launch/resume flows bind runtime state to a specific `agent_id`.
 - Provider-originated events can resolve the owning `agent_id` without using singleton task slots as primary truth.
-- Same-provider multi-agent scenarios no longer collapse into one ownership slot.
+- Same-provider multi-agent scenarios no longer collapse into one ownership slot, including live daemon handle ownership.
 
 **allowed_files:**
 
@@ -152,17 +153,69 @@
 - `src-tauri/src/daemon/codex/session.rs`
 - `src-tauri/src/daemon/provider/claude.rs`
 - `src-tauri/src/daemon/provider/codex.rs`
+- `src-tauri/src/daemon/provider/shared.rs`
+- `src-tauri/src/daemon/provider/claude_tests.rs`
+- `src-tauri/src/daemon/provider/codex_tests.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/routing_user_input_tests.rs`
+- `src-tauri/src/daemon/routing_user_target_tests.rs`
+- `src-tauri/src/daemon/state_task_snapshot_tests.rs`
+- `src-tauri/src/daemon/types_tests.rs`
 - `src-tauri/src/daemon/state_tests.rs`
 
-**max_files_changed:** `20`
-**max_added_loc:** `880`
-**max_deleted_loc:** `280`
+**max_files_changed:** `30`
+**max_added_loc:** `1200`
+**max_deleted_loc:** `360`
 
 **verification_commands:**
 
+- `cargo check --manifest-path src-tauri/Cargo.toml --tests`
 - `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml agent_runtime_ownership -- --nocapture`
+- `git diff --check`
+
+## Plan Revision 5 — 2026-04-14
+
+**Reason:** Review of the first Task 2 attempts proved two additional requirements:
+
+1. backend runtime ownership must include `SessionHandle.agent_id` and provider registration/resume paths, not just task runtime slots
+2. compile-fix ripples in provider/test helper files are unavoidable once normalized session ownership carries `agent_id`
+
+Task 2 also needs stronger verification because `cargo check --tests` caught compile drift that the narrower task filters missed.
+
+**Added to revised Task 2 allowed_files:**
+
+- `src-tauri/src/daemon/provider/shared.rs`
+- `src-tauri/src/daemon/provider/claude_tests.rs`
+- `src-tauri/src/daemon/provider/codex_tests.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/routing_user_input_tests.rs`
+- `src-tauri/src/daemon/routing_user_target_tests.rs`
+- `src-tauri/src/daemon/state_task_snapshot_tests.rs`
+- `src-tauri/src/daemon/types_tests.rs`
+
+**Revised Task 2 budgets:**
+
+- `max_files_changed: 30`
+- `max_added_loc: 1200`
+- `max_deleted_loc: 360`
+
+**Revised Task 2 verification_commands:**
+
+- `cargo check --manifest-path src-tauri/Cargo.toml --tests`
+- `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml agent_runtime_ownership -- --nocapture`
 - `git diff --check`
 
