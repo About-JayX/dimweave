@@ -11,6 +11,8 @@ pub(super) struct TaskGraphSnapshot {
     pub tasks: Vec<Task>,
     pub sessions: Vec<SessionHandle>,
     pub artifacts: Vec<Artifact>,
+    #[serde(default)]
+    pub task_agents: Vec<TaskAgent>,
     pub next_id: u64,
 }
 
@@ -37,11 +39,13 @@ impl TaskGraphStore {
             tasks: self.tasks.values().cloned().collect(),
             sessions: self.sessions.values().cloned().collect(),
             artifacts: self.artifacts.values().cloned().collect(),
+            task_agents: self.task_agents.values().cloned().collect(),
             next_id: self.next_id,
         }
     }
 
-    /// Rebuild a store from a deserialized snapshot.
+    /// Rebuild a store from a deserialized snapshot, running legacy
+    /// migration for tasks that have no `TaskAgent` records yet.
     pub(super) fn from_snapshot(
         snap: TaskGraphSnapshot,
         persist_path: Option<std::path::PathBuf>,
@@ -61,13 +65,21 @@ impl TaskGraphStore {
             .into_iter()
             .map(|a| (a.artifact_id.clone(), a))
             .collect();
-        Self {
+        let task_agents = snap
+            .task_agents
+            .into_iter()
+            .map(|a| (a.agent_id.clone(), a))
+            .collect();
+        let mut store = Self {
             tasks,
             sessions,
             artifacts,
+            task_agents,
             next_id: snap.next_id,
             persist_path,
-        }
+        };
+        store.migrate_legacy_agents();
+        store
     }
 
     /// Save the store to its configured persist path.

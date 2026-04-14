@@ -87,6 +87,16 @@ fn task_snapshot_serializes_camel_case() {
             updated_at: 2000,
         }],
         artifacts: vec![],
+        task_agents: vec![TaskAgent {
+            agent_id: "agent_1".into(),
+            task_id: "task_1".into(),
+            provider: Provider::Claude,
+            role: "lead".into(),
+            display_name: None,
+            order: 0,
+            created_at: 1000,
+            updated_at: 2000,
+        }],
         provider_summary: None,
     };
     let json = serde_json::to_value(&snap).unwrap();
@@ -96,6 +106,8 @@ fn task_snapshot_serializes_camel_case() {
     assert_eq!(json["sessions"][0]["sessionId"], "s1");
     assert_eq!(json["sessions"][0]["provider"], "claude");
     assert!(json["artifacts"].as_array().unwrap().is_empty());
+    assert_eq!(json["taskAgents"][0]["agentId"], "agent_1");
+    assert_eq!(json["taskAgents"][0]["role"], "lead");
 }
 
 #[test]
@@ -116,6 +128,7 @@ fn task_snapshot_roundtrip() {
         },
         sessions: vec![],
         artifacts: vec![],
+        task_agents: vec![],
         provider_summary: None,
     };
     let json_str = serde_json::to_string(&snap).unwrap();
@@ -123,6 +136,7 @@ fn task_snapshot_roundtrip() {
     assert_eq!(decoded.task.task_id, "t1");
     assert_eq!(decoded.task.status, TaskStatus::Draft);
     assert_eq!(decoded.task.lead_provider, Provider::Claude);
+    assert!(decoded.task_agents.is_empty());
 }
 
 #[test]

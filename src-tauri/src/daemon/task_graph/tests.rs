@@ -523,3 +523,190 @@ fn find_session_by_external_id_filters_by_provider() {
     assert_eq!(found.session_id, codex.session_id);
     assert_eq!(found.provider, Provider::Codex);
 }
+
+// ── TaskAgent Model ────────────────────────────────────────
+
+#[test]
+fn add_task_agent_returns_record_with_stable_id() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Agent Test");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    assert!(agent.agent_id.starts_with("agent_"));
+    assert_eq!(agent.task_id, task.task_id);
+    assert_eq!(agent.provider, Provider::Claude);
+    assert_eq!(agent.role, "lead");
+    assert_eq!(agent.order, 0);
+}
+
+#[test]
+fn add_task_agent_increments_order() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Order Test");
+    let a1 = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let a2 = store.add_task_agent(&task.task_id, Provider::Codex, "coder");
+    assert_eq!(a1.order, 0);
+    assert_eq!(a2.order, 1);
+}
+
+#[test]
+fn agents_for_task_returns_all_linked() {
+    let mut store = TaskGraphStore::new();
+    let t1 = store.create_task("/ws", "T1");
+    let t2 = store.create_task("/ws", "T2");
+    store.add_task_agent(&t1.task_id, Provider::Claude, "lead");
+    store.add_task_agent(&t1.task_id, Provider::Codex, "coder");
+    store.add_task_agent(&t2.task_id, Provider::Claude, "lead");
+    let agents = store.agents_for_task(&t1.task_id);
+    assert_eq!(agents.len(), 2);
+    assert!(agents.iter().all(|a| a.task_id == t1.task_id));
+}
+
+#[test]
+fn get_task_agent_returns_by_id() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Lookup");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let fetched = store.get_task_agent(&agent.agent_id).expect("should exist");
+    assert_eq!(fetched.role, "lead");
+}
+
+#[test]
+fn remove_task_agent_works() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Remove Test");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    assert!(store.remove_task_agent(&agent.agent_id));
+    assert!(store.get_task_agent(&agent.agent_id).is_none());
+    assert!(!store.remove_task_agent(&agent.agent_id));
+}
+
+#[test]
+fn task_agent_serialization_round_trip() {
+    let agent = TaskAgent {
+        agent_id: "agent_1".into(),
+        task_id: "task_1".into(),
+        provider: Provider::Claude,
+        role: "lead".into(),
+        display_name: None,
+        order: 0,
+        created_at: 100,
+        updated_at: 200,
+    };
+    let json = serde_json::to_string(&agent).unwrap();
+    let decoded: TaskAgent = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded.agent_id, "agent_1");
+    assert_eq!(decoded.role, "lead");
+    assert_eq!(decoded.provider, Provider::Claude);
+}
+
+// ── Legacy Migration ───────────────────────────────────────
+
+#[test]
+fn migrate_legacy_agents_creates_two_agents_from_singleton_fields() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task_with_config("/ws", "Migrate", Provider::Claude, Provider::Codex);
+    // No agents exist yet
+    assert!(store.agents_for_task(&task.task_id).is_empty());
+    store.migrate_legacy_agents();
+    let agents = store.agents_for_task(&task.task_id);
+    assert_eq!(agents.len(), 2);
+    let roles: Vec<&str> = agents.iter().map(|a| a.role.as_str()).collect();
+    assert!(roles.contains(&"lead"));
+    assert!(roles.contains(&"coder"));
+    let lead = agents.iter().find(|a| a.role == "lead").unwrap();
+    let coder = agents.iter().find(|a| a.role == "coder").unwrap();
+    assert_eq!(lead.provider, Provider::Claude);
+    assert_eq!(coder.provider, Provider::Codex);
+}
+
+#[test]
+fn migrate_legacy_agents_idempotent() {
+    let mut store = TaskGraphStore::new();
+    store.create_task("/ws", "Idempotent");
+    store.migrate_legacy_agents();
+    let count_after_first = store.agents_for_task(
+        &store.list_tasks()[0].task_id,
+    ).len();
+    store.migrate_legacy_agents();
+    let count_after_second = store.agents_for_task(
+        &store.list_tasks()[0].task_id,
+    ).len();
+    assert_eq!(count_after_first, count_after_second);
+}
+
+#[test]
+fn migrate_legacy_agents_same_provider_both_roles() {
+    let mut store = TaskGraphStore::new();
+    store.create_task_with_config("/ws", "Same", Provider::Claude, Provider::Claude);
+    store.migrate_legacy_agents();
+    let agents = store.agents_for_task(
+        &store.list_tasks()[0].task_id,
+    );
+    assert_eq!(agents.len(), 2);
+    assert!(agents.iter().all(|a| a.provider == Provider::Claude));
+    let roles: Vec<&str> = agents.iter().map(|a| a.role.as_str()).collect();
+    assert!(roles.contains(&"lead"));
+    assert!(roles.contains(&"coder"));
+}
+
+#[test]
+fn migrate_legacy_agents_skips_tasks_that_already_have_agents() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "PreExisting");
+    store.add_task_agent(&task.task_id, Provider::Claude, "architect");
+    store.migrate_legacy_agents();
+    let agents = store.agents_for_task(&task.task_id);
+    // Should still have exactly 1 (the manually added one), not 3
+    assert_eq!(agents.len(), 1);
+    assert_eq!(agents[0].role, "architect");
+}
+
+// ── Persistence with TaskAgents ────────────────────────────
+
+#[test]
+fn persist_task_agents_round_trip() {
+    let path = tmp_persist_path("agents_roundtrip");
+    let _cleanup = CleanupFile(path.clone());
+    {
+        let mut store = TaskGraphStore::with_persist_path(path.clone());
+        let task = store.create_task("/ws", "Persist Agents");
+        store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        store.add_task_agent(&task.task_id, Provider::Codex, "coder");
+        store.save().unwrap();
+    }
+    {
+        let store = TaskGraphStore::load(&path).unwrap();
+        let tasks = store.list_tasks();
+        assert_eq!(tasks.len(), 1);
+        let agents = store.agents_for_task(&tasks[0].task_id);
+        assert_eq!(agents.len(), 2);
+    }
+}
+
+#[test]
+fn persist_migration_runs_on_old_format_load() {
+    let path = tmp_persist_path("migration_on_load");
+    let _cleanup = CleanupFile(path.clone());
+    // Write an old-format snapshot (no task_agents field)
+    {
+        let mut store = TaskGraphStore::with_persist_path(path.clone());
+        store.create_task_with_config("/ws", "OldFormat", Provider::Codex, Provider::Claude);
+        store.save().unwrap();
+    }
+    // Remove agents by saving raw JSON without the field
+    {
+        let data = std::fs::read_to_string(&path).unwrap();
+        let mut val: serde_json::Value = serde_json::from_str(&data).unwrap();
+        val.as_object_mut().unwrap().remove("task_agents");
+        std::fs::write(&path, serde_json::to_string_pretty(&val).unwrap()).unwrap();
+    }
+    // Load should trigger migration
+    {
+        let store = TaskGraphStore::load(&path).unwrap();
+        let tasks = store.list_tasks();
+        let agents = store.agents_for_task(&tasks[0].task_id);
+        assert_eq!(agents.len(), 2);
+        let lead = agents.iter().find(|a| a.role == "lead").unwrap();
+        assert_eq!(lead.provider, Provider::Codex);
+    }
+}

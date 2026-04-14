@@ -142,7 +142,7 @@ impl DaemonState {
         })
     }
 
-    /// Snapshot of the active task with its sessions and artifacts.
+    /// Snapshot of the active task with its sessions, artifacts, and agents.
     pub fn task_snapshot(&self) -> Option<TaskSnapshot> {
         let task_id = self.active_task_id.as_ref()?;
         let task = self.task_graph.get_task(task_id)?.clone();
@@ -158,11 +158,18 @@ impl DaemonState {
             .into_iter()
             .cloned()
             .collect();
+        let task_agents: Vec<_> = self
+            .task_graph
+            .agents_for_task(task_id)
+            .into_iter()
+            .cloned()
+            .collect();
         let provider_summary = self.task_provider_summary(task_id);
         Some(TaskSnapshot {
             task,
             sessions,
             artifacts,
+            task_agents,
             provider_summary,
         })
     }

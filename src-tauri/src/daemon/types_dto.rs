@@ -7,6 +7,8 @@ pub struct TaskSnapshot {
     pub task: crate::daemon::task_graph::types::Task,
     pub sessions: Vec<crate::daemon::task_graph::types::SessionHandle>,
     pub artifacts: Vec<crate::daemon::task_graph::types::Artifact>,
+    #[serde(default)]
+    pub task_agents: Vec<crate::daemon::task_graph::types::TaskAgent>,
     pub provider_summary: Option<TaskProviderSummary>,
 }
 

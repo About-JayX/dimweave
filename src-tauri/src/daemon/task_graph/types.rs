@@ -92,6 +92,23 @@ pub struct Artifact {
     pub created_at: u64,
 }
 
+/// Per-task agent identity. Replaces singleton `lead_provider`/`coder_provider`
+/// as the primary truth for which agents belong to a task.
+/// Role is an extensible string (not limited to lead/coder).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskAgent {
+    pub agent_id: String,
+    pub task_id: String,
+    pub provider: Provider,
+    pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub order: u32,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
 /// Parameters for creating a new session.
 pub struct CreateSessionParams<'a> {
     pub task_id: &'a str,

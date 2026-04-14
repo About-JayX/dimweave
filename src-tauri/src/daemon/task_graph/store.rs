@@ -9,6 +9,7 @@ pub struct TaskGraphStore {
     pub(super) tasks: HashMap<String, Task>,
     pub(super) sessions: HashMap<String, SessionHandle>,
     pub(super) artifacts: HashMap<String, Artifact>,
+    pub(super) task_agents: HashMap<String, TaskAgent>,
     pub(super) next_id: u64,
     pub(super) persist_path: Option<PathBuf>,
 }
@@ -19,6 +20,7 @@ impl TaskGraphStore {
             tasks: HashMap::new(),
             sessions: HashMap::new(),
             artifacts: HashMap::new(),
+            task_agents: HashMap::new(),
             next_id: 0,
             persist_path: None,
         }
@@ -272,6 +274,63 @@ impl TaskGraphStore {
     /// Retrieve an artifact by ID.
     pub fn get_artifact(&self, artifact_id: &str) -> Option<&Artifact> {
         self.artifacts.get(artifact_id)
+    }
+
+    // ── TaskAgent CRUD ─────────────────────────────────────
+
+    /// Add an agent to a task. Order auto-increments within the task.
+    pub fn add_task_agent(&mut self, task_id: &str, provider: Provider, role: &str) -> TaskAgent {
+        let now = chrono::Utc::now().timestamp_millis() as u64;
+        let order = self.agents_for_task(task_id).len() as u32;
+        let agent = TaskAgent {
+            agent_id: self.next_id_str("agent"),
+            task_id: task_id.to_string(),
+            provider,
+            role: role.to_string(),
+            display_name: None,
+            order,
+            created_at: now,
+            updated_at: now,
+        };
+        self.task_agents.insert(agent.agent_id.clone(), agent.clone());
+        agent
+    }
+
+    /// Retrieve an agent by ID.
+    pub fn get_task_agent(&self, agent_id: &str) -> Option<&TaskAgent> {
+        self.task_agents.get(agent_id)
+    }
+
+    /// All agents belonging to a task, sorted by order.
+    pub fn agents_for_task(&self, task_id: &str) -> Vec<&TaskAgent> {
+        let mut agents: Vec<_> = self.task_agents.values()
+            .filter(|a| a.task_id == task_id)
+            .collect();
+        agents.sort_by_key(|a| a.order);
+        agents
+    }
+
+    /// Remove an agent by ID. Returns true if it existed.
+    pub fn remove_task_agent(&mut self, agent_id: &str) -> bool {
+        self.task_agents.remove(agent_id).is_some()
+    }
+
+    /// Deterministic legacy migration: for each task with no agents,
+    /// generate lead + coder agents from singleton provider fields.
+    /// Idempotent — skips tasks that already have agents.
+    pub fn migrate_legacy_agents(&mut self) {
+        let task_ids: Vec<String> = self.tasks.keys().cloned().collect();
+        for task_id in task_ids {
+            let has_agents = self.task_agents.values().any(|a| a.task_id == task_id);
+            if has_agents {
+                continue;
+            }
+            let task = self.tasks.get(&task_id).unwrap();
+            let lead_provider = task.lead_provider;
+            let coder_provider = task.coder_provider;
+            self.add_task_agent(&task_id, lead_provider, "lead");
+            self.add_task_agent(&task_id, coder_provider, "coder");
+        }
     }
 
     pub(super) fn next_id_str(&mut self, prefix: &str) -> String {

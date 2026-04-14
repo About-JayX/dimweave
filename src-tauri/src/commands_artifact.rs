@@ -137,6 +137,7 @@ mod tests {
                 content_ref: content_ref.to_string(),
                 created_at: 1,
             }],
+            task_agents: vec![],
             provider_summary: None,
         }
     }
