@@ -1,6 +1,6 @@
 # Task Pane Card-Only Simplification Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task pane already supports multi-task listing, `task_agents[]` is already the sole task-agent truth source, and task persistence is now backed by SQLite with explicit `project_root` and `task_worktree_root`.
 
