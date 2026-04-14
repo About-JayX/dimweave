@@ -55,6 +55,20 @@
 - `bun run build`
 - `git diff --check`
 
+## Plan Revision 1 — 2026-04-15
+
+**Reason:** Task 1 requires a focused regression test to lock the card-only surface contract while removing the `Agents`, `Sessions`, and `Artifacts` render path. That coverage lives in `TaskHeader.test.tsx`, so the test file must be in scope for the required TDD workflow.
+
+**Added to Task 1 allowed_files:**
+
+- `src/components/TaskPanel/TaskHeader.test.tsx`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 4`
+- `max_added_loc: 200`
+- `max_deleted_loc: 140`
+
 ## Task 2: Preserve card-level task management and selection behavior
 
 **task_id:** `task-card-selection-and-edit-flow`
