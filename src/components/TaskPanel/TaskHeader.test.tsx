@@ -76,3 +76,31 @@ describe("TaskHeader", () => {
     expect(html).not.toContain("Edit task");
   });
 });
+
+describe("collapsed accordion header", () => {
+  test("marks container with data-collapsed when collapsed", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, collapsed: true, onClick: () => {} } as any),
+    );
+    expect(html).toContain('data-collapsed="true"');
+  });
+
+  test("applies cursor-pointer when onClick is provided", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onClick: () => {} } as any),
+    );
+    expect(html).toContain("cursor-pointer");
+  });
+
+  test("hides edit button in collapsed mode even when handler exists", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, {
+        task: baseTask,
+        collapsed: true,
+        onClick: () => {},
+        onEditTask: () => {},
+      } as any),
+    );
+    expect(html).not.toContain("Edit task");
+  });
+});

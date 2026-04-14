@@ -10,6 +10,7 @@ import {
   selectActiveTaskAgents,
   selectActiveTaskArtifacts,
   selectActiveTaskSessions,
+  selectWorkspaceTasks,
 } from "@/stores/task-store/selectors";
 import { ArtifactTimeline } from "./ArtifactTimeline";
 import { SessionTree } from "./SessionTree";
@@ -29,6 +30,9 @@ import {
 
 export function TaskPanel() {
   const task = useTaskStore(selectActiveTask);
+  const workspaceTasks = useTaskStore(selectWorkspaceTasks);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const selectTask = useTaskStore((s) => s.selectTask);
   const taskSessions = useTaskStore(selectActiveTaskSessions);
   const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
@@ -143,55 +147,41 @@ export function TaskPanel() {
 
   const reviewBadge: ReviewBadge | null =
     task?.status === "reviewing" ? { label: "Review", tone: "warning" } : null;
+  const dialogWorkspace = dialogMode === "edit" ? task?.workspaceRoot : selectedWorkspace;
 
-  if (!task) {
-    return (
-      <div className="space-y-3">
+  return (
+    <div className="space-y-2">
+      {workspaceTasks.length === 0 && (
         <div className="rounded-xl border border-dashed border-border/50 bg-card/30 px-4 py-3 text-xs text-muted-foreground/70">
           {getTaskPanelEmptyStateMessage()}
         </div>
-        {selectedWorkspace && !dialogOpen && (
-          <button
-            type="button"
-            onClick={() => openDialog("create")}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/10"
-          >
-            <Plus className="size-3.5" />
-            New Task
-          </button>
-        )}
-        {dialogOpen && selectedWorkspace && (
-          <TaskSetupDialog
-            mode="create"
-            workspace={selectedWorkspace}
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            onSubmit={handleDialogSubmit}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <TaskHeader task={task} reviewBadge={reviewBadge} onEditTask={() => openDialog("edit")} />
-      <TaskAgentList />
-      <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
-        <SessionTree rows={sessionRows} onResume={handleResume} />
-      </div>
-      <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
-        <ArtifactTimeline
-          items={artifactTimeline}
-          selectedArtifactId={selectedArtifactId}
-          detail={artifactDetailModel}
-          detailLoading={artifactDetailLoading}
-          detailError={artifactDetailError}
-          onSelect={setSelectedArtifactId}
-        />
-      </div>
-      {dialogOpen && task.workspaceRoot && (
-        <TaskSetupDialog mode={dialogMode} workspace={task.workspaceRoot}
+      )}
+      {workspaceTasks.map((t) =>
+        t.taskId === activeTaskId ? (
+          <div key={t.taskId} className="space-y-3">
+            <TaskHeader task={t} reviewBadge={reviewBadge} onEditTask={() => openDialog("edit")} />
+            <TaskAgentList />
+            <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
+              <SessionTree rows={sessionRows} onResume={handleResume} />
+            </div>
+            <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
+              <ArtifactTimeline items={artifactTimeline} selectedArtifactId={selectedArtifactId}
+                detail={artifactDetailModel} detailLoading={artifactDetailLoading}
+                detailError={artifactDetailError} onSelect={setSelectedArtifactId} />
+            </div>
+          </div>
+        ) : (
+          <TaskHeader key={t.taskId} task={t} collapsed onClick={() => void selectTask(t.taskId)} />
+        ),
+      )}
+      {selectedWorkspace && !dialogOpen && (
+        <button type="button" onClick={() => openDialog("create")}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/10">
+          <Plus className="size-3.5" /> New Task
+        </button>
+      )}
+      {dialogOpen && dialogWorkspace && (
+        <TaskSetupDialog mode={dialogMode} workspace={dialogWorkspace}
           open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
           initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined} />
       )}

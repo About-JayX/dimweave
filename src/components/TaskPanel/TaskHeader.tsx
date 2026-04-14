@@ -54,41 +54,59 @@ export function TaskHeader({
   task,
   reviewBadge,
   onEditTask,
+  collapsed,
+  onClick,
 }: {
   task: TaskInfo;
   reviewBadge?: ReviewBadge | null;
   onEditTask?: () => void;
+  collapsed?: boolean;
+  onClick?: () => void;
 }) {
   const agents = useTaskStore(selectActiveTaskAgents);
+  const showDetail = !collapsed;
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 px-4 py-3">
+    <div
+      className={`rounded-xl border border-border/50 bg-card/50 px-4 py-3${onClick ? " cursor-pointer transition-colors hover:bg-card/70" : ""}`}
+      data-collapsed={collapsed ? "true" : undefined}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="truncate text-sm font-semibold text-foreground">
             {task.title}
           </div>
-          <div className="truncate text-xs text-muted-foreground/80">
-            {task.workspaceRoot}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground/60">
-              {task.taskId}
-            </span>
-            <SaveIndicator />
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {agents.map((agent) => {
-              const provStyle = agent.provider === "claude"
-                ? "border-claude/30 bg-claude/8 text-claude/80"
-                : "border-codex/30 bg-codex/8 text-codex/80";
-              return (
-                <span key={agent.agentId} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}>
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-500" />
-                  {agent.displayName ?? agent.role}: {agent.provider}
-                </span>
-              );
-            })}
-          </div>
+          {showDetail && (
+            <div className="truncate text-xs text-muted-foreground/80">
+              {task.workspaceRoot}
+            </div>
+          )}
+          {showDetail && (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-muted-foreground/60">
+                {task.taskId}
+              </span>
+              <SaveIndicator />
+            </div>
+          )}
+          {showDetail && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {agents.map((agent) => {
+                const provStyle = agent.provider === "claude"
+                  ? "border-claude/30 bg-claude/8 text-claude/80"
+                  : "border-codex/30 bg-codex/8 text-codex/80";
+                return (
+                  <span key={agent.agentId} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-500" />
+                    {agent.displayName ?? agent.role}: {agent.provider}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <div className="flex items-center gap-1.5">
@@ -98,17 +116,17 @@ export function TaskHeader({
               {STATUS_LABELS[task.status] ?? task.status}
             </div>
           </div>
-          {reviewBadge && (
+          {showDetail && reviewBadge && (
             <span
               className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${REVIEW_TONE_STYLES[reviewBadge.tone]}`}
             >
               {reviewBadge.label}
             </span>
           )}
-          {onEditTask && (
+          {showDetail && onEditTask && (
             <button
               type="button"
-              onClick={onEditTask}
+              onClick={(e) => { e.stopPropagation(); onEditTask(); }}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Edit task"
             >
