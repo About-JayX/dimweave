@@ -51,6 +51,7 @@
 
 - `src-tauri/src/daemon/task_graph/types.rs`
 - `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/persist.rs`
 - `src-tauri/src/daemon/task_graph/tests.rs`
 - `src-tauri/src/daemon/state.rs`
 - `src-tauri/src/daemon/state_snapshot.rs`
@@ -59,7 +60,7 @@
 - `src-tauri/src/daemon/types_dto.rs`
 - `src-tauri/src/daemon/types_tests.rs`
 
-**max_files_changed:** `9`
+**max_files_changed:** `10`
 **max_added_loc:** `520`
 **max_deleted_loc:** `180`
 
@@ -69,6 +70,20 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml types_tests -- --nocapture`
 - `git diff --check`
+
+## Plan Revision 1 — 2026-04-14
+
+**Reason:** Task 1 requires persisted `TaskAgent` records and deterministic migration on repeated load. The snapshot serialization/deserialization layer lives in `src-tauri/src/daemon/task_graph/persist.rs`, so migration cannot be implemented correctly without putting that file in scope.
+
+**Added to Task 1 allowed_files:**
+
+- `src-tauri/src/daemon/task_graph/persist.rs`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 10`
+- `max_added_loc: 520`
+- `max_deleted_loc: 180`
 
 ## Task 2: Rewire daemon routing and runtime ownership to `agent_id`
 
