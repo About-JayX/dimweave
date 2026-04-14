@@ -139,7 +139,7 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | _pending_ | _pending_ | pending |
-| Task 2 | _pending_ | _pending_ | _pending_ | pending |
+| Task 1 | `b2cdd662` | Added memoized `selectWorkspaceTasks` so the selected workspace can render multiple tasks newest-first, and documented that accordion expansion is derived directly from `activeTaskId` without a second truth source. | `bun test tests/task-store.test.ts` ✅ 65 passed; `git diff --check` ✅ | accepted |
+| Task 2 | `968aea04`, `1f635f4c` | Replaced the single-task inspector with a workspace task accordion that uses the task summary card as the collapsed header, expands only the active task, and switches tasks through `activeTaskId` so the message panel stays synchronized. Follow-up `1f635f4c` fixed `TaskHeader` to read agents from its own task instead of leaking active-task agents into collapsed headers. | `bun test src/components/TaskContextPopover.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` ✅ 15 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
