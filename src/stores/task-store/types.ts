@@ -72,6 +72,16 @@ export interface ArtifactInfo {
   createdAt: number;
 }
 
+export interface TaskAgentInfo {
+  agentId: string;
+  taskId: string;
+  provider: Provider;
+  role: string;
+  displayName?: string | null;
+  order: number;
+  createdAt: number;
+}
+
 export interface TaskProviderSessionInfo {
   provider: "claude" | "codex";
   externalSessionId: string;
@@ -118,6 +128,7 @@ export interface TaskStoreData {
   activeTaskId: string | null;
   selectedWorkspace: string | null;
   tasks: Record<string, TaskInfo>;
+  taskAgents: Record<string, TaskAgentInfo[]>;
   replyTargets: Record<string, ReplyTarget>;
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;

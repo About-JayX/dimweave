@@ -16,11 +16,18 @@ import {
   setReplyTargetPatch,
   snapshotToPatch,
 } from "../src/stores/task-store";
+import {
+  selectActiveTaskAgents,
+  selectActiveTaskRoleOptions,
+  selectDefaultReplyTarget,
+} from "../src/stores/task-store/selectors";
 import type {
   ProviderHistoryInfo,
+  TaskAgentInfo,
   TaskStoreData,
   TaskInfo,
   SessionInfo,
+  TaskStoreState,
 } from "../src/stores/task-store/types";
 
 function emptyState(): TaskStoreData {
@@ -28,6 +35,7 @@ function emptyState(): TaskStoreData {
     activeTaskId: null,
     selectedWorkspace: null,
     tasks: {},
+    taskAgents: {},
     replyTargets: {},
     sessions: {},
     artifacts: {},
@@ -39,6 +47,16 @@ function emptyState(): TaskStoreData {
     bootstrapError: null,
     lastSave: null,
   };
+}
+
+function makeAgent(
+  agentId: string,
+  taskId: string,
+  provider: "claude" | "codex",
+  role: string,
+  order = 0,
+): TaskAgentInfo {
+  return { agentId, taskId, provider, role, order, createdAt: 100 };
 }
 
 function makeTask(id: string, title = "Test"): TaskInfo {
@@ -572,5 +590,160 @@ describe("regression: no-task state stability", () => {
     };
     expect(Object.keys(state.tasks)).toHaveLength(2);
     expect(state.activeTaskId).toBeNull();
+  });
+
+  test("no-task state with empty taskAgents is stable", () => {
+    const state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: null,
+      taskAgents: {},
+    };
+    expect(state.taskAgents).toEqual({});
+    expect(state.activeTaskId).toBeNull();
+  });
+});
+
+describe("task-agent snapshot hydration", () => {
+  test("snapshotToPatch hydrates taskAgents from snapshot", () => {
+    const task = makeTask("t1");
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const patch = snapshotToPatch({
+      task,
+      sessions: [],
+      artifacts: [],
+      taskAgents: agents,
+    });
+    expect(patch.taskAgents?.t1).toHaveLength(2);
+    expect(patch.taskAgents?.t1?.[0]?.agentId).toBe("a1");
+    expect(patch.taskAgents?.t1?.[1]?.role).toBe("coder");
+  });
+
+  test("snapshotToPatch with empty taskAgents produces empty array", () => {
+    const task = makeTask("t1");
+    const patch = snapshotToPatch({
+      task,
+      sessions: [],
+      artifacts: [],
+      taskAgents: [],
+    });
+    expect(patch.taskAgents?.t1).toEqual([]);
+  });
+
+  test("snapshotToPatch without taskAgents defaults to empty", () => {
+    const task = makeTask("t1");
+    const patch = snapshotToPatch({ task, sessions: [], artifacts: [] });
+    expect(patch.taskAgents?.t1).toEqual([]);
+  });
+});
+
+describe("selectActiveTaskAgents", () => {
+  test("returns agents for the active task", () => {
+    const agents = [makeAgent("a1", "t1", "claude", "lead")];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(state)).toEqual(agents);
+  });
+
+  test("returns empty array when no active task", () => {
+    const state = { ...emptyState() } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(state)).toEqual([]);
+  });
+});
+
+describe("selectActiveTaskRoleOptions", () => {
+  test("returns unique roles sorted by order", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskRoleOptions(state)).toEqual(["auto", "lead", "coder"]);
+  });
+
+  test("deduplicates same-role agents", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "coder", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskRoleOptions(state)).toEqual(["auto", "coder"]);
+  });
+
+  test("returns only auto when no agents", () => {
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [] },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskRoleOptions(state)).toEqual(["auto"]);
+  });
+
+  test("returns only auto when no active task", () => {
+    const state = { ...emptyState() } as unknown as TaskStoreState;
+    expect(selectActiveTaskRoleOptions(state)).toEqual(["auto"]);
+  });
+});
+
+describe("selectDefaultReplyTarget", () => {
+  test("defaults to lead when lead role is present", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectDefaultReplyTarget(state)).toBe("lead");
+  });
+
+  test("defaults to first ordered role when no lead", () => {
+    const agents = [
+      makeAgent("a1", "t1", "codex", "coder", 0),
+      makeAgent("a2", "t1", "claude", "reviewer", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    expect(selectDefaultReplyTarget(state)).toBe("coder");
+  });
+
+  test("defaults to auto when no agents", () => {
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [] },
+    } as unknown as TaskStoreState;
+    expect(selectDefaultReplyTarget(state)).toBe("auto");
+  });
+
+  test("defaults to auto when no active task", () => {
+    const state = { ...emptyState() } as unknown as TaskStoreState;
+    expect(selectDefaultReplyTarget(state)).toBe("auto");
   });
 });

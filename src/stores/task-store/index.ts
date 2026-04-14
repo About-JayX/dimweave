@@ -5,6 +5,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionRole,
+  TaskAgentInfo,
   TaskConfig,
   TaskProviderSummary,
   TaskStoreData,
@@ -21,6 +22,7 @@ type TaskSnapshot = {
   task: TaskInfo;
   sessions: any[];
   artifacts: any[];
+  taskAgents?: TaskAgentInfo[];
   providerSummary?: TaskProviderSummary | null;
 };
 
@@ -29,6 +31,7 @@ type TaskSetter = (
     activeTaskId: string | null;
     selectedWorkspace: string | null;
     tasks: Record<string, TaskInfo>;
+    taskAgents: Record<string, TaskAgentInfo[]>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerSummaries: Record<string, TaskProviderSummary>;
@@ -41,6 +44,7 @@ type TaskSetter = (
     activeTaskId: string | null;
     selectedWorkspace: string | null;
     tasks: Record<string, TaskInfo>;
+    taskAgents: Record<string, TaskAgentInfo[]>;
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerSummaries: Record<string, TaskProviderSummary>;
@@ -59,6 +63,7 @@ export function snapshotToPatch(snap: TaskSnapshot) {
     activeTaskId: snap.task.taskId,
     selectedWorkspace: snap.task.workspaceRoot,
     tasks: { [snap.task.taskId]: snap.task },
+    taskAgents: { [snap.task.taskId]: snap.taskAgents ?? [] },
     sessions: { [snap.task.taskId]: snap.sessions },
     artifacts: { [snap.task.taskId]: snap.artifacts },
     providerSummaries: summaryPatch,
@@ -253,6 +258,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     activeTaskId: null,
     selectedWorkspace: null,
     tasks: {},
+    taskAgents: {},
     replyTargets: {},
     sessions: {},
     artifacts: {},
@@ -303,6 +309,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       set((s) => ({
         ...patch,
         tasks: { ...s.tasks, [snap.task.taskId]: snap.task },
+        taskAgents: { ...s.taskAgents, ...patch.taskAgents },
         sessions: { ...s.sessions, [snap.task.taskId]: snap.sessions },
         artifacts: { ...s.artifacts, [snap.task.taskId]: snap.artifacts },
         providerSummaries: { ...s.providerSummaries, ...patch.providerSummaries },

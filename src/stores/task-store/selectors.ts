@@ -4,6 +4,7 @@ import type {
   ProviderHistoryInfo,
   ReplyTarget,
   SessionInfo,
+  TaskAgentInfo,
   TaskInfo,
   TaskProviderSessionInfo,
   TaskProviderSummary,
@@ -13,6 +14,8 @@ import type {
 const EMPTY_SESSIONS: SessionInfo[] = [];
 const EMPTY_ARTIFACTS: ArtifactInfo[] = [];
 const EMPTY_PROVIDER_HISTORY: ProviderHistoryInfo[] = [];
+const EMPTY_AGENTS: TaskAgentInfo[] = [];
+const AUTO_ONLY: string[] = ["auto"];
 
 export function selectActiveTask(state: TaskStoreState) {
   return state.activeTaskId ? state.tasks[state.activeTaskId] ?? null : null;
@@ -117,4 +120,41 @@ export function makeProviderHistoryErrorSelector(
 ) {
   return (state: TaskStoreState) =>
     workspace ? state.providerHistoryError[workspace] ?? null : null;
+}
+
+export function selectActiveTaskAgents(state: TaskStoreState): TaskAgentInfo[] {
+  return state.activeTaskId
+    ? state.taskAgents[state.activeTaskId] ?? EMPTY_AGENTS
+    : EMPTY_AGENTS;
+}
+
+// Memoization for role options
+let _roleOptsPrevAgents: TaskAgentInfo[] | undefined;
+let _roleOptsPrevResult: string[] = AUTO_ONLY;
+
+export function selectActiveTaskRoleOptions(state: TaskStoreState): string[] {
+  const agents = selectActiveTaskAgents(state);
+  if (agents === _roleOptsPrevAgents) return _roleOptsPrevResult;
+  _roleOptsPrevAgents = agents;
+  if (agents.length === 0) {
+    _roleOptsPrevResult = AUTO_ONLY;
+    return AUTO_ONLY;
+  }
+  const sorted = [...agents].sort((a, b) => a.order - b.order);
+  const seen = new Set<string>();
+  const roles: string[] = ["auto"];
+  for (const a of sorted) {
+    if (!seen.has(a.role)) {
+      seen.add(a.role);
+      roles.push(a.role);
+    }
+  }
+  _roleOptsPrevResult = roles;
+  return roles;
+}
+
+export function selectDefaultReplyTarget(state: TaskStoreState): string {
+  const roles = selectActiveTaskRoleOptions(state);
+  if (roles.includes("lead")) return "lead";
+  return roles.length > 1 ? roles[1] : "auto";
 }
