@@ -85,6 +85,20 @@
 - `max_added_loc: 520`
 - `max_deleted_loc: 180`
 
+## Plan Revision 2 — 2026-04-14
+
+**Reason:** Task 1 adds `task_agents` to the persisted `TaskSnapshot` DTO. `src-tauri/src/commands_artifact.rs` contains a test helper that constructs `TaskSnapshot` directly, so it needs a mechanical compile-fix update to include the new field. This does not expand runtime behavior; it only keeps the test helper aligned with the approved DTO change.
+
+**Added to Task 1 allowed_files:**
+
+- `src-tauri/src/commands_artifact.rs`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 11`
+- `max_added_loc: 525`
+- `max_deleted_loc: 180`
+
 ## Task 2: Rewire daemon routing and runtime ownership to `agent_id`
 
 **task_id:** `agent-id-routing-and-broadcast`
