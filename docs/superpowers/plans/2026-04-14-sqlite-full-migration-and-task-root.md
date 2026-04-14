@@ -60,6 +60,28 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `git diff --check`
 
+## Plan Revision 1 — 2026-04-14
+
+**Reason:** Task 1 review found three compile/persistence ripples that are directly on the acceptance path for the SQLite task-graph cutover:
+
+- `src-tauri/src/daemon/task_graph/task_index.rs` must switch workspace filtering to the stable project root
+- `src-tauri/src/daemon/gui_task.rs` contains `Task` test literals that must include the new root field
+- `Cargo.lock` must update because adding `rusqlite` changes the dependency lock graph
+
+These changes are mechanical consequences of the approved SQLite + root-split task and must be in scope.
+
+**Added to Task 1 allowed_files:**
+
+- `src-tauri/src/daemon/task_graph/task_index.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `Cargo.lock`
+
+**Revised Task 1 budgets:**
+
+- `max_files_changed: 13`
+- `max_added_loc: 780`
+- `max_deleted_loc: 300`
+
 ## Task 2: Move daemon snapshot buffering to SQLite-backed persistence
 
 **task_id:** `sqlite-daemon-snapshot-persistence`
