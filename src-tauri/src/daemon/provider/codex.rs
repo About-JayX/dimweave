@@ -22,6 +22,7 @@ pub fn register_session(store: &mut TaskGraphStore, reg: SessionRegistration) ->
         role: reg.role,
         cwd: &reg.cwd,
         title: &reg.title,
+        agent_id: reg.agent_id.as_deref(),
     });
     if let Some(ext_id) = &reg.external_id {
         store.set_external_session_id(&sess.session_id, ext_id);
@@ -49,6 +50,7 @@ pub fn register_on_launch(
     role_id: &str,
     cwd: &str,
     thread_id: &str,
+    agent_id: Option<&str>,
 ) {
     if task_id.is_empty() {
         return;
@@ -69,6 +71,7 @@ pub fn register_on_launch(
         title: format!("Codex {role_id}"),
         external_id: Some(thread_id.into()),
         transcript_path: None,
+        agent_id: agent_id.map(String::from),
     };
     let sess = register_session(&mut state.task_graph, reg);
     match session_role {
@@ -145,6 +148,7 @@ pub fn register_forked_session(
         title: title.unwrap_or(&source.title).to_string(),
         external_id: Some(thread_id.to_string()),
         transcript_path: None,
+        agent_id: source.agent_id.clone(),
     };
     Ok(register_session(store, reg))
 }

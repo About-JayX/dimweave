@@ -34,6 +34,7 @@ fn auto_target_ignores_online_agent_bound_to_another_task_session() {
         role: SessionRole::Lead,
         cwd: "/repo-b",
         title: "Lead",
+        agent_id: None,
     });
     state
         .task_graph
@@ -73,6 +74,7 @@ fn explicit_task_id_stamps_without_mutating_active_task() {
         role: SessionRole::Coder,
         cwd: "/repo-b",
         title: "Coder B",
+        agent_id: None,
     });
     state
         .task_graph

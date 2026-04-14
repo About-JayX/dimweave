@@ -193,6 +193,7 @@ impl TaskGraphStore {
             role: params.role,
             external_session_id: None,
             transcript_path: None,
+            agent_id: params.agent_id.map(String::from),
             status: SessionStatus::Active,
             cwd: params.cwd.to_string(),
             title: params.title.to_string(),

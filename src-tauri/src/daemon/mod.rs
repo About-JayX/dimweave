@@ -83,9 +83,17 @@ async fn stop_codex_for_task(
     state: &SharedState,
     app: &AppHandle,
 ) {
-    if let Some(h) = codex_handles.remove(task_id) {
-        port_pool.release(h.port, task_id, h.launch_id);
-        h.stop().await;
+    // Find all handles belonging to this task
+    let agent_ids: Vec<String> = codex_handles
+        .iter()
+        .filter(|(_, h)| h.task_id == task_id)
+        .map(|(aid, _)| aid.clone())
+        .collect();
+    for aid in agent_ids {
+        if let Some(h) = codex_handles.remove(&aid) {
+            port_pool.release(h.port, task_id, h.launch_id);
+            h.stop().await;
+        }
     }
     let tid = state.write().await.invalidate_codex_task_session(task_id);
     if !state.read().await.is_codex_online() {
@@ -102,11 +110,13 @@ async fn stop_all_codex_sessions(
     state: &SharedState,
     app: &AppHandle,
 ) {
-    let task_ids: Vec<String> = codex_handles.keys().cloned().collect();
-    for tid in task_ids {
-        stop_codex_for_task(codex_handles, port_pool, &tid, state, app).await;
+    let agent_ids: Vec<String> = codex_handles.keys().cloned().collect();
+    for aid in agent_ids {
+        if let Some(h) = codex_handles.remove(&aid) {
+            port_pool.release(h.port, &h.task_id, h.launch_id);
+            h.stop().await;
+        }
     }
-    // Fallback: clear singleton state if no task handles remain
     let task_id = state.write().await.invalidate_codex_session();
     gui::emit_agent_status(app, "codex", false, None, None);
     if let Some(task_id) = task_id {
@@ -114,13 +124,16 @@ async fn stop_all_codex_sessions(
     }
 }
 
-async fn stop_claude_sdk_session(
-    handle: &mut Option<claude_sdk::ClaudeSdkHandle>,
+async fn stop_all_claude_sdk_sessions(
+    handles: &mut std::collections::HashMap<String, claude_sdk::ClaudeSdkHandle>,
     state: &SharedState,
     app: &AppHandle,
 ) {
-    if let Some(h) = handle.take() {
-        h.stop().await;
+    let agent_ids: Vec<String> = handles.keys().cloned().collect();
+    for aid in agent_ids {
+        if let Some(h) = handles.remove(&aid) {
+            h.stop().await;
+        }
     }
     let task_id = state.write().await.invalidate_claude_sdk_session();
     gui::emit_agent_status(app, "claude", false, None, None);
@@ -155,7 +168,7 @@ async fn launch_claude_sdk(
     resume_session_id: Option<String>,
     state: &SharedState,
     app: &AppHandle,
-) -> Result<(claude_sdk::ClaudeSdkHandle, String), String> {
+) -> Result<(claude_sdk::ClaudeSdkHandle, String, String), String> {
     if let Some(conflict_agent) = {
         let daemon = state.read().await;
         daemon.online_role_conflict("claude", role_id)
@@ -197,8 +210,9 @@ async fn launch_claude_sdk(
         mcp_config: Some(mcp_config),
     };
 
+    let returned_agent_id = agent_id.clone();
     match claude_sdk::launch(opts, task_id.to_string(), agent_id, state.clone(), app.clone()).await {
-        Ok(handle) => Ok((handle, external_session_id)),
+        Ok(handle) => Ok((handle, external_session_id, returned_agent_id)),
         Err(e) => {
             gui::emit_agent_status(app, "claude", false, None, None);
             gui::emit_system_log(
@@ -225,7 +239,7 @@ async fn attach_provider_history(
     role: crate::daemon::task_graph::types::SessionRole,
     codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
     codex_port_pool: &mut codex::port_pool::CodexPortPool,
-    claude_sdk_handle: &mut Option<claude_sdk::ClaudeSdkHandle>,
+    claude_sdk_handles: &mut std::collections::HashMap<String, claude_sdk::ClaudeSdkHandle>,
     codex_exit_tx: &tokio::sync::mpsc::UnboundedSender<codex::CodexExitNotice>,
     state: &SharedState,
     app: &AppHandle,
@@ -255,10 +269,10 @@ async fn attach_provider_history(
                     "role '{role_id}' already in use by online {conflict_agent}"
                 ));
             }
-            stop_claude_sdk_session(claude_sdk_handle, state, app).await;
+            stop_all_claude_sdk_sessions(claude_sdk_handles, state, app).await;
             let attach_task_id = state.read().await.active_task_id.clone()
                 .unwrap_or_default();
-            let (handle, _external_session_id) = launch_claude_sdk(
+            let (handle, _external_session_id, attach_claude_aid) = launch_claude_sdk(
                 &attach_task_id,
                 role_id,
                 &cwd,
@@ -269,7 +283,7 @@ async fn attach_provider_history(
                 app,
             )
             .await?;
-            *claude_sdk_handle = Some(handle);
+            claude_sdk_handles.insert(attach_claude_aid.clone(), handle);
             let transcript_path =
                 crate::daemon::provider::claude::default_transcript_path(&cwd, &external_id)?
                     .to_string_lossy()
@@ -287,6 +301,7 @@ async fn attach_provider_history(
                     &cwd,
                     &external_id,
                     &transcript_path,
+                    None, // agent_id not available in attach path
                 );
                 tid
             };
@@ -326,6 +341,7 @@ async fn attach_provider_history(
                     slot.port = allocated_port;
                 }
             }
+            let resume_agent_id_ref = resume_agent_id.clone();
             let handle = codex::resume(
                 codex::ResumeOpts {
                     task_id: attach_task_id.clone(),
@@ -342,7 +358,7 @@ async fn attach_provider_history(
             )
             .await
             .map_err(|err| err.to_string())?;
-            codex_handles.insert(attach_task_id.clone(), handle);
+            codex_handles.insert(resume_agent_id_ref.clone(), handle);
             codex_port_pool.promote(allocated_port, &attach_task_id, launch_epoch);
             {
                 let mut daemon = state.write().await;
@@ -352,6 +368,7 @@ async fn attach_provider_history(
                     &role_id,
                     &cwd,
                     &external_id,
+                    Some(&resume_agent_id_ref),
                 );
             }
             Ok(attach_task_id)
@@ -387,7 +404,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     let mut codex_handles: std::collections::HashMap<String, codex::CodexHandle> = std::collections::HashMap::new();
     let (codex_exit_tx, mut codex_exit_rx) =
         tokio::sync::mpsc::unbounded_channel::<codex::CodexExitNotice>();
-    let mut claude_sdk_handle: Option<claude_sdk::ClaudeSdkHandle> = None;
+    let mut claude_sdk_handles: std::collections::HashMap<String, claude_sdk::ClaudeSdkHandle> = std::collections::HashMap::new();
     let mut telegram_handle: Option<crate::telegram::runtime::TelegramHandle> =
         telegram_lifecycle::auto_start(&state, &app).await;
     loop {
@@ -395,10 +412,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         let cmd = tokio::select! {
             Some(notice) = codex_exit_rx.recv() => {
                 // Guard: only act if the current handle matches the notice's launch_id
-                let matches = codex_handles.get(&notice.task_id)
+                let matches = codex_handles.get(&notice.agent_id)
                     .map_or(false, |h| h.launch_id == notice.launch_id);
                 if matches {
-                    codex_handles.remove(&notice.task_id);
+                    codex_handles.remove(&notice.agent_id);
                 }
                 codex_port_pool.release(notice.port, &notice.task_id, notice.launch_id);
                 continue;
@@ -494,7 +511,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         .await
                         {
                             Ok(h) => {
-                                codex_handles.insert(resolved_task_id.clone(), h);
+                                codex_handles.insert(codex_agent_id.clone(), h);
                                 codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
                                 let task_id = {
                                     let mut daemon = state.write().await;
@@ -504,6 +521,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         &resume_role,
                                         &resume_cwd,
                                         &resumed_thread_id,
+                                        Some(&codex_agent_id),
                                     )
                                 };
                                 if let Some(task_id) = task_id {
@@ -541,7 +559,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     .await
                     {
                         Ok(h) => {
-                            codex_handles.insert(resolved_task_id.clone(), h);
+                            codex_handles.insert(codex_agent_id.clone(), h);
                             codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
                             if let Some(task_id) = state.read().await.active_task_id.clone() {
                                 emit_task_context_events(&state, &app, &task_id).await;
@@ -575,7 +593,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 resume_session_id,
                 reply,
             } => {
-                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app).await;
                 // Resolve task_id: explicit param > active_task_id
                 let resolved_task_id = if task_id.is_empty() {
                     state.read().await.active_task_id.clone().unwrap_or_default()
@@ -594,15 +612,15 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 )
                 .await;
                 match result {
-                    Ok((handle, external_session_id)) => {
+                    Ok((handle, external_session_id, claude_agent_id)) => {
                         let transcript_path = match crate::daemon::provider::claude::default_transcript_path(
                                 &cwd,
                                 &external_session_id,
                             ) {
                             Ok(path) => path.to_string_lossy().to_string(),
                             Err(err) => {
-                                let mut failed_handle = Some(handle);
-                                stop_claude_sdk_session(&mut failed_handle, &state, &app).await;
+                                handle.stop().await;
+                                gui::emit_agent_status(&app, "claude", false, None, None);
                                 let _ = reply.send(Err(err));
                                 continue;
                             }
@@ -616,9 +634,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 &cwd,
                                 &external_session_id,
                                 &transcript_path,
+                                Some(&claude_agent_id),
                             )
                         };
-                        claude_sdk_handle = Some(handle);
+                        claude_sdk_handles.insert(claude_agent_id.clone(), handle);
                         if let Some(task_id) = synced_task_id {
                             emit_task_context_events(&state, &app, &task_id).await;
                         }
@@ -630,14 +649,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 }
             }
             DaemonCmd::StopClaudeSdk => {
-                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app).await;
             }
             DaemonCmd::Shutdown { reply } => {
                 if let Some(mut h) = feishu_project_handle.take() {
                     h.stop().await;
                 }
                 stop_all_codex_sessions(&mut codex_handles, &mut codex_port_pool, &state, &app).await;
-                stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app).await;
+                stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app).await;
                 let session_mgr = { state.read().await.session_mgr.clone() };
                 session_mgr.lock().await.cleanup_all();
                 state.write().await.teardown_runtime_handles_for_shutdown();
@@ -882,7 +901,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 match codex::resume(
                                     codex::ResumeOpts {
                                         task_id: resume_task_id.clone(),
-                                        agent_id: resume_codex_aid,
+                                        agent_id: resume_codex_aid.clone(),
                                         role_id,
                                         cwd: target.cwd,
                                         thread_id: target.external_id,
@@ -896,7 +915,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                 .await
                                 {
                                     Ok(handle) => {
-                                        codex_handles.insert(resume_task_id.clone(), handle);
+                                        codex_handles.insert(resume_codex_aid.clone(), handle);
                                         codex_port_pool.promote(allocated_port, &resume_task_id, launch_epoch);
                                         state.write().await.resume_session(&session_id)
                                     }
@@ -929,7 +948,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         "role '{role_id}' already in use by online {conflict_agent}"
                                     ))
                                 } else {
-                                    stop_claude_sdk_session(&mut claude_sdk_handle, &state, &app)
+                                    stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app)
                                         .await;
                                     let resume_task_id = state.read().await.active_task_id
                                         .clone().unwrap_or_default();
@@ -945,8 +964,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     )
                                     .await
                                     {
-                                        Ok((handle, _external_session_id)) => {
-                                            claude_sdk_handle = Some(handle);
+                                        Ok((handle, _external_session_id, resume_claude_aid)) => {
+                                            claude_sdk_handles.insert(resume_claude_aid.clone(), handle);
                                             let mut daemon = state.write().await;
                                             if let Ok(path) =
                                                 crate::daemon::provider::claude::default_transcript_path(
@@ -990,7 +1009,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     role,
                     &mut codex_handles,
                     &mut codex_port_pool,
-                    &mut claude_sdk_handle,
+                    &mut claude_sdk_handles,
                     &codex_exit_tx,
                     &state,
                     &app,

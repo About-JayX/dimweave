@@ -123,6 +123,7 @@ fn create_lead_session_linked_to_task() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead Session",
+        agent_id: None,
     });
     assert_eq!(sess.task_id, task.task_id);
     assert_eq!(sess.role, SessionRole::Lead);
@@ -141,6 +142,7 @@ fn create_coder_child_session_with_parent() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let coder = store.create_session(CreateSessionParams {
         task_id: &task.task_id,
@@ -149,6 +151,7 @@ fn create_coder_child_session_with_parent() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     assert_eq!(
         coder.parent_session_id.as_deref(),
@@ -168,6 +171,7 @@ fn get_session_returns_created() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "S1",
+        agent_id: None,
     });
     let id = sess.session_id.clone();
     assert!(store.get_session(&id).is_some());
@@ -184,6 +188,7 @@ fn update_session_status_works() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "S1",
+        agent_id: None,
     });
     assert!(store.update_session_status(&sess.session_id, SessionStatus::Completed));
     let s = store.get_session(&sess.session_id).unwrap();
@@ -203,6 +208,7 @@ fn add_and_retrieve_artifact() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "S1",
+        agent_id: None,
     });
     let art = store.add_artifact(CreateArtifactParams {
         task_id: &task.task_id,
@@ -230,6 +236,7 @@ fn sessions_for_task_returns_all_linked() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     store.create_session(CreateSessionParams {
         task_id: &tid,
@@ -238,6 +245,7 @@ fn sessions_for_task_returns_all_linked() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     assert_eq!(store.sessions_for_task(&tid).len(), 2);
 }
@@ -254,6 +262,7 @@ fn children_of_session_returns_only_children() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let lid = lead.session_id.clone();
     store.create_session(CreateSessionParams {
@@ -263,6 +272,7 @@ fn children_of_session_returns_only_children() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "C1",
+        agent_id: None,
     });
     store.create_session(CreateSessionParams {
         task_id: &tid,
@@ -271,6 +281,7 @@ fn children_of_session_returns_only_children() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "C2",
+        agent_id: None,
     });
     assert_eq!(store.children_of_session(&lid).len(), 2);
 }
@@ -287,6 +298,7 @@ fn lead_session_for_task_returns_correct() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     store.set_lead_session(&tid, &lead.session_id);
     let found = store.lead_session_for_task(&tid).unwrap();
@@ -329,6 +341,7 @@ fn artifacts_for_task_and_session() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "S1",
+        agent_id: None,
     });
     let s1id = s1.session_id.clone();
     store.add_artifact(CreateArtifactParams {
@@ -372,6 +385,7 @@ fn session_serialization_round_trip() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "S1",
+        agent_id: None,
     });
     let json = serde_json::to_string(&sess).unwrap();
     let de: SessionHandle = serde_json::from_str(&json).unwrap();
@@ -409,6 +423,7 @@ fn persist_save_and_load_round_trip() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder S",
+        agent_id: None,
     });
     let sid = sess.session_id.clone();
     let art = store.add_artifact(CreateArtifactParams {
@@ -470,6 +485,7 @@ fn persist_parent_child_relationship_survives() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let lid = lead.session_id.clone();
     store.create_session(CreateSessionParams {
@@ -479,6 +495,7 @@ fn persist_parent_child_relationship_survives() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     store.save().unwrap();
 
@@ -505,6 +522,7 @@ fn find_session_by_external_id_filters_by_provider() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Codex",
+        agent_id: None,
     });
     let claude = store.create_session(CreateSessionParams {
         task_id: &task.task_id,
@@ -513,6 +531,7 @@ fn find_session_by_external_id_filters_by_provider() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Claude",
+        agent_id: None,
     });
     assert!(store.set_external_session_id(&codex.session_id, "shared_id"));
     assert!(store.set_external_session_id(&claude.session_id, "shared_id"));
@@ -613,6 +632,7 @@ fn migrate_legacy_agents_creates_two_agents_when_both_sessions_exist() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     store.set_lead_session(&task.task_id, &lead_sess.session_id);
     let coder_sess = store.create_session(CreateSessionParams {
@@ -622,6 +642,7 @@ fn migrate_legacy_agents_creates_two_agents_when_both_sessions_exist() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     store.set_coder_session(&task.task_id, &coder_sess.session_id);
     // No agents exist yet
@@ -664,6 +685,7 @@ fn migrate_legacy_agents_same_provider_both_roles() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     store.set_lead_session(&task.task_id, &lead_sess.session_id);
     let coder_sess = store.create_session(CreateSessionParams {
@@ -673,6 +695,7 @@ fn migrate_legacy_agents_same_provider_both_roles() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     store.set_coder_session(&task.task_id, &coder_sess.session_id);
     store.migrate_legacy_agents();
@@ -717,6 +740,7 @@ fn migrate_legacy_agents_one_agent_when_only_lead_session() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     store.set_lead_session(&task.task_id, &sess.session_id);
     store.migrate_legacy_agents();
@@ -763,7 +787,8 @@ fn persist_migration_runs_on_old_format_load() {
             role: SessionRole::Lead,
             cwd: "/ws",
             title: "Lead",
-        });
+        agent_id: None,
+    });
         store.set_lead_session(&task.task_id, &lead_sess.session_id);
         let coder_sess = store.create_session(CreateSessionParams {
             task_id: &task.task_id,
@@ -772,7 +797,8 @@ fn persist_migration_runs_on_old_format_load() {
             role: SessionRole::Coder,
             cwd: "/ws",
             title: "Coder",
-        });
+        agent_id: None,
+    });
         store.set_coder_session(&task.task_id, &coder_sess.session_id);
         store.save().unwrap();
     }

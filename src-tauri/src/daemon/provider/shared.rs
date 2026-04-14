@@ -12,6 +12,8 @@ pub struct SessionRegistration {
     pub external_id: Option<String>,
     /// Provider-owned transcript or history file when applicable.
     pub transcript_path: Option<String>,
+    /// The TaskAgent that owns this session.
+    pub agent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

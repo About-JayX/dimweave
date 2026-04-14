@@ -23,6 +23,7 @@ fn register_claude_session_binds_session_id() {
         title: "Claude lead".into(),
         external_id: Some("claude_sess_abc".into()),
         transcript_path: Some("/tmp/.claude/projects/-ws/claude_sess_abc.jsonl".into()),
+        agent_id: None,
     };
     let sess = claude::register_session(&mut store, reg);
 
@@ -49,6 +50,7 @@ fn register_claude_session_without_external_id() {
         title: "Claude lead".into(),
         external_id: None,
         transcript_path: None,
+        agent_id: None,
     };
     let sess = claude::register_session(&mut store, reg);
     assert!(sess.external_session_id.is_none());
@@ -69,6 +71,7 @@ fn bind_session_id_updates_existing_session() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Claude",
+        agent_id: None,
     });
 
     let ok = claude::bind_session_id(&mut store, &sess.session_id, "claude_sess_late");
@@ -164,6 +167,7 @@ fn register_on_launch_captures_transcript_path() {
         "/ws",
         "claude_launch_123",
         "/tmp/.claude/projects/-ws/claude_launch_123.jsonl",
+        None,
     );
 
     let task = s.task_graph.get_task(&tid).unwrap();
@@ -191,6 +195,7 @@ fn sync_claude_launch_sets_current_coder_session_for_active_task() {
         "/ws",
         "claude_session_1",
         "/tmp/.claude/projects/-ws/claude_session_1.jsonl",
+        None,
     );
 
     let task = state.task_graph.get_task(&task.task_id).unwrap();
@@ -210,6 +215,7 @@ fn sync_claude_launch_resumes_known_history_session() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Claude lead",
+        agent_id: None,
     });
     state
         .task_graph
@@ -225,6 +231,7 @@ fn sync_claude_launch_resumes_known_history_session() {
         "/ws",
         "claude_hist_1",
         "/tmp/.claude/projects/-ws/claude_hist_1.jsonl",
+        None,
     );
 
     assert_eq!(
@@ -377,6 +384,7 @@ fn build_resume_target_requires_external_session_id() {
         role: SessionRole::Lead,
         external_session_id: None,
         transcript_path: Some("/tmp/.claude/projects/-tmp-ws/session.jsonl".into()),
+        agent_id: None,
         status: SessionStatus::Paused,
         cwd: "/tmp/ws".into(),
         title: "Claude lead".into(),
@@ -398,6 +406,7 @@ fn build_resume_target_uses_external_id_and_cwd() {
         role: SessionRole::Coder,
         external_session_id: Some("claude_resume_42".into()),
         transcript_path: Some("/tmp/.claude/projects/-tmp-ws/claude_resume_42.jsonl".into()),
+        agent_id: None,
         status: SessionStatus::Paused,
         cwd: "/tmp/ws".into(),
         title: "Claude coder".into(),

@@ -24,6 +24,7 @@ fn register_codex_session_binds_thread_id() {
         title: "Codex coder".into(),
         external_id: Some("thread_abc123".into()),
         transcript_path: None,
+        agent_id: None,
     };
     let sess = codex::register_session(&mut store, reg);
 
@@ -47,6 +48,7 @@ fn register_codex_session_without_thread_id() {
         title: "Codex coder".into(),
         external_id: None,
         transcript_path: None,
+        agent_id: None,
     };
     let sess = codex::register_session(&mut store, reg);
     assert!(sess.external_session_id.is_none());
@@ -63,6 +65,7 @@ fn register_codex_session_as_child_of_lead() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
 
     let reg = SessionRegistration {
@@ -73,6 +76,7 @@ fn register_codex_session_as_child_of_lead() {
         title: "Codex coder".into(),
         external_id: Some("thread_xyz".into()),
         transcript_path: None,
+        agent_id: None,
     };
     let sess = codex::register_session(&mut store, reg);
 
@@ -99,6 +103,7 @@ fn bind_thread_id_updates_existing_session() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Codex",
+        agent_id: None,
     });
     assert!(sess.external_session_id.is_none());
 
@@ -127,7 +132,7 @@ fn register_on_launch_creates_session_with_thread_id() {
         .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
-    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_abc");
+    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_abc", None);
 
     // Session registered with correct external_session_id
     let task = s.task_graph.get_task(&tid).unwrap();
@@ -146,7 +151,7 @@ fn register_on_launch_creates_session_with_thread_id() {
 fn register_on_launch_noop_without_active_task() {
     let mut s = DaemonState::new();
     // No active task — passing empty task_id should be a no-op
-    codex::register_on_launch(&mut s, "", "coder", "/ws", "thread_xyz");
+    codex::register_on_launch(&mut s, "", "coder", "/ws", "thread_xyz", None);
     assert!(s.task_graph.list_tasks().is_empty());
 }
 
@@ -162,13 +167,14 @@ fn register_on_launch_links_to_lead_session() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&tid, &lead.session_id);
     s.task_graph
         .update_task_status(&tid, TaskStatus::Implementing);
     s.set_active_task(Some(tid.clone()));
 
-    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_child");
+    codex::register_on_launch(&mut s, &tid, "coder", "/ws", "thread_child", None);
 
     let task = s.task_graph.get_task(&tid).unwrap();
     let coder_sid = task.current_coder_session_id.as_ref().unwrap();
@@ -195,6 +201,7 @@ fn sync_codex_launch_resumes_known_history_session() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Codex coder",
+        agent_id: None,
     });
     s.task_graph
         .set_external_session_id(&history_session.session_id, "thread_hist_1");
@@ -203,7 +210,7 @@ fn sync_codex_launch_resumes_known_history_session() {
     s.set_active_task(Some(task_current.task_id.clone()));
 
     let returned_task_id =
-        sync_codex_launch_into_task(&mut s, &task_current.task_id, "coder", "/ws", "thread_hist_1");
+        sync_codex_launch_into_task(&mut s, &task_current.task_id, "coder", "/ws", "thread_hist_1", None);
 
     assert_eq!(
         returned_task_id.as_deref(),
@@ -232,7 +239,7 @@ fn sync_codex_launch_registers_unknown_thread_on_active_task() {
     let task = s.task_graph.create_task("/ws", "Active Task");
     s.set_active_task(Some(task.task_id.clone()));
 
-    let returned = sync_codex_launch_into_task(&mut s, &task.task_id, "coder", "/ws", "thread_new");
+    let returned = sync_codex_launch_into_task(&mut s, &task.task_id, "coder", "/ws", "thread_new", None);
 
     assert_eq!(returned.as_deref(), Some(task.task_id.as_str()));
     assert!(s
@@ -433,6 +440,7 @@ fn register_forked_session_preserves_task_and_parent_linkage() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let source = store.create_session(CreateSessionParams {
         task_id: &task.task_id,
@@ -441,6 +449,7 @@ fn register_forked_session_preserves_task_and_parent_linkage() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Source coder",
+        agent_id: None,
     });
 
     let forked = codex::register_forked_session(
@@ -472,6 +481,7 @@ fn build_resume_target_requires_external_thread_id() {
         role: SessionRole::Coder,
         external_session_id: None,
         transcript_path: None,
+        agent_id: None,
         status: SessionStatus::Paused,
         cwd: "/ws".into(),
         title: "Codex coder".into(),
@@ -494,6 +504,7 @@ fn mark_archived_updates_normalized_session_status() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
 
     assert!(codex::mark_session_archived(

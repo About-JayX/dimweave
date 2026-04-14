@@ -290,6 +290,7 @@ async fn task_runtime_routing_delivers_via_task_local_codex_channel() {
             role: SessionRole::Coder,
             cwd: "/ws",
             title: "Coder",
+            agent_id: None,
         });
         s.task_graph
             .set_coder_session(&task.task_id, &sess.session_id);
@@ -371,6 +372,7 @@ async fn task_runtime_routing_delivers_via_task_local_claude_channel() {
             role: SessionRole::Lead,
             cwd: "/ws",
             title: "Lead",
+            agent_id: None,
         });
         s.task_graph
             .set_lead_session(&task.task_id, &sess.session_id);
@@ -474,6 +476,7 @@ async fn task_first_routing_resolves_codex_coder_via_task_provider() {
             role: SessionRole::Coder,
             cwd: "/ws",
             title: "Coder",
+            agent_id: None,
         });
         s.task_graph
             .set_coder_session(&task.task_id, &sess.session_id);

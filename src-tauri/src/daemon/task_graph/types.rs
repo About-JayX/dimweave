@@ -73,6 +73,9 @@ pub struct SessionHandle {
     pub external_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transcript_path: Option<String>,
+    /// The TaskAgent that owns this session, if known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     pub status: SessionStatus,
     pub cwd: String,
     pub title: String,
@@ -117,6 +120,7 @@ pub struct CreateSessionParams<'a> {
     pub role: SessionRole,
     pub cwd: &'a str,
     pub title: &'a str,
+    pub agent_id: Option<&'a str>,
 }
 
 fn default_lead_provider() -> Provider {

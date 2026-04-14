@@ -18,6 +18,7 @@ pub fn register_session(store: &mut TaskGraphStore, reg: SessionRegistration) ->
         role: reg.role,
         cwd: &reg.cwd,
         title: &reg.title,
+        agent_id: reg.agent_id.as_deref(),
     });
     if let Some(ext_id) = &reg.external_id {
         store.set_external_session_id(&sess.session_id, ext_id);
@@ -54,6 +55,7 @@ pub fn register_on_launch(
     cwd: &str,
     claude_session_id: &str,
     transcript_path: &str,
+    agent_id: Option<&str>,
 ) {
     let task_id = task_id.to_string();
     let session_role = match role_id {
@@ -88,6 +90,7 @@ pub fn register_on_launch(
             title: format!("Claude {role_id}"),
             external_id: Some(claude_session_id.to_string()),
             transcript_path: Some(transcript_path.to_string()),
+            agent_id: agent_id.map(String::from),
         };
         register_session(&mut state.task_graph, reg).session_id
     };
@@ -144,6 +147,7 @@ pub fn register_on_connect(
             .ok()
             .flatten()
             .map(|path| path.to_string_lossy().to_string()),
+        agent_id: None, // bridge-connect path has no agent context
     };
     let sess = register_session(&mut state.task_graph, reg);
     match session_role {

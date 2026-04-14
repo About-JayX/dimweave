@@ -8,6 +8,7 @@ pub fn sync_claude_launch_into_task(
     cwd: &str,
     session_id: &str,
     transcript_path: &str,
+    agent_id: Option<&str>,
 ) -> Option<String> {
     if let Some(existing_session_id) = state
         .task_graph
@@ -29,6 +30,7 @@ pub fn sync_claude_launch_into_task(
             cwd,
             session_id,
             transcript_path,
+            agent_id,
         );
         Some(task_id.to_string())
     }
@@ -40,6 +42,7 @@ pub fn sync_codex_launch_into_task(
     role_id: &str,
     cwd: &str,
     thread_id: &str,
+    agent_id: Option<&str>,
 ) -> Option<String> {
     if let Some(existing_session_id) = state
         .task_graph
@@ -51,7 +54,7 @@ pub fn sync_codex_launch_into_task(
         state.resume_session(&existing_session_id).ok()
     } else {
         // Unknown thread: register on the explicit task_id from the launch.
-        crate::daemon::provider::codex::register_on_launch(state, task_id, role_id, cwd, thread_id);
+        crate::daemon::provider::codex::register_on_launch(state, task_id, role_id, cwd, thread_id, agent_id);
         Some(task_id.to_string())
     }
 }

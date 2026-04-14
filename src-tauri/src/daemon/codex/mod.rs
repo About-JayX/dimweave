@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 #[derive(Debug)]
 pub struct CodexExitNotice {
     pub task_id: String,
+    pub agent_id: String,
     pub port: u16,
     pub launch_id: u64,
 }
@@ -33,6 +34,8 @@ pub struct CodexHandle {
     cancel: CancellationToken,
     pub port: u16,
     pub launch_id: u64,
+    pub task_id: String,
+    pub agent_id: String,
 }
 
 pub struct StartOpts {
@@ -248,6 +251,7 @@ async fn launch(
     let session_exit_tx = exit_tx.clone();
     let session_exit_port = codex_port;
     let session_exit_task_id = task_id.clone();
+    let session_exit_agent_id = agent_id.clone();
     let session_exit_launch_id = launch_epoch;
     tokio::spawn(async move {
         tokio::select! {
@@ -266,6 +270,7 @@ async fn launch(
         // Notify daemon loop so it can release port lease and remove handle
         let _ = session_exit_tx.send(CodexExitNotice {
             task_id: session_exit_task_id,
+            agent_id: session_exit_agent_id,
             port: session_exit_port,
             launch_id: session_exit_launch_id,
         });
@@ -303,7 +308,7 @@ async fn launch(
         let buffered = if attached {
             if is_new_session {
                 crate::daemon::provider::codex::register_on_launch(
-                    &mut s, &task_id, &role_id, &cwd, &thread_id,
+                    &mut s, &task_id, &role_id, &cwd, &thread_id, Some(&agent_id),
                 );
             } else if let Some(existing_session_id) = s
                 .task_graph
@@ -355,7 +360,7 @@ async fn launch(
     spawn_health_monitor(
         child_arc.clone(),
         task_id.clone(),
-        agent_id,
+        agent_id.clone(),
         launch_epoch,
         codex_port,
         exit_tx,
@@ -371,6 +376,8 @@ async fn launch(
         cancel,
         port: codex_port,
         launch_id: launch_epoch,
+        task_id,
+        agent_id,
     })
 }
 

@@ -38,6 +38,7 @@ fn task_snapshot_includes_sessions() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let snap = s.task_snapshot().unwrap();
     assert_eq!(snap.sessions.len(), 1);
@@ -99,6 +100,7 @@ fn session_tree_returns_sessions_for_task() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let tree = s.session_tree(&task.task_id).unwrap();
     assert_eq!(tree.task_id, task.task_id);
@@ -119,6 +121,7 @@ fn task_history_returns_entries_with_counts() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     let history = s.task_history(Some("/ws"));
     assert_eq!(history.len(), 1);
@@ -146,6 +149,7 @@ fn resume_session_sets_active_task_and_pointer() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     s.task_graph
         .update_session_status(&sess.session_id, SessionStatus::Paused);

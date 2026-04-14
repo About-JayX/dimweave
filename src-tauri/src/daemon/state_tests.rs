@@ -224,6 +224,7 @@ fn clearing_provider_connection_pauses_and_unbinds_active_task_session() {
         role: crate::daemon::task_graph::types::SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&task.task_id, &lead.session_id);
     s.task_graph
@@ -510,6 +511,7 @@ fn clear_codex_session_if_current_returns_task_id() {
         role: crate::daemon::task_graph::types::SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     s.task_graph
         .set_coder_session(&task.task_id, &session.session_id);
@@ -542,6 +544,7 @@ fn invalidate_claude_sdk_session_if_current_returns_task_id() {
         role: crate::daemon::task_graph::types::SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     s.task_graph
         .set_lead_session(&task.task_id, &session.session_id);
@@ -568,7 +571,7 @@ fn codex_register_on_launch_binds_resumed_thread_to_active_task() {
     let task = s.task_graph.create_task("/ws", "Task");
     s.active_task_id = Some(task.task_id.clone());
 
-    crate::daemon::provider::codex::register_on_launch(&mut s, &task.task_id, "coder", "/ws", "thread_resumed_1");
+    crate::daemon::provider::codex::register_on_launch(&mut s, &task.task_id, "coder", "/ws", "thread_resumed_1", None);
 
     let session = s
         .task_graph
@@ -696,6 +699,7 @@ fn daemon_state_persist_round_trip_restores_buffered_messages_per_task() {
         role: SessionRole::Coder,
         cwd: "/ws/a",
         title: "Coder A",
+        agent_id: None,
     });
     let session_b = s.task_graph.create_session(CreateSessionParams {
         task_id: &task_b.task_id,
@@ -704,6 +708,7 @@ fn daemon_state_persist_round_trip_restores_buffered_messages_per_task() {
         role: SessionRole::Coder,
         cwd: "/ws/b",
         title: "Coder B",
+        agent_id: None,
     });
 
     let mut buffered_a = BridgeMessage::system("resume task a", "coder");
@@ -1089,6 +1094,7 @@ fn claude_task_slot_invalidate_task_a_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Lead,
         cwd: "/ws/a",
         title: "Claude A",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&t1.task_id, &sess_a.session_id);
 
@@ -1099,6 +1105,7 @@ fn claude_task_slot_invalidate_task_a_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Lead,
         cwd: "/ws/b",
         title: "Claude B",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&t2.task_id, &sess_b.session_id);
 
@@ -1283,6 +1290,7 @@ fn codex_task_slot_invalidate_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Coder,
         cwd: "/ws/a",
         title: "Codex A",
+        agent_id: None,
     });
     s.task_graph.set_coder_session(&t1.task_id, &sess_a.session_id);
 
@@ -1293,6 +1301,7 @@ fn codex_task_slot_invalidate_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Coder,
         cwd: "/ws/b",
         title: "Codex B",
+        agent_id: None,
     });
     s.task_graph.set_coder_session(&t2.task_id, &sess_b.session_id);
 
@@ -1342,6 +1351,7 @@ fn codex_task_slot_clear_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Coder,
         cwd: "/ws/a",
         title: "Codex A",
+        agent_id: None,
     });
     s.task_graph.set_coder_session(&t1.task_id, &sess_a.session_id);
 
@@ -1352,6 +1362,7 @@ fn codex_task_slot_clear_preserves_task_b_graph_binding() {
         role: crate::daemon::task_graph::types::SessionRole::Coder,
         cwd: "/ws/b",
         title: "Codex B",
+        agent_id: None,
     });
     s.task_graph.set_coder_session(&t2.task_id, &sess_b.session_id);
 
@@ -1483,6 +1494,7 @@ fn stamp_message_context_for_task_uses_explicit_task_not_active() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder A",
+        agent_id: None,
     });
     s.task_graph
         .set_coder_session(&task_a.task_id, &sess_a.session_id);
@@ -1493,6 +1505,7 @@ fn stamp_message_context_for_task_uses_explicit_task_not_active() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder B",
+        agent_id: None,
     });
     s.task_graph
         .set_coder_session(&task_b.task_id, &sess_b.session_id);

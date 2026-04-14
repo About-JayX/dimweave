@@ -95,6 +95,7 @@ fn auto_keeps_preferred_task_role_first_but_still_fanouts() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&task.task_id, &lead.session_id);
     s.task_graph
@@ -106,6 +107,7 @@ fn auto_keeps_preferred_task_role_first_but_still_fanouts() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     s.task_graph
         .set_coder_session(&task.task_id, &coder.session_id);
@@ -158,6 +160,7 @@ fn auto_prefers_bound_claude_coder_for_active_task() {
         role: SessionRole::Lead,
         cwd: "/ws",
         title: "Lead",
+        agent_id: None,
     });
     s.task_graph.set_lead_session(&task.task_id, &lead.session_id);
     s.task_graph
@@ -169,6 +172,7 @@ fn auto_prefers_bound_claude_coder_for_active_task() {
         role: SessionRole::Coder,
         cwd: "/ws",
         title: "Coder",
+        agent_id: None,
     });
     s.task_graph.set_coder_session(&task.task_id, &coder.session_id);
     s.task_graph

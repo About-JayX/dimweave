@@ -144,6 +144,7 @@ async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not
             role: SessionRole::Lead,
             cwd: "/repo-b",
             title: "Lead",
+            agent_id: None,
         });
         s.task_graph
             .set_lead_session(&task.task_id, &lead.session_id);
@@ -210,6 +211,7 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
             role: SessionRole::Lead,
             cwd: "/repo-b",
             title: "Lead",
+            agent_id: None,
         });
         s.task_graph.set_lead_session(&task.task_id, &lead.session_id);
         s.task_graph
@@ -222,6 +224,7 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
             role: SessionRole::Coder,
             cwd: "/repo-b",
             title: "Coder",
+            agent_id: None,
         });
         s.task_graph.set_coder_session(&task.task_id, &coder.session_id);
         s.task_graph
@@ -318,6 +321,7 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
             role: SessionRole::Lead,
             cwd: "/repo-b",
             title: "Lead",
+            agent_id: None,
         });
         s.task_graph
             .set_lead_session(&task.task_id, &lead.session_id);
