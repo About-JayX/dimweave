@@ -358,17 +358,20 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src-tauri/src/daemon/mod.rs`
 - `src-tauri/src/daemon/task_graph/store.rs`
 - `src-tauri/src/daemon/task_graph/tests.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `src-tauri/src/daemon/control/handler.rs`
 - `src-tauri/src/commands_task.rs`
 - `src-tauri/src/main.rs`
 - `src/stores/task-store/index.ts`
 - `src/stores/task-store/types.ts`
+- `src/stores/task-store/events.ts`
 - `tests/task-store.test.ts`
 
 **Revised Task 5 budgets:**
 
-- `max_files_changed: 36`
-- `max_added_loc: 1650`
-- `max_deleted_loc: 600`
+- `max_files_changed: 39`
+- `max_added_loc: 1725`
+- `max_deleted_loc: 650`
 
 **Revised Task 5 verification_commands:**
 
@@ -428,15 +431,18 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src-tauri/src/daemon/mod.rs`
 - `src-tauri/src/daemon/task_graph/store.rs`
 - `src-tauri/src/daemon/task_graph/tests.rs`
+- `src-tauri/src/daemon/gui_task.rs`
+- `src-tauri/src/daemon/control/handler.rs`
 - `src-tauri/src/commands_task.rs`
 - `src-tauri/src/main.rs`
 - `src/stores/task-store/index.ts`
 - `src/stores/task-store/types.ts`
+- `src/stores/task-store/events.ts`
 - `tests/task-store.test.ts`
 
-**max_files_changed:** `36`
-**max_added_loc:** `1650`
-**max_deleted_loc:** `600`
+**max_files_changed:** `39`
+**max_added_loc:** `1725`
+**max_deleted_loc:** `650`
 
 **verification_commands:**
 
