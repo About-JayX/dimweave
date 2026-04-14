@@ -1,5 +1,7 @@
 # Task Multi-Task Collapsible Panels Design
 
+> **Status:** Implemented and accepted. See [plan](../plans/2026-04-14-task-multi-task-collapsible-panels.md) for commit records and verification evidence.
+
 > **Context:** The `task_agents[]` model is already stage-complete on `main`. This follow-up changes only the task-pane presentation and task selection flow inside the existing shell.
 
 ## Goal

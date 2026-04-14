@@ -182,6 +182,38 @@ describe("ReplyInput", () => {
     expect(selectActiveReplyTarget(useTaskStore.getState())).toBe("architect");
   });
 
+  test("switching active task syncs reply target to the new task's agents", () => {
+    useTaskStore.setState({
+      activeTaskId: "task-A",
+      tasks: {
+        "task-A": makeTask("task-A", "/ws"),
+        "task-B": makeTask("task-B", "/ws"),
+      },
+      taskAgents: {
+        "task-A": [
+          { agentId: "a1", taskId: "task-A", provider: "claude", role: "lead", displayName: null, order: 0, createdAt: 1 },
+        ],
+        "task-B": [
+          { agentId: "a2", taskId: "task-B", provider: "codex", role: "reviewer", displayName: null, order: 0, createdAt: 1 },
+        ],
+      },
+      replyTargets: {},
+      sessions: {},
+      artifacts: {},
+      providerHistory: {},
+      providerHistoryLoading: {},
+      providerHistoryError: {},
+      bootstrapComplete: true,
+      bootstrapError: null,
+    });
+    // Task A active → reply target derives from its lead agent
+    expect(selectActiveReplyTarget(useTaskStore.getState())).toBe("lead");
+    // Accordion expansion switches to task B
+    useTaskStore.setState({ activeTaskId: "task-B" });
+    // Reply target now derives from task B's reviewer agent
+    expect(selectActiveReplyTarget(useTaskStore.getState())).toBe("reviewer");
+  });
+
   test("returns no warning when the connected agent matches the active task session", () => {
     const task = makeTask("task-2", "/repo-b");
     const session = makeClaudeLeadSession("task-2", "claude_current", "/repo-b");
