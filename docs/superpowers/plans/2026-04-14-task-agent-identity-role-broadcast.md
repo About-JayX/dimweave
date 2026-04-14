@@ -348,6 +348,40 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src-tauri/src/daemon/state_runtime.rs`
 - `src-tauri/src/daemon/claude_sdk/runtime.rs`
 
+## Plan Revision 9 — 2026-04-14
+
+**Reason:** Task 5 review established that persisted add/remove/reorder agent flows cannot be implemented as UI-only work. The approved acceptance criteria require backend task-agent CRUD and order persistence, plus frontend store actions to invoke that backend. Those files are directly on the acceptance path and must be in-scope.
+
+**Added to revised Task 5 allowed_files:**
+
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/tests.rs`
+- `src-tauri/src/commands_task.rs`
+- `src-tauri/src/main.rs`
+- `src/stores/task-store/index.ts`
+- `src/stores/task-store/types.ts`
+- `tests/task-store.test.ts`
+
+**Revised Task 5 budgets:**
+
+- `max_files_changed: 36`
+- `max_added_loc: 1650`
+- `max_deleted_loc: 600`
+
+**Revised Task 5 verification_commands:**
+
+- `cargo check --manifest-path src-tauri/Cargo.toml --tests`
+- `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
+- `bun test tests/task-store.test.ts`
+- `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx`
+- `bun test src/components/TaskPanel/TaskHeader.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskAgentList.test.tsx src/components/TaskPanel/TaskAgentEditor.test.tsx`
+- `bun test src/components/ClaudePanel/connect-state.test.ts src/components/ClaudePanel/launch-request.test.ts src/components/AgentStatus/codex-launch-config.test.ts`
+- `bun test src/components/ReplyInput/index.test.tsx`
+- `bun run build`
+- `git diff --check`
+
 ## Revised Task 5: Rebuild task pane agent management around `task_agents[]`
 
 **task_id:** `task-pane-agent-list-and-dialog`
@@ -390,13 +424,25 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src/components/AgentStatus/codex-launch-config.test.ts`
 - `src/components/AgentStatus/provider-session-view-model.ts`
 - `src/components/ReplyInput/Footer.tsx`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/tests.rs`
+- `src-tauri/src/commands_task.rs`
+- `src-tauri/src/main.rs`
+- `src/stores/task-store/index.ts`
+- `src/stores/task-store/types.ts`
+- `tests/task-store.test.ts`
 
-**max_files_changed:** `27`
-**max_added_loc:** `1100`
-**max_deleted_loc:** `420`
+**max_files_changed:** `36`
+**max_added_loc:** `1650`
+**max_deleted_loc:** `600`
 
 **verification_commands:**
 
+- `cargo check --manifest-path src-tauri/Cargo.toml --tests`
+- `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
+- `bun test tests/task-store.test.ts`
 - `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx`
 - `bun test src/components/TaskPanel/TaskHeader.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskAgentList.test.tsx src/components/TaskPanel/TaskAgentEditor.test.tsx`
 - `bun test src/components/ClaudePanel/connect-state.test.ts src/components/ClaudePanel/launch-request.test.ts src/components/AgentStatus/codex-launch-config.test.ts`
