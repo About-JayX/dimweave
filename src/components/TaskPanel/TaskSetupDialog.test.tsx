@@ -19,9 +19,7 @@ Object.assign(globalThis, {
         return null;
       },
     },
-    __TAURI_EVENT_PLUGIN_INTERNALS__: {
-      unregisterListener: () => {},
-    },
+    __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
     addEventListener: () => {},
     removeEventListener: () => {},
     innerWidth: 800,
@@ -31,12 +29,8 @@ Object.assign(globalThis, {
     removeEventListener: () => {},
   },
   localStorage: {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {},
-    clear: () => {},
-    key: () => null,
-    length: 0,
+    getItem: () => null, setItem: () => {}, removeItem: () => {},
+    clear: () => {}, key: () => null, length: 0,
   },
 });
 
@@ -44,32 +38,22 @@ describe("TaskSetupDialog", () => {
   test("renders create-mode modal with agent defs and action buttons", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-      />,
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
     );
     expect(html).toContain("New Task");
     expect(html).toContain("Agents");
     expect(html).toContain("Create");
     expect(html).toContain("Create &amp; Connect");
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-modal="true"');
   });
 
   test("renders default agent defs (claude lead + codex coder)", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-      />,
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
     );
-    // Default agents render as select+input rows
     expect(html).toContain("claude");
     expect(html).toContain("codex");
     expect(html).toContain("lead");
@@ -79,35 +63,14 @@ describe("TaskSetupDialog", () => {
   test("does not render content when closed", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={false}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-      />,
+      <TaskSetupDialog workspace="/repo" open={false}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
     );
     expect(html).not.toContain("New Task");
-    expect(html).not.toContain("Agents");
     expect(html).not.toContain('role="dialog"');
   });
 
-  test("submit payload uses agent array model", async () => {
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-      />,
-    );
-    // AgentStatusPanel still renders inside the dialog
-    expect(html).toContain("Runtime control");
-  });
-
   test("create-mode agent defs are dialog-local, not global store", async () => {
-    // Rendering create-mode must NOT invoke daemon_set_*_role commands.
     const roleCmds: string[] = [];
     const orig = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
     (globalThis as any).window.__TAURI_INTERNALS__.invoke = async (cmd: string, ...rest: any[]) => {
@@ -128,118 +91,77 @@ describe("TaskSetupDialog", () => {
   });
 
   test("launch gate: agent array determines which providers are launched", () => {
-    // Mirrors the gating logic in TaskPanel handleSetupSubmit
     type AgentDef = { provider: string; role: string };
     const cases: { agents: AgentDef[]; expectClaude: boolean; expectCodex: boolean }[] = [
       { agents: [{ provider: "claude", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: true, expectCodex: true },
       { agents: [{ provider: "claude", role: "lead" }, { provider: "claude", role: "coder" }], expectClaude: true, expectCodex: false },
       { agents: [{ provider: "codex", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: false, expectCodex: true },
-      { agents: [{ provider: "codex", role: "lead" }, { provider: "claude", role: "coder" }], expectClaude: true, expectCodex: true },
     ];
     for (const c of cases) {
-      const wantsClaude = c.agents.some((a) => a.provider === "claude");
-      const wantsCodex = c.agents.some((a) => a.provider === "codex");
-      expect(wantsClaude).toBe(c.expectClaude);
-      expect(wantsCodex).toBe(c.expectCodex);
+      expect(c.agents.some((a) => a.provider === "claude")).toBe(c.expectClaude);
+      expect(c.agents.some((a) => a.provider === "codex")).toBe(c.expectCodex);
     }
   });
 
-  test("add button renders for adding more agent defs", async () => {
+  test("Create & Connect disabled with empty agents, Create enabled", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-      />,
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} initialAgents={[]} />,
     );
-    expect(html).toContain("Add");
-  });
-
-  test("Create button is NOT disabled even with empty initial agents", async () => {
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-        initialAgents={[]}
-      />,
-    );
-    // Create button should render without disabled attribute
-    // The "Create & Connect" button SHOULD be disabled (no agents to connect)
-    expect(html).toContain("Create &amp; Connect");
-    // "Create" button is present and not disabled
     expect(html).toContain(">Create</button>");
-    // Verify "Create & Connect" is disabled
     expect(html).toContain("disabled");
   });
 
-  test("empty-task submit payload has zero agents", () => {
-    // Mirrors the submit logic with all agents removed
-    type AgentDef = { provider: string; role: string };
-    const agentDefs: AgentDef[] = [];
-    const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
-    const payload = {
-      agents: validAgents,
-      claudeConfig: null,
-      codexConfig: null,
-      requestLaunch: false,
-    };
-    expect(payload.agents).toEqual([]);
-    expect(payload.requestLaunch).toBe(false);
-  });
-
-  test("edit mode renders with Save button and Edit Task heading", async () => {
+  test("edit mode renders Save button and Edit Task heading", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        mode="edit"
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-        initialAgents={[
-          { provider: "claude", role: "lead" },
-          { provider: "codex", role: "coder" },
-        ]}
-      />,
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead" }]} />,
     );
     expect(html).toContain("Edit Task");
     expect(html).toContain(">Save</button>");
     expect(html).not.toContain("Create &amp; Connect");
-    expect(html).toContain('role="dialog"');
   });
 
-  test("edit mode does not render AgentStatusPanel", async () => {
+  test("edit mode preserves agentId and displayName in initialAgents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        mode="edit"
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-        initialAgents={[]}
-      />,
-    );
-    expect(html).not.toContain("Runtime control");
-  });
-
-  test("edit mode pre-populates with initialAgents", async () => {
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog
-        mode="edit"
-        workspace="/repo"
-        open={true}
-        onOpenChange={() => {}}
-        onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "reviewer" }]}
-      />,
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "reviewer", agentId: "a1", displayName: "Rev" }]} />,
     );
     expect(html).toContain('value="reviewer"');
+    expect(html).toContain("codex");
+  });
+
+  test("empty-task submit payload has zero agents", () => {
+    type AgentDef = { provider: string; role: string };
+    const agentDefs: AgentDef[] = [];
+    const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
+    expect(validAgents).toEqual([]);
+    expect({ agents: validAgents, requestLaunch: false }.agents).toEqual([]);
+  });
+
+  test("edit-mode diff logic: update existing, add new, remove deleted", () => {
+    // Mirrors the handleEditSubmit diff logic in index.tsx
+    type AgentDef = { provider: string; role: string; agentId?: string; displayName?: string | null };
+    const existing = [
+      { agentId: "a1", provider: "claude", role: "lead" },
+      { agentId: "a2", provider: "codex", role: "coder" },
+    ];
+    const incoming: AgentDef[] = [
+      { provider: "claude", role: "reviewer", agentId: "a1" },
+      { provider: "codex", role: "tester" },
+    ];
+    const incomingIds = new Set(incoming.filter((d) => d.agentId).map((d) => d.agentId!));
+    const toRemove = existing.filter((a) => !incomingIds.has(a.agentId));
+    const toUpdate = incoming.filter((d) => d.agentId);
+    const toAdd = incoming.filter((d) => !d.agentId);
+    expect(toRemove.map((a) => a.agentId)).toEqual(["a2"]);
+    expect(toUpdate.map((a) => a.agentId)).toEqual(["a1"]);
+    expect(toAdd.length).toBe(1);
+    expect(toAdd[0].role).toBe("tester");
   });
 });

@@ -37,6 +37,7 @@ export function TaskPanel() {
   const createTask = useTaskStore((s) => s.createTask);
   const addTaskAgent = useTaskStore((s) => s.addTaskAgent);
   const removeTaskAgent = useTaskStore((s) => s.removeTaskAgent);
+  const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
@@ -56,12 +57,7 @@ export function TaskPanel() {
     detailError: artifactDetailError,
   } = useArtifactDetail(artifactTimeline);
 
-  const handleResume = useCallback(
-    (sessionId: string) => {
-      void resumeSession(sessionId);
-    },
-    [resumeSession],
-  );
+  const handleResume = useCallback((id: string) => void resumeSession(id), [resumeSession]);
 
   const handleSetupSubmit = useCallback(
     async (payload: TaskSetupSubmitPayload) => {
@@ -114,17 +110,22 @@ export function TaskPanel() {
     async (payload: TaskSetupSubmitPayload) => {
       if (!task) return;
       try {
+        const incoming = new Set(payload.agents.filter((d) => d.agentId).map((d) => d.agentId!));
         for (const a of agents) {
-          await removeTaskAgent(a.agentId);
+          if (!incoming.has(a.agentId)) await removeTaskAgent(a.agentId);
         }
         for (const def of payload.agents) {
-          await addTaskAgent(task.taskId, def.provider, def.role);
+          if (def.agentId) {
+            await updateTaskAgent(def.agentId, def.provider, def.role, def.displayName);
+          } else {
+            await addTaskAgent(task.taskId, def.provider, def.role, def.displayName);
+          }
         }
       } catch {
         /* edit error — UI updates via store */
       }
     },
-    [addTaskAgent, agents, removeTaskAgent, task],
+    [addTaskAgent, agents, removeTaskAgent, task, updateTaskAgent],
   );
 
   const openDialog = useCallback((m: TaskSetupMode) => {
@@ -192,7 +193,7 @@ export function TaskPanel() {
       {dialogOpen && task.workspaceRoot && (
         <TaskSetupDialog mode={dialogMode} workspace={task.workspaceRoot}
           open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
-          initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role })) : undefined} />
+          initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined} />
       )}
     </div>
   );

@@ -7,6 +7,8 @@ import type { Provider } from "@/stores/task-store/types";
 export interface AgentDef {
   provider: Provider;
   role: string;
+  agentId?: string;
+  displayName?: string | null;
 }
 
 export interface TaskSetupSubmitPayload {
