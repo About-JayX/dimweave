@@ -1,7 +1,8 @@
 import { Settings2 } from "lucide-react";
 import { useTaskStore } from "@/stores/task-store";
-import { selectActiveTaskAgents } from "@/stores/task-store/selectors";
-import type { TaskInfo } from "@/stores/task-store/types";
+import type { TaskAgentInfo, TaskInfo } from "@/stores/task-store/types";
+
+const NO_AGENTS: TaskAgentInfo[] = [];
 
 export type ReviewBadge = { label: string; tone: "warning" | "progress" };
 
@@ -63,7 +64,7 @@ export function TaskHeader({
   collapsed?: boolean;
   onClick?: () => void;
 }) {
-  const agents = useTaskStore(selectActiveTaskAgents);
+  const agents = useTaskStore((s) => s.taskAgents[task.taskId] ?? NO_AGENTS);
   const showDetail = !collapsed;
   return (
     <div

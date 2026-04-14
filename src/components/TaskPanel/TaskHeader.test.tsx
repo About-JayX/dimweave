@@ -2,12 +2,16 @@ import { describe, expect, mock, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-// Mock the store to avoid mock.module bleed-over from other test files
+// Mock the store — includes agents for task-001 to verify task-scoped reads
 mock.module("@/stores/task-store", () => ({
   useTaskStore: (sel: (s: any) => any) => sel({
     activeTaskId: "task-001",
     lastSave: null,
-    taskAgents: {},
+    taskAgents: {
+      "task-001": [
+        { agentId: "a1", taskId: "task-001", provider: "claude", role: "lead", order: 0, createdAt: 1 },
+      ],
+    },
   }),
 }));
 
@@ -56,7 +60,7 @@ describe("TaskHeader", () => {
 
   test("shows no agent badges when task has zero agents", () => {
     const html = renderToStaticMarkup(
-      createElement(TaskHeader, { task: baseTask }),
+      createElement(TaskHeader, { task: { ...baseTask, taskId: "task-no-agents" } }),
     );
     expect(html).not.toContain("lead:");
     expect(html).not.toContain("coder:");
@@ -102,5 +106,14 @@ describe("collapsed accordion header", () => {
       } as any),
     );
     expect(html).not.toContain("Edit task");
+  });
+
+  test("does not leak active task agents into a different task header", () => {
+    // Mock has agents for task-001 (active). Render header for task-other.
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: { ...baseTask, taskId: "task-other" } }),
+    );
+    expect(html).not.toContain("lead:");
+    expect(html).not.toContain("claude");
   });
 });
