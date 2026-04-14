@@ -775,6 +775,83 @@ fn migrate_legacy_agents_one_agent_when_only_lead_session() {
     assert_eq!(agents[0].provider, Provider::Claude);
 }
 
+// ── Reorder TaskAgents ─────────────────────────────────────
+
+#[test]
+fn reorder_task_agents_updates_order() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Reorder");
+    let a = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let b = store.add_task_agent(&task.task_id, Provider::Codex, "coder");
+    let c = store.add_task_agent(&task.task_id, Provider::Claude, "reviewer");
+    // Reverse the order
+    let new_order = vec![c.agent_id.clone(), b.agent_id.clone(), a.agent_id.clone()];
+    assert!(store.reorder_task_agents(&task.task_id, &new_order));
+    let agents = store.agents_for_task(&task.task_id);
+    assert_eq!(agents[0].agent_id, c.agent_id);
+    assert_eq!(agents[1].agent_id, b.agent_id);
+    assert_eq!(agents[2].agent_id, a.agent_id);
+    assert_eq!(agents[0].order, 0);
+    assert_eq!(agents[1].order, 1);
+    assert_eq!(agents[2].order, 2);
+}
+
+#[test]
+fn reorder_task_agents_rejects_unknown_agent_id() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Reorder");
+    let a = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let ids = vec![a.agent_id.clone(), "nonexistent".to_string()];
+    assert!(!store.reorder_task_agents(&task.task_id, &ids));
+}
+
+#[test]
+fn reorder_task_agents_rejects_wrong_task() {
+    let mut store = TaskGraphStore::new();
+    let t1 = store.create_task("/ws", "T1");
+    let t2 = store.create_task("/ws", "T2");
+    let a = store.add_task_agent(&t1.task_id, Provider::Claude, "lead");
+    let b = store.add_task_agent(&t2.task_id, Provider::Codex, "coder");
+    // b belongs to t2, not t1
+    assert!(!store.reorder_task_agents(&t1.task_id, &[a.agent_id, b.agent_id]));
+}
+
+// ── Update TaskAgent ──────────────────────────────────────
+
+#[test]
+fn update_task_agent_changes_fields() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Update");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    assert!(store.update_task_agent(
+        &agent.agent_id,
+        Provider::Codex,
+        "architect",
+        Some("My Architect".to_string()),
+    ));
+    let updated = store.get_task_agent(&agent.agent_id).unwrap();
+    assert_eq!(updated.provider, Provider::Codex);
+    assert_eq!(updated.role, "architect");
+    assert_eq!(updated.display_name.as_deref(), Some("My Architect"));
+}
+
+#[test]
+fn update_task_agent_returns_false_for_missing() {
+    let mut store = TaskGraphStore::new();
+    assert!(!store.update_task_agent("nonexistent", Provider::Claude, "lead", None));
+}
+
+#[test]
+fn update_task_agent_clears_display_name() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "Clear");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    store.update_task_agent(&agent.agent_id, Provider::Claude, "lead", Some("Named".into()));
+    assert_eq!(store.get_task_agent(&agent.agent_id).unwrap().display_name.as_deref(), Some("Named"));
+    store.update_task_agent(&agent.agent_id, Provider::Claude, "lead", None);
+    assert!(store.get_task_agent(&agent.agent_id).unwrap().display_name.is_none());
+}
+
 // ── Persistence with TaskAgents ────────────────────────────
 
 #[test]

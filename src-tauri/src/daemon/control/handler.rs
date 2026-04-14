@@ -332,31 +332,9 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 gui::emit_system_log(&app, "info", &format!("[Control] {id} disconnected"));
             }
             if let Some(task_id) = task_id {
-                let daemon = state.read().await;
-                let sess: Vec<_> = daemon
-                    .task_graph
-                    .sessions_for_task(&task_id)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let arts: Vec<_> = daemon
-                    .task_graph
-                    .artifacts_for_task(&task_id)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                let active_task_id = daemon.active_task_id.clone();
-                let events = crate::daemon::gui_task::build_task_context_events(
-                    daemon.task_graph.get_task(&task_id),
-                    &task_id,
-                    &sess,
-                    &arts,
-                    active_task_id.as_deref(),
-                );
-                drop(daemon);
-                for event in events {
-                    event.emit(&app);
-                }
+                crate::daemon::gui_task::emit_task_context_events(
+                    &state, &app, &task_id,
+                ).await;
             }
         } else {
             drop(daemon);

@@ -1,4 +1,4 @@
-use crate::daemon::task_graph::types::{Artifact, Provider, SessionHandle, Task};
+use crate::daemon::task_graph::types::{Artifact, Provider, SessionHandle, Task, TaskAgent};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -15,6 +15,10 @@ pub enum TaskUiEvent {
     ArtifactsChanged {
         task_id: String,
         artifacts: Vec<Artifact>,
+    },
+    TaskAgentsChanged {
+        task_id: String,
+        agents: Vec<TaskAgent>,
     },
 }
 
@@ -67,6 +71,21 @@ impl TaskUiEvent {
                     },
                 );
             }
+            TaskUiEvent::TaskAgentsChanged { task_id, agents } => {
+                #[derive(Serialize, Clone)]
+                #[serde(rename_all = "camelCase")]
+                struct Payload {
+                    task_id: String,
+                    agents: Vec<TaskAgent>,
+                }
+                let _ = app.emit(
+                    "task_agents_changed",
+                    Payload {
+                        task_id: task_id.clone(),
+                        agents: agents.clone(),
+                    },
+                );
+            }
         }
     }
 }
@@ -94,6 +113,7 @@ pub fn build_task_context_events(
     task_id: &str,
     sessions: &[SessionHandle],
     artifacts: &[Artifact],
+    agents: &[TaskAgent],
     active_task_id: Option<&str>,
 ) -> Vec<TaskUiEvent> {
     let mut events = task.map(build_task_state_events).unwrap_or_default();
@@ -109,6 +129,10 @@ pub fn build_task_context_events(
     events.push(TaskUiEvent::ArtifactsChanged {
         task_id: task_id.to_string(),
         artifacts: artifacts.to_vec(),
+    });
+    events.push(TaskUiEvent::TaskAgentsChanged {
+        task_id: task_id.to_string(),
+        agents: agents.to_vec(),
     });
     events
 }
@@ -135,9 +159,15 @@ pub async fn emit_task_context_events(
         .into_iter()
         .cloned()
         .collect();
+    let agents: Vec<_> = s
+        .task_graph
+        .agents_for_task(task_id)
+        .into_iter()
+        .cloned()
+        .collect();
     let active_task_id = s.active_task_id.as_deref();
     let events =
-        build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts, active_task_id);
+        build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts, &agents, active_task_id);
     drop(s);
     for event in events {
         event.emit(app);
@@ -320,9 +350,9 @@ mod tests {
         let artifacts = vec![make_test_artifact("task_1")];
 
         let events =
-            build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, Some("task_1"));
+            build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, &[], Some("task_1"));
 
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 5);
         assert_eq!(events[0], TaskUiEvent::TaskUpdated(task.clone()));
         assert_eq!(
             events[1],
@@ -354,7 +384,7 @@ mod tests {
 
         // task_a is being refreshed, but the active task is task_b
         let events =
-            build_task_context_events(Some(&task_a), &task_a.task_id, &sessions, &artifacts, Some("task_b"));
+            build_task_context_events(Some(&task_a), &task_a.task_id, &sessions, &artifacts, &[], Some("task_b"));
 
         assert!(
             !events.iter().any(|event| matches!(
@@ -381,7 +411,7 @@ mod tests {
         let artifacts = vec![make_test_artifact("task_1")];
 
         let events =
-            build_task_context_events(Some(&task), "task_1", &sessions, &artifacts, Some("task_1"));
+            build_task_context_events(Some(&task), "task_1", &sessions, &artifacts, &[], Some("task_1"));
 
         assert!(
             events.iter().any(|e| matches!(

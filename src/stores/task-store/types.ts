@@ -115,6 +115,11 @@ export interface ArtifactsChangedPayload {
   artifacts: ArtifactInfo[];
 }
 
+export interface TaskAgentsChangedPayload {
+  taskId: string;
+  agents: TaskAgentInfo[];
+}
+
 // Store data (separate from actions for testability)
 
 export interface SaveStatus {
@@ -164,5 +169,19 @@ export interface TaskStoreState extends TaskStoreData {
     cwd: string,
     role: SessionRole,
   ) => Promise<void>;
+  addTaskAgent: (
+    taskId: string,
+    provider: Provider,
+    role: string,
+    displayName?: string | null,
+  ) => Promise<TaskAgentInfo>;
+  removeTaskAgent: (agentId: string) => Promise<void>;
+  updateTaskAgent: (
+    agentId: string,
+    provider: Provider,
+    role: string,
+    displayName?: string | null,
+  ) => Promise<void>;
+  reorderTaskAgents: (taskId: string, agentIds: string[]) => Promise<void>;
   cleanup: () => void;
 }

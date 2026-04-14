@@ -4,6 +4,7 @@ import type {
   ArtifactsChangedPayload,
   SaveStatus,
   SessionTreeChangedPayload,
+  TaskAgentsChangedPayload,
   TaskInfo,
   TaskStoreData,
 } from "./types";
@@ -46,6 +47,15 @@ export function reduceArtifactsChanged(
   };
 }
 
+export function reduceTaskAgentsChanged(
+  state: TaskStoreData,
+  payload: TaskAgentsChangedPayload,
+): Partial<TaskStoreData> {
+  return {
+    taskAgents: { ...state.taskAgents, [payload.taskId]: payload.agents },
+  };
+}
+
 export function reduceSaveStatus(
   _state: TaskStoreData,
   payload: SaveStatus,
@@ -72,6 +82,9 @@ export function createTaskListeners(
     }),
     listen<ArtifactsChangedPayload>("artifacts_changed", (e) => {
       set((s) => reduceArtifactsChanged(s, e.payload));
+    }),
+    listen<TaskAgentsChangedPayload>("task_agents_changed", (e) => {
+      set((s) => reduceTaskAgentsChanged(s, e.payload));
     }),
     listen<SaveStatus>("task_save_status", (e) => {
       set((s) => reduceSaveStatus(s, e.payload));

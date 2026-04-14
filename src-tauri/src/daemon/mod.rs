@@ -1015,6 +1015,68 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 }
                 let _ = reply.send(result.map(|_| ()));
             }
+            // ── TaskAgent CRUD ──────────────────────────────────
+            DaemonCmd::AddTaskAgent { task_id, provider, role, display_name, reply } => {
+                let mut s = state.write().await;
+                if s.task_graph.get_task(&task_id).is_none() {
+                    let _ = reply.send(Err(format!("task {task_id} not found")));
+                } else {
+                    let mut agent = s.task_graph.add_task_agent(&task_id, provider, &role);
+                    if display_name.is_some() {
+                        agent.display_name = display_name;
+                        // Write back the display_name
+                        s.task_graph.update_task_agent(
+                            &agent.agent_id,
+                            agent.provider,
+                            &agent.role,
+                            agent.display_name.clone(),
+                        );
+                    }
+                    let _ = s.task_graph.save();
+                    drop(s);
+                    emit_task_context_events(&state, &app, &task_id).await;
+                    let _ = reply.send(Ok(agent));
+                }
+            }
+            DaemonCmd::RemoveTaskAgent { agent_id, reply } => {
+                let mut s = state.write().await;
+                let task_id = s.task_graph.get_task_agent(&agent_id)
+                    .map(|a| a.task_id.clone());
+                if let Some(tid) = task_id {
+                    s.task_graph.remove_task_agent(&agent_id);
+                    let _ = s.task_graph.save();
+                    drop(s);
+                    emit_task_context_events(&state, &app, &tid).await;
+                    let _ = reply.send(Ok(()));
+                } else {
+                    let _ = reply.send(Err(format!("agent {agent_id} not found")));
+                }
+            }
+            DaemonCmd::UpdateTaskAgent { agent_id, provider, role, display_name, reply } => {
+                let mut s = state.write().await;
+                let task_id = s.task_graph.get_task_agent(&agent_id)
+                    .map(|a| a.task_id.clone());
+                if let Some(tid) = task_id {
+                    s.task_graph.update_task_agent(&agent_id, provider, &role, display_name);
+                    let _ = s.task_graph.save();
+                    drop(s);
+                    emit_task_context_events(&state, &app, &tid).await;
+                    let _ = reply.send(Ok(()));
+                } else {
+                    let _ = reply.send(Err(format!("agent {agent_id} not found")));
+                }
+            }
+            DaemonCmd::ReorderTaskAgents { task_id, agent_ids, reply } => {
+                let mut s = state.write().await;
+                if s.task_graph.reorder_task_agents(&task_id, &agent_ids) {
+                    let _ = s.task_graph.save();
+                    drop(s);
+                    emit_task_context_events(&state, &app, &task_id).await;
+                    let _ = reply.send(Ok(()));
+                } else {
+                    let _ = reply.send(Err("reorder failed: invalid agent IDs or task mismatch".into()));
+                }
+            }
             // ── Feishu Project ────────────────────────────────────
             DaemonCmd::GetFeishuProjectState { reply } => {
                 let rs = feishu_project_lifecycle::get_runtime_state(&state).await;

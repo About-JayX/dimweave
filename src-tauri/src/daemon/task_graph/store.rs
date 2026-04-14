@@ -327,6 +327,45 @@ impl TaskGraphStore {
         self.task_agents.remove(agent_id).is_some()
     }
 
+    /// Reorder agents within a task. `agent_ids` must all belong to `task_id`.
+    /// Returns false if any ID is unknown or belongs to another task.
+    pub fn reorder_task_agents(&mut self, task_id: &str, agent_ids: &[String]) -> bool {
+        // Validate first — no partial mutation on failure
+        for aid in agent_ids {
+            match self.task_agents.get(aid) {
+                Some(a) if a.task_id == task_id => {}
+                _ => return false,
+            }
+        }
+        let now = chrono::Utc::now().timestamp_millis() as u64;
+        for (i, aid) in agent_ids.iter().enumerate() {
+            if let Some(agent) = self.task_agents.get_mut(aid) {
+                agent.order = i as u32;
+                agent.updated_at = now;
+            }
+        }
+        true
+    }
+
+    /// Update an agent's provider, role, and display_name.
+    pub fn update_task_agent(
+        &mut self,
+        agent_id: &str,
+        provider: Provider,
+        role: &str,
+        display_name: Option<String>,
+    ) -> bool {
+        if let Some(agent) = self.task_agents.get_mut(agent_id) {
+            agent.provider = provider;
+            agent.role = role.to_string();
+            agent.display_name = display_name;
+            agent.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Deterministic legacy migration: for each task with no agents,
     /// generate agents from singleton provider fields only when
     /// concrete session occupancy evidence exists.

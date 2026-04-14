@@ -12,6 +12,7 @@ import {
 } from "@/stores/task-store/selectors";
 import { ArtifactTimeline } from "./ArtifactTimeline";
 import { SessionTree } from "./SessionTree";
+import { TaskAgentList } from "./TaskAgentList";
 import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   TaskSetupDialog,
@@ -172,6 +173,7 @@ export function TaskPanel() {
           initialCoderProvider={task.coderProvider}
         />
       )}
+      <TaskAgentList />
       <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
         <SessionTree rows={sessionRows} onResume={handleResume} />
       </div>

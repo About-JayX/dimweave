@@ -1,6 +1,9 @@
 import { Settings2 } from "lucide-react";
 import { useTaskStore } from "@/stores/task-store";
-import { selectProviderSummary } from "@/stores/task-store/selectors";
+import {
+  selectActiveTaskAgents,
+  selectProviderSummary,
+} from "@/stores/task-store/selectors";
 import type { TaskInfo } from "@/stores/task-store/types";
 
 export type ReviewBadge = { label: string; tone: "warning" | "progress" };
@@ -60,8 +63,10 @@ export function TaskHeader({
   onEditTask?: () => void;
 }) {
   const summary = useTaskStore(selectProviderSummary);
+  const agents = useTaskStore(selectActiveTaskAgents);
   const leadOnline = summary?.taskId === task.taskId ? summary.leadOnline : false;
   const coderOnline = summary?.taskId === task.taskId ? summary.coderOnline : false;
+  const hasAgents = agents.length > 0;
   return (
     <div className="rounded-xl border border-border/50 bg-card/50 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -78,15 +83,29 @@ export function TaskHeader({
             </span>
             <SaveIndicator />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-full border border-claude/30 bg-claude/8 px-2 py-0.5 text-[10px] text-claude/80">
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${leadOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
-              lead: {task.leadProvider}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-codex/30 bg-codex/8 px-2 py-0.5 text-[10px] text-codex/80">
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${coderOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
-              coder: {task.coderProvider}
-            </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hasAgents ? agents.map((agent) => {
+              const provStyle = agent.provider === "claude"
+                ? "border-claude/30 bg-claude/8 text-claude/80"
+                : "border-codex/30 bg-codex/8 text-codex/80";
+              return (
+                <span key={agent.agentId} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}>
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-500" />
+                  {agent.displayName ?? agent.role}: {agent.provider}
+                </span>
+              );
+            }) : (
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full border border-claude/30 bg-claude/8 px-2 py-0.5 text-[10px] text-claude/80">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${leadOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
+                  lead: {task.leadProvider}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-codex/30 bg-codex/8 px-2 py-0.5 text-[10px] text-codex/80">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${coderOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
+                  coder: {task.coderProvider}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">

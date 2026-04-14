@@ -1,5 +1,5 @@
 use crate::daemon::{
-    task_graph::types::{Provider, Task},
+    task_graph::types::{Provider, Task, TaskAgent},
     types::{SessionTreeSnapshot, TaskSnapshot},
     DaemonCmd,
 };
@@ -152,4 +152,96 @@ pub async fn daemon_list_session_tree(
     reply_rx
         .await
         .map_err(|_| "daemon dropped list_session_tree reply".to_string())
+}
+
+#[tauri::command]
+pub async fn daemon_add_task_agent(
+    task_id: String,
+    provider: String,
+    role: String,
+    display_name: Option<String>,
+    sender: State<'_, DaemonSender>,
+) -> Result<TaskAgent, String> {
+    let p = parse_provider(&provider)?;
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::AddTaskAgent {
+            task_id,
+            provider: p,
+            role,
+            display_name,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped add_task_agent reply".to_string())?
+}
+
+#[tauri::command]
+pub async fn daemon_remove_task_agent(
+    agent_id: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::RemoveTaskAgent {
+            agent_id,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped remove_task_agent reply".to_string())?
+}
+
+#[tauri::command]
+pub async fn daemon_update_task_agent(
+    agent_id: String,
+    provider: String,
+    role: String,
+    display_name: Option<String>,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let p = parse_provider(&provider)?;
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::UpdateTaskAgent {
+            agent_id,
+            provider: p,
+            role,
+            display_name,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped update_task_agent reply".to_string())?
+}
+
+#[tauri::command]
+pub async fn daemon_reorder_task_agents(
+    task_id: String,
+    agent_ids: Vec<String>,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::ReorderTaskAgents {
+            task_id,
+            agent_ids,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped reorder_task_agents reply".to_string())?
 }

@@ -107,6 +107,30 @@ pub enum DaemonCmd {
         role: SessionRole,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    // ── TaskAgent CRUD ───────────────────────────────────────
+    AddTaskAgent {
+        task_id: String,
+        provider: Provider,
+        role: String,
+        display_name: Option<String>,
+        reply: oneshot::Sender<Result<crate::daemon::task_graph::types::TaskAgent, String>>,
+    },
+    RemoveTaskAgent {
+        agent_id: String,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    UpdateTaskAgent {
+        agent_id: String,
+        provider: Provider,
+        role: String,
+        display_name: Option<String>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    ReorderTaskAgents {
+        task_id: String,
+        agent_ids: Vec<String>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     // ── Feishu Project ────────────────────────────────────────
     GetFeishuProjectState {
         reply: oneshot::Sender<crate::feishu_project::types::FeishuProjectRuntimeState>,

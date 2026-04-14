@@ -4,6 +4,7 @@ import {
   reduceActiveTaskChanged,
   reduceSessionTreeChanged,
   reduceArtifactsChanged,
+  reduceTaskAgentsChanged,
 } from "../src/stores/task-store/events";
 import {
   bootstrapTaskStore,
@@ -819,5 +820,54 @@ describe("selectActiveReplyTarget (live default-target rule)", () => {
       taskAgents: { t1: agents },
     } as unknown as TaskStoreState;
     expect(selectActiveReplyTarget(state)).toBe("architect");
+  });
+});
+
+// ── reduceTaskAgentsChanged ────────────────────────────────
+
+describe("reduceTaskAgentsChanged", () => {
+  test("inserts agents for a task", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "lead", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+    ];
+    const patch = reduceTaskAgentsChanged(emptyState(), {
+      taskId: "t1",
+      agents,
+    });
+    expect(patch.taskAgents?.["t1"]).toHaveLength(2);
+    expect(patch.taskAgents?.["t1"]?.[0].role).toBe("lead");
+  });
+
+  test("replaces existing agents for same task", () => {
+    const state = {
+      ...emptyState(),
+      taskAgents: {
+        t1: [makeAgent("old", "t1", "claude", "lead", 0)],
+      },
+    };
+    const newAgents = [makeAgent("new", "t1", "codex", "architect", 0)];
+    const patch = reduceTaskAgentsChanged(state, {
+      taskId: "t1",
+      agents: newAgents,
+    });
+    expect(patch.taskAgents?.["t1"]).toHaveLength(1);
+    expect(patch.taskAgents?.["t1"]?.[0].agentId).toBe("new");
+  });
+
+  test("preserves agents for other tasks", () => {
+    const state = {
+      ...emptyState(),
+      taskAgents: {
+        t1: [makeAgent("a1", "t1", "claude", "lead", 0)],
+        t2: [makeAgent("a2", "t2", "codex", "coder", 0)],
+      },
+    };
+    const patch = reduceTaskAgentsChanged(state, {
+      taskId: "t1",
+      agents: [],
+    });
+    expect(patch.taskAgents?.["t1"]).toHaveLength(0);
+    expect(patch.taskAgents?.["t2"]).toHaveLength(1);
   });
 });

@@ -342,6 +342,33 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       }
     },
 
+    addTaskAgent: async (taskId, provider, role, displayName) => {
+      const agent = await invoke<TaskAgentInfo>("daemon_add_task_agent", {
+        taskId,
+        provider,
+        role,
+        displayName: displayName ?? null,
+      });
+      return agent;
+    },
+
+    removeTaskAgent: async (agentId) => {
+      await invoke("daemon_remove_task_agent", { agentId });
+    },
+
+    updateTaskAgent: async (agentId, provider, role, displayName) => {
+      await invoke("daemon_update_task_agent", {
+        agentId,
+        provider,
+        role,
+        displayName: displayName ?? null,
+      });
+    },
+
+    reorderTaskAgents: async (taskId, agentIds) => {
+      await invoke("daemon_reorder_task_agents", { taskId, agentIds });
+    },
+
     cleanup: () => {
       for (const fn of unlisteners) fn();
       unlisteners = [];
