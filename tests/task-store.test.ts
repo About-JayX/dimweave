@@ -65,7 +65,8 @@ function makeAgent(
 function makeTask(id: string, title = "Test"): TaskInfo {
   return {
     taskId: id,
-    workspaceRoot: "/ws",
+    projectRoot: "/ws",
+    taskWorktreeRoot: "/ws",
     title,
     status: "draft",
     leadSessionId: null,
@@ -297,7 +298,7 @@ describe("bootstrapTaskStore", () => {
   });
 
   test("sets selectedWorkspace from snapshot task workspace", async () => {
-    const task = { ...makeTask("t1"), workspaceRoot: "/ws/repo" };
+    const task = { ...makeTask("t1"), projectRoot: "/ws/repo" };
     const calls: Partial<TaskStoreData>[] = [];
 
     await bootstrapTaskStore(
@@ -458,8 +459,8 @@ describe("createFetchProviderHistoryAction", () => {
 
 describe("createLoadWorkspaceTasksAction", () => {
   test("merges tasks from daemon_list_tasks into store", async () => {
-    const t1 = { ...makeTask("t1", "A"), workspaceRoot: "/ws" };
-    const t2 = { ...makeTask("t2", "B"), workspaceRoot: "/ws" };
+    const t1 = { ...makeTask("t1", "A"), projectRoot: "/ws" };
+    const t2 = { ...makeTask("t2", "B"), projectRoot: "/ws" };
     let state = { ...emptyState(), tasks: { t0: makeTask("t0", "Existing") } };
     const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
       state = { ...state, ...fn(state) };
@@ -495,19 +496,19 @@ describe("createStartWorkspaceTaskAction", () => {
       set,
       async (_cmd, args) => {
         expect(args).toEqual({ workspace: "/repo-b", title: "repo-b" });
-        return { ...task, workspaceRoot: "/repo-b", title: "repo-b" };
+        return { ...task, projectRoot: "/repo-b", title: "repo-b" };
       },
     );
 
     await startWorkspaceTask("/repo-b");
 
     expect(state.activeTaskId).toBe("t2");
-    expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
+    expect(state.tasks.t2?.projectRoot).toBe("/repo-b");
   });
 
   test("creates a fresh task context instead of overwriting the current task", async () => {
     const currentTask = makeTask("t1", "repo-a");
-    const nextTask = { ...makeTask("t2", "repo-b"), workspaceRoot: "/repo-b" };
+    const nextTask = { ...makeTask("t2", "repo-b"), projectRoot: "/repo-b" };
     let state: TaskStoreData = {
       ...emptyState(),
       activeTaskId: currentTask.taskId,
@@ -525,8 +526,8 @@ describe("createStartWorkspaceTaskAction", () => {
     await startWorkspaceTask("/repo-b");
 
     expect(state.activeTaskId).toBe("t2");
-    expect(state.tasks.t1?.workspaceRoot).toBe("/ws");
-    expect(state.tasks.t2?.workspaceRoot).toBe("/repo-b");
+    expect(state.tasks.t1?.projectRoot).toBe("/ws");
+    expect(state.tasks.t2?.projectRoot).toBe("/repo-b");
   });
 });
 
@@ -979,8 +980,8 @@ describe("selectWorkspaceTasks", () => {
   });
 
   test("excludes tasks from other workspaces", () => {
-    const t1 = { ...makeTask("t1"), workspaceRoot: "/ws" };
-    const t2 = { ...makeTask("t2"), workspaceRoot: "/other" };
+    const t1 = { ...makeTask("t1"), projectRoot: "/ws" };
+    const t2 = { ...makeTask("t2"), projectRoot: "/other" };
     const state = {
       ...emptyState(),
       selectedWorkspace: "/ws",
@@ -1066,7 +1067,7 @@ describe("active-task expansion (accordion sync)", () => {
 
 describe("multi-task creation list persistence", () => {
   test("startWorkspaceTask preserves prior task in same workspace", async () => {
-    const t1 = { ...makeTask("t1", "First"), workspaceRoot: "/ws" };
+    const t1 = { ...makeTask("t1", "First"), projectRoot: "/ws" };
     let state: TaskStoreData = {
       ...emptyState(),
       selectedWorkspace: "/ws",
@@ -1076,7 +1077,7 @@ describe("multi-task creation list persistence", () => {
     const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
       state = { ...state, ...fn(state) };
     };
-    const t2 = { ...makeTask("t2", "Second"), workspaceRoot: "/ws", createdAt: 200 };
+    const t2 = { ...makeTask("t2", "Second"), projectRoot: "/ws", createdAt: 200 };
     const start = createStartWorkspaceTaskAction(set as any, async () => t2);
     await start("/ws");
 
@@ -1086,7 +1087,7 @@ describe("multi-task creation list persistence", () => {
   });
 
   test("configuredTask preserves prior task in same workspace", async () => {
-    const t1 = { ...makeTask("t1", "Old"), workspaceRoot: "/ws" };
+    const t1 = { ...makeTask("t1", "Old"), projectRoot: "/ws" };
     let state: TaskStoreData = {
       ...emptyState(),
       selectedWorkspace: "/ws",
@@ -1096,7 +1097,7 @@ describe("multi-task creation list persistence", () => {
     const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
       state = { ...state, ...fn(state) };
     };
-    const t2 = { ...makeTask("t2", "New"), workspaceRoot: "/ws", createdAt: 200 };
+    const t2 = { ...makeTask("t2", "New"), projectRoot: "/ws", createdAt: 200 };
     const create = createConfiguredTaskAction(set as any, async () => t2);
     await create("/ws", "New", { leadProvider: "claude", coderProvider: "codex" });
 
@@ -1106,7 +1107,7 @@ describe("multi-task creation list persistence", () => {
   });
 
   test("workspace task list contains both tasks after creation", async () => {
-    const t1 = { ...makeTask("t1", "First"), workspaceRoot: "/ws", createdAt: 100 };
+    const t1 = { ...makeTask("t1", "First"), projectRoot: "/ws", createdAt: 100 };
     let state: TaskStoreData = {
       ...emptyState(),
       selectedWorkspace: "/ws",
@@ -1116,7 +1117,7 @@ describe("multi-task creation list persistence", () => {
     const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
       state = { ...state, ...fn(state) };
     };
-    const t2 = { ...makeTask("t2", "Second"), workspaceRoot: "/ws", createdAt: 200 };
+    const t2 = { ...makeTask("t2", "Second"), projectRoot: "/ws", createdAt: 200 };
     const start = createStartWorkspaceTaskAction(set as any, async () => t2);
     await start("/ws");
 
@@ -1127,7 +1128,7 @@ describe("multi-task creation list persistence", () => {
   });
 
   test("newly created task is the expanded item in accordion", async () => {
-    const t1 = { ...makeTask("t1"), workspaceRoot: "/ws", createdAt: 100 };
+    const t1 = { ...makeTask("t1"), projectRoot: "/ws", createdAt: 100 };
     let state: TaskStoreData = {
       ...emptyState(),
       selectedWorkspace: "/ws",
@@ -1137,7 +1138,7 @@ describe("multi-task creation list persistence", () => {
     const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
       state = { ...state, ...fn(state) };
     };
-    const t2 = { ...makeTask("t2"), workspaceRoot: "/ws", createdAt: 200 };
+    const t2 = { ...makeTask("t2"), projectRoot: "/ws", createdAt: 200 };
     const start = createStartWorkspaceTaskAction(set as any, async () => t2);
     await start("/ws");
 
@@ -1148,5 +1149,62 @@ describe("multi-task creation list persistence", () => {
     const collapsed = list.filter((t) => t.taskId !== state.activeTaskId);
     expect(collapsed).toHaveLength(1);
     expect(collapsed[0].taskId).toBe("t1");
+  });
+});
+
+// ── projectRoot-aligned workspace selection ──────────────────
+
+describe("projectRoot-aligned workspace selection", () => {
+  test("tasks with different taskWorktreeRoot but same projectRoot appear in same list", () => {
+    const t1 = { ...makeTask("t1"), projectRoot: "/repo", taskWorktreeRoot: "/repo", createdAt: 100 };
+    const t2 = { ...makeTask("t2"), projectRoot: "/repo", taskWorktreeRoot: "/repo/.worktrees/feat-a", createdAt: 200 };
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/repo",
+      tasks: { t1, t2 },
+    } as unknown as TaskStoreState;
+    const result = selectWorkspaceTasks(state);
+    expect(result).toHaveLength(2);
+    expect(result[0].taskId).toBe("t2");
+    expect(result[1].taskId).toBe("t1");
+  });
+
+  test("tasks with different projectRoot are excluded even if taskWorktreeRoot matches", () => {
+    const t1 = { ...makeTask("t1"), projectRoot: "/repo-a", taskWorktreeRoot: "/shared" };
+    const t2 = { ...makeTask("t2"), projectRoot: "/repo-b", taskWorktreeRoot: "/shared" };
+    const state = {
+      ...emptyState(),
+      selectedWorkspace: "/repo-a",
+      tasks: { t1, t2 },
+    } as unknown as TaskStoreState;
+    const result = selectWorkspaceTasks(state);
+    expect(result).toHaveLength(1);
+    expect(result[0].taskId).toBe("t1");
+  });
+
+  test("snapshotToPatch sets selectedWorkspace to projectRoot", () => {
+    const task = { ...makeTask("t1"), projectRoot: "/repo", taskWorktreeRoot: "/repo/.worktrees/feat" };
+    const patch = snapshotToPatch({ task, sessions: [], artifacts: [] });
+    expect(patch.selectedWorkspace).toBe("/repo");
+  });
+
+  test("creating a worktree task does not hide prior tasks in same project", async () => {
+    const t1 = { ...makeTask("t1", "Main"), projectRoot: "/repo", taskWorktreeRoot: "/repo", createdAt: 100 };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/repo",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const t2 = { ...makeTask("t2", "Feature"), projectRoot: "/repo", taskWorktreeRoot: "/repo/.worktrees/feat", createdAt: 200 };
+    const start = createStartWorkspaceTaskAction(set as any, async () => t2);
+    await start("/repo");
+
+    const list = selectWorkspaceTasks(state as unknown as TaskStoreState);
+    expect(list).toHaveLength(2);
+    expect(list.map((t) => t.taskId)).toEqual(["t2", "t1"]);
   });
 });

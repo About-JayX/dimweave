@@ -164,7 +164,7 @@ export function selectWorkspaceTasks(state: TaskStoreState): TaskInfo[] {
   _wsPrevWorkspace = ws;
   _wsPrevTasks = state.tasks;
   const filtered = Object.values(state.tasks)
-    .filter((t) => t.workspaceRoot === ws)
+    .filter((t) => t.projectRoot === ws)
     .sort((a, b) => b.createdAt - a.createdAt);
   _wsPrevResult = filtered.length > 0 ? filtered : EMPTY_TASKS;
   return _wsPrevResult;

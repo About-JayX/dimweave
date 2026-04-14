@@ -22,7 +22,10 @@ export type ArtifactKind =
 
 export interface TaskInfo {
   taskId: string;
-  workspaceRoot: string;
+  projectRoot: string;
+  taskWorktreeRoot: string;
+  /** @deprecated Use projectRoot. Backend no longer sends this field. */
+  workspaceRoot?: string;
   title: string;
   status: TaskStatus;
   leadSessionId?: string | null;

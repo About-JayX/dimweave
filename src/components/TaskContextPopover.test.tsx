@@ -92,6 +92,28 @@ describe("TaskContextPopover", () => {
     expect(html).toContain("No pending approvals.");
   });
 
+  test("task prop uses projectRoot for header title", async () => {
+    installTauriStub();
+    const { TaskContextPopover } = await import("./TaskContextPopover");
+    const task = {
+      taskId: "t1",
+      projectRoot: "/repo",
+      taskWorktreeRoot: "/repo/.worktrees/feat",
+      title: "Feature task",
+      status: "implementing" as const,
+      leadSessionId: null,
+      currentCoderSessionId: null,
+      leadProvider: "claude" as const,
+      coderProvider: "codex" as const,
+      createdAt: 100,
+      updatedAt: 200,
+    };
+    const html = renderToStaticMarkup(
+      <TaskContextPopover activePane="task" onClose={() => {}} task={task} />,
+    );
+    expect(html).toContain("Feature task");
+  });
+
   test("renders tools pane inside the shared shell drawer", async () => {
     installTauriStub();
     const { TaskContextPopover } = await import("./TaskContextPopover");

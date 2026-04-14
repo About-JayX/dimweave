@@ -61,7 +61,7 @@ export function snapshotToPatch(snap: TaskSnapshot) {
     snap.providerSummary ? { [snap.task.taskId]: snap.providerSummary } : {};
   return {
     activeTaskId: snap.task.taskId,
-    selectedWorkspace: snap.task.workspaceRoot,
+    selectedWorkspace: snap.task.projectRoot,
     tasks: { [snap.task.taskId]: snap.task },
     taskAgents: { [snap.task.taskId]: snap.taskAgents ?? [] },
     sessions: { [snap.task.taskId]: snap.sessions },
@@ -338,7 +338,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       const activeTaskId = get().activeTaskId;
       const task = activeTaskId ? get().tasks[activeTaskId] : null;
       if (task) {
-        await get().fetchProviderHistory(task.workspaceRoot);
+        await get().fetchProviderHistory(task.projectRoot);
       }
     },
 

@@ -7,6 +7,8 @@ import { getTaskSessionWarning } from "./task-session-guard";
 function makeTask(id: string, workspaceRoot: string) {
   return {
     taskId: id,
+    projectRoot: workspaceRoot,
+    taskWorktreeRoot: workspaceRoot,
     workspaceRoot,
     title: `Task ${id}`,
     status: "draft" as const,

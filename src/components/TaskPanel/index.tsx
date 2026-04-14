@@ -147,7 +147,7 @@ export function TaskPanel() {
 
   const reviewBadge: ReviewBadge | null =
     task?.status === "reviewing" ? { label: "Review", tone: "warning" } : null;
-  const dialogWorkspace = dialogMode === "edit" ? task?.workspaceRoot : selectedWorkspace;
+  const dialogWorkspace = dialogMode === "edit" ? task?.projectRoot : selectedWorkspace;
 
   return (
     <div className="space-y-2">

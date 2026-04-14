@@ -20,6 +20,8 @@ import { TaskHeader } from "./TaskHeader";
 const baseTask = {
   taskId: "task-001",
   title: "Fix routing bug",
+  projectRoot: "/repo",
+  taskWorktreeRoot: "/repo",
   workspaceRoot: "/repo",
   status: "implementing" as const,
   leadProvider: "claude" as const,
