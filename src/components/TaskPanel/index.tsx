@@ -30,6 +30,7 @@ export function TaskPanel() {
   const addTaskAgent = useTaskStore((s) => s.addTaskAgent);
   const removeTaskAgent = useTaskStore((s) => s.removeTaskAgent);
   const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
+  const reorderTaskAgents = useTaskStore((s) => s.reorderTaskAgents);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
@@ -89,18 +90,22 @@ export function TaskPanel() {
         for (const a of agents) {
           if (!incoming.has(a.agentId)) await removeTaskAgent(a.agentId);
         }
+        const finalOrder: string[] = [];
         for (const def of payload.agents) {
           if (def.agentId) {
             await updateTaskAgent(def.agentId, def.provider, def.role, def.displayName);
+            finalOrder.push(def.agentId);
           } else {
-            await addTaskAgent(task.taskId, def.provider, def.role, def.displayName);
+            const added = await addTaskAgent(task.taskId, def.provider, def.role, def.displayName);
+            finalOrder.push(added.agentId);
           }
         }
+        if (finalOrder.length > 0) await reorderTaskAgents(task.taskId, finalOrder);
       } catch {
         /* edit error — UI updates via store */
       }
     },
-    [addTaskAgent, agents, removeTaskAgent, task, updateTaskAgent],
+    [addTaskAgent, agents, removeTaskAgent, reorderTaskAgents, task, updateTaskAgent],
   );
 
   const openDialog = useCallback((m: TaskSetupMode) => {

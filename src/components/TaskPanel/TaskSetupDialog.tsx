@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { AgentDraftConfig } from "@/components/AgentStatus/provider-session-view-model";
 import type { Provider } from "@/stores/task-store/types";
@@ -86,28 +86,29 @@ export function TaskSetupDialog({
   );
   const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(null);
   const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, handleClose]);
 
   if (!open) return null;
 
-  const updateDef = (index: number, updated: AgentDef) => {
-    setAgentDefs((prev) => prev.map((d, i) => (i === index ? updated : d)));
-  };
-  const removeDef = (index: number) => {
-    setAgentDefs((prev) => prev.filter((_, i) => i !== index));
-  };
-  const addDef = () => {
-    setAgentDefs((prev) => [...prev, { provider: "claude", role: "" }]);
+  const updateDef = (i: number, u: AgentDef) => setAgentDefs((p) => p.map((d, j) => j === i ? u : d));
+  const removeDef = (i: number) => setAgentDefs((p) => p.filter((_, j) => j !== i));
+  const addDef = () => setAgentDefs((p) => [...p, { provider: "claude", role: "" }]);
+  const handleDrop = (targetIndex: number) => {
+    const src = dragIndexRef.current;
+    if (src === null || src === targetIndex) return;
+    setAgentDefs((p) => { const n = [...p]; const [m] = n.splice(src, 1); n.splice(targetIndex, 0, m); return n; });
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
   };
 
   const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
@@ -117,12 +118,7 @@ export function TaskSetupDialog({
   const draftCoderProvider: Provider = validAgents[1]?.provider ?? validAgents[0]?.provider ?? "codex";
 
   const submit = (launch: boolean) => {
-    onSubmit({
-      agents: validAgents,
-      claudeConfig,
-      codexConfig,
-      requestLaunch: launch,
-    });
+    onSubmit({ agents: validAgents, claudeConfig, codexConfig, requestLaunch: launch });
     onOpenChange(false);
   };
 
@@ -147,13 +143,20 @@ export function TaskSetupDialog({
                 Add
               </button>
             </div>
-            {agentDefs.map((def, i) => (
-              <AgentDefRow
-                key={i}
-                def={def}
-                onChange={(u) => updateDef(i, u)}
-                onRemove={() => removeDef(i)}
-              />
+            {agentDefs.map((def, i) => mode === "edit" ? (
+              <div key={i} draggable data-draggable-row="true"
+                onDragStart={() => { dragIndexRef.current = i; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+                className={`flex items-center gap-1.5${dragOverIndex === i ? " border-t-2 border-primary/50" : ""}`}>
+                <GripVertical className="size-3 shrink-0 cursor-grab text-muted-foreground/40" />
+                <div className="flex-1">
+                  <AgentDefRow def={def} onChange={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
+                </div>
+              </div>
+            ) : (
+              <AgentDefRow key={i} def={def} onChange={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
             ))}
           </div>
         </div>

@@ -173,6 +173,28 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-dialog-footer="true"');
   });
 
+  test("edit mode wraps agent rows with draggable row marker", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[
+          { provider: "claude", role: "lead", agentId: "a1" },
+          { provider: "codex", role: "coder", agentId: "a2" },
+        ]} />,
+    );
+    expect(html).toContain('data-draggable-row="true"');
+  });
+
+  test("create mode does not add draggable row markers", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).not.toContain('data-draggable-row="true"');
+  });
+
   test("edit-mode diff logic: update existing, add new, remove deleted", () => {
     // Mirrors the handleEditSubmit diff logic in index.tsx
     type AgentDef = { provider: string; role: string; agentId?: string; displayName?: string | null };

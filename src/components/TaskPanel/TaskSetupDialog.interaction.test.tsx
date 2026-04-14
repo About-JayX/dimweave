@@ -82,6 +82,49 @@ describe("TaskSetupDialog interaction", () => {
     expect(payload.agents[1].agentId).toBe("a2");
   });
 
+  test("edit-mode drag reorder changes agent order in submit payload", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit",
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit,
+        initialAgents: [
+          { provider: "claude", role: "lead", agentId: "a1" },
+          { provider: "codex", role: "coder", agentId: "a2" },
+        ],
+      }),
+    );
+
+    const rows = queryAll('[data-draggable-row="true"]');
+    expect(rows.length).toBe(2);
+
+    // Simulate drag row 0 to row 1
+    const Win = globalThis.window as any;
+    const dt = { effectAllowed: "", dropEffect: "" };
+    const mkDrag = (type: string) => {
+      const ev = new Win.Event(type, { bubbles: true });
+      ev.dataTransfer = dt;
+      ev.preventDefault = () => {};
+      return ev;
+    };
+    rows[0].dispatchEvent(mkDrag("dragstart"));
+    rows[1].dispatchEvent(mkDrag("dragover"));
+    rows[1].dispatchEvent(mkDrag("drop"));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const saveBtn = queryAll("button").find((b) => b.textContent === "Save");
+    click(saveBtn!);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    expect(payload.agents[0].agentId).toBe("a2");
+    expect(payload.agents[1].agentId).toBe("a1");
+  });
+
   test("Cancel button calls onOpenChange(false)", async () => {
     const onOpenChange = mock(() => {});
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
