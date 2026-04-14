@@ -262,8 +262,21 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 **verification_commands:**
 
 - `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_shared_role_tests:: -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_user_target_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::shared_role_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::user_target_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml agent_id_routing -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
+- `git diff --check`
+
+## Plan Revision 6 — 2026-04-14
+
+**Reason:** The original Task 3 verification filters `daemon::routing_shared_role_tests::` and `daemon::routing_user_target_tests::` can match zero tests because the actual module paths are nested under `daemon::routing::...`. The verification commands must use the concrete module path so non-zero routing suites run during review.
+
+**Revised Task 3 verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::shared_role_tests:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::user_target_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml agent_id_routing -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `git diff --check`
