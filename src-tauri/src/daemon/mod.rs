@@ -143,19 +143,14 @@ async fn stop_all_claude_sdk_sessions(
     }
 }
 
-/// Resolve an existing TaskAgent or create one for this task/provider/role.
-fn resolve_or_create_agent_id(
+/// Always create a fresh TaskAgent identity for a new launch.
+/// Same-provider same-role agents each get their own agent_id.
+pub(crate) fn create_agent_id(
     state: &mut DaemonState,
     task_id: &str,
     provider: task_graph::types::Provider,
     role: &str,
 ) -> String {
-    if let Some(agent) = state.task_graph.agents_for_task(task_id)
-        .iter()
-        .find(|a| a.provider == provider && a.role == role)
-    {
-        return agent.agent_id.clone();
-    }
     state.task_graph.add_task_agent(task_id, provider, role).agent_id
 }
 
@@ -180,7 +175,7 @@ async fn launch_claude_sdk(
     // Previous session is already stopped by the daemon loop caller.
     let agent_id = {
         let mut s = state.write().await;
-        resolve_or_create_agent_id(
+        create_agent_id(
             &mut s, task_id, task_graph::types::Provider::Claude, role_id,
         )
     };
@@ -323,7 +318,7 @@ async fn attach_provider_history(
             stop_codex_for_task(codex_handles, codex_port_pool, &attach_task_id, state, app).await;
             let (launch_epoch, resume_agent_id) = {
                 let mut s = state.write().await;
-                let aid = resolve_or_create_agent_id(
+                let aid = create_agent_id(
                     &mut s, &attach_task_id, task_graph::types::Provider::Codex, &role_id,
                 );
                 let epoch = s.begin_codex_task_launch_for_agent(&attach_task_id, &aid, 0)
@@ -461,7 +456,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 }
                 let (launch_epoch, codex_agent_id) = {
                     let mut s = state.write().await;
-                    let aid = resolve_or_create_agent_id(
+                    let aid = create_agent_id(
                         &mut s, &resolved_task_id, task_graph::types::Provider::Codex, &role_id,
                     );
                     let epoch = s.begin_codex_task_launch_for_agent(&resolved_task_id, &aid, 0)
@@ -864,16 +859,19 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             Ok(target) => {
                                 let resume_task_id = sess.task_id.clone();
                                 stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resume_task_id, &state, &app).await;
+                                let resume_sess_agent_id = sess.agent_id.clone();
                                 let (launch_epoch, resume_codex_aid) = {
                                     let mut s = state.write().await;
                                     let role_str = match target.role {
                                         crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                         crate::daemon::task_graph::types::SessionRole::Coder => "coder",
                                     };
-                                    let codex_aid = resolve_or_create_agent_id(
-                                        &mut s, &resume_task_id,
-                                        task_graph::types::Provider::Codex, role_str,
-                                    );
+                                    let codex_aid = resume_sess_agent_id.unwrap_or_else(|| {
+                                        create_agent_id(
+                                            &mut s, &resume_task_id,
+                                            task_graph::types::Provider::Codex, role_str,
+                                        )
+                                    });
                                     let e = s.begin_codex_task_launch_for_agent(&resume_task_id, &codex_aid, 0)
                                         .unwrap_or_else(|| s.begin_codex_launch());
                                     (e, codex_aid)

@@ -1943,3 +1943,23 @@ fn agent_runtime_ownership_invalidate_preserves_other_agent() {
         "agent_b must survive invalidation of agent_a"
     );
 }
+
+#[test]
+fn agent_runtime_ownership_fresh_launches_never_collapse_same_role() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/tmp", "multi-coder");
+    // Two fresh launches with identical (task, provider, role) must get distinct agent_ids
+    let aid1 = crate::daemon::create_agent_id(
+        &mut s, &task.task_id, Provider::Codex, "coder",
+    );
+    let aid2 = crate::daemon::create_agent_id(
+        &mut s, &task.task_id, Provider::Codex, "coder",
+    );
+    assert_ne!(aid1, aid2, "same-provider same-role fresh launches must get distinct agent_ids");
+    // Verify both agents exist in the task
+    let agents = s.task_graph.agents_for_task(&task.task_id);
+    let matching: Vec<_> = agents.iter()
+        .filter(|a| a.provider == Provider::Codex && a.role == "coder")
+        .collect();
+    assert_eq!(matching.len(), 2, "task must have two distinct coder agents");
+}
