@@ -14,7 +14,8 @@ Object.assign(globalThis, {
 
 function makeTask(id = "t1") {
   return {
-    taskId: id, workspaceRoot: "/repo", title: "Test",
+    taskId: id, projectRoot: "/repo", taskWorktreeRoot: "/repo",
+    workspaceRoot: "/repo", title: "Test",
     status: "draft" as const, leadProvider: "claude" as const,
     coderProvider: "codex" as const, createdAt: 1, updatedAt: 1,
   };
