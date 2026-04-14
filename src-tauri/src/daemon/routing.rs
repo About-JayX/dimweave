@@ -179,32 +179,44 @@ fn resolve_broadcast_targets(
                 if !should_deliver_to_agent(s, "claude", msg, ta_resolved) {
                     continue;
                 }
-                let sdk_tx = task_id
-                    .and_then(|tid| s.claude_task_ws_tx_for_agent(tid, &agent.agent_id))
-                    .or_else(|| task_id.and_then(|tid| s.claude_task_ws_tx(tid)))
-                    .or_else(|| s.claude_sdk_ws_tx.clone());
+                // Per-agent mode: only per-agent channel; no provider fallback
+                // that could misroute to another same-provider agent's slot.
+                let sdk_tx = if ta_resolved {
+                    task_id.and_then(|tid| s.claude_task_ws_tx_for_agent(tid, &agent.agent_id))
+                } else {
+                    task_id
+                        .and_then(|tid| s.claude_task_ws_tx_for_agent(tid, &agent.agent_id))
+                        .or_else(|| task_id.and_then(|tid| s.claude_task_ws_tx(tid)))
+                        .or_else(|| s.claude_sdk_ws_tx.clone())
+                };
                 if let Some(tx) = sdk_tx {
                     deliveries.push(ResolvedDelivery {
                         agent_id: agent.agent_id.clone(),
                         channel: DeliveryChannel::ClaudeSdk(tx),
                     });
-                } else if let Some(bridge) =
-                    s.attached_agents.get("claude").map(|a| a.tx.clone())
-                {
-                    deliveries.push(ResolvedDelivery {
-                        agent_id: agent.agent_id.clone(),
-                        channel: DeliveryChannel::ClaudeBridge(bridge),
-                    });
+                } else if !ta_resolved {
+                    if let Some(bridge) =
+                        s.attached_agents.get("claude").map(|a| a.tx.clone())
+                    {
+                        deliveries.push(ResolvedDelivery {
+                            agent_id: agent.agent_id.clone(),
+                            channel: DeliveryChannel::ClaudeBridge(bridge),
+                        });
+                    }
                 }
             }
             "codex" => {
                 if !should_deliver_to_agent(s, "codex", msg, ta_resolved) {
                     continue;
                 }
-                let tx = task_id
-                    .and_then(|tid| s.codex_task_inject_tx_for_agent(tid, &agent.agent_id))
-                    .or_else(|| task_id.and_then(|tid| s.codex_task_inject_tx(tid)))
-                    .or_else(|| s.codex_inject_tx.clone());
+                let tx = if ta_resolved {
+                    task_id.and_then(|tid| s.codex_task_inject_tx_for_agent(tid, &agent.agent_id))
+                } else {
+                    task_id
+                        .and_then(|tid| s.codex_task_inject_tx_for_agent(tid, &agent.agent_id))
+                        .or_else(|| task_id.and_then(|tid| s.codex_task_inject_tx(tid)))
+                        .or_else(|| s.codex_inject_tx.clone())
+                };
                 if let Some(tx) = tx {
                     deliveries.push(ResolvedDelivery {
                         agent_id: agent.agent_id.clone(),

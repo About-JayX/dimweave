@@ -206,8 +206,8 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
         );
         s.active_task_id = Some(task.task_id.clone());
         // Register task_agents for authoritative routing
-        s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "lead");
-        s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+        let codex_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "lead");
+        let claude_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
 
         let lead = s.task_graph.create_session(CreateSessionParams {
             task_id: &task.task_id,
@@ -237,10 +237,18 @@ async fn seeded_task_with_codex_lead_and_claude_coder() -> (
 
         s.claude_role = "coder".into();
         s.codex_role = "lead".into();
-        // Claude online via SDK WS
-        let epoch = s.begin_claude_sdk_launch("nonce-shared".into());
-        s.attach_claude_sdk_ws(epoch, "nonce-shared", claude_tx);
-        s.codex_inject_tx = Some(codex_tx);
+        // Per-agent-id slots (authoritative mode)
+        s.init_task_runtime(&task.task_id, "/repo-b".into());
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&claude_agent.agent_id)
+            .ws_tx = Some(claude_tx);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_codex_slot(&codex_agent.agent_id, 4500)
+            .inject_tx = Some(codex_tx);
         s.set_provider_connection(
             "claude",
             ProviderConnectionState {
@@ -382,15 +390,24 @@ async fn agent_id_routing_broadcast_delivers_to_both_providers_for_same_role() {
         let task = s.task_graph.create_task("/ws", "T");
         s.active_task_id = Some(task.task_id.clone());
         // Both agents have role "coder"
-        s.task_graph
+        let claude_agent = s
+            .task_graph
             .add_task_agent(&task.task_id, Provider::Claude, "coder");
-        s.task_graph
+        let codex_agent = s
+            .task_graph
             .add_task_agent(&task.task_id, Provider::Codex, "coder");
-        // Claude SDK online
-        let epoch = s.begin_claude_sdk_launch("nonce-bc".into());
-        s.attach_claude_sdk_ws(epoch, "nonce-bc", claude_sdk_tx);
-        // Codex online
-        s.codex_inject_tx = Some(codex_tx);
+        // Per-agent-id slots (authoritative mode)
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&claude_agent.agent_id)
+            .ws_tx = Some(claude_sdk_tx);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_codex_slot(&codex_agent.agent_id, 4500)
+            .inject_tx = Some(codex_tx);
         // Compat singletons
         s.claude_role = "coder".into();
         s.codex_role = "coder".into();
@@ -478,6 +495,67 @@ async fn agent_id_routing_two_same_provider_agents_both_receive_delivery() {
     assert!(
         rx_b.try_recv().is_ok(),
         "Agent B should receive the message via its own slot"
+    );
+}
+
+/// When a task has per-agent records and matched agent A has no per-agent
+/// channel, routing must NOT fall back to a provider/task channel that
+/// belongs to another agent B. Agent A's delivery is simply skipped.
+#[tokio::test]
+async fn agent_id_routing_no_fallback_to_provider_channel_in_per_agent_mode() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (tx_a, mut rx_a) = tokio::sync::mpsc::channel::<String>(8);
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent_a = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        let _agent_b = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.claude_role = "coder".into();
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        // Agent A gets a per-agent slot with a channel
+        let slot_a = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&agent_a.agent_id);
+        slot_a.ws_tx = Some(tx_a);
+        // Agent B gets a per-agent slot with NO channel (offline)
+        // — no slot created means no channel exists
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "no-fallback-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement feature".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "should deliver to agent A which has a channel"
+    );
+    assert!(
+        rx_a.try_recv().is_ok(),
+        "Agent A should receive the message via its own per-agent slot"
+    );
+    // Agent A's channel should have received exactly one message, not two
+    assert!(
+        rx_a.try_recv().is_err(),
+        "Agent A's channel must not receive a second copy from provider fallback"
     );
 }
 

@@ -13,6 +13,31 @@ fn is_allowed_agent(agent_id: &str) -> bool {
     matches!(agent_id, "claude" | "codex")
 }
 
+/// Validate an inbound `sender_agent_id` claim against the task's agent
+/// records. Returns `(role, agent_id, display_source)` if the claimed id
+/// matches a registered agent whose provider matches the runtime.
+fn validate_claimed_agent_id(
+    s: &crate::daemon::state::DaemonState,
+    runtime_id: &str,
+    claimed: &str,
+) -> Option<(String, String, String)> {
+    let task_id = s.agent_owning_task_id(runtime_id)?;
+    let expected = match runtime_id {
+        "claude" => crate::daemon::task_graph::types::Provider::Claude,
+        "codex" => crate::daemon::task_graph::types::Provider::Codex,
+        _ => return None,
+    };
+    let agents = s.task_graph.agents_for_task(&task_id);
+    let agent = agents
+        .iter()
+        .find(|a| a.agent_id == claimed && a.provider == expected)?;
+    Some((
+        agent.role.clone(),
+        agent.agent_id.clone(),
+        runtime_id.to_string(),
+    ))
+}
+
 /// Resolve (role, agent_id, display_source) from the concrete online slot's
 /// agent_id, then task_agents, then global singletons.
 fn resolve_agent_identity(
@@ -179,11 +204,15 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 let mut suppress_message = false;
                 let mut bridge_claimed_delivery = false;
                 if let Some(id) = agent_id.as_deref() {
-                    // Resolve role, agent_id, and display_source from task_agents
-                    // first (AC1), then fall back to global singleton roles.
+                    // Preserve inbound sender_agent_id when it validates against
+                    // the task's agents; otherwise resolve from runtime state.
                     let (role, real_agent_id, display_src) = {
                         let s = state.read().await;
-                        resolve_agent_identity(&s, id)
+                        message
+                            .sender_agent_id
+                            .as_deref()
+                            .and_then(|claimed| validate_claimed_agent_id(&s, id, claimed))
+                            .unwrap_or_else(|| resolve_agent_identity(&s, id))
                     };
                     message.from = role.clone();
                     message.display_source = Some(display_src);
@@ -342,7 +371,12 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
 
 #[cfg(test)]
 mod tests {
-    use super::{claude_terminal_reply_claims_visible_result, summarize_bridge_message_shape};
+    use super::{
+        claude_terminal_reply_claims_visible_result, resolve_agent_identity,
+        summarize_bridge_message_shape, validate_claimed_agent_id,
+    };
+    use crate::daemon::state::DaemonState;
+    use crate::daemon::task_graph::types::Provider;
     use crate::daemon::types::{BridgeMessage, MessageStatus};
 
     fn make_msg(to: &str, content: &str, status: MessageStatus) -> BridgeMessage {
@@ -444,6 +478,122 @@ mod tests {
         assert!(summary.contains("content_len=12"));
         assert!(summary.contains("task_id=task-1"));
         assert!(summary.contains("session_id=session-1"));
+    }
+
+    #[test]
+    fn validate_claimed_agent_id_accepts_matching_task_agent() {
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let slot = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&agent.agent_id);
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        slot.ws_tx = Some(tx);
+
+        let result = validate_claimed_agent_id(&s, "claude", &agent.agent_id);
+        assert!(result.is_some(), "valid claimed agent_id should validate");
+        let (role, aid, disp) = result.unwrap();
+        assert_eq!(role, "coder");
+        assert_eq!(aid, agent.agent_id);
+        assert_eq!(disp, "claude");
+    }
+
+    #[test]
+    fn validate_claimed_agent_id_rejects_wrong_provider() {
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let slot = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&agent.agent_id);
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        slot.ws_tx = Some(tx);
+
+        // Claim a Claude agent_id via "codex" runtime — should reject
+        let result = validate_claimed_agent_id(&s, "codex", &agent.agent_id);
+        assert!(
+            result.is_none(),
+            "agent_id on wrong provider runtime must not validate"
+        );
+    }
+
+    #[test]
+    fn validate_claimed_agent_id_rejects_unknown_id() {
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let slot = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot("real-agent");
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        slot.ws_tx = Some(tx);
+
+        let result = validate_claimed_agent_id(&s, "claude", "bogus-agent-id");
+        assert!(result.is_none(), "unknown agent_id must not validate");
+    }
+
+    /// Two Claude agents in the same task. `resolve_agent_identity` picks first
+    /// online slot, but `validate_claimed_agent_id` distinguishes them.
+    #[test]
+    fn validate_distinguishes_two_same_provider_agents() {
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent_a = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let agent_b = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let (tx_a, _rx_a) = tokio::sync::mpsc::channel::<String>(1);
+        let (tx_b, _rx_b) = tokio::sync::mpsc::channel::<String>(1);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&agent_a.agent_id)
+            .ws_tx = Some(tx_a);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&agent_b.agent_id)
+            .ws_tx = Some(tx_b);
+
+        // Claiming agent_a returns lead role
+        let (role_a, id_a, _) =
+            validate_claimed_agent_id(&s, "claude", &agent_a.agent_id).unwrap();
+        assert_eq!(role_a, "lead");
+        assert_eq!(id_a, agent_a.agent_id);
+
+        // Claiming agent_b returns coder role
+        let (role_b, id_b, _) =
+            validate_claimed_agent_id(&s, "claude", &agent_b.agent_id).unwrap();
+        assert_eq!(role_b, "coder");
+        assert_eq!(id_b, agent_b.agent_id);
+
+        // resolve_agent_identity would pick whichever is first online —
+        // validate_claimed_agent_id avoids this ambiguity
+        let (resolved_role, _, _) = resolve_agent_identity(&s, "claude");
+        // Just verify it returns something — the point is validate is precise
+        assert!(!resolved_role.is_empty());
     }
 }
 
