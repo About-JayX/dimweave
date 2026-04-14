@@ -66,6 +66,20 @@ describe("ErrorBoundary", () => {
     expect(after.terminalLines.length).toBe(before);
   });
 
+  test("error capture is independent of task-agent state", async () => {
+    const { ErrorBoundary } = await import("./ErrorBoundary");
+    const { useBridgeStore } = await import("@/stores/bridge-store");
+    // Ensure uiErrors work regardless of whether a task exists
+    const prevCount = useBridgeStore.getState().uiErrors.length;
+    const instance = new ErrorBoundary({ children: <div /> });
+    instance.componentDidCatch(new Error("no-task crash"), {
+      componentStack: "\n    at Widget",
+    } as any);
+    const after = useBridgeStore.getState();
+    expect(after.uiErrors.length).toBe(prevCount + 1);
+    expect(after.uiErrors[after.uiErrors.length - 1].message).toBe("no-task crash");
+  });
+
   test("regression: persistent errors stay in fallback, no auto-retry loop", async () => {
     const { ErrorBoundary } = await import("./ErrorBoundary");
     // getDerivedStateFromError is called by React before componentDidCatch

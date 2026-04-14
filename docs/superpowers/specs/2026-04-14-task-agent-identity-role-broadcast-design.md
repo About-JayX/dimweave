@@ -1,6 +1,8 @@
 # Task Agent Identity And Role-Broadcast Design
 
-> **Supersedes:** The task/agent modeling portions of [2026-04-13-task-first-sidebar-and-ui-error-log-design.md](/Users/jason/floder/agent-bridge/.worktrees/task-agent-identity-redesign/docs/superpowers/specs/2026-04-13-task-first-sidebar-and-ui-error-log-design.md). The single-workspace flow and UI error log work remain valid; the single-slot `lead_provider/coder_provider` task model does not.
+> **Supersedes:** The task/agent modeling portions of [2026-04-13-task-first-sidebar-and-ui-error-log-design.md](2026-04-13-task-first-sidebar-and-ui-error-log-design.md). The single-workspace flow and UI error log work remain valid; the single-slot `lead_provider/coder_provider` task model does not.
+>
+> **Status: Stage-complete.** All implementation tasks (1-6) have been accepted. The `task_agents[]` model is the sole source of truth for task-agent identity, role targeting, and broadcast routing.
 
 ## Goal
 

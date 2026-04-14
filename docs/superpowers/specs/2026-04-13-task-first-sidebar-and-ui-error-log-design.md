@@ -1,8 +1,8 @@
 # Task-First Sidebar And UI Error Log Design
 
-> **Superseded on 2026-04-14 by:** [2026-04-14-task-agent-identity-role-broadcast-design.md](/Users/jason/floder/agent-bridge/.worktrees/task-agent-identity-redesign/docs/superpowers/specs/2026-04-14-task-agent-identity-role-broadcast-design.md)
+> **Superseded on 2026-04-14 by:** [2026-04-14-task-agent-identity-role-broadcast-design.md](../specs/2026-04-14-task-agent-identity-role-broadcast-design.md)
 >
-> The single-workspace UX and UI error-log sections remain useful background, but the task/agent model in this spec assumed singleton `lead/coder` slots and should no longer be treated as the target design.
+> **Status: Fully superseded.** The replacement spec's `task_agents[]` model is now stage-complete (Tasks 1-6 accepted). The single-workspace UX and UI error-log sections remain useful background, but the task/agent model in this spec assumed singleton `lead/coder` slots and is no longer the target design. All new work must reference the replacement spec.
 
 ## Goal
 

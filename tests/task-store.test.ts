@@ -823,6 +823,95 @@ describe("selectActiveReplyTarget (live default-target rule)", () => {
   });
 });
 
+// ── agent-identity integration regression ─────────────────
+
+describe("agent-identity integration regression", () => {
+  test("empty-task creation: zero agents produce stable selector defaults", () => {
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [] },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(state)).toEqual([]);
+    expect(selectActiveTaskRoleOptions(state)).toEqual(["auto"]);
+    expect(selectDefaultReplyTarget(state)).toBe("auto");
+    expect(selectActiveReplyTarget(state)).toBe("auto");
+  });
+
+  test("dynamic role targets: adding agents changes available roles", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "architect", 0),
+      makeAgent("a2", "t1", "codex", "tester", 1),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    const roles = selectActiveTaskRoleOptions(state);
+    expect(roles).toContain("architect");
+    expect(roles).toContain("tester");
+    expect(roles).toContain("auto");
+    expect(roles).not.toContain("lead");
+    expect(roles).not.toContain("coder");
+  });
+
+  test("broadcast semantics: duplicate roles produce single target option", () => {
+    const agents = [
+      makeAgent("a1", "t1", "claude", "coder", 0),
+      makeAgent("a2", "t1", "codex", "coder", 1),
+      makeAgent("a3", "t1", "claude", "lead", 2),
+    ];
+    const state = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: agents },
+    } as unknown as TaskStoreState;
+    const roles = selectActiveTaskRoleOptions(state);
+    expect(roles.filter((r) => r === "coder")).toHaveLength(1);
+    expect(roles).toContain("lead");
+    expect(roles).toContain("auto");
+  });
+
+  test("no-task → task transition: selectors stabilize after activation", () => {
+    const noTask = { ...emptyState() } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(noTask)).toEqual([]);
+    expect(selectActiveReplyTarget(noTask)).toBe("auto");
+
+    const withTask = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [makeAgent("a1", "t1", "claude", "lead", 0)] },
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(withTask)).toHaveLength(1);
+    expect(selectActiveReplyTarget(withTask)).toBe("lead");
+  });
+
+  test("task → no-task transition: selectors return safe defaults", () => {
+    const withTask = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1: makeTask("t1") },
+      taskAgents: { t1: [makeAgent("a1", "t1", "claude", "lead", 0)] },
+    } as unknown as TaskStoreState;
+    expect(selectActiveReplyTarget(withTask)).toBe("lead");
+
+    const cleared = {
+      ...emptyState(),
+      activeTaskId: null,
+      tasks: {},
+      taskAgents: {},
+    } as unknown as TaskStoreState;
+    expect(selectActiveTaskAgents(cleared)).toEqual([]);
+    expect(selectActiveReplyTarget(cleared)).toBe("auto");
+    expect(selectActiveTaskRoleOptions(cleared)).toEqual(["auto"]);
+  });
+});
+
 // ── reduceTaskAgentsChanged ────────────────────────────────
 
 describe("reduceTaskAgentsChanged", () => {

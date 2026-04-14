@@ -30,6 +30,18 @@ describe("ErrorLogDialog", () => {
     expect(html).not.toContain("Clear all");
   });
 
+  test("error display is independent of task-agent model", () => {
+    // ErrorLogDialog must render errors regardless of task/agent state
+    const errors: UiError[] = [
+      { id: 99, message: "Agent crash without task", timestamp: 1700000099000 },
+    ];
+    const html = renderToStaticMarkup(
+      <ErrorLogDialog open errors={errors} onClose={() => {}} onClear={() => {}} />,
+    );
+    expect(html).toContain("Agent crash without task");
+    expect(html).toContain("Clear all");
+  });
+
   test("renders list of UI errors with timestamps", () => {
     const html = renderToStaticMarkup(
       <ErrorLogDialog open errors={SAMPLE_ERRORS} onClose={() => {}} onClear={() => {}} />,

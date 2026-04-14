@@ -158,6 +158,30 @@ describe("ReplyInput", () => {
     expect(html).toContain('disabled=""');
   });
 
+  test("reply target reflects task_agents[] not singleton slots", () => {
+    useTaskStore.setState({
+      activeTaskId: "task-3",
+      tasks: {
+        "task-3": makeTask("task-3", "/repo-c"),
+      },
+      taskAgents: {
+        "task-3": [
+          { agentId: "a1", taskId: "task-3", provider: "claude", role: "architect", displayName: null, order: 0, createdAt: 1 },
+        ],
+      },
+      replyTargets: {},
+      sessions: {},
+      artifacts: {},
+      providerHistory: {},
+      providerHistoryLoading: {},
+      providerHistoryError: {},
+      bootstrapComplete: true,
+      bootstrapError: null,
+    });
+    // Default target should be the first agent's role, not hardcoded "lead"
+    expect(selectActiveReplyTarget(useTaskStore.getState())).toBe("architect");
+  });
+
   test("returns no warning when the connected agent matches the active task session", () => {
     const task = makeTask("task-2", "/repo-b");
     const session = makeClaudeLeadSession("task-2", "claude_current", "/repo-b");
