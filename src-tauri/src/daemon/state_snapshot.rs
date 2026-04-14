@@ -73,12 +73,40 @@ impl DaemonState {
         result
     }
 
-    /// Returns online agents filtered by a specific task's provider bindings.
-    /// Only includes agents that serve a role in the given task.
+    /// Returns online agents filtered by a specific task's agent bindings.
+    /// Uses task_agents[] as primary truth; falls back to singleton fields
+    /// for pre-migration tasks without task_agents records.
     pub fn task_scoped_online_agents(&self, task_id: &str) -> Vec<OnlineAgentInfo> {
         let Some(task) = self.task_graph.get_task(task_id) else {
             return self.online_agents_snapshot();
         };
+        let agents = self.task_graph.agents_for_task(task_id);
+        if agents.is_empty() {
+            return self.task_scoped_online_agents_legacy(task_id, task);
+        }
+        let mut result = Vec::new();
+        for agent in agents {
+            let runtime_name: &str = match agent.provider {
+                crate::daemon::task_graph::types::Provider::Claude => "claude",
+                crate::daemon::task_graph::types::Provider::Codex => "codex",
+            };
+            if self.is_task_agent_online(task_id, runtime_name) {
+                result.push(OnlineAgentInfo {
+                    agent_id: runtime_name.into(),
+                    role: agent.role.clone(),
+                    model_source: runtime_name.into(),
+                });
+            }
+        }
+        result
+    }
+
+    /// Legacy fallback for tasks without task_agents records.
+    fn task_scoped_online_agents_legacy(
+        &self,
+        task_id: &str,
+        task: &Task,
+    ) -> Vec<OnlineAgentInfo> {
         let mut result = Vec::new();
         let lead_agent = match task.lead_provider {
             crate::daemon::task_graph::types::Provider::Claude => "claude",
@@ -88,16 +116,14 @@ impl DaemonState {
             crate::daemon::task_graph::types::Provider::Claude => "claude",
             crate::daemon::task_graph::types::Provider::Codex => "codex",
         };
-        let is_lead_online = self.is_task_agent_online(task_id, lead_agent);
-        let is_coder_online = self.is_task_agent_online(task_id, coder_agent);
-        if is_lead_online {
+        if self.is_task_agent_online(task_id, lead_agent) {
             result.push(OnlineAgentInfo {
                 agent_id: lead_agent.into(),
                 role: "lead".into(),
                 model_source: lead_agent.into(),
             });
         }
-        if is_coder_online {
+        if self.is_task_agent_online(task_id, coder_agent) {
             result.push(OnlineAgentInfo {
                 agent_id: coder_agent.into(),
                 role: "coder".into(),

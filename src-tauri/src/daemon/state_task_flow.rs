@@ -190,19 +190,57 @@ impl DaemonState {
         }
     }
 
-    /// Resolve which agent name ("claude"/"codex") handles a given role for a task,
-    /// based on the task's persisted `lead_provider`/`coder_provider`.
-    pub fn resolve_task_provider_agent(&self, task_id: &str, role: &str) -> Option<&'static str> {
-        let task = self.task_graph.get_task(task_id)?;
+    /// Resolve all runtime agent names ("claude"/"codex") serving a given role
+    /// in a task, using `task_agents[]` as primary truth.
+    /// Falls back to singleton `lead_provider`/`coder_provider` when no
+    /// task_agents exist (transitional compat for pre-migration tasks).
+    pub fn resolve_task_role_providers(&self, task_id: &str, role: &str) -> Vec<&'static str> {
+        let agents = self.task_graph.agents_for_task(task_id);
+        if agents.is_empty() {
+            return self.resolve_role_providers_legacy(task_id, role);
+        }
+        let mut has_claude = false;
+        let mut has_codex = false;
+        for a in agents {
+            if a.role != role {
+                continue;
+            }
+            match a.provider {
+                Provider::Claude => has_claude = true,
+                Provider::Codex => has_codex = true,
+            }
+        }
+        let mut result = Vec::with_capacity(2);
+        if has_claude {
+            result.push("claude");
+        }
+        if has_codex {
+            result.push("codex");
+        }
+        result
+    }
+
+    /// Legacy singleton fallback for tasks without task_agents.
+    fn resolve_role_providers_legacy(&self, task_id: &str, role: &str) -> Vec<&'static str> {
+        let Some(task) = self.task_graph.get_task(task_id) else {
+            return vec![];
+        };
         let provider = match role {
             "lead" => &task.lead_provider,
             "coder" => &task.coder_provider,
-            _ => return None,
+            _ => return vec![],
         };
-        match provider {
-            Provider::Claude => Some("claude"),
-            Provider::Codex => Some("codex"),
-        }
+        vec![match provider {
+            Provider::Claude => "claude",
+            Provider::Codex => "codex",
+        }]
+    }
+
+    /// Compat wrapper: resolve the first agent for a role (delegates to task_agents).
+    pub fn resolve_task_provider_agent(&self, task_id: &str, role: &str) -> Option<&'static str> {
+        self.resolve_task_role_providers(task_id, role)
+            .into_iter()
+            .next()
     }
 
     pub fn prepare_task_routing(&mut self, msg: &BridgeMessage) -> TaskRoutingDecision {

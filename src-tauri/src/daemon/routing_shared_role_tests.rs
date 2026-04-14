@@ -359,3 +359,101 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
     assert!(matches!(outcome.result, RouteResult::Buffered));
     assert_eq!(outcome.buffer_reason, Some("task_session_mismatch"));
 }
+
+// ── agent_id routing: broadcast delivery ──────────────────────
+
+/// When a task has two agents with the same role ("coder") backed by different
+/// providers (Claude + Codex), a message to "coder" must broadcast to BOTH.
+#[tokio::test]
+async fn agent_id_routing_broadcast_delivers_to_both_providers_for_same_role() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (claude_sdk_tx, mut claude_sdk_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (codex_tx, mut codex_rx) =
+        tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        // Both agents have role "coder"
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Codex, "coder");
+        // Claude SDK online
+        let epoch = s.begin_claude_sdk_launch("nonce-bc".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-bc", claude_sdk_tx);
+        // Codex online
+        s.codex_inject_tx = Some(codex_tx);
+        // Compat singletons
+        s.claude_role = "coder".into();
+        s.codex_role = "coder".into();
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "broadcast-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "implement feature X".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "broadcast should deliver to at least one target"
+    );
+    assert!(
+        claude_sdk_rx.try_recv().is_ok(),
+        "Claude SDK should receive the broadcast"
+    );
+    assert!(
+        codex_rx.try_recv().is_ok(),
+        "Codex should also receive the broadcast"
+    );
+}
+
+/// When a task has agents but the target role has NO matching agent,
+/// the message should be buffered, not silently rerouted.
+#[tokio::test]
+async fn agent_id_routing_missing_role_buffers_clearly() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let epoch = s.begin_claude_sdk_launch("nonce-mr".into());
+        let (tx, _) = tokio::sync::mpsc::channel::<String>(1);
+        s.attach_claude_sdk_ws(epoch, "nonce-mr", tx);
+        s.claude_role = "lead".into();
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "missing-role-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "reviewer".into(),
+        content: "review please".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Buffered),
+        "missing role should buffer, not silently reroute"
+    );
+}

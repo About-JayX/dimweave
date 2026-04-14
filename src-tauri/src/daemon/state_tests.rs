@@ -1,5 +1,5 @@
 use super::*;
-use crate::daemon::task_graph::types::CreateSessionParams;
+use crate::daemon::task_graph::types::{CreateSessionParams, Provider};
 
 fn temp_state_path(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -1721,4 +1721,93 @@ fn runtime_final_cleanup_global_role_defaults_empty() {
     let s = DaemonState::new();
     assert_eq!(s.claude_role, "", "global claude_role defaults to empty (compat-only)");
     assert_eq!(s.codex_role, "", "global codex_role defaults to empty (compat-only)");
+}
+
+// ── agent_id routing: resolve_task_role_providers ──────────────
+
+#[test]
+fn agent_id_routing_resolve_role_providers_from_task_agents() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+
+    assert_eq!(s.resolve_task_role_providers(&task.task_id, "lead"), vec!["claude"]);
+    assert_eq!(s.resolve_task_role_providers(&task.task_id, "coder"), vec!["codex"]);
+}
+
+#[test]
+fn agent_id_routing_broadcast_same_role_both_providers() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+
+    let coders = s.resolve_task_role_providers(&task.task_id, "coder");
+    assert_eq!(coders.len(), 2);
+    assert!(coders.contains(&"claude"));
+    assert!(coders.contains(&"codex"));
+}
+
+#[test]
+fn agent_id_routing_unknown_role_returns_empty() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+
+    assert!(s.resolve_task_role_providers(&task.task_id, "reviewer").is_empty());
+}
+
+#[test]
+fn agent_id_routing_compat_wrapper_uses_task_agents() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    // Task singleton field is Claude for lead_provider, but task_agents says Codex
+    s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "lead");
+
+    assert_eq!(
+        s.resolve_task_provider_agent(&task.task_id, "lead"),
+        Some("codex"),
+        "resolve_task_provider_agent should delegate to task_agents, not singleton fields"
+    );
+}
+
+#[test]
+fn agent_id_routing_extensible_role_resolves() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "reviewer");
+
+    assert_eq!(s.resolve_task_role_providers(&task.task_id, "reviewer"), vec!["claude"]);
+    assert_eq!(s.resolve_task_provider_agent(&task.task_id, "reviewer"), Some("claude"));
+}
+
+#[test]
+fn agent_id_routing_no_task_returns_empty() {
+    let s = DaemonState::new();
+    assert!(s.resolve_task_role_providers("nonexistent", "lead").is_empty());
+    assert_eq!(s.resolve_task_provider_agent("nonexistent", "lead"), None);
+}
+
+// ── agent_id routing: task_scoped_online_agents ────────────────
+
+#[test]
+fn agent_id_routing_task_scoped_online_agents_uses_task_agents() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+
+    s.init_task_runtime(&task.task_id, "/ws".into());
+
+    // Make Claude online for this task
+    let nonce = "nonce-online".to_string();
+    let epoch = s.begin_claude_task_launch(&task.task_id, nonce.clone()).unwrap();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+    s.attach_claude_task_ws(&task.task_id, epoch, &nonce, tx);
+
+    let online = s.task_scoped_online_agents(&task.task_id);
+    assert_eq!(online.len(), 1);
+    assert_eq!(online[0].agent_id, "claude");
+    assert_eq!(online[0].role, "lead", "role should come from task_agents, not singleton");
 }

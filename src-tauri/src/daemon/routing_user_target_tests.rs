@@ -206,3 +206,62 @@ fn auto_prefers_bound_claude_coder_for_active_task() {
 
     assert_eq!(resolve_user_targets(&s, "auto"), vec!["coder", "lead"]);
 }
+
+// ── agent_id routing: auto-target from task_agents ────────────
+
+#[test]
+fn agent_id_routing_auto_task_agents_prefers_lead() {
+    use crate::daemon::task_runtime::{ClaudeTaskSlot, CodexTaskSlot, TaskRuntime};
+
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    // Add agents: coder first (order 0), lead second (order 1)
+    s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+
+    // Set up task runtime with both online
+    let mut rt = TaskRuntime::new(task.task_id.clone(), "/ws".into());
+    let mut claude_slot = ClaudeTaskSlot::new();
+    let (claude_tx, _) = tokio::sync::mpsc::channel::<String>(1);
+    claude_slot.ws_tx = Some(claude_tx);
+    rt.claude_slot = Some(claude_slot);
+    let mut codex_slot = CodexTaskSlot::new(4501);
+    let (codex_tx, _) = tokio::sync::mpsc::channel(1);
+    codex_slot.inject_tx = Some(codex_tx);
+    rt.codex_slot = Some(codex_slot);
+    s.task_runtimes.insert(task.task_id.clone(), rt);
+
+    let targets = resolve_user_targets_for_task(&s, "auto", &task.task_id);
+    assert!(!targets.is_empty(), "should resolve at least one target");
+    assert_eq!(targets[0], "lead", "lead must come first even though coder has lower order");
+}
+
+#[test]
+fn agent_id_routing_auto_task_agents_first_role_when_no_lead() {
+    use crate::daemon::task_runtime::{ClaudeTaskSlot, TaskRuntime};
+
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    // Only a "reviewer" agent, no lead
+    s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "reviewer");
+
+    let mut rt = TaskRuntime::new(task.task_id.clone(), "/ws".into());
+    let mut claude_slot = ClaudeTaskSlot::new();
+    let (tx, _) = tokio::sync::mpsc::channel::<String>(1);
+    claude_slot.ws_tx = Some(tx);
+    rt.claude_slot = Some(claude_slot);
+    s.task_runtimes.insert(task.task_id.clone(), rt);
+
+    let targets = resolve_user_targets_for_task(&s, "auto", &task.task_id);
+    assert_eq!(targets, vec!["reviewer"], "should fall back to first ordered role");
+}
+
+#[test]
+fn agent_id_routing_auto_task_agents_empty_task_returns_empty() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "T");
+    // No agents added
+
+    let targets = resolve_user_targets_for_task(&s, "auto", &task.task_id);
+    assert!(targets.is_empty(), "task with no agents should return empty auto targets");
+}

@@ -75,7 +75,9 @@ fn has_user_input_payload(content: &str, attachments: &Option<Vec<Attachment>>) 
     !content.trim().is_empty() || attachments.as_ref().is_some_and(|atts| !atts.is_empty())
 }
 
-/// Resolve targets using a specific task's provider bindings and online state.
+/// Resolve targets using task_agents[] as primary truth for a specific task.
+/// "lead" is promoted to first position when present (AC3).
+/// Falls back to singleton fields for pre-migration tasks without task_agents.
 pub fn resolve_user_targets_for_task(
     state: &DaemonState,
     target: &str,
@@ -84,6 +86,41 @@ pub fn resolve_user_targets_for_task(
     if target != "auto" {
         return vec![target.to_string()];
     }
+    let agents = state.task_graph.agents_for_task(task_id);
+    if agents.is_empty() {
+        // Fallback to singleton-based resolution for pre-migration tasks
+        return resolve_user_targets_for_task_legacy(state, task_id);
+    }
+    // Collect unique roles preserving agent order
+    let mut roles: Vec<String> = Vec::new();
+    for a in &agents {
+        if !roles.contains(&a.role) {
+            roles.push(a.role.clone());
+        }
+    }
+    // Promote "lead" to first position (AC3)
+    if let Some(idx) = roles.iter().position(|r| r == "lead") {
+        if idx != 0 {
+            roles.swap(0, idx);
+        }
+    }
+    // Keep only roles that have at least one online provider
+    roles
+        .into_iter()
+        .filter(|role| {
+            state
+                .resolve_task_role_providers(task_id, role)
+                .iter()
+                .any(|agent| state.is_task_agent_online(task_id, agent))
+        })
+        .collect()
+}
+
+/// Legacy auto-target for tasks without task_agents records.
+fn resolve_user_targets_for_task_legacy(
+    state: &DaemonState,
+    task_id: &str,
+) -> Vec<String> {
     let Some(task) = state.task_graph.get_task(task_id) else {
         return vec![];
     };

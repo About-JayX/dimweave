@@ -1,5 +1,7 @@
 #[cfg(test)]
 pub use crate::daemon::routing_user_input::resolve_user_targets;
+#[cfg(test)]
+pub use crate::daemon::routing_user_input::resolve_user_targets_for_task;
 pub use crate::daemon::routing_user_input::route_user_input;
 use crate::daemon::{
     routing_display,
@@ -46,167 +48,21 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         };
     }
 
-    enum Target {
-        Claude(tokio::sync::mpsc::Sender<ToAgent>),
-        ClaudeSdk(tokio::sync::mpsc::Sender<String>),
-        Codex(tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>, Vec<serde_json::Value>, bool),
-        NeedBuffer,
-    }
-
-    // Resolve the target agent for the message.
-    //
-    // Task-first routing (AC1/AC2): when a message carries a task_id, resolve
-    // the target provider through the task's persisted lead_provider/coder_provider
-    // instead of the global claude_role/codex_role singletons. This ensures that
-    // messages stamped against a specific task reach the correct provider even
-    // when the active task or global role assignment has changed.
-    let (target, emit_claude_thinking) = {
+    // Resolution phase: resolve ALL providers for the target role.
+    // Broadcast: target=<role> may resolve to multiple providers (AC2).
+    // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
+    let resolution = {
         let s = state.read().await;
-        let emit_claude_thinking =
-            routing_display::should_emit_claude_thinking_pre(&msg, &s.claude_role);
-
-        // Task-first: resolve agent from task's provider binding
-        let task_resolved_agent = msg
-            .task_id
-            .as_deref()
-            .and_then(|tid| s.resolve_task_provider_agent(tid, &msg.to));
-
-        let claude_matches = match task_resolved_agent {
-            Some("claude") => true,
-            Some(_) => false,
-            None => s.claude_role == msg.to,
-        };
-        let codex_matches = match task_resolved_agent {
-            Some("codex") => true,
-            Some(_) => false,
-            None => s.codex_role == msg.to,
-        };
-
-        if !claude_matches && !codex_matches {
-            if crate::daemon::is_valid_agent_role(&msg.to) {
-                (Target::NeedBuffer, false)
-            } else {
-                return RouteOutcome {
-                    result: RouteResult::Dropped,
-                    emit_claude_thinking: false,
-                    buffer_reason: None,
-                };
-            }
-        } else {
-            // Sender gating: Claude only accepts user/system/current codex_role
-            if claude_matches
-                && msg.from != "user"
-                && msg.from != "system"
-                && msg.from != s.codex_role
-            {
-                return RouteOutcome {
-                    result: RouteResult::Dropped,
-                    emit_claude_thinking: false,
-                    buffer_reason: None,
-                };
-            }
-            // Collect online candidates for the target role.
-            // Task-local channels take priority when msg carries a task_id.
-            // Prefer Claude SDK WS over bridge for Claude delivery.
-            let task_id = msg.task_id.as_deref();
-            let claude_sdk_tx = if claude_matches && s.agent_matches_task_message("claude", &msg) {
-                task_id
-                    .and_then(|tid| s.claude_task_ws_tx(tid))
-                    .or_else(|| s.claude_sdk_ws_tx.clone())
-            } else {
-                None
-            };
-            let claude_tx = if claude_matches
-                && claude_sdk_tx.is_none()
-                && s.agent_matches_task_message("claude", &msg)
-            {
-                s.attached_agents.get("claude").map(|a| a.tx.clone())
-            } else {
-                None
-            };
-            let codex_tx = if codex_matches && s.agent_matches_task_message("codex", &msg) {
-                task_id
-                    .and_then(|tid| s.codex_task_inject_tx(tid))
-                    .or_else(|| s.codex_inject_tx.clone())
-            } else {
-                None
-            };
-
-            if let Some(tx) = claude_sdk_tx {
-                (Target::ClaudeSdk(tx), emit_claude_thinking)
-            } else if let Some(tx) = claude_tx {
-                (Target::Claude(tx), emit_claude_thinking)
-            } else if let Some(tx) = codex_tx {
-                let from_user = msg.from == "user";
-                (
-                    Target::Codex(tx, build_codex_input_items(&msg), from_user),
-                    false,
-                )
-            } else {
-                (Target::NeedBuffer, false)
-            }
-        }
+        resolve_broadcast_targets(&s, &msg)
     };
 
-    match target {
-        Target::Claude(tx) => {
-            if tx
-                .send(ToAgent::RoutedMessage {
-                    message: msg.clone(),
-                })
-                .await
-                .is_ok()
-            {
-                state.write().await.prepare_claude_response_turn();
-                RouteOutcome {
-                    result: RouteResult::Delivered,
-                    emit_claude_thinking,
-                    buffer_reason: None,
-                }
-            } else {
-                state.write().await.buffer_message(msg);
-                RouteOutcome {
-                    result: RouteResult::Buffered,
-                    emit_claude_thinking: false,
-                    buffer_reason: Some("target_agent_offline"),
-                }
-            }
-        }
-        Target::ClaudeSdk(tx) => {
-            let ndjson = format_ndjson_user_message(&msg).await;
-            if tx.send(ndjson).await.is_ok() {
-                state.write().await.prepare_claude_response_turn();
-                RouteOutcome {
-                    result: RouteResult::Delivered,
-                    emit_claude_thinking,
-                    buffer_reason: None,
-                }
-            } else {
-                state.write().await.buffer_message(msg);
-                RouteOutcome {
-                    result: RouteResult::Buffered,
-                    emit_claude_thinking: false,
-                    buffer_reason: Some("target_agent_offline"),
-                }
-            }
-        }
-        Target::Codex(tx, items, from_user) => {
-            if tx.send((items, from_user)).await.is_ok() {
-                RouteOutcome {
-                    result: RouteResult::Delivered,
-                    emit_claude_thinking: false,
-                    buffer_reason: None,
-                }
-            } else {
-                state.write().await.buffer_message(msg);
-                RouteOutcome {
-                    result: RouteResult::Buffered,
-                    emit_claude_thinking: false,
-                    buffer_reason: Some("target_agent_offline"),
-                }
-            }
-        }
-        Target::NeedBuffer => {
+    match resolution {
+        BroadcastResolution::Dropped => RouteOutcome {
+            result: RouteResult::Dropped,
+            emit_claude_thinking: false,
+            buffer_reason: None,
+        },
+        BroadcastResolution::NeedBuffer => {
             let buffer_reason = {
                 let daemon = state.read().await;
                 daemon.route_buffer_reason(&msg)
@@ -217,6 +73,198 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
                 emit_claude_thinking: false,
                 buffer_reason,
             }
+        }
+        BroadcastResolution::Targets {
+            claude_sdk,
+            claude_bridge,
+            codex,
+            emit_claude_thinking,
+        } => {
+            deliver_broadcast(state, msg, claude_sdk, claude_bridge, codex, emit_claude_thinking)
+                .await
+        }
+    }
+}
+
+// ── broadcast resolution ──────────────────────────────────────
+
+enum BroadcastResolution {
+    Dropped,
+    NeedBuffer,
+    Targets {
+        claude_sdk: Option<tokio::sync::mpsc::Sender<String>>,
+        claude_bridge: Option<tokio::sync::mpsc::Sender<ToAgent>>,
+        codex: Option<(
+            tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+            Vec<serde_json::Value>,
+            bool,
+        )>,
+        emit_claude_thinking: bool,
+    },
+}
+
+fn resolve_broadcast_targets(
+    s: &crate::daemon::state::DaemonState,
+    msg: &BridgeMessage,
+) -> BroadcastResolution {
+    let emit_claude_thinking =
+        routing_display::should_emit_claude_thinking_pre(msg, &s.claude_role);
+
+    // Task-first: resolve providers from task_agents[].
+    // Track whether task_agents (not singleton fallback) provided the resolution,
+    // so session matching is only skipped for the authoritative new model.
+    let (task_providers, task_agents_authoritative) = match msg.task_id.as_deref() {
+        Some(tid) => {
+            let has_agents = !s.task_graph.agents_for_task(tid).is_empty();
+            let providers = s.resolve_task_role_providers(tid, &msg.to);
+            (Some(providers), has_agents)
+        }
+        None => (None, false),
+    };
+
+    let (claude_matches, codex_matches) = match &task_providers {
+        Some(p) if !p.is_empty() => (p.contains(&"claude"), p.contains(&"codex")),
+        Some(_) if task_agents_authoritative => {
+            // task_agents exist but none match the role → buffer (AC4)
+            return BroadcastResolution::NeedBuffer;
+        }
+        Some(_) => {
+            // Legacy fallback returned empty → no agent for this role
+            return BroadcastResolution::NeedBuffer;
+        }
+        None => (s.claude_role == msg.to, s.codex_role == msg.to),
+    };
+
+    if !claude_matches && !codex_matches {
+        if crate::daemon::is_valid_agent_role(&msg.to) {
+            return BroadcastResolution::NeedBuffer;
+        }
+        return BroadcastResolution::Dropped;
+    }
+
+    // Sender gating: Claude only accepts user/system/current codex_role
+    let claude_sender_gated = claude_matches
+        && msg.from != "user"
+        && msg.from != "system"
+        && msg.from != s.codex_role;
+
+    if claude_sender_gated && !codex_matches {
+        return BroadcastResolution::Dropped;
+    }
+
+    let task_id = msg.task_id.as_deref();
+    // Only skip legacy session check when task_agents[] genuinely resolved the providers
+    let ta_resolved = task_agents_authoritative;
+
+    // Collect Claude channel (SDK preferred over bridge)
+    let (claude_sdk, claude_bridge) = if claude_matches
+        && !claude_sender_gated
+        && should_deliver_to_agent(s, "claude", msg, ta_resolved)
+    {
+        let sdk_tx = task_id
+            .and_then(|tid| s.claude_task_ws_tx(tid))
+            .or_else(|| s.claude_sdk_ws_tx.clone());
+        if sdk_tx.is_some() {
+            (sdk_tx, None)
+        } else {
+            (None, s.attached_agents.get("claude").map(|a| a.tx.clone()))
+        }
+    } else {
+        (None, None)
+    };
+
+    // Collect Codex channel
+    let codex = if codex_matches && should_deliver_to_agent(s, "codex", msg, ta_resolved) {
+        let tx = task_id
+            .and_then(|tid| s.codex_task_inject_tx(tid))
+            .or_else(|| s.codex_inject_tx.clone());
+        tx.map(|t| (t, build_codex_input_items(msg), msg.from == "user"))
+    } else {
+        None
+    };
+
+    if claude_sdk.is_none() && claude_bridge.is_none() && codex.is_none() {
+        return BroadcastResolution::NeedBuffer;
+    }
+
+    BroadcastResolution::Targets {
+        claude_sdk,
+        claude_bridge,
+        codex,
+        emit_claude_thinking,
+    }
+}
+
+/// When task_agents[] resolved the providers, the binding is authoritative
+/// and we skip the legacy per-message session check (which assumes singleton
+/// lead/coder session pointers). Otherwise we fall back to session matching.
+fn should_deliver_to_agent(
+    s: &crate::daemon::state::DaemonState,
+    agent: &str,
+    msg: &BridgeMessage,
+    task_agents_resolved: bool,
+) -> bool {
+    if task_agents_resolved {
+        return true;
+    }
+    s.agent_matches_task_message(agent, msg)
+}
+
+// ── broadcast delivery ────────────────────────────────────────
+
+async fn deliver_broadcast(
+    state: &SharedState,
+    msg: BridgeMessage,
+    claude_sdk: Option<tokio::sync::mpsc::Sender<String>>,
+    claude_bridge: Option<tokio::sync::mpsc::Sender<ToAgent>>,
+    codex: Option<(
+        tokio::sync::mpsc::Sender<(Vec<serde_json::Value>, bool)>,
+        Vec<serde_json::Value>,
+        bool,
+    )>,
+    emit_claude_thinking: bool,
+) -> RouteOutcome {
+    let mut any_delivered = false;
+
+    // Deliver to Claude (SDK preferred, then bridge)
+    if let Some(tx) = claude_sdk {
+        let ndjson = format_ndjson_user_message(&msg).await;
+        if tx.send(ndjson).await.is_ok() {
+            state.write().await.prepare_claude_response_turn();
+            any_delivered = true;
+        }
+    } else if let Some(tx) = claude_bridge {
+        if tx
+            .send(ToAgent::RoutedMessage {
+                message: msg.clone(),
+            })
+            .await
+            .is_ok()
+        {
+            state.write().await.prepare_claude_response_turn();
+            any_delivered = true;
+        }
+    }
+
+    // Deliver to Codex (independent of Claude — broadcast)
+    if let Some((tx, items, from_user)) = codex {
+        if tx.send((items, from_user)).await.is_ok() {
+            any_delivered = true;
+        }
+    }
+
+    if any_delivered {
+        RouteOutcome {
+            result: RouteResult::Delivered,
+            emit_claude_thinking,
+            buffer_reason: None,
+        }
+    } else {
+        state.write().await.buffer_message(msg);
+        RouteOutcome {
+            result: RouteResult::Buffered,
+            emit_claude_thinking: false,
+            buffer_reason: Some("target_agent_offline"),
         }
     }
 }
