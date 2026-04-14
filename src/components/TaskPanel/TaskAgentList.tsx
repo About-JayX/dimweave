@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
@@ -15,24 +15,35 @@ const PROVIDER_STYLES: Record<string, string> = {
 
 function AgentRow({
   agent,
-  isFirst,
-  isLast,
   onEdit,
   onRemove,
-  onMoveUp,
-  onMoveDown,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragOver,
 }: {
   agent: TaskAgentInfo;
-  isFirst: boolean;
-  isLast: boolean;
   onEdit: () => void;
   onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  isDragOver: boolean;
 }) {
   const providerStyle = PROVIDER_STYLES[agent.provider] ?? "border-border/40 bg-muted/20 text-muted-foreground";
   return (
-    <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/30">
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`group flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 transition-colors active:cursor-grabbing hover:bg-muted/30 ${isDragOver ? "border-t-2 border-primary/50" : ""}`}
+      data-testid="agent-row"
+    >
+      <GripVertical className="size-3 shrink-0 text-muted-foreground/40" />
       <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${providerStyle}`}>
         {agent.provider}
       </span>
@@ -43,16 +54,6 @@ function AgentRow({
         {agent.displayName ? agent.role : ""}
       </span>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        {!isFirst && (
-          <button type="button" onClick={onMoveUp} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Move up">
-            <ArrowUp className="size-3" />
-          </button>
-        )}
-        {!isLast && (
-          <button type="button" onClick={onMoveDown} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Move down">
-            <ArrowDown className="size-3" />
-          </button>
-        )}
         <button type="button" onClick={onEdit} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Edit">
           <Pencil className="size-3" />
         </button>
@@ -74,6 +75,8 @@ export function TaskAgentList() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<TaskAgentInfo | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleAdd = useCallback(() => {
     setEditingAgent(null);
@@ -90,25 +93,41 @@ export function TaskAgentList() {
     [removeTaskAgent],
   );
 
-  const handleMoveUp = useCallback(
-    (index: number) => {
-      if (!task || index <= 0) return;
+  const handleDragStart = useCallback(
+    (index: number, e: React.DragEvent) => {
+      dragIndexRef.current = index;
+      e.dataTransfer.effectAllowed = "move";
+    },
+    [],
+  );
+
+  const handleDragOver = useCallback(
+    (index: number, e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOverIndex(index);
+    },
+    [],
+  );
+
+  const handleDrop = useCallback(
+    (targetIndex: number) => {
+      const sourceIndex = dragIndexRef.current;
+      if (sourceIndex === null || sourceIndex === targetIndex || !task) return;
       const ids = agents.map((a) => a.agentId);
-      [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
+      const [moved] = ids.splice(sourceIndex, 1);
+      ids.splice(targetIndex, 0, moved);
       void reorderTaskAgents(task.taskId, ids);
+      dragIndexRef.current = null;
+      setDragOverIndex(null);
     },
     [agents, reorderTaskAgents, task],
   );
 
-  const handleMoveDown = useCallback(
-    (index: number) => {
-      if (!task || index >= agents.length - 1) return;
-      const ids = agents.map((a) => a.agentId);
-      [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]];
-      void reorderTaskAgents(task.taskId, ids);
-    },
-    [agents, reorderTaskAgents, task],
-  );
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  }, []);
 
   const handleEditorSubmit = useCallback(
     (payload: AgentEditorPayload) => {
@@ -139,6 +158,7 @@ export function TaskAgentList() {
           type="button"
           onClick={handleAdd}
           className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          data-testid="add-agent-btn"
         >
           <Plus className="size-3" />
           Add
@@ -154,12 +174,13 @@ export function TaskAgentList() {
             <AgentRow
               key={agent.agentId}
               agent={agent}
-              isFirst={i === 0}
-              isLast={i === agents.length - 1}
               onEdit={() => handleEdit(agent)}
               onRemove={() => handleRemove(agent.agentId)}
-              onMoveUp={() => handleMoveUp(i)}
-              onMoveDown={() => handleMoveDown(i)}
+              onDragStart={(e) => handleDragStart(i, e)}
+              onDragOver={(e) => handleDragOver(i, e)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
+              isDragOver={dragOverIndex === i}
             />
           ))}
         </div>

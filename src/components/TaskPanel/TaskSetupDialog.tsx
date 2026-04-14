@@ -1,81 +1,81 @@
 import { useState, useEffect, useCallback } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { AgentDraftConfig } from "@/components/AgentStatus/provider-session-view-model";
-import { useBridgeStore } from "@/stores/bridge-store";
 import type { Provider } from "@/stores/task-store/types";
 
-export type TaskSetupMode = "create" | "edit";
+export interface AgentDef {
+  provider: Provider;
+  role: string;
+}
 
 export interface TaskSetupSubmitPayload {
-  leadProvider: Provider;
-  coderProvider: Provider;
+  agents: AgentDef[];
   claudeConfig: AgentDraftConfig | null;
   codexConfig: AgentDraftConfig | null;
-  claudeRole: string;
-  codexRole: string;
   requestLaunch: boolean;
 }
 
 interface TaskSetupDialogProps {
-  mode: TaskSetupMode;
   workspace: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: TaskSetupSubmitPayload) => void;
-  initialLeadProvider?: Provider;
-  initialCoderProvider?: Provider;
 }
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
+const DEFAULT_AGENTS: AgentDef[] = [
+  { provider: "claude", role: "lead" },
+  { provider: "codex", role: "coder" },
+];
 
-function ProviderSelect({
-  label,
-  value,
+function AgentDefRow({
+  def,
   onChange,
+  onRemove,
 }: {
-  label: string;
-  value: Provider;
-  onChange: (v: Provider) => void;
+  def: AgentDef;
+  onChange: (updated: AgentDef) => void;
+  onRemove: () => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="flex items-center gap-2">
       <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as Provider)}
+        value={def.provider}
+        onChange={(e) => onChange({ ...def, provider: e.target.value as Provider })}
         className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
       >
         {PROVIDERS.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
+          <option key={p} value={p}>{p}</option>
         ))}
       </select>
-    </label>
+      <input
+        type="text"
+        value={def.role}
+        onChange={(e) => onChange({ ...def, role: e.target.value })}
+        placeholder="role"
+        className="min-w-0 flex-1 rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40"
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400"
+      >
+        <Trash2 className="size-3" />
+      </button>
+    </div>
   );
 }
 
 export function TaskSetupDialog({
-  mode,
   workspace,
   open,
   onOpenChange,
   onSubmit,
-  initialLeadProvider = "claude",
-  initialCoderProvider = "codex",
 }: TaskSetupDialogProps) {
-  const [leadProvider, setLeadProvider] =
-    useState<Provider>(initialLeadProvider);
-  const [coderProvider, setCoderProvider] =
-    useState<Provider>(initialCoderProvider);
-  const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(
-    null,
-  );
+  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(DEFAULT_AGENTS);
+  const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(null);
   const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
-  const initClaudeRole = useBridgeStore((s) => s.claudeRole);
-  const initCodexRole = useBridgeStore((s) => s.codexRole);
-  const [draftClaudeRole, setDraftClaudeRole] = useState(initClaudeRole);
-  const [draftCodexRole, setDraftCodexRole] = useState(initCodexRole);
 
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -90,18 +90,27 @@ export function TaskSetupDialog({
 
   if (!open) return null;
 
-  const heading = mode === "create" ? "New Task" : "Edit Task";
-  const submitLabel = mode === "create" ? "Create" : "Save";
-  const draftMode = mode === "create";
+  const updateDef = (index: number, updated: AgentDef) => {
+    setAgentDefs((prev) => prev.map((d, i) => (i === index ? updated : d)));
+  };
+  const removeDef = (index: number) => {
+    setAgentDefs((prev) => prev.filter((_, i) => i !== index));
+  };
+  const addDef = () => {
+    setAgentDefs((prev) => [...prev, { provider: "claude", role: "" }]);
+  };
+
+  const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
+  const hasClaude = validAgents.some((a) => a.provider === "claude");
+  const hasCodex = validAgents.some((a) => a.provider === "codex");
+  const draftLeadProvider: Provider = validAgents[0]?.provider ?? "claude";
+  const draftCoderProvider: Provider = validAgents[1]?.provider ?? validAgents[0]?.provider ?? "codex";
 
   const submit = (launch: boolean) => {
     onSubmit({
-      leadProvider,
-      coderProvider,
+      agents: validAgents,
       claudeConfig,
       codexConfig,
-      claudeRole: draftClaudeRole,
-      codexRole: draftCodexRole,
       requestLaunch: launch,
     });
     onOpenChange(false);
@@ -118,19 +127,28 @@ export function TaskSetupDialog({
         aria-modal="true"
         className="relative z-10 w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-xl border border-border/50 bg-card p-4 shadow-xl space-y-3"
       >
-        <h3 className="text-sm font-semibold text-foreground">{heading}</h3>
+        <h3 className="text-sm font-semibold text-foreground">New Task</h3>
 
         <div className="space-y-2">
-          <ProviderSelect
-            label="Lead provider"
-            value={leadProvider}
-            onChange={setLeadProvider}
-          />
-          <ProviderSelect
-            label="Coder provider"
-            value={coderProvider}
-            onChange={setCoderProvider}
-          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Agents</span>
+            <button
+              type="button"
+              onClick={addDef}
+              className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Plus className="size-3" />
+              Add
+            </button>
+          </div>
+          {agentDefs.map((def, i) => (
+            <AgentDefRow
+              key={i}
+              def={def}
+              onChange={(u) => updateDef(i, u)}
+              onRemove={() => removeDef(i)}
+            />
+          ))}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
@@ -141,35 +159,31 @@ export function TaskSetupDialog({
           >
             Cancel
           </button>
-          {draftMode && (
-            <button
-              type="button"
-              onClick={() => submit(true)}
-              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-            >
-              Create &amp; Connect
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => submit(true)}
+            disabled={validAgents.length === 0}
+            className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+          >
+            Create &amp; Connect
+          </button>
           <button
             type="button"
             onClick={() => submit(false)}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            disabled={validAgents.length === 0}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
           >
-            {submitLabel}
+            Create
           </button>
         </div>
 
         <AgentStatusPanel
           workspace={workspace}
-          draftMode={draftMode}
-          draftLeadProvider={leadProvider}
-          draftCoderProvider={coderProvider}
-          onClaudeDraftChange={setClaudeConfig}
-          onCodexDraftChange={setCodexConfig}
-          draftClaudeRole={draftMode ? draftClaudeRole : undefined}
-          draftCodexRole={draftMode ? draftCodexRole : undefined}
-          onDraftClaudeRoleChange={draftMode ? setDraftClaudeRole : undefined}
-          onDraftCodexRoleChange={draftMode ? setDraftCodexRole : undefined}
+          draftMode
+          draftLeadProvider={draftLeadProvider}
+          draftCoderProvider={draftCoderProvider}
+          onClaudeDraftChange={hasClaude ? setClaudeConfig : undefined}
+          onCodexDraftChange={hasCodex ? setCodexConfig : undefined}
         />
       </div>
     </div>

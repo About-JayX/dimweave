@@ -1,6 +1,46 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+// Stub Tauri internals — TaskHeader now uses useTaskStore
+let callbackId = 0;
+Object.assign(globalThis, {
+  window: {
+    __TAURI_INTERNALS__: {
+      transformCallback: () => ++callbackId,
+      unregisterCallback: () => {},
+      invoke: async (cmd: string) => {
+        if (cmd === "plugin:event|listen") return callbackId;
+        if (cmd === "daemon_get_status_snapshot") {
+          return { agents: [], claudeRole: "lead", codexRole: "coder" };
+        }
+        if (cmd === "daemon_get_task_snapshot") return null;
+        if (cmd === "codex_list_models") return [];
+        if (cmd === "codex_get_profile") return null;
+        return null;
+      },
+    },
+    __TAURI_EVENT_PLUGIN_INTERNALS__: {
+      unregisterListener: () => {},
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    innerWidth: 800,
+  },
+  document: {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  },
+  localStorage: {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    key: () => null,
+    length: 0,
+  },
+});
+
 import { TaskHeader } from "./TaskHeader";
 
 const baseTask = {
@@ -8,6 +48,8 @@ const baseTask = {
   title: "Fix routing bug",
   workspaceRoot: "/repo",
   status: "implementing" as const,
+  leadProvider: "claude" as const,
+  coderProvider: "codex" as const,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -30,17 +72,8 @@ describe("TaskHeader", () => {
         reviewBadge: { label: "Review", tone: "warning" },
       }),
     );
-    // Both status badge and review badge should appear
     expect(html).toContain("Review");
-    // amber styles indicate review badge tone
     expect(html).toContain("amber");
-  });
-
-  test("renders an edit-task button", () => {
-    const html = renderToStaticMarkup(
-      createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
-    );
-    expect(html).toContain("Edit task");
   });
 
   test("does not render review badge when absent", () => {
@@ -50,10 +83,16 @@ describe("TaskHeader", () => {
         reviewBadge: null,
       }),
     );
-    // No explicit review badge — only status label present
     expect(html).toContain("In progress");
-    // review badge label not present
     expect(html).not.toContain("Pending Review");
     expect(html).not.toContain("Pending Approval");
+  });
+
+  test("shows fallback provider badges when no task agents configured", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain("lead:");
+    expect(html).toContain("coder:");
   });
 });

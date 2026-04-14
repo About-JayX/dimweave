@@ -16,7 +16,6 @@ import { TaskAgentList } from "./TaskAgentList";
 import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   TaskSetupDialog,
-  type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
 import { useArtifactDetail } from "./use-artifact-detail";
@@ -32,11 +31,10 @@ export function TaskPanel() {
   const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
   const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
-  const createConfiguredTask = useTaskStore((s) => s.createConfiguredTask);
-  const updateTaskConfig = useTaskStore((s) => s.updateTaskConfig);
+  const createTask = useTaskStore((s) => s.createTask);
+  const addTaskAgent = useTaskStore((s) => s.addTaskAgent);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const sessionRows = useMemo(
     () => buildSessionTreeRows(taskSessions, task),
     [task, taskSessions],
@@ -62,59 +60,49 @@ export function TaskPanel() {
 
   const handleSetupSubmit = useCallback(
     async (payload: TaskSetupSubmitPayload) => {
-      if (dialogMode === "create" && selectedWorkspace) {
-        try {
-          const newTask = await createConfiguredTask(selectedWorkspace, "", {
-            leadProvider: payload.leadProvider,
-            coderProvider: payload.coderProvider,
-          });
-          if (payload.requestLaunch) {
-            const tid = newTask.taskId;
-            const cwd = selectedWorkspace;
-            await invoke("daemon_set_claude_role", { role: payload.claudeRole });
-            await invoke("daemon_set_codex_role", { role: payload.codexRole });
-            const wantsClaude = payload.leadProvider === "claude" || payload.coderProvider === "claude";
-            const wantsCodex = payload.leadProvider === "codex" || payload.coderProvider === "codex";
-            const cc = wantsClaude ? payload.claudeConfig : null;
-            if (cc) {
-              const a = cc.historyAction;
-              if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-              else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
-                claudeRole: payload.claudeRole, cwd, model: cc.model, effort: cc.effort,
-                resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
-                taskId: tid,
-              }));
-            }
-            const cx = wantsCodex ? payload.codexConfig : null;
-            if (cx) {
-              const a = cx.historyAction;
-              if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-              else await applyConfig(buildCodexLaunchConfig({
-                model: cx.model, reasoningEffort: cx.effort, cwd,
-                resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined,
-                taskId: tid,
-              }));
-            }
-          }
-        } catch {
-          /* task creation or launch error — UI updates via store */
+      if (!selectedWorkspace) return;
+      try {
+        const newTask = await createTask(selectedWorkspace, "");
+        const tid = newTask.taskId;
+        for (const def of payload.agents) {
+          await addTaskAgent(tid, def.provider, def.role);
         }
-      } else if (dialogMode === "edit" && task) {
-        void updateTaskConfig(task.taskId, {
-          leadProvider: payload.leadProvider,
-          coderProvider: payload.coderProvider,
-        });
+        if (payload.requestLaunch) {
+          const cwd = selectedWorkspace;
+          const claudeAgent = payload.agents.find((a) => a.provider === "claude");
+          const codexAgent = payload.agents.find((a) => a.provider === "codex");
+          if (claudeAgent) {
+            await invoke("daemon_set_claude_role", { role: claudeAgent.role });
+          }
+          if (codexAgent) {
+            await invoke("daemon_set_codex_role", { role: codexAgent.role });
+          }
+          const cc = claudeAgent ? payload.claudeConfig : null;
+          if (cc) {
+            const a = cc.historyAction;
+            if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+            else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
+              claudeRole: claudeAgent!.role, cwd, model: cc.model, effort: cc.effort,
+              resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
+              taskId: tid,
+            }));
+          }
+          const cx = codexAgent ? payload.codexConfig : null;
+          if (cx) {
+            const a = cx.historyAction;
+            if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+            else await applyConfig(buildCodexLaunchConfig({
+              model: cx.model, reasoningEffort: cx.effort, cwd,
+              resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined,
+              taskId: tid,
+            }));
+          }
+        }
+      } catch {
+        /* task creation or launch error — UI updates via store */
       }
     },
-    [
-      applyConfig,
-      createConfiguredTask,
-      dialogMode,
-      resumeSession,
-      selectedWorkspace,
-      task,
-      updateTaskConfig,
-    ],
+    [addTaskAgent, applyConfig, createTask, resumeSession, selectedWorkspace],
   );
 
   const reviewBadge: ReviewBadge | null =
@@ -129,10 +117,7 @@ export function TaskPanel() {
         {selectedWorkspace && !dialogOpen && (
           <button
             type="button"
-            onClick={() => {
-              setDialogMode("create");
-              setDialogOpen(true);
-            }}
+            onClick={() => setDialogOpen(true)}
             className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/10"
           >
             <Plus className="size-3.5" />
@@ -141,7 +126,6 @@ export function TaskPanel() {
         )}
         {dialogOpen && selectedWorkspace && (
           <TaskSetupDialog
-            mode="create"
             workspace={selectedWorkspace}
             open={dialogOpen}
             onOpenChange={setDialogOpen}
@@ -154,25 +138,7 @@ export function TaskPanel() {
 
   return (
     <div className="space-y-3">
-      <TaskHeader
-        task={task}
-        reviewBadge={reviewBadge}
-        onEditTask={() => {
-          setDialogMode("edit");
-          setDialogOpen(true);
-        }}
-      />
-      {dialogOpen && (
-        <TaskSetupDialog
-          mode="edit"
-          workspace={task.workspaceRoot}
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          onSubmit={handleSetupSubmit}
-          initialLeadProvider={task.leadProvider}
-          initialCoderProvider={task.coderProvider}
-        />
-      )}
+      <TaskHeader task={task} reviewBadge={reviewBadge} />
       <TaskAgentList />
       <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
         <SessionTree rows={sessionRows} onResume={handleResume} />

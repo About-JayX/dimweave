@@ -41,11 +41,10 @@ Object.assign(globalThis, {
 });
 
 describe("TaskSetupDialog", () => {
-  test("renders create-mode modal with provider selectors and agent panels", async () => {
+  test("renders create-mode modal with agent defs and action buttons", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
-        mode="create"
         workspace="/repo"
         open={true}
         onOpenChange={() => {}}
@@ -53,41 +52,34 @@ describe("TaskSetupDialog", () => {
       />,
     );
     expect(html).toContain("New Task");
-    expect(html).toContain("Lead provider");
-    expect(html).toContain("Coder provider");
+    expect(html).toContain("Agents");
     expect(html).toContain("Create");
     expect(html).toContain("Create &amp; Connect");
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
-    expect(html).toContain("Runtime control");
   });
 
-  test("renders edit-mode modal without Create & Connect", async () => {
+  test("renders default agent defs (claude lead + codex coder)", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
-        mode="edit"
         workspace="/repo"
         open={true}
         onOpenChange={() => {}}
         onSubmit={() => {}}
-        initialLeadProvider="codex"
-        initialCoderProvider="claude"
       />,
     );
-    expect(html).toContain("Edit Task");
-    expect(html).toContain("Save");
-    expect(html).toContain("Lead provider");
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain("Runtime control");
-    expect(html).not.toContain("Create &amp; Connect");
+    // Default agents render as select+input rows
+    expect(html).toContain("claude");
+    expect(html).toContain("codex");
+    expect(html).toContain("lead");
+    expect(html).toContain("coder");
   });
 
   test("does not render content when closed", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog
-        mode="create"
         workspace="/repo"
         open={false}
         onOpenChange={() => {}}
@@ -95,29 +87,27 @@ describe("TaskSetupDialog", () => {
       />,
     );
     expect(html).not.toContain("New Task");
-    expect(html).not.toContain("Lead provider");
+    expect(html).not.toContain("Agents");
     expect(html).not.toContain('role="dialog"');
   });
 
-  test("submit payload includes agent draft config slots", async () => {
+  test("submit payload uses agent array model", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
 
     const html = renderToStaticMarkup(
       <TaskSetupDialog
-        mode="create"
         workspace="/repo"
         open={true}
         onOpenChange={() => {}}
         onSubmit={() => {}}
       />,
     );
+    // AgentStatusPanel still renders inside the dialog
     expect(html).toContain("Runtime control");
-    expect(html).toContain("Providers");
   });
 
-  test("create-mode role selection is dialog-local, not global store", async () => {
+  test("create-mode agent defs are dialog-local, not global store", async () => {
     // Rendering create-mode must NOT invoke daemon_set_*_role commands.
-    // Roles live in dialog useState; cancel discards them without side effects.
     const roleCmds: string[] = [];
     const orig = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
     (globalThis as any).window.__TAURI_INTERNALS__.invoke = async (cmd: string, ...rest: any[]) => {
@@ -128,7 +118,7 @@ describe("TaskSetupDialog", () => {
     try {
       const { TaskSetupDialog } = await import("./TaskSetupDialog");
       renderToStaticMarkup(
-        <TaskSetupDialog mode="create" workspace="/repo" open={true}
+        <TaskSetupDialog workspace="/repo" open={true}
           onOpenChange={() => {}} onSubmit={() => {}} />,
       );
       expect(roleCmds).toEqual([]);
@@ -137,40 +127,33 @@ describe("TaskSetupDialog", () => {
     }
   });
 
-  test("submit payload includes both claude and codex draft roles", async () => {
-    // Both roles flow through dialog-local state into the payload.
-    // CodexHeader must wire draftRole/onDraftChange into RoleSelect
-    // so the Codex role is captured alongside the Claude role.
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="create" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
-    );
-    // Both Claude and Codex role selects render (stub: lead + coder)
-    // Each CyberSelect trigger shows the current role label in a span
-    expect(html).toContain("Coder"); // Codex role select value
-    // Payload shape proof: construct matching TaskSetupSubmitPayload
-    const p = {
-      leadProvider: "claude" as const, coderProvider: "codex" as const,
-      claudeConfig: null, codexConfig: null,
-      claudeRole: "coder", codexRole: "lead", requestLaunch: true,
-    };
-    expect(p).toHaveProperty("codexRole", "lead");
-  });
-
-  test("launch gate: only providers bound to task bindings are selected", () => {
+  test("launch gate: agent array determines which providers are launched", () => {
     // Mirrors the gating logic in TaskPanel handleSetupSubmit
-    const cases: { lead: string; coder: string; expectClaude: boolean; expectCodex: boolean }[] = [
-      { lead: "claude", coder: "codex", expectClaude: true, expectCodex: true },
-      { lead: "claude", coder: "claude", expectClaude: true, expectCodex: false },
-      { lead: "codex", coder: "codex", expectClaude: false, expectCodex: true },
-      { lead: "codex", coder: "claude", expectClaude: true, expectCodex: true },
+    type AgentDef = { provider: string; role: string };
+    const cases: { agents: AgentDef[]; expectClaude: boolean; expectCodex: boolean }[] = [
+      { agents: [{ provider: "claude", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: true, expectCodex: true },
+      { agents: [{ provider: "claude", role: "lead" }, { provider: "claude", role: "coder" }], expectClaude: true, expectCodex: false },
+      { agents: [{ provider: "codex", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: false, expectCodex: true },
+      { agents: [{ provider: "codex", role: "lead" }, { provider: "claude", role: "coder" }], expectClaude: true, expectCodex: true },
     ];
     for (const c of cases) {
-      const wantsClaude = c.lead === "claude" || c.coder === "claude";
-      const wantsCodex = c.lead === "codex" || c.coder === "codex";
+      const wantsClaude = c.agents.some((a) => a.provider === "claude");
+      const wantsCodex = c.agents.some((a) => a.provider === "codex");
       expect(wantsClaude).toBe(c.expectClaude);
       expect(wantsCodex).toBe(c.expectCodex);
     }
+  });
+
+  test("add button renders for adding more agent defs", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
+    );
+    expect(html).toContain("Add");
   });
 });

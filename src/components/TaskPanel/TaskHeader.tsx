@@ -1,4 +1,3 @@
-import { Settings2 } from "lucide-react";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTaskAgents,
@@ -56,11 +55,9 @@ function SaveIndicator() {
 export function TaskHeader({
   task,
   reviewBadge,
-  onEditTask,
 }: {
   task: TaskInfo;
   reviewBadge?: ReviewBadge | null;
-  onEditTask?: () => void;
 }) {
   const summary = useTaskStore(selectProviderSummary);
   const agents = useTaskStore(selectActiveTaskAgents);
@@ -110,16 +107,6 @@ export function TaskHeader({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <div className="flex items-center gap-1.5">
-            {onEditTask && (
-              <button
-                type="button"
-                onClick={onEditTask}
-                className="inline-flex items-center gap-1 rounded-full border border-border/40 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Settings2 className="size-3" />
-                Edit task
-              </button>
-            )}
             <div
               className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUS_STYLES[task.status] ?? "border-zinc-500/50 bg-zinc-500/10 text-zinc-400"}`}
             >
