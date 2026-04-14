@@ -76,18 +76,28 @@ describe("TaskHeader", () => {
     expect(html).not.toContain("coder:");
   });
 
-  test("renders edit-task button when onEditTask is provided", () => {
+  test("renders icon-only edit affordance when onEditTask is provided", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
     );
-    expect(html).toContain("Edit task");
+    // icon-only: button carries a data marker and tooltip, no visible text label
+    expect(html).toContain('data-edit-icon="true"');
+    expect(html).toContain('title="Edit task"');
+    expect(html).toContain('aria-label="Edit task"');
   });
 
-  test("does not render edit-task button when onEditTask is absent", () => {
+  test("does not render edit affordance when onEditTask is absent", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask }),
     );
-    expect(html).not.toContain("Edit task");
+    expect(html).not.toContain('data-edit-icon="true"');
+  });
+
+  test("status chip has compact lower-right placement marker", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain('data-task-status="true"');
   });
 });
 
@@ -107,11 +117,11 @@ describe("card-only selection contract", () => {
     expect(html).not.toContain('role="button"');
   });
 
-  test("Edit task button is reachable on the active card", () => {
+  test("Edit icon is reachable on the active card via data marker", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask, onEditTask: () => {} }),
     );
-    expect(html).toContain("Edit task");
+    expect(html).toContain('data-edit-icon="true"');
     expect(html).toContain("<button");
   });
 });

@@ -21,7 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  draft: "border-zinc-500/50 bg-zinc-500/10 text-zinc-400",
+  draft: "border-zinc-500/40 bg-zinc-500/8 text-zinc-500",
   planning: "border-sky-500/50 bg-sky-500/15 text-sky-300",
   implementing: "border-indigo-500/50 bg-indigo-500/15 text-indigo-300",
   reviewing: "border-amber-500/50 bg-amber-500/15 text-amber-300",
@@ -51,6 +51,17 @@ function SaveIndicator() {
   );
 }
 
+function StatusChip({ status }: { status: string }) {
+  return (
+    <span
+      data-task-status="true"
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_STYLES[status] ?? "border-zinc-500/40 bg-zinc-500/8 text-zinc-500"}`}
+    >
+      {STATUS_LABELS[status] ?? status}
+    </span>
+  );
+}
+
 export function TaskHeader({
   task,
   reviewBadge,
@@ -75,6 +86,7 @@ export function TaskHeader({
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
     >
+      {/* Main row: task info left, edit icon (non-collapsed) or status (collapsed) right */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="truncate text-sm font-semibold text-foreground">
@@ -109,34 +121,35 @@ export function TaskHeader({
             </div>
           )}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUS_STYLES[task.status] ?? "border-zinc-500/50 bg-zinc-500/10 text-zinc-400"}`}
+        {/* Upper-right: icon-only edit button (non-collapsed) or compact status (collapsed) */}
+        {showDetail ? (
+          onEditTask ? (
+            <button
+              type="button"
+              data-edit-icon="true"
+              onClick={(e) => { e.stopPropagation(); onEditTask(); }}
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title="Edit task"
+              aria-label="Edit task"
             >
-              {STATUS_LABELS[task.status] ?? task.status}
-            </div>
-          </div>
-          {showDetail && reviewBadge && (
-            <span
-              className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${REVIEW_TONE_STYLES[reviewBadge.tone]}`}
-            >
+              <Settings2 className="size-3.5" />
+            </button>
+          ) : null
+        ) : (
+          <StatusChip status={task.status} />
+        )}
+      </div>
+      {/* Footer row: review badge + compact status chip anchored lower-right (non-collapsed) */}
+      {showDetail && (
+        <div className="mt-2 flex items-center justify-end gap-2">
+          {reviewBadge && (
+            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${REVIEW_TONE_STYLES[reviewBadge.tone]}`}>
               {reviewBadge.label}
             </span>
           )}
-          {showDetail && onEditTask && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onEditTask(); }}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title="Edit task"
-            >
-              <Settings2 className="size-3" />
-              Edit task
-            </button>
-          )}
+          <StatusChip status={task.status} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
