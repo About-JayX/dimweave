@@ -1061,3 +1061,92 @@ describe("active-task expansion (accordion sync)", () => {
     expect(list[0].taskId === state.activeTaskId).toBe(false);
   });
 });
+
+// ── multi-task creation list persistence ────────────────────
+
+describe("multi-task creation list persistence", () => {
+  test("startWorkspaceTask preserves prior task in same workspace", async () => {
+    const t1 = { ...makeTask("t1", "First"), workspaceRoot: "/ws" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const t2 = { ...makeTask("t2", "Second"), workspaceRoot: "/ws", createdAt: 200 };
+    const start = createStartWorkspaceTaskAction(set as any, async () => t2);
+    await start("/ws");
+
+    expect(state.tasks.t1?.title).toBe("First");
+    expect(state.tasks.t2?.title).toBe("Second");
+    expect(state.activeTaskId).toBe("t2");
+  });
+
+  test("configuredTask preserves prior task in same workspace", async () => {
+    const t1 = { ...makeTask("t1", "Old"), workspaceRoot: "/ws" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const t2 = { ...makeTask("t2", "New"), workspaceRoot: "/ws", createdAt: 200 };
+    const create = createConfiguredTaskAction(set as any, async () => t2);
+    await create("/ws", "New", { leadProvider: "claude", coderProvider: "codex" });
+
+    expect(Object.keys(state.tasks)).toHaveLength(2);
+    expect(state.tasks.t1?.title).toBe("Old");
+    expect(state.activeTaskId).toBe("t2");
+  });
+
+  test("workspace task list contains both tasks after creation", async () => {
+    const t1 = { ...makeTask("t1", "First"), workspaceRoot: "/ws", createdAt: 100 };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const t2 = { ...makeTask("t2", "Second"), workspaceRoot: "/ws", createdAt: 200 };
+    const start = createStartWorkspaceTaskAction(set as any, async () => t2);
+    await start("/ws");
+
+    const list = selectWorkspaceTasks(state as unknown as TaskStoreState);
+    expect(list).toHaveLength(2);
+    expect(list[0].taskId).toBe("t2");
+    expect(list[1].taskId).toBe("t1");
+  });
+
+  test("newly created task is the expanded item in accordion", async () => {
+    const t1 = { ...makeTask("t1"), workspaceRoot: "/ws", createdAt: 100 };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const t2 = { ...makeTask("t2"), workspaceRoot: "/ws", createdAt: 200 };
+    const start = createStartWorkspaceTaskAction(set as any, async () => t2);
+    await start("/ws");
+
+    const list = selectWorkspaceTasks(state as unknown as TaskStoreState);
+    const expanded = list.filter((t) => t.taskId === state.activeTaskId);
+    expect(expanded).toHaveLength(1);
+    expect(expanded[0].taskId).toBe("t2");
+    const collapsed = list.filter((t) => t.taskId !== state.activeTaskId);
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0].taskId).toBe("t1");
+  });
+});
