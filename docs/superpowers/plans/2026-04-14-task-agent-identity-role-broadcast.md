@@ -110,7 +110,63 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `git diff --check`
 
-## Task 2: Rewire daemon routing and runtime ownership to `agent_id`
+## Plan Revision 4 — 2026-04-14
+
+**Reason:** Review of the first attempt at Task 2 proved that role-broadcast routing cannot be correct while runtime ownership still collapses to provider names (`"claude"` / `"codex"`). The remaining work must first establish backend agent runtime ownership by `agent_id`, then rewire routing/snapshots on top of that.
+
+**Superseded tasks:**
+
+- The original Task 2, Task 3, Task 4, and Task 5 sections below this point are superseded.
+- Execute the revised Task 2 through revised Task 6 sections that follow.
+
+## Revised Task 2: Introduce backend `agent_id` runtime ownership
+
+**task_id:** `agent-runtime-ownership-by-id`
+
+**Acceptance criteria:**
+
+- Live provider/session ownership resolves to concrete `agent_id`, not singleton provider names.
+- Session/runtime structures can represent multiple agents of the same provider inside one task.
+- Launch/resume flows bind runtime state to a specific `agent_id`.
+- Provider-originated events can resolve the owning `agent_id` without using singleton task slots as primary truth.
+- Same-provider multi-agent scenarios no longer collapse into one ownership slot.
+
+**allowed_files:**
+
+- `src-tauri/src/daemon/task_graph/types.rs`
+- `src-tauri/src/daemon/task_graph/store.rs`
+- `src-tauri/src/daemon/task_graph/persist.rs`
+- `src-tauri/src/daemon/task_graph/tests.rs`
+- `src-tauri/src/daemon/task_runtime.rs`
+- `src-tauri/src/daemon/state.rs`
+- `src-tauri/src/daemon/state_runtime.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/launch_task_sync.rs`
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
+- `src-tauri/src/daemon/claude_sdk/mod.rs`
+- `src-tauri/src/daemon/claude_sdk/reconnect.rs`
+- `src-tauri/src/daemon/control/claude_sdk_handler.rs`
+- `src-tauri/src/daemon/codex/mod.rs`
+- `src-tauri/src/daemon/codex/runtime.rs`
+- `src-tauri/src/daemon/codex/session.rs`
+- `src-tauri/src/daemon/provider/claude.rs`
+- `src-tauri/src/daemon/provider/codex.rs`
+- `src-tauri/src/daemon/state_tests.rs`
+
+**max_files_changed:** `20`
+**max_added_loc:** `880`
+**max_deleted_loc:** `280`
+
+**verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml agent_runtime_ownership -- --nocapture`
+- `git diff --check`
+
+## Revised Task 3: Route and snapshot by `agent_id` and role broadcast
 
 **task_id:** `agent-id-routing-and-broadcast`
 
@@ -142,10 +198,13 @@
 - `src-tauri/src/daemon/routing_tests.rs`
 - `src-tauri/src/daemon/routing_shared_role_tests.rs`
 - `src-tauri/src/daemon/routing_user_target_tests.rs`
+- `src-tauri/src/daemon/types.rs`
+- `src-tauri/src/daemon/types_dto.rs`
+- `src-tauri/src/daemon/types_tests.rs`
 
-**max_files_changed:** `18`
-**max_added_loc:** `760`
-**max_deleted_loc:** `260`
+**max_files_changed:** `21`
+**max_added_loc:** `900`
+**max_deleted_loc:** `320`
 
 **verification_commands:**
 
@@ -153,9 +212,10 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_shared_role_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing_user_target_tests:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml agent_id_routing -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `git diff --check`
 
-## Task 3: Replace frontend singleton task bindings with task-agent collections
+## Revised Task 4: Replace frontend singleton task bindings with task-agent collections
 
 **task_id:** `frontend-task-agents-state`
 
@@ -192,7 +252,7 @@
 - `bun run build`
 - `git diff --check`
 
-## Task 4: Rebuild task pane agent management around `task_agents[]`
+## Revised Task 5: Rebuild task pane agent management around `task_agents[]`
 
 **task_id:** `task-pane-agent-list-and-dialog`
 
@@ -248,7 +308,7 @@
 - `bun run build`
 - `git diff --check`
 
-## Task 5: Final integration, supersession docs, and regression guard
+## Revised Task 6: Final integration, supersession docs, and regression guard
 
 **task_id:** `agent-identity-final-integration`
 
@@ -285,8 +345,9 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | `caae718f` | Introduced persisted `TaskAgent` with stable internal ids, added store CRUD plus deterministic legacy migration from singleton task slots, persisted `task_agents` in snapshots with backward-compatible load migration, and exposed `task_agents` on `TaskSnapshot` DTOs. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 43 passed; `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
+| Task 1 | `caae718f`, `faa4d78f` | Introduced persisted `TaskAgent` with stable internal ids, added store CRUD plus deterministic legacy migration from singleton task slots, persisted `task_agents` in snapshots with backward-compatible load migration, and exposed `task_agents` on `TaskSnapshot` DTOs. Follow-up `faa4d78f` tightened migration so legacy tasks derive zero/one/two agents from actual session occupancy evidence instead of default slot fields. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 45 passed; `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | _pending_ | _pending_ | pending |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
 | Task 5 | _pending_ | _pending_ | _pending_ | pending |
+| Task 6 | _pending_ | _pending_ | _pending_ | pending |
