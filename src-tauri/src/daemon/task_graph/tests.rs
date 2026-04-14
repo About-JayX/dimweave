@@ -602,9 +602,28 @@ fn task_agent_serialization_round_trip() {
 // ── Legacy Migration ───────────────────────────────────────
 
 #[test]
-fn migrate_legacy_agents_creates_two_agents_from_singleton_fields() {
+fn migrate_legacy_agents_creates_two_agents_when_both_sessions_exist() {
     let mut store = TaskGraphStore::new();
     let task = store.create_task_with_config("/ws", "Migrate", Provider::Claude, Provider::Codex);
+    // Create sessions to provide occupancy evidence
+    let lead_sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    store.set_lead_session(&task.task_id, &lead_sess.session_id);
+    let coder_sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: Some(&lead_sess.session_id),
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
+    });
+    store.set_coder_session(&task.task_id, &coder_sess.session_id);
     // No agents exist yet
     assert!(store.agents_for_task(&task.task_id).is_empty());
     store.migrate_legacy_agents();
@@ -637,11 +656,27 @@ fn migrate_legacy_agents_idempotent() {
 #[test]
 fn migrate_legacy_agents_same_provider_both_roles() {
     let mut store = TaskGraphStore::new();
-    store.create_task_with_config("/ws", "Same", Provider::Claude, Provider::Claude);
+    let task = store.create_task_with_config("/ws", "Same", Provider::Claude, Provider::Claude);
+    let lead_sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    store.set_lead_session(&task.task_id, &lead_sess.session_id);
+    let coder_sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: Some(&lead_sess.session_id),
+        provider: Provider::Claude,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "Coder",
+    });
+    store.set_coder_session(&task.task_id, &coder_sess.session_id);
     store.migrate_legacy_agents();
-    let agents = store.agents_for_task(
-        &store.list_tasks()[0].task_id,
-    );
+    let agents = store.agents_for_task(&task.task_id);
     assert_eq!(agents.len(), 2);
     assert!(agents.iter().all(|a| a.provider == Provider::Claude));
     let roles: Vec<&str> = agents.iter().map(|a| a.role.as_str()).collect();
@@ -659,6 +694,36 @@ fn migrate_legacy_agents_skips_tasks_that_already_have_agents() {
     // Should still have exactly 1 (the manually added one), not 3
     assert_eq!(agents.len(), 1);
     assert_eq!(agents[0].role, "architect");
+}
+
+#[test]
+fn migrate_legacy_agents_zero_agents_when_no_sessions() {
+    let mut store = TaskGraphStore::new();
+    // Task with default providers but no sessions — no occupancy evidence
+    store.create_task("/ws", "NoSessions");
+    store.migrate_legacy_agents();
+    let agents = store.agents_for_task(&store.list_tasks()[0].task_id);
+    assert!(agents.is_empty(), "task with no session evidence must produce zero agents");
+}
+
+#[test]
+fn migrate_legacy_agents_one_agent_when_only_lead_session() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task_with_config("/ws", "LeadOnly", Provider::Claude, Provider::Codex);
+    let sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+    });
+    store.set_lead_session(&task.task_id, &sess.session_id);
+    store.migrate_legacy_agents();
+    let agents = store.agents_for_task(&task.task_id);
+    assert_eq!(agents.len(), 1, "only lead session evidence → one agent");
+    assert_eq!(agents[0].role, "lead");
+    assert_eq!(agents[0].provider, Provider::Claude);
 }
 
 // ── Persistence with TaskAgents ────────────────────────────
@@ -687,10 +752,28 @@ fn persist_task_agents_round_trip() {
 fn persist_migration_runs_on_old_format_load() {
     let path = tmp_persist_path("migration_on_load");
     let _cleanup = CleanupFile(path.clone());
-    // Write an old-format snapshot (no task_agents field)
+    // Write an old-format snapshot with sessions (occupancy evidence)
     {
         let mut store = TaskGraphStore::with_persist_path(path.clone());
-        store.create_task_with_config("/ws", "OldFormat", Provider::Codex, Provider::Claude);
+        let task = store.create_task_with_config("/ws", "OldFormat", Provider::Codex, Provider::Claude);
+        let lead_sess = store.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Lead,
+            cwd: "/ws",
+            title: "Lead",
+        });
+        store.set_lead_session(&task.task_id, &lead_sess.session_id);
+        let coder_sess = store.create_session(CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: Some(&lead_sess.session_id),
+            provider: Provider::Claude,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder",
+        });
+        store.set_coder_session(&task.task_id, &coder_sess.session_id);
         store.save().unwrap();
     }
     // Remove agents by saving raw JSON without the field
@@ -700,7 +783,7 @@ fn persist_migration_runs_on_old_format_load() {
         val.as_object_mut().unwrap().remove("task_agents");
         std::fs::write(&path, serde_json::to_string_pretty(&val).unwrap()).unwrap();
     }
-    // Load should trigger migration
+    // Load should trigger migration using session evidence
     {
         let store = TaskGraphStore::load(&path).unwrap();
         let tasks = store.list_tasks();

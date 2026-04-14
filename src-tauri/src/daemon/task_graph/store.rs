@@ -316,7 +316,8 @@ impl TaskGraphStore {
     }
 
     /// Deterministic legacy migration: for each task with no agents,
-    /// generate lead + coder agents from singleton provider fields.
+    /// generate agents from singleton provider fields only when
+    /// concrete session occupancy evidence exists.
     /// Idempotent — skips tasks that already have agents.
     pub fn migrate_legacy_agents(&mut self) {
         let task_ids: Vec<String> = self.tasks.keys().cloned().collect();
@@ -326,10 +327,16 @@ impl TaskGraphStore {
                 continue;
             }
             let task = self.tasks.get(&task_id).unwrap();
+            let has_lead = task.lead_session_id.is_some();
+            let has_coder = task.current_coder_session_id.is_some();
             let lead_provider = task.lead_provider;
             let coder_provider = task.coder_provider;
-            self.add_task_agent(&task_id, lead_provider, "lead");
-            self.add_task_agent(&task_id, coder_provider, "coder");
+            if has_lead {
+                self.add_task_agent(&task_id, lead_provider, "lead");
+            }
+            if has_coder {
+                self.add_task_agent(&task_id, coder_provider, "coder");
+            }
         }
     }
 
