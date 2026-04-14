@@ -15,11 +15,13 @@ pub fn sync_claude_launch_into_task(
         .find_session_by_external_id(Provider::Claude, session_id)
         .map(|s| s.session_id.clone())
     {
-        // Known history entry: refresh transcript path and resume the normalized session.
-        // resume_session() switches active_task_id to the session's task.
+        // Known history entry: refresh transcript path, bind agent_id, and resume.
         let _ = state
             .task_graph
             .set_transcript_path(&existing_session_id, transcript_path);
+        if let Some(aid) = agent_id {
+            let _ = state.task_graph.set_session_agent_id(&existing_session_id, aid);
+        }
         state.resume_session(&existing_session_id).ok()
     } else {
         // Unknown session: register on the explicit task.
@@ -49,8 +51,10 @@ pub fn sync_codex_launch_into_task(
         .find_session_by_external_id(Provider::Codex, thread_id)
         .map(|s| s.session_id.clone())
     {
-        // Known history entry: resume the normalized session.
-        // resume_session() switches active_task_id to the session's task.
+        // Known history entry: bind agent_id and resume the normalized session.
+        if let Some(aid) = agent_id {
+            let _ = state.task_graph.set_session_agent_id(&existing_session_id, aid);
+        }
         state.resume_session(&existing_session_id).ok()
     } else {
         // Unknown thread: register on the explicit task_id from the launch.

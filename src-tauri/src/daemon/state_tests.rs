@@ -1963,3 +1963,66 @@ fn agent_runtime_ownership_fresh_launches_never_collapse_same_role() {
         .collect();
     assert_eq!(matching.len(), 2, "task must have two distinct coder agents");
 }
+
+#[test]
+fn agent_runtime_ownership_claude_resume_preserves_agent_id() {
+    use crate::daemon::launch_task_sync::sync_claude_launch_into_task;
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/tmp", "resume-test");
+    s.active_task_id = Some(task.task_id.clone());
+    // Simulate initial launch: register a session with agent_id
+    let agent_id = crate::daemon::create_agent_id(
+        &mut s, &task.task_id, Provider::Claude, "lead",
+    );
+    crate::daemon::provider::claude::register_on_launch(
+        &mut s, &task.task_id, "lead", "/tmp", "ext-sess-1", "/transcript", Some(&agent_id),
+    );
+    let original_session = s.task_graph
+        .find_session_by_external_id(Provider::Claude, "ext-sess-1")
+        .expect("session should exist");
+    assert_eq!(original_session.agent_id.as_deref(), Some(agent_id.as_str()));
+    let original_session_id = original_session.session_id.clone();
+
+    // Now simulate resume with the same agent_id — sync should preserve it
+    let result = sync_claude_launch_into_task(
+        &mut s, &task.task_id, "lead", "/tmp", "ext-sess-1", "/transcript2",
+        Some(&agent_id),
+    );
+    assert!(result.is_some());
+    let resumed = s.task_graph.get_session(&original_session_id).unwrap();
+    assert_eq!(
+        resumed.agent_id.as_deref(), Some(agent_id.as_str()),
+        "resume must preserve the original agent_id",
+    );
+}
+
+#[test]
+fn agent_runtime_ownership_codex_resume_binds_agent_id() {
+    use crate::daemon::launch_task_sync::sync_codex_launch_into_task;
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/tmp", "codex-resume");
+    s.active_task_id = Some(task.task_id.clone());
+    // Register initial codex session without agent_id
+    crate::daemon::provider::codex::register_on_launch(
+        &mut s, &task.task_id, "coder", "/tmp", "thread-1", None,
+    );
+    let sess = s.task_graph
+        .find_session_by_external_id(Provider::Codex, "thread-1")
+        .expect("session should exist");
+    assert!(sess.agent_id.is_none(), "initially no agent_id");
+    let sess_id = sess.session_id.clone();
+
+    // Resume with explicit agent_id — should bind it
+    let aid = crate::daemon::create_agent_id(
+        &mut s, &task.task_id, Provider::Codex, "coder",
+    );
+    let result = sync_codex_launch_into_task(
+        &mut s, &task.task_id, "coder", "/tmp", "thread-1", Some(&aid),
+    );
+    assert!(result.is_some());
+    let updated = s.task_graph.get_session(&sess_id).unwrap();
+    assert_eq!(
+        updated.agent_id.as_deref(), Some(aid.as_str()),
+        "resume must bind the supplied agent_id to the existing session",
+    );
+}

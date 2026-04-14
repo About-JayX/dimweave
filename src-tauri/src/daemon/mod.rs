@@ -161,6 +161,7 @@ async fn launch_claude_sdk(
     model: Option<String>,
     effort: Option<String>,
     resume_session_id: Option<String>,
+    explicit_agent_id: Option<String>,
     state: &SharedState,
     app: &AppHandle,
 ) -> Result<(claude_sdk::ClaudeSdkHandle, String, String), String> {
@@ -172,12 +173,14 @@ async fn launch_claude_sdk(
         gui::emit_system_log(app, "error", &format!("[Daemon] Claude SDK failed: {err}"));
         return Err(err);
     }
-    // Previous session is already stopped by the daemon loop caller.
-    let agent_id = {
-        let mut s = state.write().await;
-        create_agent_id(
-            &mut s, task_id, task_graph::types::Provider::Claude, role_id,
-        )
+    let agent_id = match explicit_agent_id {
+        Some(aid) => aid,
+        None => {
+            let mut s = state.write().await;
+            create_agent_id(
+                &mut s, task_id, task_graph::types::Provider::Claude, role_id,
+            )
+        }
     };
     let claude_bin = crate::claude_cli::resolve_claude_bin()?;
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -264,7 +267,6 @@ async fn attach_provider_history(
                     "role '{role_id}' already in use by online {conflict_agent}"
                 ));
             }
-            stop_all_claude_sdk_sessions(claude_sdk_handles, state, app).await;
             let attach_task_id = state.read().await.active_task_id.clone()
                 .unwrap_or_default();
             let (handle, _external_session_id, attach_claude_aid) = launch_claude_sdk(
@@ -274,6 +276,7 @@ async fn attach_provider_history(
                 None,
                 None,
                 Some(external_id.clone()),
+                None,
                 state,
                 app,
             )
@@ -314,8 +317,6 @@ async fn attach_provider_history(
             }
             let attach_task_id = state.read().await.active_task_id.clone()
                 .ok_or_else(|| "no active task selected".to_string())?;
-            // Stop only this task's existing Codex session if any
-            stop_codex_for_task(codex_handles, codex_port_pool, &attach_task_id, state, app).await;
             let (launch_epoch, resume_agent_id) = {
                 let mut s = state.write().await;
                 let aid = create_agent_id(
@@ -438,8 +439,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 } else {
                     task_id
                 };
-                // Stop only this task's existing Codex session, not other tasks'
-                stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resolved_task_id, &state, &app).await;
                 if let Some(conflict_agent) = {
                     let daemon = state.read().await;
                     daemon.online_role_conflict("codex", &role_id)
@@ -588,7 +587,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 resume_session_id,
                 reply,
             } => {
-                stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app).await;
                 // Resolve task_id: explicit param > active_task_id
                 let resolved_task_id = if task_id.is_empty() {
                     state.read().await.active_task_id.clone().unwrap_or_default()
@@ -602,6 +600,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     model,
                     effort,
                     resume_session_id,
+                    None,
                     &state,
                     &app,
                 )
@@ -858,7 +857,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         match target {
                             Ok(target) => {
                                 let resume_task_id = sess.task_id.clone();
-                                stop_codex_for_task(&mut codex_handles, &mut codex_port_pool, &resume_task_id, &state, &app).await;
                                 let resume_sess_agent_id = sess.agent_id.clone();
                                 let (launch_epoch, resume_codex_aid) = {
                                     let mut s = state.write().await;
@@ -946,8 +944,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         "role '{role_id}' already in use by online {conflict_agent}"
                                     ))
                                 } else {
-                                    stop_all_claude_sdk_sessions(&mut claude_sdk_handles, &state, &app)
-                                        .await;
                                     let resume_task_id = state.read().await.active_task_id
                                         .clone().unwrap_or_default();
                                     match launch_claude_sdk(
@@ -957,6 +953,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         None,
                                         None,
                                         Some(target.external_id.clone()),
+                                        sess.agent_id.clone(),
                                         &state,
                                         &app,
                                     )

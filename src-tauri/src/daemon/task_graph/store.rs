@@ -255,6 +255,17 @@ impl TaskGraphStore {
         }
     }
 
+    /// Bind an agent_id to a session.
+    pub fn set_session_agent_id(&mut self, session_id: &str, agent_id: &str) -> bool {
+        if let Some(sess) = self.sessions.get_mut(session_id) {
+            sess.agent_id = Some(agent_id.to_string());
+            sess.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Add an artifact to the store.
     pub fn add_artifact(&mut self, params: CreateArtifactParams) -> Artifact {
         let now = chrono::Utc::now().timestamp_millis() as u64;

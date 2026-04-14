@@ -618,6 +618,31 @@ fn task_agent_serialization_round_trip() {
     assert_eq!(decoded.provider, Provider::Claude);
 }
 
+#[test]
+fn set_session_agent_id_binds_agent() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "AgentBind");
+    let sess = store.create_session(CreateSessionParams {
+        task_id: &task.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Test",
+        agent_id: None,
+    });
+    assert!(sess.agent_id.is_none());
+    assert!(store.set_session_agent_id(&sess.session_id, "agent_42"));
+    let updated = store.get_session(&sess.session_id).unwrap();
+    assert_eq!(updated.agent_id.as_deref(), Some("agent_42"));
+}
+
+#[test]
+fn set_session_agent_id_returns_false_for_missing() {
+    let mut store = TaskGraphStore::new();
+    assert!(!store.set_session_agent_id("nonexistent", "agent_1"));
+}
+
 // ── Legacy Migration ───────────────────────────────────────
 
 #[test]
