@@ -114,5 +114,5 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `7d420733` | Polished the task card chrome by making the edit affordance icon-only in the upper-right, shrinking the status chip into a compact lower-right badge for expanded cards, and reducing the visual weight of `Draft` while preserving title, id, save indicator, and agent pills. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 15 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | Turn edit mode into a full agent-management dialog with drag reorder and ordered-save persistence. | _pending_ | pending |
+| Task 2 | `1dcb7895` | Upgraded edit mode to use draggable agent rows, preserved add/remove/edit behavior, and persisted final agent order through the existing `reorderTaskAgents` path after add/update/remove mutations complete. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 20 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the card polish and edit-dialog upgrade. | _pending_ | pending |
