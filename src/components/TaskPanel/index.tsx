@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildCodexLaunchConfig } from "@/components/AgentStatus/codex-launch-config";
 import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
@@ -8,33 +8,21 @@ import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
   selectActiveTaskAgents,
-  selectActiveTaskArtifacts,
-  selectActiveTaskSessions,
   selectWorkspaceTasks,
 } from "@/stores/task-store/selectors";
-import { ArtifactTimeline } from "./ArtifactTimeline";
-import { SessionTree } from "./SessionTree";
-import { TaskAgentList } from "./TaskAgentList";
 import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   TaskSetupDialog,
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
-import { useArtifactDetail } from "./use-artifact-detail";
-import {
-  buildArtifactTimeline,
-  buildSessionTreeRows,
-  getTaskPanelEmptyStateMessage,
-} from "./view-model";
+import { getTaskPanelEmptyStateMessage } from "./view-model";
 
 export function TaskPanel() {
   const task = useTaskStore(selectActiveTask);
   const workspaceTasks = useTaskStore(selectWorkspaceTasks);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const selectTask = useTaskStore((s) => s.selectTask);
-  const taskSessions = useTaskStore(selectActiveTaskSessions);
-  const taskArtifacts = useTaskStore(selectActiveTaskArtifacts);
   const resumeSession = useTaskStore((s) => s.resumeSession);
   const selectedWorkspace = useTaskStore((s) => s.selectedWorkspace);
   const agents = useTaskStore(selectActiveTaskAgents);
@@ -45,23 +33,6 @@ export function TaskPanel() {
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
-  const sessionRows = useMemo(
-    () => buildSessionTreeRows(taskSessions, task),
-    [task, taskSessions],
-  );
-  const artifactTimeline = useMemo(
-    () => buildArtifactTimeline(taskArtifacts, taskSessions),
-    [taskArtifacts, taskSessions],
-  );
-  const {
-    selectedArtifactId,
-    setSelectedArtifactId,
-    detail: artifactDetailModel,
-    detailLoading: artifactDetailLoading,
-    detailError: artifactDetailError,
-  } = useArtifactDetail(artifactTimeline);
-
-  const handleResume = useCallback((id: string) => void resumeSession(id), [resumeSession]);
 
   const handleSetupSubmit = useCallback(
     async (payload: TaskSetupSubmitPayload) => {
@@ -158,18 +129,12 @@ export function TaskPanel() {
       )}
       {workspaceTasks.map((t) =>
         t.taskId === activeTaskId ? (
-          <div key={t.taskId} className="space-y-3">
-            <TaskHeader task={t} reviewBadge={reviewBadge} onEditTask={() => openDialog("edit")} />
-            <TaskAgentList />
-            <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
-              <SessionTree rows={sessionRows} onResume={handleResume} />
-            </div>
-            <div className="rounded-2xl border border-border/50 bg-card/50 p-0">
-              <ArtifactTimeline items={artifactTimeline} selectedArtifactId={selectedArtifactId}
-                detail={artifactDetailModel} detailLoading={artifactDetailLoading}
-                detailError={artifactDetailError} onSelect={setSelectedArtifactId} />
-            </div>
-          </div>
+          <TaskHeader
+            key={t.taskId}
+            task={t}
+            reviewBadge={reviewBadge}
+            onEditTask={() => openDialog("edit")}
+          />
         ) : (
           <TaskHeader key={t.taskId} task={t} collapsed onClick={() => void selectTask(t.taskId)} />
         ),

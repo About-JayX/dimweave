@@ -60,6 +60,14 @@ describe("TaskHeader", () => {
     expect(html).not.toContain("Pending Review");
   });
 
+  test("renders agent chip inline on expanded card (card-only surface contract)", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain("lead:");
+    expect(html).toContain("claude");
+  });
+
   test("shows no agent badges when task has zero agents", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: { ...baseTask, taskId: "task-no-agents" } }),
