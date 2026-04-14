@@ -79,4 +79,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `454ee305` | Split `TaskSetupDialog` into a fixed header, dedicated inner scroll region, and fixed bottom footer so only the provider-panel area scrolls while the action bar stays pinned. Added focused regression tests for the new layout contract and inner-scroll styling. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 13 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | _pending_ | _pending_ | pending |
+| Task 2 | `b284299c` | Recorded Task 1 verification evidence in the CM record and finalized the follow-up spec/plan so the accepted fixed-header / inner-scroll / fixed-footer layout contract is the documented final state for this scroll-layout fix. | `git diff --check` ✅ | accepted |
