@@ -68,7 +68,7 @@
 
 - `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml types_tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `git diff --check`
 
 ## Plan Revision 1 — 2026-04-14
@@ -98,6 +98,17 @@
 - `max_files_changed: 11`
 - `max_added_loc: 525`
 - `max_deleted_loc: 180`
+
+## Plan Revision 3 — 2026-04-14
+
+**Reason:** The original Task 1 verification filter `types_tests` does not match the actual Rust test module name and can return zero executed tests while still exiting successfully. The task needs a precise filter that actually executes the DTO/type snapshot coverage.
+
+**Revised Task 1 verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
+- `git diff --check`
 
 ## Task 2: Rewire daemon routing and runtime ownership to `agent_id`
 
@@ -274,7 +285,7 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | _pending_ | _pending_ | pending |
+| Task 1 | `caae718f` | Introduced persisted `TaskAgent` with stable internal ids, added store CRUD plus deterministic legacy migration from singleton task slots, persisted `task_agents` in snapshots with backward-compatible load migration, and exposed `task_agents` on `TaskSnapshot` DTOs. | `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 43 passed; `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | _pending_ | _pending_ | pending |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
