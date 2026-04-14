@@ -113,6 +113,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Polish task card chrome so edit is icon-only in the upper-right and status becomes a smaller lower-right chip. | _pending_ | pending |
+| Task 1 | `7d420733` | Polished the task card chrome by making the edit affordance icon-only in the upper-right, shrinking the status chip into a compact lower-right badge for expanded cards, and reducing the visual weight of `Draft` while preserving title, id, save indicator, and agent pills. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 15 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Turn edit mode into a full agent-management dialog with drag reorder and ordered-save persistence. | _pending_ | pending |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the card polish and edit-dialog upgrade. | _pending_ | pending |
