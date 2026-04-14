@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 fn temp_config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "dimweave_tg_test_{label}_{}.json",
+        "dimweave_tg_test_{label}_{}.db",
         std::process::id(),
     ))
 }
@@ -122,13 +122,11 @@ fn bot_user_id_persisted_in_config() {
 }
 
 #[test]
-fn old_config_without_bot_user_id_loads_as_none() {
-    // Backward compat: JSON without bot_user_id deserializes to None
+fn config_without_bot_user_id_loads_as_none() {
+    // Config saved without bot_user_id should load as None
     let path = temp_config_path("bot_user_id_compat");
-    std::fs::write(
-        &path,
-        r#"{"enabled":false,"bot_token":"","notifications_enabled":false}"#,
-    ).unwrap();
+    let cfg = TelegramConfig { bot_user_id: None, ..Default::default() };
+    config::save_config(&path, &cfg).unwrap();
     let loaded = config::load_config(&path).unwrap();
     assert_eq!(loaded.bot_user_id, None);
     let _ = std::fs::remove_file(&path);

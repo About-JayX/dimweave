@@ -3,26 +3,51 @@ use std::path::{Path, PathBuf};
 
 pub fn default_config_path() -> anyhow::Result<PathBuf> {
     let base = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("no config dir"))?;
-    Ok(base.join("com.dimweave.app").join("feishu_project.json"))
+    Ok(base.join("com.dimweave.app").join("config.db"))
+}
+
+fn ensure_schema(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS feishu_project_config (
+            id      INTEGER PRIMARY KEY CHECK(id = 1),
+            payload TEXT NOT NULL
+        );",
+    )
+}
+
+fn open_db(path: &Path) -> anyhow::Result<rusqlite::Connection> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let conn = rusqlite::Connection::open(path)?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+    ensure_schema(&conn)?;
+    Ok(conn)
 }
 
 pub fn load_config(path: &Path) -> anyhow::Result<FeishuProjectConfig> {
     if !path.exists() {
         return Ok(FeishuProjectConfig::default());
     }
-    let data = std::fs::read_to_string(path)?;
-    let cfg: FeishuProjectConfig = serde_json::from_str(&data)?;
-    Ok(cfg)
+    let conn = open_db(path)?;
+    match conn.query_row(
+        "SELECT payload FROM feishu_project_config WHERE id = 1",
+        [],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(payload) => Ok(serde_json::from_str(&payload)?),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(FeishuProjectConfig::default()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn save_config(path: &Path, cfg: &FeishuProjectConfig) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_string_pretty(cfg)?;
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, &json)?;
-    std::fs::rename(&tmp, path)?;
+    let conn = open_db(path)?;
+    let payload = serde_json::to_string(cfg)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO feishu_project_config (id, payload) VALUES (1, ?1)",
+        rusqlite::params![payload],
+    )?;
     Ok(())
 }
 
@@ -30,9 +55,9 @@ pub fn save_config(path: &Path, cfg: &FeishuProjectConfig) -> anyhow::Result<()>
 mod tests {
     use super::*;
 
-    fn temp_path(name: &str) -> PathBuf {
+    fn temp_db_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "dimweave_feishu_project_cfg_{name}_{}_{}.json",
+            "dimweave_feishu_project_cfg_{name}_{}_{}.db",
             std::process::id(),
             chrono::Utc::now().timestamp_millis(),
         ))
@@ -48,7 +73,7 @@ mod tests {
             refresh_interval_minutes: 15,
             ..Default::default()
         };
-        let path = temp_path("mcp_round_trip");
+        let path = temp_db_path("mcp_round_trip");
         save_config(&path, &cfg).unwrap();
         let loaded = load_config(&path).unwrap();
         assert_eq!(loaded.domain, "https://project.feishu.cn");
@@ -68,7 +93,7 @@ mod tests {
             user_key: "u_123".into(),
             ..Default::default()
         };
-        let path = temp_path("legacy_compat");
+        let path = temp_db_path("legacy_compat");
         save_config(&path, &cfg).unwrap();
         let loaded = load_config(&path).unwrap();
         assert_eq!(loaded.project_key, "proj");
@@ -79,7 +104,7 @@ mod tests {
 
     #[test]
     fn load_missing_file_returns_default() {
-        let cfg = load_config(Path::new("/tmp/nonexistent_dimweave_fp.json")).unwrap();
+        let cfg = load_config(Path::new("/tmp/nonexistent_dimweave_fp.db")).unwrap();
         assert!(!cfg.enabled);
         assert_eq!(cfg.domain, "https://project.feishu.cn");
         assert!(cfg.mcp_user_token.is_empty());
@@ -87,8 +112,8 @@ mod tests {
 
     #[test]
     fn save_creates_parent_directories() {
-        let path = temp_path("nested");
-        let nested = path.parent().unwrap().join("subdir").join("cfg.json");
+        let path = temp_db_path("nested");
+        let nested = path.parent().unwrap().join("subdir").join("cfg.db");
         let cfg = FeishuProjectConfig {
             workspace_hint: "test".into(),
             ..Default::default()

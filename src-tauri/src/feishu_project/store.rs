@@ -72,28 +72,54 @@ impl FeishuProjectStore {
 
 pub fn default_store_path() -> anyhow::Result<PathBuf> {
     let base = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("no config dir"))?;
-    Ok(base
-        .join("com.dimweave.app")
-        .join("feishu_project_inbox.json"))
+    Ok(base.join("com.dimweave.app").join("config.db"))
+}
+
+fn ensure_store_schema(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS feishu_project_inbox (
+            id      INTEGER PRIMARY KEY CHECK(id = 1),
+            payload TEXT NOT NULL
+        );",
+    )
+}
+
+fn open_store_db(path: &Path) -> anyhow::Result<rusqlite::Connection> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let conn = rusqlite::Connection::open(path)?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+    ensure_store_schema(&conn)?;
+    Ok(conn)
 }
 
 pub fn load_store(path: &Path) -> anyhow::Result<FeishuProjectStore> {
     if !path.exists() {
         return Ok(FeishuProjectStore::default());
     }
-    let data = std::fs::read_to_string(path)?;
-    let items: Vec<FeishuProjectInboxItem> = serde_json::from_str(&data)?;
-    Ok(FeishuProjectStore { items })
+    let conn = open_store_db(path)?;
+    match conn.query_row(
+        "SELECT payload FROM feishu_project_inbox WHERE id = 1",
+        [],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(payload) => {
+            let items: Vec<FeishuProjectInboxItem> = serde_json::from_str(&payload)?;
+            Ok(FeishuProjectStore { items })
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(FeishuProjectStore::default()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn save_store(path: &Path, store: &FeishuProjectStore) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_string_pretty(&store.items)?;
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, &json)?;
-    std::fs::rename(&tmp, path)?;
+    let conn = open_store_db(path)?;
+    let payload = serde_json::to_string(&store.items)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO feishu_project_inbox (id, payload) VALUES (1, ?1)",
+        rusqlite::params![payload],
+    )?;
     Ok(())
 }
 
@@ -247,7 +273,7 @@ mod tests {
     #[test]
     fn store_round_trip_preserves_items() {
         let path = std::env::temp_dir().join(format!(
-            "dimweave_fp_store_rt_{}_{}.json",
+            "dimweave_fp_store_rt_{}_{}.db",
             std::process::id(),
             chrono::Utc::now().timestamp_millis(),
         ));
