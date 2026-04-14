@@ -254,10 +254,14 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src-tauri/src/daemon/types.rs`
 - `src-tauri/src/daemon/types_dto.rs`
 - `src-tauri/src/daemon/types_tests.rs`
+- `src-tauri/src/daemon/state.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_tests.rs`
 
-**max_files_changed:** `21`
-**max_added_loc:** `900`
-**max_deleted_loc:** `320`
+**max_files_changed:** `25`
+**max_added_loc:** `1040`
+**max_deleted_loc:** `360`
 
 **verification_commands:**
 
@@ -317,6 +321,23 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `bun test tests/task-store.test.ts src/components/ReplyInput/index.test.tsx`
 - `bun run build`
 - `git diff --check`
+
+## Plan Revision 7 — 2026-04-14
+
+**Reason:** Task 3 review established that provider-originated ownership and task-scoped status still require the Claude SDK event-handler chain and a small `state.rs` export surface to move from provider-level ids to concrete `agent_id`s. These files are directly on the acceptance path for agent-id routing and stamping.
+
+**Added to revised Task 3 allowed_files:**
+
+- `src-tauri/src/daemon/state.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_tests.rs`
+
+**Revised Task 3 budgets:**
+
+- `max_files_changed: 25`
+- `max_added_loc: 1040`
+- `max_deleted_loc: 360`
 
 ## Revised Task 5: Rebuild task pane agent management around `task_agents[]`
 
