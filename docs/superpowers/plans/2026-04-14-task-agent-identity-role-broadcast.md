@@ -385,6 +385,25 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `bun run build`
 - `git diff --check`
 
+## Plan Revision 10 — 2026-04-14
+
+**Reason:** Task 5 review required interaction-level tests for empty-task create, add/edit submit behavior, and drag reorder persistence. The implementation uses a small dedicated DOM harness plus three focused interaction test files, and that harness requires a test-only `happy-dom` dev dependency. These files are directly on the acceptance path for the required Task 5 interaction coverage.
+
+**Added to revised Task 5 allowed_files:**
+
+- `package.json`
+- `bun.lock`
+- `src/components/TaskPanel/dom-test-env.ts`
+- `src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx`
+- `src/components/TaskPanel/TaskAgentEditor.interaction.test.tsx`
+- `src/components/TaskPanel/TaskAgentList.interaction.test.tsx`
+
+**Revised Task 5 budgets:**
+
+- `max_files_changed: 45`
+- `max_added_loc: 1900`
+- `max_deleted_loc: 700`
+
 ## Revised Task 5: Rebuild task pane agent management around `task_agents[]`
 
 **task_id:** `task-pane-agent-list-and-dialog`
@@ -410,11 +429,15 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src/components/TaskPanel/TaskHeader.test.tsx`
 - `src/components/TaskPanel/TaskSetupDialog.tsx`
 - `src/components/TaskPanel/TaskSetupDialog.test.tsx`
+- `src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx`
 - `src/components/TaskPanel/use-artifact-detail.ts`
+- `src/components/TaskPanel/dom-test-env.ts`
 - `src/components/TaskPanel/TaskAgentList.tsx`
 - `src/components/TaskPanel/TaskAgentList.test.tsx`
+- `src/components/TaskPanel/TaskAgentList.interaction.test.tsx`
 - `src/components/TaskPanel/TaskAgentEditor.tsx`
 - `src/components/TaskPanel/TaskAgentEditor.test.tsx`
+- `src/components/TaskPanel/TaskAgentEditor.interaction.test.tsx`
 - `src/components/ClaudePanel/index.tsx`
 - `src/components/ClaudePanel/connect-state.test.ts`
 - `src/components/ClaudePanel/launch-request.ts`
@@ -439,10 +462,12 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 - `src/stores/task-store/types.ts`
 - `src/stores/task-store/events.ts`
 - `tests/task-store.test.ts`
+- `package.json`
+- `bun.lock`
 
-**max_files_changed:** `39`
-**max_added_loc:** `1725`
-**max_deleted_loc:** `650`
+**max_files_changed:** `45`
+**max_added_loc:** `1900`
+**max_deleted_loc:** `700`
 
 **verification_commands:**
 
@@ -497,5 +522,5 @@ Task 2 also needs stronger verification because `cargo check --tests` caught com
 | Task 2 | `5d24a376`, `c046ba4b`, `1dba6be6`, `160d2a43`, `d55a3a56`, `8782d0f0` | Introduced `agent_id`-aware task runtime slots, keyed daemon live Claude/Codex handle registries by `agent_id`, preserved `SessionHandle.agent_id` through provider registration/resume, stopped same-provider same-role launches from collapsing to one identity, and fixed the Claude attach-provider-history path to bind the created `agent_id` into the normalized session. | `cargo check --manifest-path src-tauri/Cargo.toml --tests` ✅; `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 47 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk:: -- --nocapture` ✅ 38 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex:: -- --nocapture` ✅ 52 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::claude_tests:: -- --nocapture` ✅ 18 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::provider::codex_tests:: -- --nocapture` ✅ 18 passed; `cargo test --manifest-path src-tauri/Cargo.toml agent_runtime_ownership -- --nocapture` ✅ 9 passed; `git diff --check` ✅ | accepted |
 | Task 3 | `9698615b`, `5fc23821`, `9da95457`, `590adb4e` | Reworked daemon routing and task-scoped snapshots around concrete `agent_id` ownership: role-target resolution now preserves matched task agents, authoritative routing uses per-agent runtime channels without provider fallback, task-scoped online/status data resolves by concrete agent ids, and Claude/Codex provider-originated messages now stamp resolved `sender_agent_id` ownership through the runtime/event chains. | `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 39 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::shared_role_tests:: -- --nocapture` ✅ 11 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::user_target_tests:: -- --nocapture` ✅ 13 passed; `cargo test --manifest-path src-tauri/Cargo.toml agent_id_routing -- --nocapture` ✅ 17 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 10 passed; `git diff --check` ✅ | accepted |
 | Task 4 | `d24c1ced`, `fc426624` | Hydrated `task_agents[]` into the frontend task store, derived dynamic role target options from active task agents, changed reply target storage to an extensible string target, and wired the live reply-target default to `lead` if present or the first ordered role otherwise while preserving stable no-task behavior. | `bun test tests/task-store.test.ts src/components/ReplyInput/index.test.tsx` ✅ 54 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 5 | _pending_ | _pending_ | _pending_ | pending |
+| Task 5 | `343ae415`, `e2500da4`, `977c8907`, `87d8a469` | Added persisted backend/frontend task-agent CRUD and reorder plumbing, emitted `task_agents_changed` context events, rebuilt the task pane around a concrete agent list, introduced add/edit agent UI plus drag reorder, converted `New Task`/`Edit Task` to an agent-array model, allowed empty-task creation, preserved existing `agentId`/`displayName` on edit, and added interaction-level coverage for empty-task create, add/edit submit behavior, and drag reorder persistence. | `cargo check --manifest-path src-tauri/Cargo.toml --tests` ✅; `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 53 passed; `bun test tests/task-store.test.ts` ✅ 52 passed; `bun test src/components/ShellContextBar.test.tsx src/components/TaskContextPopover.test.tsx` ✅ 10 passed; `bun test src/components/TaskPanel/TaskHeader.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskAgentList.test.tsx src/components/TaskPanel/TaskAgentEditor.test.tsx` ✅ 41 passed; `bun test src/components/ClaudePanel/connect-state.test.ts src/components/ClaudePanel/launch-request.test.ts src/components/AgentStatus/codex-launch-config.test.ts` ✅ 7 passed; `bun test src/components/ReplyInput/index.test.tsx` ✅ 5 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 6 | _pending_ | _pending_ | _pending_ | pending |
