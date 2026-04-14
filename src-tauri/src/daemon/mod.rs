@@ -299,7 +299,7 @@ async fn attach_provider_history(
                     &cwd,
                     &external_id,
                     &transcript_path,
-                    None, // agent_id not available in attach path
+                    Some(&attach_claude_aid),
                 );
                 tid
             };

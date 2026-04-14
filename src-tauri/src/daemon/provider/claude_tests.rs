@@ -184,6 +184,31 @@ fn register_on_launch_captures_transcript_path() {
 }
 
 #[test]
+fn register_on_launch_preserves_agent_id() {
+    let mut s = DaemonState::new();
+    let task = s.task_graph.create_task("/ws", "Attach");
+    let tid = task.task_id.clone();
+    s.set_active_task(Some(tid.clone()));
+
+    let agent_id = crate::daemon::create_agent_id(
+        &mut s, &tid, Provider::Claude, "lead",
+    );
+    claude::register_on_launch(
+        &mut s, &tid, "lead", "/ws", "attach_ext_1",
+        "/tmp/.claude/projects/-ws/attach_ext_1.jsonl",
+        Some(&agent_id),
+    );
+
+    let task = s.task_graph.get_task(&tid).unwrap();
+    let lead_sid = task.lead_session_id.as_ref().expect("lead session set");
+    let sess = s.task_graph.get_session(lead_sid).unwrap();
+    assert_eq!(
+        sess.agent_id.as_deref(), Some(agent_id.as_str()),
+        "attach-launch must bind agent_id to the created session",
+    );
+}
+
+#[test]
 fn sync_claude_launch_sets_current_coder_session_for_active_task() {
     let mut state = DaemonState::new();
     let task = state.create_and_select_task("/ws", "Task");
