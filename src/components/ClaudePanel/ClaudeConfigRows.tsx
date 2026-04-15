@@ -1,6 +1,6 @@
 import { CyberSelect } from "@/components/ui/cyber-select";
 
-const MODEL_OPTIONS = [
+export const CLAUDE_MODEL_OPTIONS = [
   { value: "", label: "Default" },
   { value: "sonnet", label: "Sonnet (latest)" },
   { value: "opus", label: "Opus (latest)" },
@@ -9,7 +9,7 @@ const MODEL_OPTIONS = [
   { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
-const EFFORT_OPTIONS = [
+export const CLAUDE_EFFORT_OPTIONS = [
   { value: "", label: "Default" },
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
@@ -38,7 +38,7 @@ export function ClaudeConfigRows({
         <span className="text-[10px] text-muted-foreground">Model</span>
         <CyberSelect
           value={model}
-          options={MODEL_OPTIONS}
+          options={CLAUDE_MODEL_OPTIONS}
           onChange={onModelChange}
           disabled={disabled}
         />
@@ -48,7 +48,7 @@ export function ClaudeConfigRows({
         <span className="text-[10px] text-muted-foreground">Effort</span>
         <CyberSelect
           value={effort}
-          options={EFFORT_OPTIONS}
+          options={CLAUDE_EFFORT_OPTIONS}
           onChange={onEffortChange}
           disabled={disabled}
         />

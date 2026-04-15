@@ -232,7 +232,7 @@ describe("TaskSetupDialog", () => {
 
   // TDD: provider-aware config fields — these fail against current (Task 1) code
 
-  test("model field is a select dropdown with provider-specific options", async () => {
+  test("claude model dropdown matches old ClaudeConfigRows options", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -240,7 +240,10 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
     expect(html).toContain('data-model-select="true"');
-    expect(html).toContain("Sonnet 4.5");
+    // Must match ClaudeConfigRows MODEL_OPTIONS
+    expect(html).toContain("Sonnet (latest)");
+    expect(html).toContain("Opus (latest)");
+    expect(html).toContain("Haiku 4.5");
     expect(html).not.toContain("o3-pro");
   });
 
@@ -294,7 +297,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("__new_session__");
   });
 
-  test("effort field is a select dropdown", async () => {
+  test("claude effort dropdown matches old ClaudeConfigRows options including Max", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -304,6 +307,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-effort-select="true"');
     expect(html).toContain("Low");
     expect(html).toContain("High");
+    expect(html).toContain("Max (Opus only)");
   });
 
   test("claude effort label differs from codex effort label", async () => {
@@ -334,15 +338,18 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("disabled");
   });
 
-  test("codex model options differ from claude model options", async () => {
+  test("codex model options come from dynamic codexModels prop, not local static list", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const codexHtml = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
+        codexModels={[{ slug: "o3-pro", displayName: "o3-pro" }, { slug: "o4-mini", displayName: "o4-mini" }]}
+        codexReasoningOptions={[{ effort: "low" }, { effort: "high" }]} />,
     );
     expect(codexHtml).toContain("o3-pro");
-    expect(codexHtml).not.toContain("Sonnet 4.5");
+    expect(codexHtml).toContain("o4-mini");
+    expect(codexHtml).not.toContain("Sonnet (latest)");
   });
 
   test("no free-form text input for model or effort", async () => {

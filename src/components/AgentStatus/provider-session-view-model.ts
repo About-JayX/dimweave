@@ -1,4 +1,5 @@
 import type { CyberSelectOption } from "@/components/ui/cyber-select";
+import { CLAUDE_MODEL_OPTIONS, CLAUDE_EFFORT_OPTIONS } from "@/components/ClaudePanel/ClaudeConfigRows";
 import type { ProviderHistoryInfo } from "@/stores/task-store/types";
 import type { ProviderSessionInfo } from "@/types";
 
@@ -123,16 +124,8 @@ export const PROVIDER_CAPS: Record<"claude" | "codex", ProviderCaps> = {
     supportsSessionResume: true,
     effortLabel: "Effort",
     resumeIdPlaceholder: "session ID",
-    modelOptions: [
-      { value: "claude-sonnet-4-5-20250514", label: "Sonnet 4.5" },
-      { value: "claude-opus-4-5-20250514", label: "Opus 4.5" },
-      { value: "claude-haiku-3-5-20241022", label: "Haiku 3.5" },
-    ],
-    effortOptions: [
-      { value: "low", label: "Low" },
-      { value: "medium", label: "Medium" },
-      { value: "high", label: "High" },
-    ],
+    modelOptions: CLAUDE_MODEL_OPTIONS,
+    effortOptions: CLAUDE_EFFORT_OPTIONS,
   },
   codex: {
     supportsModel: true,
@@ -141,16 +134,8 @@ export const PROVIDER_CAPS: Record<"claude" | "codex", ProviderCaps> = {
     supportsSessionResume: true,
     effortLabel: "Reasoning effort",
     resumeIdPlaceholder: "thread ID",
-    modelOptions: [
-      { value: "o3-pro", label: "o3-pro" },
-      { value: "o3", label: "o3" },
-      { value: "o4-mini", label: "o4-mini" },
-    ],
-    effortOptions: [
-      { value: "low", label: "Low" },
-      { value: "medium", label: "Medium" },
-      { value: "high", label: "High" },
-    ],
+    modelOptions: [],
+    effortOptions: [],
   },
 };
 

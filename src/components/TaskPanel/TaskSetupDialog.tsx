@@ -32,14 +32,14 @@ export interface TaskSetupSubmitPayload {
 
 export type TaskSetupMode = "create" | "edit";
 
+export interface CodexModelInfo { slug: string; displayName: string }
+export interface CodexReasoningLevel { effort: string }
+
 interface TaskSetupDialogProps {
-  mode?: TaskSetupMode;
-  workspace: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (payload: TaskSetupSubmitPayload) => void;
-  initialAgents?: AgentDef[];
-  providerHistory?: ProviderHistoryInfo[];
+  mode?: TaskSetupMode; workspace: string; open: boolean;
+  onOpenChange: (open: boolean) => void; onSubmit: (payload: TaskSetupSubmitPayload) => void;
+  initialAgents?: AgentDef[]; providerHistory?: ProviderHistoryInfo[];
+  codexModels?: CodexModelInfo[]; codexReasoningOptions?: CodexReasoningLevel[];
 }
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
@@ -53,10 +53,10 @@ function ProviderIcon({ provider }: { provider: Provider }) {
   </span>);
 }
 
-function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = [] }: {
-  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean; providerHistory?: ProviderHistoryInfo[];
-}) {
+function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = [], codexModels, codexReasoningOptions }: { def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean; providerHistory?: ProviderHistoryInfo[]; codexModels?: CodexModelInfo[]; codexReasoningOptions?: CodexReasoningLevel[] }) {
   const caps = PROVIDER_CAPS[def.provider], eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
+  const mOpts = def.provider === "codex" && codexModels ? codexModels.map(m => ({ value: m.slug, label: m.displayName })) : caps.modelOptions;
+  const eOpts = def.provider === "codex" && codexReasoningOptions ? codexReasoningOptions.map(r => ({ value: r.effort, label: r.effort })) : caps.effortOptions;
   const setP = (p: Provider) => onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
   const histOpts = buildProviderHistoryOptions(def.provider, providerHistory);
   const histVal = historyActionToSelectValue(def.historyAction, providerHistory);
@@ -75,12 +75,12 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
         <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
         {caps.supportsModel && <select data-model-select="true" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} className={selectCls}>
           <option value="">Select model</option>
-          {caps.modelOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {mOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>}
         {caps.supportsEffort && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{caps.effortLabel}</label>
           <select data-effort-select="true" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} className={selectCls}>
           <option value="">Default</option>
-          {caps.effortOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {eOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select></>}
         {caps.supportsSessionResume && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</label>
           <select data-history-select="true" value={histVal} onChange={(e) => onHist(e.target.value)} className={selectCls}>
@@ -110,7 +110,7 @@ function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: { id
     </div>);
 }
 
-export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [] }: TaskSetupDialogProps) {
+export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [], codexModels, codexReasoningOptions }: TaskSetupDialogProps) {
   const init = initialAgents ?? [{ ...DEFAULT_FIRST }];
   const [agentDefs, setAgentDefs] = useState<AgentDef[]>(init);
   const [sortIds, setSortIds] = useState<string[]>(() => init.map((d, i) => d.agentId ?? `new-${i}`));
@@ -176,7 +176,7 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
               <div data-right-pane-placeholder="true" className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
                 Select an agent to configure</div>
             ) : (
-              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} providerHistory={providerHistory} />
+              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} providerHistory={providerHistory} codexModels={codexModels} codexReasoningOptions={codexReasoningOptions} />
             )}
           </div>
         </div>
