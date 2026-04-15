@@ -16,6 +16,7 @@ interface CodexLaunchInputs {
   cwd?: string;
   resumeThreadId?: string;
   taskId?: string;
+  agentId?: string;
 }
 
 interface CodexConnectTimeoutState {
@@ -56,12 +57,14 @@ export function buildCodexLaunchConfig({
   cwd,
   resumeThreadId,
   taskId,
+  agentId,
 }: CodexLaunchInputs): {
   model?: string;
   reasoningEffort?: string;
   cwd?: string;
   resumeThreadId?: string;
   taskId?: string;
+  agentId?: string;
 } {
   return {
     model: model || undefined,
@@ -69,6 +72,7 @@ export function buildCodexLaunchConfig({
     cwd: cwd?.trim() || undefined,
     resumeThreadId: resumeThreadId?.trim() || undefined,
     taskId: taskId || undefined,
+    agentId: agentId || undefined,
   };
 }
 

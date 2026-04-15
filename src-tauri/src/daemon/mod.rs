@@ -432,6 +432,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 model,
                 reasoning_effort,
                 resume_thread_id,
+                agent_id,
                 reply,
             } => {
                 let resolved_task_id = if task_id.is_empty() {
@@ -439,6 +440,20 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 } else {
                     task_id
                 };
+                // No-op if this exact agent is already online
+                if let Some(ref eid) = agent_id {
+                    if !eid.is_empty() {
+                        let s = state.read().await;
+                        if let Some(rt) = s.task_runtimes.get(&resolved_task_id) {
+                            if rt.codex_slot_by_agent(eid).map_or(false, |sl| sl.is_online()) {
+                                gui::emit_system_log(&app, "info",
+                                    &format!("[Daemon] Codex agent {eid} already online, skipping launch"));
+                                let _ = reply.send(Ok(()));
+                                continue;
+                            }
+                        }
+                    }
+                }
                 if let Some(conflict_agent) = {
                     let daemon = state.read().await;
                     daemon.online_role_conflict("codex", &role_id)
@@ -455,9 +470,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 }
                 let (launch_epoch, codex_agent_id) = {
                     let mut s = state.write().await;
-                    let aid = create_agent_id(
-                        &mut s, &resolved_task_id, task_graph::types::Provider::Codex, &role_id,
-                    );
+                    let aid = match agent_id.filter(|id| !id.is_empty()) {
+                        Some(id) => id,
+                        None => create_agent_id(
+                            &mut s, &resolved_task_id, task_graph::types::Provider::Codex, &role_id,
+                        ),
+                    };
                     let epoch = s.begin_codex_task_launch_for_agent(&resolved_task_id, &aid, 0)
                         .unwrap_or_else(|| s.begin_codex_launch());
                     (epoch, aid)
@@ -585,6 +603,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 model,
                 effort,
                 resume_session_id,
+                agent_id,
                 reply,
             } => {
                 // Resolve task_id: explicit param > active_task_id
@@ -593,6 +612,20 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 } else {
                     task_id
                 };
+                // No-op if this exact agent is already online
+                if let Some(ref eid) = agent_id {
+                    if !eid.is_empty() {
+                        let s = state.read().await;
+                        if let Some(rt) = s.task_runtimes.get(&resolved_task_id) {
+                            if rt.claude_slot_by_agent(eid).map_or(false, |sl| sl.is_online()) {
+                                gui::emit_system_log(&app, "info",
+                                    &format!("[Daemon] Claude agent {eid} already online, skipping launch"));
+                                let _ = reply.send(Ok(()));
+                                continue;
+                            }
+                        }
+                    }
+                }
                 let result = launch_claude_sdk(
                     &resolved_task_id,
                     &role_id,
@@ -600,7 +633,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     model,
                     effort,
                     resume_session_id,
-                    None,
+                    agent_id,
                     &state,
                     &app,
                 )

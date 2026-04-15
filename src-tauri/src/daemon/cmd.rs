@@ -19,6 +19,7 @@ pub enum DaemonCmd {
         model: Option<String>,
         reasoning_effort: Option<String>,
         resume_thread_id: Option<String>,
+        agent_id: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     LaunchClaudeSdk {
@@ -28,6 +29,7 @@ pub enum DaemonCmd {
         model: Option<String>,
         effort: Option<String>,
         resume_session_id: Option<String>,
+        agent_id: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     StopClaudeSdk,

@@ -1,9 +1,8 @@
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { buildCodexLaunchConfig } from "@/components/AgentStatus/codex-launch-config";
+import { buildDraftConfigFromDef } from "@/components/AgentStatus/provider-session-view-model";
 import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
-import { useBridgeStore } from "@/stores/bridge-store";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
@@ -34,7 +33,6 @@ export function TaskPanel() {
   const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
   const reorderTaskAgents = useTaskStore((s) => s.reorderTaskAgents);
   const deleteTask = useTaskStore((s) => s.deleteTask);
-  const applyConfig = useBridgeStore((s) => s.applyConfig);
   const codexModels = useCodexAccountStore((s) => s.models);
   const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,30 +43,29 @@ export function TaskPanel() {
 
   const launchProviders = useCallback(
     async (taskId: string, cwd: string, payload: TaskSetupSubmitPayload) => {
-      const claudeAgent = payload.agents.find((a) => a.provider === "claude");
-      const codexAgent = payload.agents.find((a) => a.provider === "codex");
-      if (claudeAgent) await invoke("daemon_set_claude_role", { role: claudeAgent.role });
-      if (codexAgent) await invoke("daemon_set_codex_role", { role: codexAgent.role });
-      const cc = claudeAgent ? payload.claudeConfig : null;
-      if (cc) {
-        const a = cc.historyAction;
-        if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-        else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
-          claudeRole: claudeAgent!.role, cwd, model: cc.model, effort: cc.effort,
-          resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined, taskId,
-        }));
-      }
-      const cx = codexAgent ? payload.codexConfig : null;
-      if (cx) {
-        const a = cx.historyAction;
-        if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-        else await applyConfig(buildCodexLaunchConfig({
-          model: cx.model, reasoningEffort: cx.effort, cwd,
-          resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined, taskId,
-        }));
+      for (const agent of payload.agents) {
+        const cfg = buildDraftConfigFromDef(agent);
+        const a = cfg.historyAction;
+        if (a.kind === "resumeNormalized") { await resumeSession(a.sessionId); continue; }
+        if (agent.provider === "claude") {
+          await invoke("daemon_set_claude_role", { role: agent.role });
+          await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
+            claudeRole: agent.role, cwd, model: cfg.model, effort: cfg.effort,
+            resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
+            taskId, agentId: agent.agentId,
+          }));
+        } else {
+          await invoke("daemon_set_codex_role", { role: agent.role });
+          await invoke("daemon_launch_codex", {
+            roleId: agent.role, cwd, model: cfg.model || null,
+            reasoningEffort: cfg.effort || null,
+            resumeThreadId: a.kind === "resumeExternal" ? a.externalId : null,
+            taskId, agentId: agent.agentId || null,
+          });
+        }
       }
     },
-    [applyConfig, resumeSession],
+    [resumeSession],
   );
 
   const handleSetupSubmit = useCallback(

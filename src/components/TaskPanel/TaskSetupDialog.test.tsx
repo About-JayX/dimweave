@@ -619,4 +619,19 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-provider-card="true"');
     expect(html).not.toContain('data-right-pane-placeholder="true"');
   });
+
+  test("edit-mode renders distinct rows for multiple same-provider agents", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[
+          { provider: "codex", role: "lead", agentId: "cx-1" },
+          { provider: "codex", role: "coder", agentId: "cx-2" },
+        ]} />,
+    );
+    const rows = html.match(/data-draggable-row="true"/g);
+    expect(rows).not.toBeNull();
+    expect(rows!.length).toBe(2);
+  });
 });

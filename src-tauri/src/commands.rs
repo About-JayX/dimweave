@@ -59,6 +59,7 @@ pub async fn daemon_launch_codex(
     reasoning_effort: Option<String>,
     resume_thread_id: Option<String>,
     task_id: Option<String>,
+    agent_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     validate_codex_launch_args(&role_id, &cwd)?;
@@ -76,6 +77,7 @@ pub async fn daemon_launch_codex(
             model,
             reasoning_effort,
             resume_thread_id,
+            agent_id,
             reply: reply_tx,
         })
         .await
@@ -178,6 +180,7 @@ pub async fn daemon_launch_claude_sdk(
     effort: Option<String>,
     resume_session_id: Option<String>,
     task_id: Option<String>,
+    agent_id: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     validate_claude_launch_args(&role_id, &cwd)?;
@@ -199,6 +202,7 @@ pub async fn daemon_launch_claude_sdk(
             model,
             effort,
             resume_session_id,
+            agent_id,
             reply: reply_tx,
         })
         .await

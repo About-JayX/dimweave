@@ -298,6 +298,55 @@ describe("TaskSetupDialog interaction", () => {
     expect(deleteBtn).toBeFalsy();
   });
 
+  test("edit-mode submit carries agentId through for all agents (agent-bound connect)", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {}, onSubmit,
+        initialAgents: [
+          { provider: "claude", role: "lead", agentId: "agent-A" },
+          { provider: "codex", role: "coder", agentId: "agent-B" },
+          { provider: "claude", role: "coder", agentId: "agent-C" },
+        ],
+      }),
+    );
+    const saveBtn = queryAll("button").find((b) => b.textContent === "Save & Connect");
+    expect(saveBtn).toBeTruthy();
+    click(saveBtn!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    expect(payload.agents.length).toBe(3);
+    expect(payload.agents[0].agentId).toBe("agent-A");
+    expect(payload.agents[1].agentId).toBe("agent-B");
+    expect(payload.agents[2].agentId).toBe("agent-C");
+    expect(payload.requestLaunch).toBe(true);
+  });
+
+  test("multiple same-provider agents carry distinct agentIds without collapse", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {}, onSubmit,
+        initialAgents: [
+          { provider: "codex", role: "lead", agentId: "codex-lead-1" },
+          { provider: "codex", role: "coder", agentId: "codex-coder-2" },
+        ],
+      }),
+    );
+    const connectBtn = queryAll("button").find((b) => b.textContent === "Save & Connect");
+    expect(connectBtn).toBeTruthy();
+    click(connectBtn!);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    // Both same-provider agents are present with distinct IDs — no provider-family collapse
+    expect(payload.agents.length).toBe(2);
+    expect(payload.agents[0].agentId).toBe("codex-lead-1");
+    expect(payload.agents[1].agentId).toBe("codex-coder-2");
+    expect(payload.agents[0].provider).toBe("codex");
+    expect(payload.agents[1].provider).toBe("codex");
+  });
+
   test("Add Agent button creates a new row in the left pane", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     await render(

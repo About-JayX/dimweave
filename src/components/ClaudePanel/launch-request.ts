@@ -5,6 +5,7 @@ interface BuildClaudeLaunchRequestInput {
   effort?: string | null;
   resumeSessionId?: string | null;
   taskId?: string | null;
+  agentId?: string | null;
 }
 
 interface ClaudeLaunchRequest {
@@ -14,6 +15,7 @@ interface ClaudeLaunchRequest {
   effort: string | null;
   resumeSessionId: string | null;
   taskId: string | null;
+  agentId: string | null;
 }
 
 function normalizeOptional(value?: string | null): string | null {
@@ -39,5 +41,6 @@ export function buildClaudeLaunchRequest(
     effort: normalizeOptional(input.effort),
     resumeSessionId: normalizeOptional(input.resumeSessionId),
     taskId: input.taskId ?? null,
+    agentId: normalizeOptional(input.agentId),
   };
 }
