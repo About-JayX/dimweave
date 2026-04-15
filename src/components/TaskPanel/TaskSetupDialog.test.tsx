@@ -398,6 +398,23 @@ describe("TaskSetupDialog", () => {
     expect(cardMatch![1]).not.toContain("<select");
   });
 
+  test("history trigger in dialog applies middle ellipsis to long selected label", async () => {
+    const { middleEllipsis } = await import("../ui/cyber-select");
+    const longTitle = "Implement the entire authentication middleware refactor for compliance";
+    const expected = middleEllipsis(longTitle, 36);
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
+          historyAction: { kind: "resumeExternal", externalId: "sess-long" } }]}
+        providerHistory={[{ provider: "claude", externalId: "sess-long", title: longTitle,
+          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
+    );
+    expect(expected).not.toBe(longTitle);
+    expect(html).toContain(expected);
+  });
+
   test("history dropdown pre-selects matching entry when historyAction is resumeExternal", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(

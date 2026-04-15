@@ -102,7 +102,7 @@ export function CyberSelect({
         className={cn(
           "inline-flex items-center gap-1 border outline-none transition-colors duration-200 font-medium",
           isHistory
-            ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-0.5 text-[10px]"
+            ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-1.5 text-[10px]"
             : "rounded px-1.5 py-0.5 text-[10px]",
           disabled
             ? "opacity-50 cursor-not-allowed border-input bg-muted text-foreground/60"
@@ -127,7 +127,9 @@ export function CyberSelect({
               isHistory ? "flex-1" : "max-w-28",
             )}
           >
-            {displayLabel}
+            {isHistory && selected
+              ? middleEllipsis(displayLabel, 36)
+              : displayLabel}
           </span>
         )}
         <svg

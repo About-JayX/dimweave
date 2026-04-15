@@ -101,8 +101,10 @@ describe("CyberSelect history variant menu items", () => {
 });
 
 describe("CyberSelect history variant", () => {
-  test("history variant keeps collapsed trigger compact", async () => {
-    const { CyberSelect } = await import("./cyber-select");
+  test("history trigger applies middle ellipsis to long selected labels", async () => {
+    const { CyberSelect, middleEllipsis } = await import("./cyber-select");
+    const longLabel = "A very long session title that should stay readable";
+    const expected = middleEllipsis(longLabel, 36);
     const html = renderToStaticMarkup(
       createElement(CyberSelect, {
         value: "hist_1",
@@ -110,14 +112,50 @@ describe("CyberSelect history variant", () => {
         options: [
           {
             value: "hist_1",
-            label: "A very long session title that should stay readable",
+            label: longLabel,
             description: "sess_abc123456789",
           },
         ],
         onChange: () => {},
       }),
     );
-    expect(html).toContain("A very long session title");
+    expect(expected).not.toBe(longLabel);
+    expect(html).toContain(expected);
     expect(html).not.toContain("sess_abc123456789");
+  });
+
+  test("history trigger leaves New session placeholder unchanged", async () => {
+    const { CyberSelect } = await import("./cyber-select");
+    const html = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "",
+        variant: "history",
+        options: [{ value: "__new__", label: "New session" }],
+        onChange: () => {},
+        placeholder: "New session",
+      }),
+    );
+    expect(html).toContain("New session");
+  });
+
+  test("history trigger uses taller padding than default variant", async () => {
+    const { CyberSelect } = await import("./cyber-select");
+    const historyHtml = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "h1",
+        variant: "history",
+        options: [{ value: "h1", label: "Session" }],
+        onChange: () => {},
+      }),
+    );
+    const defaultHtml = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "d1",
+        options: [{ value: "d1", label: "Option" }],
+        onChange: () => {},
+      }),
+    );
+    expect(historyHtml).toContain("py-1.5");
+    expect(defaultHtml).not.toContain("py-1.5");
   });
 });
