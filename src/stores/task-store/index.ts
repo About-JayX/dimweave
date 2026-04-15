@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AgentRuntimeStatus,
   Provider,
   ProviderHistoryInfo,
   ReplyTarget,
@@ -24,6 +25,7 @@ type TaskSnapshot = {
   artifacts: any[];
   taskAgents?: TaskAgentInfo[];
   providerSummary?: TaskProviderSummary | null;
+  agentRuntimeStatuses?: AgentRuntimeStatus[];
 };
 
 type TaskSetter = (
@@ -35,6 +37,7 @@ type TaskSetter = (
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerSummaries: Record<string, TaskProviderSummary>;
+    agentRuntimeStatuses: Record<string, AgentRuntimeStatus[]>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
     providerHistoryLoading: Record<string, boolean>;
     providerHistoryError: Record<string, string | null>;
@@ -48,6 +51,7 @@ type TaskSetter = (
     sessions: Record<string, any[]>;
     artifacts: Record<string, any[]>;
     providerSummaries: Record<string, TaskProviderSummary>;
+    agentRuntimeStatuses: Record<string, AgentRuntimeStatus[]>;
     providerHistory: Record<string, ProviderHistoryInfo[]>;
     providerHistoryLoading: Record<string, boolean>;
     providerHistoryError: Record<string, string | null>;
@@ -67,6 +71,9 @@ export function snapshotToPatch(snap: TaskSnapshot) {
     sessions: { [snap.task.taskId]: snap.sessions },
     artifacts: { [snap.task.taskId]: snap.artifacts },
     providerSummaries: summaryPatch,
+    agentRuntimeStatuses: {
+      [snap.task.taskId]: snap.agentRuntimeStatuses ?? [],
+    },
   };
 }
 
@@ -195,6 +202,7 @@ export function createDeleteTaskAction(
       const { [taskId]: _s, ...remainingSessions } = s.sessions;
       const { [taskId]: _ar, ...remainingArtifacts } = s.artifacts;
       const { [taskId]: _ps, ...remainingSummaries } = s.providerSummaries;
+      const { [taskId]: _ars, ...remainingStatuses } = s.agentRuntimeStatuses;
       const { [taskId]: _rt, ...remainingTargets } = s.replyTargets;
 
       let nextActiveId: string | null = s.activeTaskId;
@@ -214,6 +222,7 @@ export function createDeleteTaskAction(
         sessions: remainingSessions,
         artifacts: remainingArtifacts,
         providerSummaries: remainingSummaries,
+        agentRuntimeStatuses: remainingStatuses,
         replyTargets: remainingTargets,
       };
     });
@@ -303,6 +312,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     sessions: {},
     artifacts: {},
     providerSummaries: {},
+    agentRuntimeStatuses: {},
     providerHistory: {},
     providerHistoryLoading: {},
     providerHistoryError: {},
@@ -353,6 +363,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
         sessions: { ...s.sessions, [snap.task.taskId]: snap.sessions },
         artifacts: { ...s.artifacts, [snap.task.taskId]: snap.artifacts },
         providerSummaries: { ...s.providerSummaries, ...patch.providerSummaries },
+        agentRuntimeStatuses: { ...s.agentRuntimeStatuses, ...patch.agentRuntimeStatuses },
       }));
     },
 

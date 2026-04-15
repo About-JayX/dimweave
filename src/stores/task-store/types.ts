@@ -102,6 +102,11 @@ export interface TaskProviderSummary {
   coderProviderSession?: TaskProviderSessionInfo | null;
 }
 
+export interface AgentRuntimeStatus {
+  agentId: string;
+  online: boolean;
+}
+
 // Event payloads from gui_task.rs
 
 export interface ActiveTaskChangedPayload {
@@ -123,6 +128,11 @@ export interface TaskAgentsChangedPayload {
   agents: TaskAgentInfo[];
 }
 
+export interface AgentRuntimeStatusChangedPayload {
+  taskId: string;
+  statuses: AgentRuntimeStatus[];
+}
+
 // Store data (separate from actions for testability)
 
 export interface SaveStatus {
@@ -141,6 +151,7 @@ export interface TaskStoreData {
   sessions: Record<string, SessionInfo[]>;
   artifacts: Record<string, ArtifactInfo[]>;
   providerSummaries: Record<string, TaskProviderSummary>;
+  agentRuntimeStatuses: Record<string, AgentRuntimeStatus[]>;
   providerHistory: Record<string, ProviderHistoryInfo[]>;
   providerHistoryLoading: Record<string, boolean>;
   providerHistoryError: Record<string, string | null>;

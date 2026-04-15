@@ -1,6 +1,7 @@
 use super::*;
 use crate::daemon::task_graph::types::{Provider, SessionRole, SessionStatus, Task};
 use crate::daemon::types::{HistoryEntry, SessionTreeSnapshot, TaskSnapshot};
+use crate::daemon::types_dto::TaskAgentRuntimeStatus;
 
 fn provider_runtime(p: Provider) -> &'static str {
     match p {
@@ -214,12 +215,23 @@ impl DaemonState {
             .cloned()
             .collect();
         let provider_summary = self.task_provider_summary(task_id);
+        let agent_runtime_statuses: Vec<TaskAgentRuntimeStatus> = task_agents
+            .iter()
+            .map(|a| {
+                let runtime = provider_runtime(a.provider);
+                TaskAgentRuntimeStatus {
+                    agent_id: a.agent_id.clone(),
+                    online: self.is_task_agent_online_by_id(task_id, &a.agent_id, runtime),
+                }
+            })
+            .collect();
         Some(TaskSnapshot {
             task,
             sessions,
             artifacts,
             task_agents,
             provider_summary,
+            agent_runtime_statuses,
         })
     }
 

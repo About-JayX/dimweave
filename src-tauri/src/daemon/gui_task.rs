@@ -1,4 +1,5 @@
 use crate::daemon::task_graph::types::{Artifact, Provider, SessionHandle, Task, TaskAgent};
+use crate::daemon::types_dto::TaskAgentRuntimeStatus;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -19,6 +20,10 @@ pub enum TaskUiEvent {
     TaskAgentsChanged {
         task_id: String,
         agents: Vec<TaskAgent>,
+    },
+    AgentRuntimeStatusChanged {
+        task_id: String,
+        statuses: Vec<TaskAgentRuntimeStatus>,
     },
 }
 
@@ -86,6 +91,21 @@ impl TaskUiEvent {
                     },
                 );
             }
+            TaskUiEvent::AgentRuntimeStatusChanged { task_id, statuses } => {
+                #[derive(Serialize, Clone)]
+                #[serde(rename_all = "camelCase")]
+                struct Payload {
+                    task_id: String,
+                    statuses: Vec<TaskAgentRuntimeStatus>,
+                }
+                let _ = app.emit(
+                    "agent_runtime_status_changed",
+                    Payload {
+                        task_id: task_id.clone(),
+                        statuses: statuses.clone(),
+                    },
+                );
+            }
         }
     }
 }
@@ -115,6 +135,7 @@ pub fn build_task_context_events(
     artifacts: &[Artifact],
     agents: &[TaskAgent],
     active_task_id: Option<&str>,
+    agent_statuses: &[TaskAgentRuntimeStatus],
 ) -> Vec<TaskUiEvent> {
     let mut events = task.map(build_task_state_events).unwrap_or_default();
     if active_task_id.map_or(false, |active| active == task_id) {
@@ -133,6 +154,10 @@ pub fn build_task_context_events(
     events.push(TaskUiEvent::TaskAgentsChanged {
         task_id: task_id.to_string(),
         agents: agents.to_vec(),
+    });
+    events.push(TaskUiEvent::AgentRuntimeStatusChanged {
+        task_id: task_id.to_string(),
+        statuses: agent_statuses.to_vec(),
     });
     events
 }
@@ -165,9 +190,29 @@ pub async fn emit_task_context_events(
         .into_iter()
         .cloned()
         .collect();
+    let statuses: Vec<TaskAgentRuntimeStatus> = agents
+        .iter()
+        .map(|a| {
+            let runtime = match a.provider {
+                Provider::Claude => "claude",
+                Provider::Codex => "codex",
+            };
+            TaskAgentRuntimeStatus {
+                agent_id: a.agent_id.clone(),
+                online: s.is_task_agent_online_by_id(task_id, &a.agent_id, runtime),
+            }
+        })
+        .collect();
     let active_task_id = s.active_task_id.as_deref();
-    let events =
-        build_task_context_events(s.task_graph.get_task(task_id), task_id, &sess, &arts, &agents, active_task_id);
+    let events = build_task_context_events(
+        s.task_graph.get_task(task_id),
+        task_id,
+        &sess,
+        &arts,
+        &agents,
+        active_task_id,
+        &statuses,
+    );
     drop(s);
     for event in events {
         event.emit(app);
@@ -353,9 +398,9 @@ mod tests {
         let artifacts = vec![make_test_artifact("task_1")];
 
         let events =
-            build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, &[], Some("task_1"));
+            build_task_context_events(Some(&task), &task.task_id, &sessions, &artifacts, &[], Some("task_1"), &[]);
 
-        assert_eq!(events.len(), 5);
+        assert_eq!(events.len(), 6);
         assert_eq!(events[0], TaskUiEvent::TaskUpdated(task.clone()));
         assert_eq!(
             events[1],
@@ -387,7 +432,7 @@ mod tests {
 
         // task_a is being refreshed, but the active task is task_b
         let events =
-            build_task_context_events(Some(&task_a), &task_a.task_id, &sessions, &artifacts, &[], Some("task_b"));
+            build_task_context_events(Some(&task_a), &task_a.task_id, &sessions, &artifacts, &[], Some("task_b"), &[]);
 
         assert!(
             !events.iter().any(|event| matches!(
@@ -414,7 +459,7 @@ mod tests {
         let artifacts = vec![make_test_artifact("task_1")];
 
         let events =
-            build_task_context_events(Some(&task), "task_1", &sessions, &artifacts, &[], Some("task_1"));
+            build_task_context_events(Some(&task), "task_1", &sessions, &artifacts, &[], Some("task_1"), &[]);
 
         assert!(
             events.iter().any(|e| matches!(

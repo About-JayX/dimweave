@@ -5,6 +5,7 @@ import {
   reduceSessionTreeChanged,
   reduceArtifactsChanged,
   reduceTaskAgentsChanged,
+  reduceAgentRuntimeStatusChanged,
 } from "../src/stores/task-store/events";
 import {
   bootstrapTaskStore,
@@ -26,6 +27,7 @@ import {
   selectWorkspaceTasks,
 } from "../src/stores/task-store/selectors";
 import type {
+  AgentRuntimeStatus,
   ProviderHistoryInfo,
   TaskAgentInfo,
   TaskStoreData,
@@ -44,6 +46,7 @@ function emptyState(): TaskStoreData {
     sessions: {},
     artifacts: {},
     providerSummaries: {},
+    agentRuntimeStatuses: {},
     providerHistory: {},
     providerHistoryLoading: {},
     providerHistoryError: {},
@@ -1321,5 +1324,113 @@ describe("createDeleteTaskAction", () => {
 
     expect(state.activeTaskId).toBeNull();
     expect(state.tasks.t2).toBeDefined();
+  });
+
+  test("deleteTask cleans up agentRuntimeStatuses for deleted task", async () => {
+    const t1 = makeTask("t1");
+    let state: TaskStoreData = {
+      ...emptyState(),
+      activeTaskId: "t1",
+      tasks: { t1 },
+      agentRuntimeStatuses: {
+        t1: [{ agentId: "a1", online: true }],
+      },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async () => undefined as never);
+    await del("t1");
+
+    expect(state.agentRuntimeStatuses.t1).toBeUndefined();
+  });
+});
+
+describe("reduceAgentRuntimeStatusChanged", () => {
+  test("sets statuses for a task", () => {
+    const statuses: AgentRuntimeStatus[] = [
+      { agentId: "a1", online: true },
+      { agentId: "a2", online: false },
+    ];
+    const patch = reduceAgentRuntimeStatusChanged(emptyState(), {
+      taskId: "t1",
+      statuses,
+    });
+    expect(patch.agentRuntimeStatuses?.["t1"]).toEqual(statuses);
+  });
+
+  test("replaces existing statuses for same task", () => {
+    const state: TaskStoreData = {
+      ...emptyState(),
+      agentRuntimeStatuses: {
+        t1: [{ agentId: "a1", online: false }],
+      },
+    };
+    const patch = reduceAgentRuntimeStatusChanged(state, {
+      taskId: "t1",
+      statuses: [{ agentId: "a1", online: true }],
+    });
+    expect(patch.agentRuntimeStatuses?.["t1"]).toEqual([
+      { agentId: "a1", online: true },
+    ]);
+  });
+
+  test("preserves statuses for other tasks", () => {
+    const state: TaskStoreData = {
+      ...emptyState(),
+      agentRuntimeStatuses: {
+        t1: [{ agentId: "a1", online: true }],
+      },
+    };
+    const patch = reduceAgentRuntimeStatusChanged(state, {
+      taskId: "t2",
+      statuses: [{ agentId: "a2", online: false }],
+    });
+    expect(patch.agentRuntimeStatuses?.["t1"]).toEqual([
+      { agentId: "a1", online: true },
+    ]);
+    expect(patch.agentRuntimeStatuses?.["t2"]).toEqual([
+      { agentId: "a2", online: false },
+    ]);
+  });
+
+  test("multi-agent independent status within same task", () => {
+    const statuses: AgentRuntimeStatus[] = [
+      { agentId: "claude-lead", online: true },
+      { agentId: "codex-coder", online: false },
+      { agentId: "claude-reviewer", online: true },
+    ];
+    const patch = reduceAgentRuntimeStatusChanged(emptyState(), {
+      taskId: "t1",
+      statuses,
+    });
+    const result = patch.agentRuntimeStatuses?.["t1"];
+    expect(result).toHaveLength(3);
+    expect(result?.find((s) => s.agentId === "claude-lead")?.online).toBe(true);
+    expect(result?.find((s) => s.agentId === "codex-coder")?.online).toBe(false);
+    expect(result?.find((s) => s.agentId === "claude-reviewer")?.online).toBe(true);
+  });
+});
+
+describe("snapshotToPatch agentRuntimeStatuses", () => {
+  test("hydrates agentRuntimeStatuses from snapshot", () => {
+    const task = makeTask("t1");
+    const statuses: AgentRuntimeStatus[] = [
+      { agentId: "a1", online: true },
+      { agentId: "a2", online: false },
+    ];
+    const patch = snapshotToPatch({
+      task,
+      sessions: [],
+      artifacts: [],
+      agentRuntimeStatuses: statuses,
+    });
+    expect(patch.agentRuntimeStatuses?.["t1"]).toEqual(statuses);
+  });
+
+  test("defaults to empty array when agentRuntimeStatuses absent", () => {
+    const task = makeTask("t1");
+    const patch = snapshotToPatch({ task, sessions: [], artifacts: [] });
+    expect(patch.agentRuntimeStatuses?.["t1"]).toEqual([]);
   });
 });

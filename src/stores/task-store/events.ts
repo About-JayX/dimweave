@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ActiveTaskChangedPayload,
+  AgentRuntimeStatusChangedPayload,
   ArtifactsChangedPayload,
   SaveStatus,
   SessionTreeChangedPayload,
@@ -56,6 +57,18 @@ export function reduceTaskAgentsChanged(
   };
 }
 
+export function reduceAgentRuntimeStatusChanged(
+  state: TaskStoreData,
+  payload: AgentRuntimeStatusChangedPayload,
+): Partial<TaskStoreData> {
+  return {
+    agentRuntimeStatuses: {
+      ...state.agentRuntimeStatuses,
+      [payload.taskId]: payload.statuses,
+    },
+  };
+}
+
 export function reduceSaveStatus(
   _state: TaskStoreData,
   payload: SaveStatus,
@@ -86,6 +99,12 @@ export function createTaskListeners(
     listen<TaskAgentsChangedPayload>("task_agents_changed", (e) => {
       set((s) => reduceTaskAgentsChanged(s, e.payload));
     }),
+    listen<AgentRuntimeStatusChangedPayload>(
+      "agent_runtime_status_changed",
+      (e) => {
+        set((s) => reduceAgentRuntimeStatusChanged(s, e.payload));
+      },
+    ),
     listen<SaveStatus>("task_save_status", (e) => {
       set((s) => reduceSaveStatus(s, e.payload));
     }),

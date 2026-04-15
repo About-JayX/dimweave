@@ -10,6 +10,8 @@ pub struct TaskSnapshot {
     #[serde(default)]
     pub task_agents: Vec<crate::daemon::task_graph::types::TaskAgent>,
     pub provider_summary: Option<TaskProviderSummary>,
+    #[serde(default)]
+    pub agent_runtime_statuses: Vec<TaskAgentRuntimeStatus>,
 }
 
 /// Frontend DTO: session tree for a task (flat list, tree via parent_session_id).
@@ -36,6 +38,14 @@ pub struct OnlineAgentInfo {
     pub agent_id: String,
     pub role: String,
     pub model_source: String,
+}
+
+/// Per-agent runtime status within a task snapshot / event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskAgentRuntimeStatus {
+    pub agent_id: String,
+    pub online: bool,
 }
 
 /// Per-task provider binding summary (AC5).
