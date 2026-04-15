@@ -100,6 +100,36 @@ export function resolveProviderHistoryWorkspace(
   return activeTaskWorkspace?.trim() || "";
 }
 
+// --- Provider capability flags (shared with TaskSetupDialog) ---
+
+export interface ProviderCaps {
+  supportsModel: boolean;
+  supportsEffort: boolean;
+  effortRequiresModel: boolean;
+  supportsSessionResume: boolean;
+  effortPlaceholder: string;
+  resumeIdPlaceholder: string;
+}
+
+export const PROVIDER_CAPS: Record<"claude" | "codex", ProviderCaps> = {
+  claude: {
+    supportsModel: true,
+    supportsEffort: true,
+    effortRequiresModel: false,
+    supportsSessionResume: true,
+    effortPlaceholder: "effort",
+    resumeIdPlaceholder: "session ID",
+  },
+  codex: {
+    supportsModel: true,
+    supportsEffort: true,
+    effortRequiresModel: true,
+    supportsSessionResume: true,
+    effortPlaceholder: "reasoning effort",
+    resumeIdPlaceholder: "thread ID",
+  },
+};
+
 // --- Agent config form helpers (shared with TaskSetupDialog) ---
 
 export function deriveSessionMode(ha?: ProviderHistoryAction): "new" | "resume" {

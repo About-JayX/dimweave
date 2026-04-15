@@ -4,7 +4,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  deriveSessionMode, deriveResumeId, buildHistoryAction, buildDraftConfigFromDef,
+  PROVIDER_CAPS, deriveSessionMode, deriveResumeId, buildHistoryAction, buildDraftConfigFromDef,
   type AgentDraftConfig, type ProviderHistoryAction,
 } from "@/components/AgentStatus/provider-session-view-model";
 import type { Provider } from "@/stores/task-store/types";
@@ -43,42 +43,35 @@ const inputCls = "w-full rounded-lg border border-border/50 bg-background px-2 p
 function AgentConfigForm({ def, onChange, onRemove }: {
   def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void;
 }) {
+  const caps = PROVIDER_CAPS[def.provider];
   const sMode = deriveSessionMode(def.historyAction);
   const rId = deriveResumeId(def.historyAction);
-  const setProvider = (p: Provider) =>
-    onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
-  const setSMode = (m: "new" | "resume") =>
-    onChange({ ...def, historyAction: buildHistoryAction(m, m === "new" ? "" : rId) });
+  const setP = (p: Provider) => onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
+  const setSM = (m: "new" | "resume") => onChange({ ...def, historyAction: buildHistoryAction(m, m === "new" ? "" : rId) });
+  const eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
+  const rName = `session-${def.agentId ?? "new"}`;
   return (
     <div className="space-y-3 p-4">
       <div className="flex items-center gap-2">
-        <select value={def.provider} onChange={(e) => setProvider(e.target.value as Provider)}
+        <select value={def.provider} onChange={(e) => setP(e.target.value as Provider)}
           className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40">
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <button type="button" onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400">
-          <Trash2 className="size-3" />
-        </button>
+          <Trash2 className="size-3" /></button>
       </div>
       <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
-      <input type="text" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} placeholder="model" className={inputCls} />
-      <input type="text" value={def.effort ?? ""} onChange={(e) => onChange({ ...def, effort: e.target.value })} placeholder="effort" className={inputCls} />
-      <fieldset className="space-y-1">
+      {caps.supportsModel && <input type="text" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} placeholder="model" className={inputCls} />}
+      {caps.supportsEffort && <input type="text" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} placeholder={caps.effortPlaceholder} className={`${inputCls} disabled:opacity-40`} />}
+      {caps.supportsSessionResume && <fieldset className="space-y-1">
         <legend className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</legend>
         <label className="flex items-center gap-1.5 text-xs">
-          <input type="radio" name={`session-${def.agentId ?? "new"}`} checked={sMode === "new"} onChange={() => setSMode("new")} />
-          New session
-        </label>
+          <input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
         <label className="flex items-center gap-1.5 text-xs">
-          <input type="radio" name={`session-${def.agentId ?? "new"}`} checked={sMode === "resume"} onChange={() => setSMode("resume")} />
-          Resume session
-        </label>
-        {sMode === "resume" && (
-          <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder="session / thread ID" className={inputCls} />
-        )}
-      </fieldset>
-    </div>
-  );
+          <input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
+        {sMode === "resume" && <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder={caps.resumeIdPlaceholder} className={inputCls} />}
+      </fieldset>}
+    </div>);
 }
 
 function SortableListRow({ id, def, selected, onSelect, onRemove }: {

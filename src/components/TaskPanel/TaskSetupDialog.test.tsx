@@ -274,7 +274,7 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
           historyAction: { kind: "resumeExternal", externalId: "sess-abc" } } as any]} />,
     );
-    expect(html).toContain('placeholder="session / thread ID"');
+    expect(html).toContain('placeholder="session ID"');
     expect(html).toContain('value="sess-abc"');
   });
 
@@ -286,6 +286,69 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
     expect(html).toContain('placeholder="effort"');
+  });
+
+  // Provider-capability gating tests
+
+  test("claude effort placeholder is 'effort', codex is 'reasoning effort'", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const claudeHtml = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(claudeHtml).toContain('placeholder="effort"');
+    expect(claudeHtml).not.toContain('placeholder="reasoning effort"');
+    const codexHtml = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+    );
+    expect(codexHtml).toContain('placeholder="reasoning effort"');
+    expect(codexHtml).not.toContain('placeholder="effort"');
+  });
+
+  test("codex effort is disabled when model is empty", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+    );
+    expect(html).toContain('placeholder="reasoning effort"');
+    expect(html).toContain("disabled");
+  });
+
+  test("codex effort is enabled when model is set", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]} />,
+    );
+    expect(html).toContain('placeholder="reasoning effort"');
+    // When model is set, the effort input should not have the disabled="" attribute
+    const effortMatch = html.match(/<input[^>]*placeholder="reasoning effort"[^>]*/);
+    expect(effortMatch).toBeTruthy();
+    expect(effortMatch![0]).not.toContain('disabled=""');
+  });
+
+  test("claude resume placeholder is 'session ID', codex is 'thread ID'", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const claudeHtml = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
+          historyAction: { kind: "resumeExternal", externalId: "s1" } } as any]} />,
+    );
+    expect(claudeHtml).toContain('placeholder="session ID"');
+    const codexHtml = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1",
+          historyAction: { kind: "resumeExternal", externalId: "t1" } } as any]} />,
+    );
+    expect(codexHtml).toContain('placeholder="thread ID"');
   });
 
   // TDD: two-pane shell — these fail against current code
