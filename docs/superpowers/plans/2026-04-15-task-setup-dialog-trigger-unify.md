@@ -90,4 +90,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `561d8ac0` | Added a compact dialog-trigger treatment in `CyberSelect`, opted the task dialog `Session` control into it, and added focused tests proving the dialog now uses one compact trigger family while preserving history middle ellipsis. | `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 50 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 2 | `eda489cd` | Closed the spec to Accepted and updated the plan CM record for the accepted unified-trigger scope. | `git diff --check -- docs/superpowers/specs/2026-04-15-task-setup-dialog-trigger-unify-design.md docs/superpowers/plans/2026-04-15-task-setup-dialog-trigger-unify.md` ✅ | accepted |
