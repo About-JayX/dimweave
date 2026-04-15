@@ -1,5 +1,7 @@
 # Edit Task Connect And Delete Design
 
+> **Status:** Accepted
+
 ## Summary
 
 The task pane currently allows editing task agents, but edit mode stops at persistence:

@@ -129,5 +129,5 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `414edabd` | Added backend/frontend task deletion plumbing with a new `daemon_delete_task` command, task-graph cascade removal, task-scoped runtime disconnect-before-delete handling, and a `deleteTask(taskId)` store action that cleans task-scoped frontend state and falls back active selection to the next task in the same workspace list order. | `bun test tests/task-store.test.ts` ✅ 78 passed; `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 58 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 2 | `b6b62e2b` | Added `Delete Task`, `Save`, and `Save & Connect` to edit mode, wired `Save & Connect` to reuse edit persistence plus existing launch helpers, added task-card delete affordance, and routed both delete entry points through one confirmed delete path. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` ✅ 79 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | not started | Execution has not started yet. | No task-local verification yet. | not started |
