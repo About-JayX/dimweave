@@ -560,9 +560,9 @@ async fn agent_id_routing_no_fallback_to_provider_channel_in_per_agent_mode() {
 }
 
 /// When a task has agents but the target role has NO matching agent,
-/// the message should be buffered, not silently rerouted.
+/// the message should be dropped (clear failure), not buffered indefinitely.
 #[tokio::test]
-async fn agent_id_routing_missing_role_buffers_clearly() {
+async fn agent_id_routing_missing_role_drops_when_task_has_agents() {
     let state = Arc::new(RwLock::new(DaemonState::new()));
     let task_id = {
         let mut s = state.write().await;
@@ -593,7 +593,47 @@ async fn agent_id_routing_missing_role_buffers_clearly() {
     };
     let result = route_message_inner(&state, msg).await;
     assert!(
-        matches!(result, RouteResult::Buffered),
-        "missing role should buffer, not silently reroute"
+        matches!(result, RouteResult::Dropped),
+        "task has agents but none with role 'reviewer' — must drop, not buffer"
     );
+    assert!(
+        state.read().await.buffered_messages.is_empty(),
+        "dropped message must not enter the buffer"
+    );
+}
+
+/// When a task has NO agents yet, a message to a valid role should still
+/// buffer — agents may be added later.
+#[tokio::test]
+async fn agent_id_routing_missing_role_buffers_when_task_has_no_agents() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        s.claude_role = "lead".into();
+        // No task agents added
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "no-agents-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "lead".into(),
+        content: "hello".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Buffered),
+        "task with no agents yet — must buffer, not drop"
+    );
+    assert_eq!(state.read().await.buffered_messages.len(), 1);
 }

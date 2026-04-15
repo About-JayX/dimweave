@@ -126,7 +126,9 @@ fn resolve_broadcast_targets(
             let agents = s.resolve_task_role_providers(tid, &msg.to);
             if agents.is_empty() {
                 if has_agents {
-                    return BroadcastResolution::NeedBuffer;
+                    // Task owns agents but none match the target role — fail
+                    // clearly instead of buffering indefinitely.
+                    return BroadcastResolution::Dropped;
                 }
                 return BroadcastResolution::NeedBuffer;
             }
