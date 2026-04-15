@@ -84,4 +84,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `51213dac` | Replaced the unreliable native edit-dialog drag path with `dnd-kit` sortable behavior, constrained drag start to the grip handle, and preserved ordered submit payloads while leaving create mode behavior intact. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 22 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | Flipped spec status to Accepted, filled CM record for Task 1, verified order-persistence regression in `TaskHeader.test.tsx`. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 16 passed; `git diff --check` ✅ | accepted |
+| Task 2 | `37952dfc` | Flipped spec status to Accepted, filled CM record for Task 1, verified order-persistence regression in `TaskHeader.test.tsx`. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 16 passed; `git diff --check` ✅ | accepted |
