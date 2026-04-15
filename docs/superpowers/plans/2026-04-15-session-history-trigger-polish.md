@@ -90,4 +90,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `0eca7bd3` | Polished the shared history trigger by applying middle ellipsis to selected long labels, increasing history-trigger height, and adding shared plus task-dialog coverage while leaving dropdown menu rows unchanged. | `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 45 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 2 | `f946708c` | Closed the spec to Accepted and updated the plan CM record for the accepted trigger-only scope. | `git diff --check -- docs/superpowers/specs/2026-04-15-session-history-trigger-polish-design.md docs/superpowers/plans/2026-04-15-session-history-trigger-polish.md` ✅ | accepted |
