@@ -186,6 +186,19 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-draggable-row="true"');
   });
 
+  test("edit mode exposes drag handle button on each sortable row", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[
+          { provider: "claude", role: "lead", agentId: "a1" },
+          { provider: "codex", role: "coder", agentId: "a2" },
+        ]} />,
+    );
+    expect(html).toContain('data-drag-handle="true"');
+  });
+
   test("create mode does not add draggable row markers", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(

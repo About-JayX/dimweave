@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { AgentStatusPanel } from "@/components/AgentStatus";
 import type { AgentDraftConfig } from "@/components/AgentStatus/provider-session-view-model";
 import type { Provider } from "@/stores/task-store/types";
@@ -35,40 +38,41 @@ const DEFAULT_AGENTS: AgentDef[] = [
   { provider: "codex", role: "coder" },
 ];
 
-function AgentDefRow({
-  def,
-  onChange,
-  onRemove,
-}: {
-  def: AgentDef;
-  onChange: (updated: AgentDef) => void;
-  onRemove: () => void;
+function AgentDefRow({ def, onChange, onRemove }: {
+  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <select
-        value={def.provider}
+      <select value={def.provider}
         onChange={(e) => onChange({ ...def, provider: e.target.value as Provider })}
-        className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40"
-      >
-        {PROVIDERS.map((p) => (
-          <option key={p} value={p}>{p}</option>
-        ))}
+        className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40">
+        {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
       </select>
-      <input
-        type="text"
-        value={def.role}
+      <input type="text" value={def.role}
         onChange={(e) => onChange({ ...def, role: e.target.value })}
         placeholder="role"
-        className="min-w-0 flex-1 rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40"
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400"
-      >
+        className="min-w-0 flex-1 rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40" />
+      <button type="button" onClick={onRemove}
+        className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400">
         <Trash2 className="size-3" />
       </button>
+    </div>
+  );
+}
+
+function SortableRow({ id, def, onUpdate, onRemove }: {
+  id: string; def: AgentDef; onUpdate: (u: AgentDef) => void; onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  return (
+    <div ref={setNodeRef} data-draggable-row="true"
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className="flex items-center gap-1.5">
+      <button type="button" data-drag-handle="true" {...attributes} {...listeners}
+        className="cursor-grab rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground">
+        <GripVertical className="size-3 shrink-0" />
+      </button>
+      <div className="flex-1"><AgentDefRow def={def} onChange={onUpdate} onRemove={onRemove} /></div>
     </div>
   );
 }
@@ -81,14 +85,12 @@ export function TaskSetupDialog({
   onSubmit,
   initialAgents,
 }: TaskSetupDialogProps) {
-  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(
-    initialAgents ?? DEFAULT_AGENTS,
-  );
+  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(initialAgents ?? DEFAULT_AGENTS);
+  const [sortIds, setSortIds] = useState<string[]>(() =>
+    (initialAgents ?? DEFAULT_AGENTS).map((d, i) => d.agentId ?? `new-${i}`));
   const [claudeConfig, setClaudeConfig] = useState<AgentDraftConfig | null>(null);
   const [codexConfig, setCodexConfig] = useState<AgentDraftConfig | null>(null);
-  const dragIndexRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
+  const sensors = useSensors(useSensor(PointerSensor));
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   useEffect(() => {
@@ -100,23 +102,28 @@ export function TaskSetupDialog({
 
   if (!open) return null;
 
-  const updateDef = (i: number, u: AgentDef) => setAgentDefs((p) => p.map((d, j) => j === i ? u : d));
-  const removeDef = (i: number) => setAgentDefs((p) => p.filter((_, j) => j !== i));
-  const addDef = () => setAgentDefs((p) => [...p, { provider: "claude", role: "" }]);
-  const handleDrop = (targetIndex: number) => {
-    const src = dragIndexRef.current;
-    if (src === null || src === targetIndex) return;
-    setAgentDefs((p) => { const n = [...p]; const [m] = n.splice(src, 1); n.splice(targetIndex, 0, m); return n; });
-    dragIndexRef.current = null;
-    setDragOverIndex(null);
+  const updateDef = (i: number, u: AgentDef) => setAgentDefs(p => p.map((d, j) => j === i ? u : d));
+  const removeDef = (i: number) => {
+    setAgentDefs(p => p.filter((_, j) => j !== i));
+    setSortIds(p => p.filter((_, j) => j !== i));
+  };
+  const addDef = () => {
+    setAgentDefs(p => [...p, { provider: "claude", role: "" }]);
+    setSortIds(p => [...p, `new-${Date.now()}`]);
+  };
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = sortIds.indexOf(active.id as string);
+    const newIndex = sortIds.indexOf(over.id as string);
+    setAgentDefs(p => arrayMove(p, oldIndex, newIndex));
+    setSortIds(p => arrayMove(p, oldIndex, newIndex));
   };
 
-  const validAgents = agentDefs.filter((d) => d.role.trim().length > 0);
-  const hasClaude = validAgents.some((a) => a.provider === "claude");
-  const hasCodex = validAgents.some((a) => a.provider === "codex");
+  const validAgents = agentDefs.filter(d => d.role.trim().length > 0);
+  const hasClaude = validAgents.some(a => a.provider === "claude");
+  const hasCodex = validAgents.some(a => a.provider === "codex");
   const draftLeadProvider: Provider = validAgents[0]?.provider ?? "claude";
   const draftCoderProvider: Provider = validAgents[1]?.provider ?? validAgents[0]?.provider ?? "codex";
-
   const submit = (launch: boolean) => {
     onSubmit({ agents: validAgents, claudeConfig, codexConfig, requestLaunch: launch });
     onOpenChange(false);
@@ -134,33 +141,27 @@ export function TaskSetupDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Agents</span>
-              <button
-                type="button"
-                onClick={addDef}
-                className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <Plus className="size-3" />
-                Add
+              <button type="button" onClick={addDef}
+                className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground">
+                <Plus className="size-3" />Add
               </button>
             </div>
-            {agentDefs.map((def, i) => mode === "edit" ? (
-              <div key={i} draggable data-draggable-row="true"
-                onDragStart={() => { dragIndexRef.current = i; }}
-                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
-                onDrop={() => handleDrop(i)}
-                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-                className={`flex items-center gap-1.5${dragOverIndex === i ? " border-t-2 border-primary/50" : ""}`}>
-                <GripVertical className="size-3 shrink-0 cursor-grab text-muted-foreground/40" />
-                <div className="flex-1">
-                  <AgentDefRow def={def} onChange={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
-                </div>
-              </div>
+            {mode === "edit" ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
+                  {agentDefs.map((def, i) => (
+                    <SortableRow key={sortIds[i]} id={sortIds[i]} def={def}
+                      onUpdate={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
+                  ))}
+                </SortableContext>
+              </DndContext>
             ) : (
-              <AgentDefRow key={i} def={def} onChange={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
-            ))}
+              agentDefs.map((def, i) => (
+                <AgentDefRow key={i} def={def} onChange={(u) => updateDef(i, u)} onRemove={() => removeDef(i)} />
+              ))
+            )}
           </div>
         </div>
-
         {mode === "create" && (
           <div data-scroll-region="true" className="min-h-0 flex-1 overflow-y-auto px-4 py-2 scrollbar-thin scrollbar-thumb-border/30 scrollbar-track-transparent">
             <AgentStatusPanel workspace={workspace} draftMode

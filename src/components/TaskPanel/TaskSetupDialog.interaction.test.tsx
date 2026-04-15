@@ -6,9 +6,41 @@ mock.module("@/components/AgentStatus", () => ({
   AgentStatusPanel: () => createElement("div", { "data-testid": "agent-status-mock" }),
 }));
 
+// dnd-kit mocks — capture onDragEnd for programmatic reorder testing
+let capturedDragEnd: ((event: any) => void) | null = null;
+mock.module("@dnd-kit/core", () => ({
+  DndContext: ({ children, onDragEnd }: any) => {
+    capturedDragEnd = onDragEnd;
+    return createElement("div", { "data-dnd-context": "true" }, children);
+  },
+  useSensor: () => ({}),
+  useSensors: (...args: any[]) => args,
+  PointerSensor: class {},
+  closestCenter: () => null,
+}));
+mock.module("@dnd-kit/sortable", () => ({
+  SortableContext: ({ children }: any) =>
+    createElement("div", { "data-sortable-context": "true" }, children),
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: () => {},
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+  verticalListSortingStrategy: {},
+  arrayMove: (arr: any[], from: number, to: number) => {
+    const r = [...arr]; const [item] = r.splice(from, 1); r.splice(to, 0, item); return r;
+  },
+}));
+mock.module("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => "" } },
+}));
+
 import { setupDOM, render, queryAll, click, teardownDOM } from "./dom-test-env";
 
-beforeEach(() => setupDOM());
+beforeEach(() => { setupDOM(); capturedDragEnd = null; });
 afterEach(() => teardownDOM());
 
 describe("TaskSetupDialog interaction", () => {
@@ -82,7 +114,26 @@ describe("TaskSetupDialog interaction", () => {
     expect(payload.agents[1].agentId).toBe("a2");
   });
 
-  test("edit-mode drag reorder changes agent order in submit payload", async () => {
+  test("edit-mode rows each have a drag handle affordance", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit",
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit: () => {},
+        initialAgents: [
+          { provider: "claude", role: "lead", agentId: "a1" },
+          { provider: "codex", role: "coder", agentId: "a2" },
+        ],
+      }),
+    );
+    const handles = queryAll('[data-drag-handle="true"]');
+    expect(handles.length).toBe(2);
+  });
+
+  test("edit-mode dnd-kit drag end reorders agents in submit payload", async () => {
     const onSubmit = mock(() => {});
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     await render(
@@ -99,21 +150,9 @@ describe("TaskSetupDialog interaction", () => {
       }),
     );
 
-    const rows = queryAll('[data-draggable-row="true"]');
-    expect(rows.length).toBe(2);
-
-    // Simulate drag row 0 to row 1
-    const Win = globalThis.window as any;
-    const dt = { effectAllowed: "", dropEffect: "" };
-    const mkDrag = (type: string) => {
-      const ev = new Win.Event(type, { bubbles: true });
-      ev.dataTransfer = dt;
-      ev.preventDefault = () => {};
-      return ev;
-    };
-    rows[0].dispatchEvent(mkDrag("dragstart"));
-    rows[1].dispatchEvent(mkDrag("dragover"));
-    rows[1].dispatchEvent(mkDrag("drop"));
+    // Trigger dnd-kit drag: move a1 (index 0) over a2 (index 1)
+    expect(capturedDragEnd).toBeTruthy();
+    capturedDragEnd!({ active: { id: "a1" }, over: { id: "a2" } });
     await new Promise((r) => setTimeout(r, 50));
 
     const saveBtn = queryAll("button").find((b) => b.textContent === "Save");
