@@ -1,6 +1,6 @@
 # Task Agent Dialog Style And Provider Dropdowns Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The `New Task` / `Edit Task` dialog is already unified into a two-pane layout, but the current right pane still looks like a generic form instead of the previous provider-panel visual language. It also still allows configuration paths that are too loose for reliable startup behavior.
 
