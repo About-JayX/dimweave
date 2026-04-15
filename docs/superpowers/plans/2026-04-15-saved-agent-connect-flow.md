@@ -96,4 +96,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `ac703a8f` | Reworked create/edit `Save & Connect` so both flows launch from the persisted saved agent list, using returned `addTaskAgent(...)` identities for new agents and preserving existing `agentId` values for unchanged agents. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 62 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | pending close-out | Spec marked Accepted and CM finalized after Task 1 passed. | `git diff --check -- docs/superpowers/specs/2026-04-15-saved-agent-connect-flow-design.md docs/superpowers/plans/2026-04-15-saved-agent-connect-flow.md` pending | pending |
+| Task 2 | `416713cf` | Marked the spec Accepted and closed out the CM record for the saved-agent connect flow after Task 1 passed. | `git diff --check -- docs/superpowers/specs/2026-04-15-saved-agent-connect-flow-design.md docs/superpowers/plans/2026-04-15-saved-agent-connect-flow.md` ✅ | accepted |
