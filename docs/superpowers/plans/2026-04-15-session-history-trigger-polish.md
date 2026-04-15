@@ -89,5 +89,5 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 52 passed; `bun run build` ✅ | not started |
+| Task 1 | `0eca7bd3` | Polished the shared history trigger by applying middle ellipsis to selected long labels, increasing history-trigger height, and adding shared plus task-dialog coverage while leaving dropdown menu rows unchanged. | `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 45 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |

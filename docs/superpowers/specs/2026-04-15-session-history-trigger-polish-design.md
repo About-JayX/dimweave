@@ -1,5 +1,7 @@
 # Session History Trigger Polish Design
 
+> **Status:** Accepted
+
 ## Summary
 
 Dimweave's shared `CyberSelect` history variant is now used in three live surfaces: `ClaudePanel`, `CodexPanel`, and the task setup dialog. The dropdown menu rows already prioritize readability, but the collapsed trigger still has two visual problems:
