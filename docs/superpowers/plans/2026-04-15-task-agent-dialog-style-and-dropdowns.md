@@ -115,6 +115,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Restyle the unified dialog shell with branded left rows, provider-card right pane visuals, and a default locked first row. | _pending_ | pending |
+| Task 1 | `92ab537a` | Restyled the unified dialog shell with branded left rows, provider-card right pane visuals, and a default locked first row that exists in create mode and cannot be deleted. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 40 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Replace free-form provider fields with provider-aware dropdowns for provider/model/effort while preserving history selection semantics. | _pending_ | pending |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the styled task-agent dialog. | _pending_ | pending |
