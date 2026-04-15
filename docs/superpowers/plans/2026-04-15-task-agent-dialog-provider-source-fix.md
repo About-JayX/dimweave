@@ -115,5 +115,5 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `2dbf70be` | Restored the old history-dropdown session behavior in the unified task-agent dialog by removing the radio-plus-input flow and reusing the existing `New session` sentinel plus provider-history dropdown helpers. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | Align provider dropdown sources with the old Claude/Codex panel semantics. | _pending_ | pending |
+| Task 2 | `56ffb5f7` | Aligned dialog dropdown sources with the old provider panels by reusing Claude option lists from `ClaudeConfigRows`, threading dynamic Codex model/reasoning options into the dialog, and preserving the restored history-dropdown semantics from Task 1. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the provider-source/session-selector fix. | _pending_ | pending |
