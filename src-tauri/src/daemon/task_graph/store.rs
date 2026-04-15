@@ -140,6 +140,18 @@ impl TaskGraphStore {
         self.tasks.remove(task_id).is_some()
     }
 
+    /// Remove a task and cascade-delete all task-scoped agents, sessions,
+    /// and artifacts. Returns true if the task existed.
+    pub fn remove_task_cascade(&mut self, task_id: &str) -> bool {
+        if self.tasks.remove(task_id).is_none() {
+            return false;
+        }
+        self.sessions.retain(|_, s| s.task_id != task_id);
+        self.artifacts.retain(|_, a| a.task_id != task_id);
+        self.task_agents.retain(|_, a| a.task_id != task_id);
+        true
+    }
+
     /// Set the lead session for a task.
     pub fn set_lead_session(&mut self, task_id: &str, session_id: &str) -> bool {
         if let Some(task) = self.tasks.get_mut(task_id) {

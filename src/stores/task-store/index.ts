@@ -181,6 +181,45 @@ export function setReplyTargetPatch(
   };
 }
 
+export function createDeleteTaskAction(
+  set: ProviderHistorySetter,
+  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+) {
+  return async (taskId: string): Promise<void> => {
+    await invokeImpl("daemon_delete_task", { taskId });
+    set((s) => {
+      const task = s.tasks[taskId];
+      const workspace = task?.projectRoot ?? null;
+      const { [taskId]: _t, ...remainingTasks } = s.tasks;
+      const { [taskId]: _a, ...remainingAgents } = s.taskAgents;
+      const { [taskId]: _s, ...remainingSessions } = s.sessions;
+      const { [taskId]: _ar, ...remainingArtifacts } = s.artifacts;
+      const { [taskId]: _ps, ...remainingSummaries } = s.providerSummaries;
+      const { [taskId]: _rt, ...remainingTargets } = s.replyTargets;
+
+      let nextActiveId: string | null = s.activeTaskId;
+      if (s.activeTaskId === taskId) {
+        const fallback = workspace
+          ? Object.values(remainingTasks)
+              .filter((t) => t.projectRoot === workspace)
+              .sort((a, b) => b.createdAt - a.createdAt)[0]
+          : undefined;
+        nextActiveId = fallback?.taskId ?? null;
+      }
+
+      return {
+        activeTaskId: nextActiveId,
+        tasks: remainingTasks,
+        taskAgents: remainingAgents,
+        sessions: remainingSessions,
+        artifacts: remainingArtifacts,
+        providerSummaries: remainingSummaries,
+        replyTargets: remainingTargets,
+      };
+    });
+  };
+}
+
 export function createFetchProviderHistoryAction(
   set: ProviderHistorySetter,
   invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
@@ -253,6 +292,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
   const configuredTask = createConfiguredTaskAction(set as any);
   const updateTaskConfig = createUpdateTaskConfigAction(set as any);
   const startWorkspaceTask = createStartWorkspaceTaskAction(set as any);
+  const deleteTaskAction = createDeleteTaskAction(set as any);
 
   return {
     activeTaskId: null,
@@ -368,6 +408,8 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
     reorderTaskAgents: async (taskId, agentIds) => {
       await invoke("daemon_reorder_task_agents", { taskId, agentIds });
     },
+
+    deleteTask: deleteTaskAction,
 
     cleanup: () => {
       for (const fn of unlisteners) fn();

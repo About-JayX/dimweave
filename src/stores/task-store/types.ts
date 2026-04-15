@@ -186,5 +186,6 @@ export interface TaskStoreState extends TaskStoreData {
     displayName?: string | null,
   ) => Promise<void>;
   reorderTaskAgents: (taskId: string, agentIds: string[]) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
   cleanup: () => void;
 }

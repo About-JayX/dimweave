@@ -810,6 +810,72 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 gui_task::TaskUiEvent::ActiveTaskChanged { task_id: None }.emit(&app);
                 let _ = reply.send(Ok(()));
             }
+            DaemonCmd::DeleteTask { task_id, reply } => {
+                // 1. Validate the task exists and capture workspace for fallback
+                let task_workspace = {
+                    let s = state.read().await;
+                    match s.task_graph.get_task(&task_id) {
+                        Some(t) => t.project_root.clone(),
+                        None => {
+                            let _ = reply.send(Err(format!("task not found: {task_id}")));
+                            continue;
+                        }
+                    }
+                };
+
+                // 2. Stop Codex via authoritative helper (handles + port release +
+                //    invalidation + singleton recompute + status emit)
+                stop_codex_for_task(
+                    &mut codex_handles, &mut codex_port_pool,
+                    &task_id, &state, &app,
+                ).await;
+
+                // 3. Stop Claude handles and invalidate task session so singleton
+                //    mirrors (claude_sdk_ws_tx, nonces, provider connection) are
+                //    properly cleared / recomputed.
+                let task_agent_ids: Vec<String> = state.read().await
+                    .task_graph.agents_for_task(&task_id)
+                    .iter().map(|a| a.agent_id.clone()).collect();
+                for aid in &task_agent_ids {
+                    if let Some(h) = claude_sdk_handles.remove(aid) {
+                        h.stop().await;
+                    }
+                }
+                state.write().await.invalidate_claude_task_session(&task_id);
+                if !state.read().await.is_claude_sdk_online() {
+                    gui::emit_agent_status(&app, "claude", false, None, None);
+                }
+
+                // 4. Remove task state and pick fallback active task
+                {
+                    let mut s = state.write().await;
+                    let was_active = s.active_task_id.as_deref() == Some(&task_id);
+                    s.task_graph.remove_task_cascade(&task_id);
+                    s.task_runtimes.remove(&task_id);
+
+                    if was_active {
+                        let next = s.task_graph.tasks_for_workspace(&task_workspace)
+                            .iter()
+                            .max_by_key(|t| t.created_at)
+                            .map(|t| t.task_id.clone());
+                        s.active_task_id = next;
+                    }
+                }
+
+                // 5. Persist and emit
+                let s = state.read().await;
+                match s.save_task_graph() {
+                    Ok(()) => gui::emit_task_save_status(&app, true, None, &task_id),
+                    Err(e) => gui::emit_task_save_status(&app, false, Some(e.to_string()), &task_id),
+                }
+                let new_active = s.active_task_id.clone();
+                drop(s);
+                gui_task::TaskUiEvent::ActiveTaskChanged { task_id: new_active.clone() }.emit(&app);
+                if let Some(ref next_id) = new_active {
+                    emit_task_context_events(&state, &app, next_id).await;
+                }
+                let _ = reply.send(Ok(()));
+            }
             DaemonCmd::GetTaskSnapshot { reply } => {
                 let _ = reply.send(state.read().await.task_snapshot());
             }

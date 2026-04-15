@@ -108,6 +108,25 @@ pub async fn daemon_select_task(
 }
 
 #[tauri::command]
+pub async fn daemon_delete_task(
+    task_id: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::DeleteTask {
+            task_id,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped delete_task reply".to_string())?
+}
+
+#[tauri::command]
 pub async fn daemon_clear_active_task(sender: State<'_, DaemonSender>) -> Result<(), String> {
     let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
     sender

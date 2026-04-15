@@ -829,6 +829,75 @@ fn migrate_legacy_agents_one_agent_when_only_lead_session() {
     assert_eq!(agents[0].provider, Provider::Claude);
 }
 
+// ── Cascade Delete ─────────────────────────────────────────
+
+#[test]
+fn remove_task_cascade_removes_task_and_children() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "CascadeMe");
+    let tid = task.task_id.clone();
+    let sess = store.create_session(CreateSessionParams {
+        task_id: &tid,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "Lead",
+        agent_id: None,
+    });
+    store.add_artifact(CreateArtifactParams {
+        task_id: &tid,
+        session_id: &sess.session_id,
+        kind: ArtifactKind::Plan,
+        title: "Plan",
+        content_ref: "plan.md",
+    });
+    store.add_task_agent(&tid, Provider::Claude, "lead");
+    assert!(store.remove_task_cascade(&tid));
+    assert!(store.get_task(&tid).is_none());
+    assert!(store.sessions_for_task(&tid).is_empty());
+    assert!(store.artifacts_for_task(&tid).is_empty());
+    assert!(store.agents_for_task(&tid).is_empty());
+}
+
+#[test]
+fn remove_task_cascade_returns_false_for_missing() {
+    let mut store = TaskGraphStore::new();
+    assert!(!store.remove_task_cascade("nonexistent"));
+}
+
+#[test]
+fn remove_task_cascade_preserves_other_tasks() {
+    let mut store = TaskGraphStore::new();
+    let t1 = store.create_task("/ws", "Keep");
+    let t2 = store.create_task("/ws", "Delete");
+    store.create_session(CreateSessionParams {
+        task_id: &t1.task_id,
+        parent_session_id: None,
+        provider: Provider::Claude,
+        role: SessionRole::Lead,
+        cwd: "/ws",
+        title: "T1 Lead",
+        agent_id: None,
+    });
+    store.create_session(CreateSessionParams {
+        task_id: &t2.task_id,
+        parent_session_id: None,
+        provider: Provider::Codex,
+        role: SessionRole::Coder,
+        cwd: "/ws",
+        title: "T2 Coder",
+        agent_id: None,
+    });
+    store.add_task_agent(&t1.task_id, Provider::Claude, "lead");
+    store.add_task_agent(&t2.task_id, Provider::Codex, "coder");
+    assert!(store.remove_task_cascade(&t2.task_id));
+    assert!(store.get_task(&t1.task_id).is_some());
+    assert_eq!(store.sessions_for_task(&t1.task_id).len(), 1);
+    assert_eq!(store.agents_for_task(&t1.task_id).len(), 1);
+    assert!(store.get_task(&t2.task_id).is_none());
+}
+
 // ── Reorder TaskAgents ─────────────────────────────────────
 
 #[test]

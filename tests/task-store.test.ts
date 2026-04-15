@@ -13,6 +13,7 @@ import {
   createLoadWorkspaceTasksAction,
   createConfiguredTaskAction,
   createUpdateTaskConfigAction,
+  createDeleteTaskAction,
   deriveWorkspaceTaskTitle,
   setReplyTargetPatch,
   snapshotToPatch,
@@ -1206,5 +1207,119 @@ describe("projectRoot-aligned workspace selection", () => {
     const list = selectWorkspaceTasks(state as unknown as TaskStoreState);
     expect(list).toHaveLength(2);
     expect(list.map((t) => t.taskId)).toEqual(["t2", "t1"]);
+  });
+});
+
+// ── deleteTask ──────────────────────────────────────────────
+
+describe("createDeleteTaskAction", () => {
+  test("invokes daemon_delete_task and removes task from store", async () => {
+    const t1 = { ...makeTask("t1", "Delete Me"), projectRoot: "/ws" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+      taskAgents: { t1: [makeAgent("a1", "t1", "claude", "lead")] },
+      sessions: { t1: [makeSession("s1", "t1")] },
+      artifacts: { t1: [{ artifactId: "ar1", taskId: "t1", sessionId: "s1", kind: "plan" as const, title: "p", contentRef: "r", createdAt: 1 }] },
+      replyTargets: { t1: "lead" },
+    };
+    const commands: string[] = [];
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async (cmd) => {
+      commands.push(cmd);
+      return undefined as never;
+    });
+    await del("t1");
+
+    expect(commands).toEqual(["daemon_delete_task"]);
+    expect(state.tasks.t1).toBeUndefined();
+    expect(state.taskAgents.t1).toBeUndefined();
+    expect(state.sessions.t1).toBeUndefined();
+    expect(state.artifacts.t1).toBeUndefined();
+    expect(state.replyTargets.t1).toBeUndefined();
+    expect(state.activeTaskId).toBeNull();
+  });
+
+  test("falls back to newest remaining task in same workspace", async () => {
+    const t1 = { ...makeTask("t1", "Old"), projectRoot: "/ws", createdAt: 100 };
+    const t2 = { ...makeTask("t2", "Active"), projectRoot: "/ws", createdAt: 200 };
+    const t3 = { ...makeTask("t3", "Newest"), projectRoot: "/ws", createdAt: 300 };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t2",
+      tasks: { t1, t2, t3 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async () => undefined as never);
+    await del("t2");
+
+    expect(state.activeTaskId).toBe("t3");
+    expect(state.tasks.t2).toBeUndefined();
+    expect(state.tasks.t1).toBeDefined();
+    expect(state.tasks.t3).toBeDefined();
+  });
+
+  test("does not change activeTaskId when deleting non-active task", async () => {
+    const t1 = { ...makeTask("t1"), projectRoot: "/ws" };
+    const t2 = { ...makeTask("t2"), projectRoot: "/ws" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1, t2 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async () => undefined as never);
+    await del("t2");
+
+    expect(state.activeTaskId).toBe("t1");
+    expect(state.tasks.t1).toBeDefined();
+    expect(state.tasks.t2).toBeUndefined();
+  });
+
+  test("sets activeTaskId to null when last task in workspace is deleted", async () => {
+    const t1 = { ...makeTask("t1"), projectRoot: "/ws" };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async () => undefined as never);
+    await del("t1");
+
+    expect(state.activeTaskId).toBeNull();
+    expect(Object.keys(state.tasks)).toHaveLength(0);
+  });
+
+  test("fallback ignores tasks from other workspaces", async () => {
+    const t1 = { ...makeTask("t1"), projectRoot: "/ws", createdAt: 100 };
+    const t2 = { ...makeTask("t2"), projectRoot: "/other", createdAt: 200 };
+    let state: TaskStoreData = {
+      ...emptyState(),
+      selectedWorkspace: "/ws",
+      activeTaskId: "t1",
+      tasks: { t1, t2 },
+    };
+    const set = (fn: (s: TaskStoreData) => Partial<TaskStoreData>) => {
+      state = { ...state, ...fn(state) };
+    };
+    const del = createDeleteTaskAction(set as any, async () => undefined as never);
+    await del("t1");
+
+    expect(state.activeTaskId).toBeNull();
+    expect(state.tasks.t2).toBeDefined();
   });
 });
