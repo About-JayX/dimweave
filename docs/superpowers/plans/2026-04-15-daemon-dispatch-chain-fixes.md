@@ -169,7 +169,7 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `f9fc277d` | Added the missing `agent_runtime_statuses` field to the remaining `TaskSnapshot` test fixtures so the daemon routing test targets compile again without changing runtime behavior. | `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 11 passed; `cargo test --manifest-path src-tauri/Cargo.toml user_target_tests -- --nocapture` ✅ 13 passed; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | _pending_ | _pending_ | pending |
+| Task 2 | `776aa79c`, `d2fd48e5` | Removed the singleton-era `online_role_conflict` gate from official Claude/Codex live launch/connect paths while preserving explicit-`agent_id` duplicate no-op guards, then added focused tests proving same-role cross-provider coexistence through the production launch/connect chain. | `cargo test --manifest-path src-tauri/Cargo.toml online_role_conflict -- --nocapture` ✅ 1 passed; `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 11 passed; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | _pending_ | _pending_ | pending |
 | Task 4 | _pending_ | _pending_ | _pending_ | pending |
 | Task 5 | _pending_ | _pending_ | _pending_ | pending |
