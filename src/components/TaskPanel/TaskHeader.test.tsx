@@ -193,6 +193,19 @@ describe("collapsed accordion header", () => {
     expect(leadIdx).toBeLessThan(coderIdx);
   });
 
+  test("provider-source-fix regression: card pills intact after history dropdown and source alignment", () => {
+    // After history-dropdown restore (2dbf70be) and provider-source alignment (56ffb5f7),
+    // card pills must still render in persisted store order.
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain("lead:");
+    expect(html).toContain("coder:");
+    const leadIdx = html.indexOf("lead:");
+    const coderIdx = html.indexOf("coder:");
+    expect(leadIdx).toBeLessThan(coderIdx);
+  });
+
   test("does not leak active task agents into a different task header", () => {
     // Mock has agents for task-001 (active). Render header for task-other.
     const html = renderToStaticMarkup(

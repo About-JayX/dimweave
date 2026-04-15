@@ -1,6 +1,6 @@
 # Task Agent Dialog Provider Source And Session Selector Fix Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task-agent dialog has already been unified into a two-pane layout, styled to match the prior provider panels, and constrained to dropdown-driven model/effort selection. Two remaining mismatches are still visible compared with the older provider panels:
 >
