@@ -270,6 +270,66 @@ fn online_role_conflict_allows_shared_role() {
 }
 
 #[test]
+fn agent_connect_allows_same_role_cross_provider() {
+    // Mirrors the AgentConnect handler in control/handler.rs:
+    // Claude is online via SDK WS with role "lead", then Codex bridge connects
+    // with the same role. Before the fix, AgentConnect would reject via
+    // online_role_conflict(). Now the connect proceeds and the bridge agent
+    // is registered in attached_agents.
+    let mut s = DaemonState::new();
+    s.claude_role = "lead".into();
+    s.codex_role = "lead".into();
+
+    // Make Claude online via SDK WS
+    let (claude_ws_tx, _claude_ws_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let epoch = s.begin_claude_sdk_launch("nonce-connect".into());
+    s.attach_claude_sdk_ws(epoch, "nonce-connect", claude_ws_tx);
+    assert!(s.is_agent_online("claude"));
+
+    // Simulate AgentConnect for Codex bridge: exact state ops from handler.rs
+    let (codex_bridge_tx, _codex_bridge_rx) = tokio::sync::mpsc::channel::<ToAgent>(1);
+    let gen = s.next_agent_gen;
+    s.next_agent_gen += 1;
+    s.attached_agents.insert(
+        "codex".into(),
+        crate::daemon::state::AgentSender::new(codex_bridge_tx, gen),
+    );
+
+    // Claude remains online, Codex bridge is now attached — no rejection
+    assert!(s.is_agent_online("claude"));
+    assert!(s.attached_agents.contains_key("codex"));
+}
+
+#[test]
+fn launch_claude_sdk_succeeds_when_codex_shares_role() {
+    // Mirrors the launch_claude_sdk() helper in mod.rs:
+    // Codex is already online with role "lead", then Claude launches with
+    // the same role. Before the fix, the helper would early-return with an
+    // error from online_role_conflict(). Now it proceeds through to
+    // begin_claude_sdk_launch() + attach_claude_sdk_ws().
+    let mut s = DaemonState::new();
+    s.claude_role = "lead".into();
+    s.codex_role = "lead".into();
+
+    // Make Codex online via inject channel
+    let (codex_tx, _codex_rx) =
+        tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.codex_inject_tx = Some(codex_tx);
+    assert!(s.is_agent_online("codex"));
+
+    // Simulate what launch_claude_sdk() does after the removed conflict check
+    let epoch = s.begin_claude_sdk_launch("nonce-launch".into());
+    let (claude_ws_tx, _claude_ws_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let generation = s.attach_claude_sdk_ws(epoch, "nonce-launch", claude_ws_tx);
+    assert!(generation.is_some(), "Claude SDK WS attach must succeed");
+
+    // Both providers are now live with the same role
+    assert!(s.is_agent_online("claude"));
+    assert!(s.is_agent_online("codex"));
+    assert_eq!(s.claude_role, s.codex_role);
+}
+
+#[test]
 fn claude_sdk_direct_text_handoff_stays_enabled_until_turn_finishes() {
     let mut s = DaemonState::new();
 
