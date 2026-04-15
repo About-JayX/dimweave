@@ -268,7 +268,7 @@ describe("TaskSetupDialog interaction", () => {
     expect(payload.requestLaunch).toBe(false);
   });
 
-  test("edit-mode Delete Task button calls onDelete", async () => {
+  test("edit-mode Delete Task button invokes onDelete callback (opens confirmation)", async () => {
     const onDelete = mock(() => {});
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     await render(
@@ -281,6 +281,7 @@ describe("TaskSetupDialog interaction", () => {
     const deleteBtn = query('[data-delete-task-btn="true"]');
     expect(deleteBtn).toBeTruthy();
     click(deleteBtn!);
+    // onDelete triggers the confirmation dialog — it does NOT directly delete
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 

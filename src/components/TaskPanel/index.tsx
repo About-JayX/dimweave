@@ -17,6 +17,7 @@ import {
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getTaskPanelEmptyStateMessage } from "./view-model";
 
 export function TaskPanel() {
@@ -38,6 +39,7 @@ export function TaskPanel() {
   const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => { fetchCodexModels(); }, [fetchCodexModels]);
 
@@ -117,9 +119,11 @@ export function TaskPanel() {
     setDialogOpen(true);
   }, []);
 
-  const handleDeleteTask = useCallback(async () => {
+  const requestDeleteTask = useCallback(() => { if (task) setDeleteConfirmOpen(true); }, [task]);
+  const handleCancelDelete = useCallback(() => setDeleteConfirmOpen(false), []);
+  const handleConfirmDelete = useCallback(async () => {
     if (!task) return;
-    if (!window.confirm(`Delete task "${task.title || task.taskId}"? This cannot be undone.`)) return;
+    setDeleteConfirmOpen(false);
     setDialogOpen(false);
     try { await deleteTask(task.taskId); } catch { /* delete error */ }
   }, [deleteTask, task]);
@@ -160,7 +164,7 @@ export function TaskPanel() {
             task={t}
             reviewBadge={reviewBadge}
             onEditTask={() => openDialog("edit")}
-            onDeleteTask={handleDeleteTask}
+            onDeleteTask={requestDeleteTask}
           />
         ) : (
           <TaskHeader key={t.taskId} task={t} collapsed onClick={() => void selectTask(t.taskId)} />
@@ -175,10 +179,17 @@ export function TaskPanel() {
       {dialogOpen && dialogWorkspace && (
         <TaskSetupDialog mode={dialogMode} workspace={dialogWorkspace}
           open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
-          onDelete={dialogMode === "edit" ? handleDeleteTask : undefined}
+          onDelete={dialogMode === "edit" ? requestDeleteTask : undefined}
           initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined}
           codexModels={codexModels} />
       )}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Delete Task"
+        description={`Delete "${task?.title || task?.taskId || "this task"}"? This action cannot be undone.`}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }

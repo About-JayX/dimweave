@@ -87,10 +87,11 @@ describe("TaskHeader", () => {
     expect(html).toContain('aria-label="Edit task"');
   });
 
-  test("renders delete affordance when onDeleteTask is provided", () => {
+  test("renders delete affordance when onDeleteTask is provided (opens confirmation)", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask, onDeleteTask: () => {} }),
     );
+    // Delete icon is a trigger for the shared confirmation dialog, not a direct delete
     expect(html).toContain('data-delete-icon="true"');
     expect(html).toContain('title="Delete task"');
     expect(html).toContain('aria-label="Delete task"');
