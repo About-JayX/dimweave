@@ -252,6 +252,62 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-draggable-row="true"');
   });
 
+  test("create-mode save+connect: launched agents use addTaskAgent result agentIds", () => {
+    // Models the create-mode flow in index.tsx: draft agents have no agentId,
+    // addTaskAgent returns real IDs, launch must use saved IDs not draft.
+    type AgentDef = { provider: string; role: string; agentId?: string };
+    const draftAgents: AgentDef[] = [
+      { provider: "claude", role: "lead" },
+      { provider: "codex", role: "coder" },
+    ];
+    const addResults = [
+      { agentId: "saved-a1" },
+      { agentId: "saved-a2" },
+    ];
+    const savedAgents = draftAgents.map((def, i) => ({ ...def, agentId: addResults[i].agentId }));
+    expect(savedAgents.every(a => !!a.agentId)).toBe(true);
+    expect(savedAgents[0].agentId).toBe("saved-a1");
+    expect(savedAgents[1].agentId).toBe("saved-a2");
+    // Original draft must NOT have agentIds
+    expect(draftAgents.every(a => !a.agentId)).toBe(true);
+  });
+
+  test("edit-mode save+connect: new agents get addTaskAgent agentId, existing keep theirs", () => {
+    type AgentDef = { provider: string; role: string; agentId?: string };
+    const payloadAgents: AgentDef[] = [
+      { provider: "claude", role: "lead", agentId: "existing-a1" },
+      { provider: "codex", role: "coder" }, // new agent, no agentId
+    ];
+    const savedAgents: AgentDef[] = [];
+    for (const def of payloadAgents) {
+      if (def.agentId) {
+        savedAgents.push(def);
+      } else {
+        savedAgents.push({ ...def, agentId: "new-from-daemon-b1" });
+      }
+    }
+    expect(savedAgents.length).toBe(2);
+    expect(savedAgents[0].agentId).toBe("existing-a1");
+    expect(savedAgents[1].agentId).toBe("new-from-daemon-b1");
+    expect(savedAgents.every(a => !!a.agentId)).toBe(true);
+  });
+
+  test("multiple same-provider agents: saved list preserves all as independent connect targets", () => {
+    type AgentDef = { provider: string; role: string; agentId?: string };
+    const draftAgents: AgentDef[] = [
+      { provider: "codex", role: "lead" },
+      { provider: "codex", role: "coder" },
+    ];
+    const addResults = [{ agentId: "cx-1" }, { agentId: "cx-2" }];
+    const savedAgents = draftAgents.map((def, i) => ({ ...def, agentId: addResults[i].agentId }));
+    expect(savedAgents.length).toBe(2);
+    expect(savedAgents[0].agentId).toBe("cx-1");
+    expect(savedAgents[1].agentId).toBe("cx-2");
+    expect(savedAgents[0].provider).toBe("codex");
+    expect(savedAgents[1].provider).toBe("codex");
+    expect(savedAgents[0].agentId).not.toBe(savedAgents[1].agentId);
+  });
+
   test("edit-mode diff logic: update existing, add new, remove deleted", () => {
     // Mirrors the handleEditSubmit diff logic in index.tsx
     type AgentDef = { provider: string; role: string; agentId?: string; displayName?: string | null };

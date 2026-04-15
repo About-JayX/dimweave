@@ -13,6 +13,7 @@ import {
 import { TaskHeader, type ReviewBadge } from "./TaskHeader";
 import {
   TaskSetupDialog,
+  type AgentDef,
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
@@ -42,8 +43,8 @@ export function TaskPanel() {
   useEffect(() => { fetchCodexModels(); }, [fetchCodexModels]);
 
   const launchProviders = useCallback(
-    async (taskId: string, cwd: string, payload: TaskSetupSubmitPayload) => {
-      for (const agent of payload.agents) {
+    async (taskId: string, cwd: string, agents: AgentDef[]) => {
+      for (const agent of agents) {
         const cfg = buildDraftConfigFromDef(agent);
         const a = cfg.historyAction;
         if (a.kind === "resumeNormalized") { await resumeSession(a.sessionId); continue; }
@@ -74,10 +75,12 @@ export function TaskPanel() {
       try {
         const newTask = await createTask(selectedWorkspace, "");
         const tid = newTask.taskId;
+        const savedAgents: AgentDef[] = [];
         for (const def of payload.agents) {
-          await addTaskAgent(tid, def.provider, def.role);
+          const added = await addTaskAgent(tid, def.provider, def.role, def.displayName);
+          savedAgents.push({ ...def, agentId: added.agentId });
         }
-        if (payload.requestLaunch) await launchProviders(tid, selectedWorkspace, payload);
+        if (payload.requestLaunch) await launchProviders(tid, selectedWorkspace, savedAgents);
       } catch {
         /* task creation or launch error — UI updates via store */
       }
@@ -86,26 +89,30 @@ export function TaskPanel() {
   );
 
   const handleEditSubmit = useCallback(
-    async (payload: TaskSetupSubmitPayload) => {
-      if (!task) return;
+    async (payload: TaskSetupSubmitPayload): Promise<AgentDef[]> => {
+      if (!task) return [];
       try {
         const incoming = new Set(payload.agents.filter((d) => d.agentId).map((d) => d.agentId!));
         for (const a of agents) {
           if (!incoming.has(a.agentId)) await removeTaskAgent(a.agentId);
         }
-        const finalOrder: string[] = [];
+        const savedAgents: AgentDef[] = []; const finalOrder: string[] = [];
         for (const def of payload.agents) {
           if (def.agentId) {
             await updateTaskAgent(def.agentId, def.provider, def.role, def.displayName);
             finalOrder.push(def.agentId);
+            savedAgents.push(def);
           } else {
             const added = await addTaskAgent(task.taskId, def.provider, def.role, def.displayName);
             finalOrder.push(added.agentId);
+            savedAgents.push({ ...def, agentId: added.agentId });
           }
         }
         if (finalOrder.length > 0) await reorderTaskAgents(task.taskId, finalOrder);
+        return savedAgents;
       } catch {
         /* edit error — UI updates via store */
+        return [];
       }
     },
     [addTaskAgent, agents, removeTaskAgent, reorderTaskAgents, task, updateTaskAgent],
@@ -130,9 +137,9 @@ export function TaskPanel() {
       if (dialogMode === "edit") {
         void (async () => {
           try {
-            await handleEditSubmit(payload);
-            if (payload.requestLaunch && task)
-              await launchProviders(task.taskId, task.projectRoot, payload);
+            const savedAgents = await handleEditSubmit(payload);
+            if (payload.requestLaunch && task && savedAgents.length > 0)
+              await launchProviders(task.taskId, task.projectRoot, savedAgents);
           } catch { /* edit/launch error */ }
         })();
       } else {
