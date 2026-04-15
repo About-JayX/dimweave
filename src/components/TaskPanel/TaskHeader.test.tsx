@@ -87,6 +87,22 @@ describe("TaskHeader", () => {
     expect(html).toContain('aria-label="Edit task"');
   });
 
+  test("renders delete affordance when onDeleteTask is provided", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask, onDeleteTask: () => {} }),
+    );
+    expect(html).toContain('data-delete-icon="true"');
+    expect(html).toContain('title="Delete task"');
+    expect(html).toContain('aria-label="Delete task"');
+  });
+
+  test("does not render delete affordance when onDeleteTask is absent", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).not.toContain('data-delete-icon="true"');
+  });
+
   test("does not render edit affordance when onEditTask is absent", () => {
     const html = renderToStaticMarkup(
       createElement(TaskHeader, { task: baseTask }),
@@ -151,6 +167,15 @@ describe("collapsed accordion header", () => {
       createElement(TaskHeader, { task: baseTask, onClick: () => {} } as any),
     );
     expect(html).toContain("cursor-pointer");
+  });
+
+  test("hides delete button in collapsed mode even when handler exists", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, {
+        task: baseTask, collapsed: true, onClick: () => {}, onDeleteTask: () => {},
+      } as any),
+    );
+    expect(html).not.toContain('data-delete-icon="true"');
   });
 
   test("hides edit button in collapsed mode even when handler exists", () => {

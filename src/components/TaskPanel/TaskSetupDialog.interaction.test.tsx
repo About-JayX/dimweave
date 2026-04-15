@@ -234,6 +234,69 @@ describe("TaskSetupDialog interaction", () => {
     expect(deleteButtons.length).toBe(0);
   });
 
+  test("edit-mode Save & Connect calls onSubmit with requestLaunch true", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {}, onSubmit,
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1" }],
+      }),
+    );
+    const connectBtn = queryAll("button").find((b) => b.textContent === "Save & Connect");
+    expect(connectBtn).toBeTruthy();
+    click(connectBtn!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    expect(payload.requestLaunch).toBe(true);
+  });
+
+  test("edit-mode Save calls onSubmit with requestLaunch false", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {}, onSubmit,
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1" }],
+      }),
+    );
+    const saveBtn = queryAll("button").find((b) => b.textContent === "Save");
+    expect(saveBtn).toBeTruthy();
+    click(saveBtn!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    expect(payload.requestLaunch).toBe(false);
+  });
+
+  test("edit-mode Delete Task button calls onDelete", async () => {
+    const onDelete = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {},
+        onSubmit: () => {}, onDelete,
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1" }],
+      }),
+    );
+    const deleteBtn = query('[data-delete-task-btn="true"]');
+    expect(deleteBtn).toBeTruthy();
+    click(deleteBtn!);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  test("edit-mode hides Delete Task button when onDelete is absent", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit", workspace: "/repo", open: true, onOpenChange: () => {},
+        onSubmit: () => {},
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1" }],
+      }),
+    );
+    const deleteBtn = query('[data-delete-task-btn="true"]');
+    expect(deleteBtn).toBeFalsy();
+  });
+
   test("Add Agent button creates a new row in the left pane", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     await render(

@@ -32,6 +32,7 @@ export function TaskPanel() {
   const removeTaskAgent = useTaskStore((s) => s.removeTaskAgent);
   const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
   const reorderTaskAgents = useTaskStore((s) => s.reorderTaskAgents);
+  const deleteTask = useTaskStore((s) => s.deleteTask);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
   const codexModels = useCodexAccountStore((s) => s.models);
   const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
@@ -39,6 +40,34 @@ export function TaskPanel() {
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
 
   useEffect(() => { fetchCodexModels(); }, [fetchCodexModels]);
+
+  const launchProviders = useCallback(
+    async (taskId: string, cwd: string, payload: TaskSetupSubmitPayload) => {
+      const claudeAgent = payload.agents.find((a) => a.provider === "claude");
+      const codexAgent = payload.agents.find((a) => a.provider === "codex");
+      if (claudeAgent) await invoke("daemon_set_claude_role", { role: claudeAgent.role });
+      if (codexAgent) await invoke("daemon_set_codex_role", { role: codexAgent.role });
+      const cc = claudeAgent ? payload.claudeConfig : null;
+      if (cc) {
+        const a = cc.historyAction;
+        if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+        else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
+          claudeRole: claudeAgent!.role, cwd, model: cc.model, effort: cc.effort,
+          resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined, taskId,
+        }));
+      }
+      const cx = codexAgent ? payload.codexConfig : null;
+      if (cx) {
+        const a = cx.historyAction;
+        if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
+        else await applyConfig(buildCodexLaunchConfig({
+          model: cx.model, reasoningEffort: cx.effort, cwd,
+          resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined, taskId,
+        }));
+      }
+    },
+    [applyConfig, resumeSession],
+  );
 
   const handleSetupSubmit = useCallback(
     async (payload: TaskSetupSubmitPayload) => {
@@ -49,42 +78,12 @@ export function TaskPanel() {
         for (const def of payload.agents) {
           await addTaskAgent(tid, def.provider, def.role);
         }
-        if (payload.requestLaunch) {
-          const cwd = selectedWorkspace;
-          const claudeAgent = payload.agents.find((a) => a.provider === "claude");
-          const codexAgent = payload.agents.find((a) => a.provider === "codex");
-          if (claudeAgent) {
-            await invoke("daemon_set_claude_role", { role: claudeAgent.role });
-          }
-          if (codexAgent) {
-            await invoke("daemon_set_codex_role", { role: codexAgent.role });
-          }
-          const cc = claudeAgent ? payload.claudeConfig : null;
-          if (cc) {
-            const a = cc.historyAction;
-            if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-            else await invoke("daemon_launch_claude_sdk", buildClaudeLaunchRequest({
-              claudeRole: claudeAgent!.role, cwd, model: cc.model, effort: cc.effort,
-              resumeSessionId: a.kind === "resumeExternal" ? a.externalId : undefined,
-              taskId: tid,
-            }));
-          }
-          const cx = codexAgent ? payload.codexConfig : null;
-          if (cx) {
-            const a = cx.historyAction;
-            if (a.kind === "resumeNormalized") await resumeSession(a.sessionId);
-            else await applyConfig(buildCodexLaunchConfig({
-              model: cx.model, reasoningEffort: cx.effort, cwd,
-              resumeThreadId: a.kind === "resumeExternal" ? a.externalId : undefined,
-              taskId: tid,
-            }));
-          }
-        }
+        if (payload.requestLaunch) await launchProviders(tid, selectedWorkspace, payload);
       } catch {
         /* task creation or launch error — UI updates via store */
       }
     },
-    [addTaskAgent, applyConfig, createTask, resumeSession, selectedWorkspace],
+    [addTaskAgent, createTask, launchProviders, selectedWorkspace],
   );
 
   const handleEditSubmit = useCallback(
@@ -118,12 +117,29 @@ export function TaskPanel() {
     setDialogOpen(true);
   }, []);
 
+  const handleDeleteTask = useCallback(async () => {
+    if (!task) return;
+    if (!window.confirm(`Delete task "${task.title || task.taskId}"? This cannot be undone.`)) return;
+    setDialogOpen(false);
+    try { await deleteTask(task.taskId); } catch { /* delete error */ }
+  }, [deleteTask, task]);
+
   const handleDialogSubmit = useCallback(
     (payload: TaskSetupSubmitPayload) => {
-      void (dialogMode === "edit" ? handleEditSubmit(payload) : handleSetupSubmit(payload));
+      if (dialogMode === "edit") {
+        void (async () => {
+          try {
+            await handleEditSubmit(payload);
+            if (payload.requestLaunch && task)
+              await launchProviders(task.taskId, task.projectRoot, payload);
+          } catch { /* edit/launch error */ }
+        })();
+      } else {
+        void handleSetupSubmit(payload);
+      }
       setDialogOpen(false);
     },
-    [dialogMode, handleEditSubmit, handleSetupSubmit],
+    [dialogMode, handleEditSubmit, handleSetupSubmit, launchProviders, task],
   );
 
   const reviewBadge: ReviewBadge | null =
@@ -144,6 +160,7 @@ export function TaskPanel() {
             task={t}
             reviewBadge={reviewBadge}
             onEditTask={() => openDialog("edit")}
+            onDeleteTask={handleDeleteTask}
           />
         ) : (
           <TaskHeader key={t.taskId} task={t} collapsed onClick={() => void selectTask(t.taskId)} />
@@ -158,6 +175,7 @@ export function TaskPanel() {
       {dialogOpen && dialogWorkspace && (
         <TaskSetupDialog mode={dialogMode} workspace={dialogWorkspace}
           open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
+          onDelete={dialogMode === "edit" ? handleDeleteTask : undefined}
           initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined}
           codexModels={codexModels} />
       )}

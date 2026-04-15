@@ -26,6 +26,7 @@ export interface CodexModelInfo { slug: string; displayName: string; reasoningLe
 interface TaskSetupDialogProps {
   mode?: TaskSetupMode; workspace: string; open: boolean;
   onOpenChange: (open: boolean) => void; onSubmit: (payload: TaskSetupSubmitPayload) => void;
+  onDelete?: () => void;
   initialAgents?: AgentDef[]; providerHistory?: ProviderHistoryInfo[];
   codexModels?: CodexModelInfo[];
 }
@@ -103,7 +104,7 @@ function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: { id
     </div>);
 }
 
-export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [], codexModels }: TaskSetupDialogProps) {
+export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, onDelete, initialAgents, providerHistory = [], codexModels }: TaskSetupDialogProps) {
   const init = initialAgents ?? [{ ...DEFAULT_FIRST }];
   const [agentDefs, setAgentDefs] = useState<AgentDef[]>(init);
   const [sortIds, setSortIds] = useState<string[]>(() => init.map((d, i) => d.agentId ?? `new-${i}`));
@@ -173,16 +174,22 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
             )}
           </div>
         </div>
-        <div data-dialog-footer="true" className="shrink-0 flex items-center justify-end gap-2 border-t border-border/30 px-4 py-3">
+        <div data-dialog-footer="true" className="shrink-0 flex items-center gap-2 border-t border-border/30 px-4 py-3">
+          {mode === "edit" && onDelete && (
+            <button type="button" data-delete-task-btn="true" onClick={onDelete}
+              className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-400 transition-colors hover:bg-rose-500/20 active:opacity-70">Delete Task</button>
+          )}
+          <div className="flex-1" />
           <button type="button" onClick={handleClose}
             className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">Cancel</button>
-          {mode === "edit" ? (
+          {mode === "edit" ? (<>
+            <button type="button" onClick={() => submit(true)}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20">Save &amp; Connect</button>
             <button type="button" onClick={() => submit(false)}
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">Save</button>
-          ) : (<>
+          </>) : (<>
             <button type="button" onClick={() => submit(true)} disabled={valid.length === 0}
-              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40">
-              Create &amp; Connect</button>
+              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40">Create &amp; Connect</button>
             <button type="button" onClick={() => submit(false)}
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">Create</button>
           </>)}

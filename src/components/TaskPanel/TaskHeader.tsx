@@ -1,4 +1,4 @@
-import { Settings2 } from "lucide-react";
+import { Settings2, Trash2 } from "lucide-react";
 import { useTaskStore } from "@/stores/task-store";
 import type { TaskAgentInfo, TaskInfo } from "@/stores/task-store/types";
 
@@ -66,12 +66,14 @@ export function TaskHeader({
   task,
   reviewBadge,
   onEditTask,
+  onDeleteTask,
   collapsed,
   onClick,
 }: {
   task: TaskInfo;
   reviewBadge?: ReviewBadge | null;
   onEditTask?: () => void;
+  onDeleteTask?: () => void;
   collapsed?: boolean;
   onClick?: () => void;
 }) {
@@ -123,17 +125,19 @@ export function TaskHeader({
         </div>
         {/* Upper-right: icon-only edit button (non-collapsed) or compact status (collapsed) */}
         {showDetail ? (
-          onEditTask ? (
-            <button
-              type="button"
-              data-edit-icon="true"
-              onClick={(e) => { e.stopPropagation(); onEditTask(); }}
-              className="shrink-0 rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              title="Edit task"
-              aria-label="Edit task"
-            >
-              <Settings2 className="size-3.5" />
-            </button>
+          (onEditTask || onDeleteTask) ? (
+            <div className="flex items-center gap-0.5 shrink-0">
+              {onDeleteTask && <button type="button" data-delete-icon="true"
+                onClick={(e) => { e.stopPropagation(); onDeleteTask(); }}
+                className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-rose-500/20 hover:text-rose-400 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title="Delete task" aria-label="Delete task">
+                <Trash2 className="size-3.5" /></button>}
+              {onEditTask && <button type="button" data-edit-icon="true"
+                onClick={(e) => { e.stopPropagation(); onEditTask(); }}
+                className="shrink-0 rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title="Edit task" aria-label="Edit task">
+                <Settings2 className="size-3.5" /></button>}
+            </div>
           ) : null
         ) : (
           <StatusChip status={task.status} />
