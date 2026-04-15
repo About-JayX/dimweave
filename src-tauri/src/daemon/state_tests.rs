@@ -256,17 +256,17 @@ fn clearing_provider_connection_pauses_and_unbinds_active_task_session() {
 }
 
 #[test]
-fn online_role_conflict_only_blocks_live_other_agent() {
+fn online_role_conflict_allows_shared_role() {
     let mut s = DaemonState::new();
     s.claude_role = "lead".into();
     s.codex_role = "lead".into();
     assert_eq!(s.online_role_conflict("codex", "lead"), None);
 
-    // Make Claude online via SDK WS (not attached_agents)
+    // Even with Claude online, shared role is allowed
     let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
     let epoch = s.begin_claude_sdk_launch("nonce-conflict".into());
     s.attach_claude_sdk_ws(epoch, "nonce-conflict", claude_tx);
-    assert_eq!(s.online_role_conflict("codex", "lead"), Some("claude"));
+    assert_eq!(s.online_role_conflict("codex", "lead"), None);
 }
 
 #[test]

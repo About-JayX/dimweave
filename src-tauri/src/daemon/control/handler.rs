@@ -155,20 +155,6 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         "codex" => Some(daemon.codex_role.clone()),
                         _ => None,
                     };
-                    if let Some(conflict_role) = role.as_deref() {
-                        if let Some(conflict_agent) =
-                            daemon.online_role_conflict(&id, conflict_role)
-                        {
-                            gui::emit_system_log(
-                                &app,
-                                "warn",
-                                &format!(
-                                    "[Control] rejected {id} connection: role '{conflict_role}' already in use by online {conflict_agent}"
-                                ),
-                            );
-                            break;
-                        }
-                    }
                     let gen = daemon.next_agent_gen;
                     daemon.next_agent_gen += 1;
                     my_gen = gen;

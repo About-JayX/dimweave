@@ -39,7 +39,7 @@ pub type SharedState = Arc<RwLock<DaemonState>>;
 
 async fn set_role(
     state: &SharedState,
-    agent: &str,
+    _agent: &str,
     field: fn(&mut DaemonState) -> &mut String,
     new: String,
 ) -> bool {
@@ -47,9 +47,6 @@ async fn set_role(
         return false;
     }
     let mut s = state.write().await;
-    if s.online_role_conflict(agent, &new).is_some() {
-        return false;
-    }
     let old = std::mem::replace(field(&mut s), new.clone());
     if old != new {
         s.migrate_buffered_role(&old, &new);
@@ -165,14 +162,6 @@ async fn launch_claude_sdk(
     state: &SharedState,
     app: &AppHandle,
 ) -> Result<(claude_sdk::ClaudeSdkHandle, String, String), String> {
-    if let Some(conflict_agent) = {
-        let daemon = state.read().await;
-        daemon.online_role_conflict("claude", role_id)
-    } {
-        let err = format!("role '{role_id}' already in use by online {conflict_agent}");
-        gui::emit_system_log(app, "error", &format!("[Daemon] Claude SDK failed: {err}"));
-        return Err(err);
-    }
     let agent_id = match explicit_agent_id {
         Some(aid) => aid,
         None => {
@@ -259,14 +248,6 @@ async fn attach_provider_history(
     match provider {
         crate::daemon::task_graph::types::Provider::Claude => {
             let role_id = session_role_name(role);
-            if let Some(conflict_agent) = {
-                let daemon = state.read().await;
-                daemon.online_role_conflict("claude", role_id)
-            } {
-                return Err(format!(
-                    "role '{role_id}' already in use by online {conflict_agent}"
-                ));
-            }
             let attach_task_id = state.read().await.active_task_id.clone()
                 .unwrap_or_default();
             let (handle, _external_session_id, attach_claude_aid) = launch_claude_sdk(
@@ -307,14 +288,6 @@ async fn attach_provider_history(
         }
         crate::daemon::task_graph::types::Provider::Codex => {
             let role_id = session_role_name(role).to_string();
-            if let Some(conflict_agent) = {
-                let daemon = state.read().await;
-                daemon.online_role_conflict("codex", &role_id)
-            } {
-                return Err(format!(
-                    "role '{role_id}' already in use by online {conflict_agent}"
-                ));
-            }
             let attach_task_id = state.read().await.active_task_id.clone()
                 .ok_or_else(|| "no active task selected".to_string())?;
             let (launch_epoch, resume_agent_id) = {
@@ -453,20 +426,6 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             }
                         }
                     }
-                }
-                if let Some(conflict_agent) = {
-                    let daemon = state.read().await;
-                    daemon.online_role_conflict("codex", &role_id)
-                } {
-                    let err = format!("role '{role_id}' already in use by online {conflict_agent}");
-                    gui::emit_agent_status(&app, "codex", false, None, None);
-                    gui::emit_system_log(
-                        &app,
-                        "error",
-                        &format!("[Daemon] Codex start failed: {err}"),
-                    );
-                    let _ = reply.send(Err(err));
-                    continue;
                 }
                 let (launch_epoch, codex_agent_id) = {
                     let mut s = state.write().await;
@@ -1035,47 +994,38 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                     crate::daemon::task_graph::types::SessionRole::Coder => "coder",
                                 };
-                                if let Some(conflict_agent) = {
-                                    let daemon = state.read().await;
-                                    daemon.online_role_conflict("claude", role_id)
-                                } {
-                                    Err(format!(
-                                        "role '{role_id}' already in use by online {conflict_agent}"
-                                    ))
-                                } else {
-                                    let resume_task_id = state.read().await.active_task_id
-                                        .clone().unwrap_or_default();
-                                    match launch_claude_sdk(
-                                        &resume_task_id,
-                                        role_id,
-                                        &target.cwd,
-                                        None,
-                                        None,
-                                        Some(target.external_id.clone()),
-                                        sess.agent_id.clone(),
-                                        &state,
-                                        &app,
-                                    )
-                                    .await
-                                    {
-                                        Ok((handle, _external_session_id, resume_claude_aid)) => {
-                                            claude_sdk_handles.insert(resume_claude_aid.clone(), handle);
-                                            let mut daemon = state.write().await;
-                                            if let Ok(path) =
-                                                crate::daemon::provider::claude::default_transcript_path(
-                                                    &target.cwd,
-                                                    &target.external_id,
-                                                )
-                                            {
-                                                let _ = daemon.task_graph.set_transcript_path(
-                                                    &session_id,
-                                                    &path.to_string_lossy(),
-                                                );
-                                            }
-                                            daemon.resume_session(&session_id)
+                                let resume_task_id = state.read().await.active_task_id
+                                    .clone().unwrap_or_default();
+                                match launch_claude_sdk(
+                                    &resume_task_id,
+                                    role_id,
+                                    &target.cwd,
+                                    None,
+                                    None,
+                                    Some(target.external_id.clone()),
+                                    sess.agent_id.clone(),
+                                    &state,
+                                    &app,
+                                )
+                                .await
+                                {
+                                    Ok((handle, _external_session_id, resume_claude_aid)) => {
+                                        claude_sdk_handles.insert(resume_claude_aid.clone(), handle);
+                                        let mut daemon = state.write().await;
+                                        if let Ok(path) =
+                                            crate::daemon::provider::claude::default_transcript_path(
+                                                &target.cwd,
+                                                &target.external_id,
+                                            )
+                                        {
+                                            let _ = daemon.task_graph.set_transcript_path(
+                                                &session_id,
+                                                &path.to_string_lossy(),
+                                            );
                                         }
-                                        Err(err) => Err(err.to_string()),
+                                        daemon.resume_session(&session_id)
                                     }
+                                    Err(err) => Err(err.to_string()),
                                 }
                             }
                             Err(err) => Err(err),

@@ -55,12 +55,9 @@ impl DaemonState {
         self.claude_sdk_direct_text_state = ClaudeSdkDirectTextState::Inactive;
     }
 
-    pub fn online_role_conflict(&self, agent: &str, role: &str) -> Option<&'static str> {
-        match agent {
-            "claude" if self.is_agent_online("codex") && self.codex_role == role => Some("codex"),
-            "codex" if self.is_agent_online("claude") && self.claude_role == role => Some("claude"),
-            _ => None,
-        }
+    pub fn online_role_conflict(&self, _agent: &str, _role: &str) -> Option<&'static str> {
+        // Per-agent-id routing supports same-role coexistence; no longer blocked.
+        None
     }
 
     #[cfg(test)]
