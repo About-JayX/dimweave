@@ -85,4 +85,4 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `653208d5` | Removed the fake `Select model` menu entry by using a placeholder-only unset sentinel while preserving the real Claude `Default` model option, deduped `Default` in effort options, and added dialog tests that inspect the actual options passed into `CyberSelect`. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 2 | `06b1436e` | Closed the spec to Accepted and updated the plan CM record for the accepted local option-cleanup scope. | `git diff --check -- docs/superpowers/specs/2026-04-15-task-setup-dialog-option-cleanup-design.md docs/superpowers/plans/2026-04-15-task-setup-dialog-option-cleanup.md` ✅ | accepted |
