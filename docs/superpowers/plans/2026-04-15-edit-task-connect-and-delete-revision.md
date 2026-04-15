@@ -124,6 +124,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test tests/task-store.test.ts src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` ✅ 157 passed; `cargo build -p dimweave-bridge` ✅; `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 58 passed; `bun run build` ✅ | not started |
+| Task 1 | `34b45c6d` | Replaced browser-native delete confirmation with a shared React `ConfirmDialog` component and routed both task-card and edit-dialog delete triggers through the same confirmation state in `TaskPanel`. | `bun test src/components/ui/confirm-dialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` ✅ 44 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
 | Task 3 | not started | Execution has not started yet. | No task-local verification yet. | not started |
