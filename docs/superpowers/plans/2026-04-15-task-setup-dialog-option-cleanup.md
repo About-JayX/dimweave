@@ -84,5 +84,5 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 60 passed; `bun run build` ✅ | not started |
+| Task 1 | `653208d5` | Removed the fake `Select model` menu entry by using a placeholder-only unset sentinel while preserving the real Claude `Default` model option, deduped `Default` in effort options, and added dialog tests that inspect the actual options passed into `CyberSelect`. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |

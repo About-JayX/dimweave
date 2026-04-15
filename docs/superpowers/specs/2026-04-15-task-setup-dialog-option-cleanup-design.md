@@ -1,5 +1,7 @@
 # Task Setup Dialog Option Cleanup Design
 
+> **Status:** Accepted
+
 ## Summary
 
 The task setup dialog still has two option-list bugs in the right-pane controls:
