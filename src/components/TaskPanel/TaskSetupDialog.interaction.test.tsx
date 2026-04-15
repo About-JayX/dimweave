@@ -181,6 +181,56 @@ describe("TaskSetupDialog interaction", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  // TDD: provider-aware config — these fail against current (Task 1) code
+
+  test("create submit populates claudeConfig from claude agent model field", async () => {
+    const onSubmit = mock(() => {});
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit,
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-opus" } as any],
+      }),
+    );
+    const createBtn = queryAll("button").find(
+      (b) => b.textContent === "Create" && !(b as HTMLButtonElement).disabled,
+    );
+    expect(createBtn).toBeTruthy();
+    click(createBtn!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = (onSubmit.mock.calls as any[][])[0][0];
+    expect(payload.claudeConfig).not.toBeNull();
+    expect(payload.claudeConfig.model).toBe("claude-opus");
+  });
+
+  test("provider change in right pane clears model value", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        mode: "edit",
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit: () => {},
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-opus" } as any],
+      }),
+    );
+    // Change provider select to codex — should clear model
+    const providerSelect = query("select") as HTMLSelectElement | null;
+    expect(providerSelect).toBeTruthy();
+    const DOMEvent = (globalThis as any).window.Event;
+    (providerSelect as HTMLSelectElement).value = "codex";
+    providerSelect!.dispatchEvent(new DOMEvent("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    // model input should now be empty
+    const modelInput = query('input[placeholder="model"]') as HTMLInputElement | null;
+    expect(modelInput).toBeTruthy();
+    expect((modelInput as HTMLInputElement).value).toBe("");
+  });
+
   // TDD: new test for two-pane shell — fails against current code
 
   test("Add Agent button creates a new row in the left pane", async () => {

@@ -230,7 +230,65 @@ describe("TaskSetupDialog", () => {
     expect(toAdd[0].role).toBe("tester");
   });
 
-  // TDD: new tests for two-pane shell — these fail against current code
+  // TDD: provider-aware config fields — these fail against current (Task 1) code
+
+  test("right pane config form has a separate model field", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('placeholder="model"');
+  });
+
+  test("model field renders empty for agents without a preselected model", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    // model input present but has no preselected value
+    expect(html).toContain('placeholder="model"');
+    expect(html).not.toContain('value="claude-opus"');
+    expect(html).not.toContain('value="claude-sonnet"');
+  });
+
+  test("right pane config form shows New session and Resume session options", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain("New session");
+    expect(html).toContain("Resume session");
+  });
+
+  test("resume session mode shows session ID input when historyAction is resumeExternal", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
+          historyAction: { kind: "resumeExternal", externalId: "sess-abc" } } as any]} />,
+    );
+    expect(html).toContain('placeholder="session / thread ID"');
+    expect(html).toContain('value="sess-abc"');
+  });
+
+  test("right pane config form has an effort field", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('placeholder="effort"');
+  });
+
+  // TDD: two-pane shell — these fail against current code
 
   test("dialog renders two-pane layout with left pane and right pane", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");

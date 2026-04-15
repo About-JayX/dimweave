@@ -99,3 +99,33 @@ export function resolveProviderHistoryWorkspace(
 ): string {
   return activeTaskWorkspace?.trim() || "";
 }
+
+// --- Agent config form helpers (shared with TaskSetupDialog) ---
+
+export function deriveSessionMode(ha?: ProviderHistoryAction): "new" | "resume" {
+  if (!ha || ha.kind === "new") return "new";
+  return "resume";
+}
+
+export function deriveResumeId(ha?: ProviderHistoryAction): string {
+  if (ha?.kind === "resumeExternal") return ha.externalId;
+  if (ha?.kind === "resumeNormalized") return ha.sessionId;
+  return "";
+}
+
+export function buildHistoryAction(mode: "new" | "resume", resumeId: string): ProviderHistoryAction {
+  if (mode === "resume" && resumeId.trim()) {
+    return { kind: "resumeExternal", externalId: resumeId.trim() };
+  }
+  return { kind: "new" };
+}
+
+export function buildDraftConfigFromDef(def: {
+  model?: string; effort?: string; historyAction?: ProviderHistoryAction;
+}): AgentDraftConfig {
+  return {
+    model: def.model ?? "",
+    effort: def.effort ?? "",
+    historyAction: def.historyAction ?? { kind: "new" },
+  };
+}
