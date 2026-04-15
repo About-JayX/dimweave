@@ -114,6 +114,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Convert role to a constrained dropdown and restyle dialog selectors to match old provider panels. | _pending_ | pending |
+| Task 1 | `9c744547` | Converted `role` to a constrained `lead` / `coder` dropdown, replaced the dialog’s native `<select>` controls with `CyberSelect`-based controls aligned to the old provider panel styling, and removed the last free-form role/model/effort inputs from the live dialog. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 43 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Wire the live Codex model/reasoning source into the task dialog caller path and verify the real integration path. | _pending_ | pending |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the live task-agent dialog fixes. | _pending_ | pending |
