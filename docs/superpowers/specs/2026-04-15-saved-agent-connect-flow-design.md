@@ -1,5 +1,7 @@
 # Saved Agent Connect Flow Design
 
+> **Status:** Accepted
+
 ## Summary
 
 The current `Save & Connect` flow still has one critical gap:

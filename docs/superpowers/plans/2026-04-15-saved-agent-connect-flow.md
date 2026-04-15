@@ -95,5 +95,5 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 59 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅ | not started |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 1 | `ac703a8f` | Reworked create/edit `Save & Connect` so both flows launch from the persisted saved agent list, using returned `addTaskAgent(...)` identities for new agents and preserving existing `agentId` values for unchanged agents. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 62 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅; `git diff --check` ✅ | accepted |
+| Task 2 | pending close-out | Spec marked Accepted and CM finalized after Task 1 passed. | `git diff --check -- docs/superpowers/specs/2026-04-15-saved-agent-connect-flow-design.md docs/superpowers/plans/2026-04-15-saved-agent-connect-flow.md` pending | pending |
