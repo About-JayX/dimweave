@@ -1,5 +1,47 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+
+// Mock CyberSelect so option arrays are inspectable in static markup.
+// The real component only renders options when open (useState), which
+// renderToStaticMarkup never triggers.  This mock preserves the class
+// structure that existing CSS-assertion tests depend on and adds a
+// hidden <input data-cyber-options="..."> for option-contract tests.
+mock.module("@/components/ui/cyber-select", () => {
+  function middleEllipsis(text: string, maxLen: number): string {
+    if (text.length <= maxLen) return text;
+    const keep = Math.floor((maxLen - 1) / 2);
+    return `${text.slice(0, keep)}\u2026${text.slice(-keep)}`;
+  }
+  function getCyberSelectMenuPanelClassName(variant: string, compact?: boolean): string {
+    if (variant === "history" && compact)
+      return "right-0 top-7 min-w-44 max-w-64 max-h-48 rounded-lg p-1";
+    return variant === "history"
+      ? "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1"
+      : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
+  }
+  function HistoryMenuOption() { return null; }
+  function CyberSelect({ value, options, placeholder, variant = "default", compact = false }: any) {
+    const isHistory = variant === "history";
+    const selected = options.find((o: any) => o.value === value);
+    const displayLabel = selected?.label ?? placeholder ?? value;
+    const containerCls = `relative ${isHistory && !compact ? "flex min-w-0 flex-1" : "inline-flex"}`;
+    const btnCls = `inline-flex items-center gap-1 border font-medium ${
+      isHistory && !compact
+        ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-1.5 text-[10px]"
+        : "rounded px-1.5 py-0.5 text-[10px]"
+    } border-input bg-muted text-foreground`;
+    const label = isHistory && selected ? middleEllipsis(displayLabel, 36) : displayLabel;
+    return (
+      <div className={containerCls}>
+        <button type="button" className={btnCls}>
+          <span className={isHistory && !compact ? "flex-1" : "max-w-28"}>{label}</span>
+        </button>
+        <input type="hidden" data-cyber-options={JSON.stringify(options)} data-cyber-placeholder={placeholder ?? ""} />
+      </div>
+    );
+  }
+  return { CyberSelect, middleEllipsis, getCyberSelectMenuPanelClassName, HistoryMenuOption };
+});
 
 // Stub must exist before any component import triggers bridge-store init
 let callbackId = 0;
@@ -458,6 +500,71 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-history-select="true"');
     // CyberSelect shows the selected label as button text
     expect(html).toContain("Old session");
+  });
+
+  // Option contract tests — inspect actual options arrays via mock's data-cyber-options
+
+  function parseOptionsFromBlock(html: string, dataAttr: string): { options: { value: string; label: string }[]; placeholder: string } {
+    const block = html.split(`${dataAttr}="true"`)[1] ?? "";
+    const optMatch = block.match(/data-cyber-options="([^"]*)"/);
+    const phMatch = block.match(/data-cyber-placeholder="([^"]*)"/);
+    return { options: optMatch ? JSON.parse(optMatch[1].replace(/&quot;/g, '"')) : [], placeholder: phMatch?.[1] ?? "" };
+  }
+
+  test("claude model trigger shows 'Select model' when unset, options include real Default", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    const { options, placeholder } = parseOptionsFromBlock(html, 'data-model-select');
+    // Visible trigger label is "Select model" (placeholder) when model is unset
+    const modelBlock = html.split('data-model-select="true"')[1]?.split('data-effort')[0] ?? "";
+    expect(modelBlock).toContain(">Select model<");
+    // Real provider "Default" option preserved in menu
+    expect(options.some(o => o.value === "" && o.label === "Default")).toBe(true);
+    // "Select model" is NOT a real menu option
+    expect(options.every(o => o.label !== "Select model")).toBe(true);
+    expect(placeholder).toBe("Select model");
+  });
+
+  test("claude model trigger shows 'Default' when model is explicitly empty string", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1", model: "" }]} />,
+    );
+    const modelBlock = html.split('data-model-select="true"')[1]?.split('data-effort')[0] ?? "";
+    // When model is explicitly "" (user chose Default), trigger shows "Default"
+    expect(modelBlock).toContain(">Default<");
+    expect(modelBlock).not.toContain(">Select model<");
+  });
+
+  test("claude effort options contain exactly one Default entry", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    const { options } = parseOptionsFromBlock(html, 'data-effort-select');
+    const defaultEntries = options.filter(o => o.value === "" && o.label === "Default");
+    expect(defaultEntries.length).toBe(1);
+  });
+
+  test("codex effort prepends Default when reasoning levels lack it", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]}
+        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }, { effort: "high" }] }]} />,
+    );
+    const { options } = parseOptionsFromBlock(html, 'data-effort-select');
+    expect(options[0]).toEqual({ value: "", label: "Default" });
+    expect(options.length).toBe(3);
   });
 
   // TDD: two-pane shell — these fail against current code

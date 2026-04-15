@@ -50,8 +50,7 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
   const histOpts = buildProviderHistoryOptions(def.provider, providerHistory);
   const histVal = historyActionToSelectValue(def.historyAction, providerHistory);
   const onHist = (v: string) => onChange({ ...def, historyAction: resolveProviderHistoryAction(findProviderHistoryEntry(def.provider, providerHistory, v)) });
-  const modelWithDefault = [{ value: "", label: modelPlaceholder }, ...mOpts];
-  const effortWithDefault = [{ value: "", label: "Default" }, ...eOpts];
+  const effortOpts = eOpts.some(o => o.value === "") ? eOpts : [{ value: "", label: "Default" }, ...eOpts];
   return (
     <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
       <div className="flex items-center gap-2 border-b border-border/30 px-4 py-2.5">
@@ -70,11 +69,11 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
         </div>
         {caps.supportsModel && <div className="flex items-center justify-between" data-model-select="true">
           <span className="text-[10px] text-muted-foreground">Model</span>
-          <CyberSelect value={def.model ?? ""} options={modelWithDefault} onChange={(v) => onChange({ ...def, model: v })} />
+          <CyberSelect value={def.model ?? "\x00"} options={mOpts} onChange={(v) => onChange({ ...def, model: v })} placeholder={modelPlaceholder} />
         </div>}
         {caps.supportsEffort && <div className="flex items-center justify-between" data-effort-select="true">
           <span className="text-[10px] text-muted-foreground">{caps.effortLabel}</span>
-          <CyberSelect value={def.effort ?? ""} options={effortWithDefault} onChange={(v) => onChange({ ...def, effort: v })} disabled={eDis} />
+          <CyberSelect value={def.effort ?? ""} options={effortOpts} onChange={(v) => onChange({ ...def, effort: v })} disabled={eDis} />
         </div>}
         {caps.supportsSessionResume && <div className="flex items-center justify-between" data-history-select="true">
           <span className="text-[10px] text-muted-foreground">Session</span>
