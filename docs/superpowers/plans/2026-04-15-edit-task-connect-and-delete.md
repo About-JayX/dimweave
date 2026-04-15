@@ -128,6 +128,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx src/components/TaskPanel/TaskHeader.test.tsx` ✅ 72 passed; `bun run build` ✅ | not started |
+| Task 1 | `414edabd` | Added backend/frontend task deletion plumbing with a new `daemon_delete_task` command, task-graph cascade removal, task-scoped runtime disconnect-before-delete handling, and a `deleteTask(taskId)` store action that cleans task-scoped frontend state and falls back active selection to the next task in the same workspace list order. | `bun test tests/task-store.test.ts` ✅ 78 passed; `cargo test --manifest-path src-tauri/Cargo.toml task_graph:: -- --nocapture` ✅ 58 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
 | Task 3 | not started | Execution has not started yet. | No task-local verification yet. | not started |
