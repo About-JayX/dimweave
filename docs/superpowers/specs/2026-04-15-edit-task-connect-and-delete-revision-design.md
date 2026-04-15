@@ -1,5 +1,7 @@
 # Edit Task Connect And Delete Revision Design
 
+> **Status:** Accepted
+
 ## Summary
 
 The previous edit-connect-delete change closed the obvious missing actions, but real app testing exposed two product-level failures:
