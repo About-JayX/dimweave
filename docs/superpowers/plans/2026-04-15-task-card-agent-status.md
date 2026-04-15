@@ -118,6 +118,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/TaskPanel/TaskHeader.test.tsx tests/task-store.test.ts` ✅ 101 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅ | not started |
+| Task 1 | `e817eeaa` | Added daemon-backed per-agent runtime status to task snapshots and task context events, hydrated that data into frontend store state by `taskId`, and added store tests proving multi-agent independent status handling and cleanup. | `bun test tests/task-store.test.ts` ✅ 85 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
 | Task 3 | not started | Execution has not started yet. | No task-local verification yet. | not started |
