@@ -1,5 +1,7 @@
 # Task Setup Dialog Trigger Unify Design
 
+> **Status:** Accepted
+
 ## Summary
 
 The task setup dialog still renders one visually broken control group in the right pane:

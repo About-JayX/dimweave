@@ -89,5 +89,5 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Execution has not started yet. | Baseline only: `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 55 passed; `bun run build` ✅ | not started |
+| Task 1 | `561d8ac0` | Added a compact dialog-trigger treatment in `CyberSelect`, opted the task dialog `Session` control into it, and added focused tests proving the dialog now uses one compact trigger family while preserving history middle ellipsis. | `bun test src/components/ui/cyber-select.test.tsx src/components/TaskPanel/TaskSetupDialog.test.tsx` ✅ 50 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
