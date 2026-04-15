@@ -3,10 +3,11 @@ import { useBridgeStore } from "@/stores/bridge-store";
 import { CyberSelect } from "@/components/ui/cyber-select";
 
 // "user" is reserved for the human administrator and not assignable to agents.
-const ALL_ROLES = [
+export const AGENT_ROLE_OPTIONS = [
   { value: "lead", label: "Lead" },
   { value: "coder", label: "Coder" },
 ];
+const ALL_ROLES = AGENT_ROLE_OPTIONS;
 
 export function RoleSelect({
   agent,

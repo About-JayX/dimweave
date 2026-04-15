@@ -131,9 +131,10 @@ describe("TaskSetupDialog", () => {
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "reviewer", agentId: "a1", displayName: "Rev" }]} />,
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "a1", displayName: "Rev" }]} />,
     );
-    expect(html).toContain('value="reviewer"');
+    // CyberSelect shows matched label; role "coder" renders as "Coder"
+    expect(html).toContain("Coder");
     expect(html).toContain("codex");
   });
 
@@ -232,7 +233,7 @@ describe("TaskSetupDialog", () => {
 
   // TDD: provider-aware config fields — these fail against current (Task 1) code
 
-  test("claude model dropdown matches old ClaudeConfigRows options", async () => {
+  test("claude model CyberSelect shows Select model when unset", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -240,11 +241,8 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
     expect(html).toContain('data-model-select="true"');
-    // Must match ClaudeConfigRows MODEL_OPTIONS
-    expect(html).toContain("Sonnet (latest)");
-    expect(html).toContain("Opus (latest)");
-    expect(html).toContain("Haiku 4.5");
-    expect(html).not.toContain("o3-pro");
+    // CyberSelect button shows "Select model" when value is ""
+    expect(html).toContain("Select model");
   });
 
   test("model select starts unselected for new agents", async () => {
@@ -272,20 +270,7 @@ describe("TaskSetupDialog", () => {
     expect(html).not.toContain('type="radio"');
   });
 
-  test("history dropdown shows provider history entries when provided", async () => {
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
-        providerHistory={[{ provider: "claude", externalId: "sess-abc", title: "Debug session",
-          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
-    );
-    expect(html).toContain("Debug session");
-    expect(html).toContain("sess-abc");
-  });
-
-  test("history dropdown defaults to New session when no history action set", async () => {
+  test("history CyberSelect shows New session when no history is provided", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -293,11 +278,10 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
     expect(html).toContain('data-history-select="true"');
-    // The sentinel value should be selected
-    expect(html).toContain("__new_session__");
+    expect(html).toContain("New session");
   });
 
-  test("claude effort dropdown matches old ClaudeConfigRows options including Max", async () => {
+  test("claude effort CyberSelect shows Default when unset", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -305,9 +289,7 @@ describe("TaskSetupDialog", () => {
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
     expect(html).toContain('data-effort-select="true"');
-    expect(html).toContain("Low");
-    expect(html).toContain("High");
-    expect(html).toContain("Max (Opus only)");
+    expect(html).toContain("Default");
   });
 
   test("claude effort label differs from codex effort label", async () => {
@@ -338,21 +320,19 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("disabled");
   });
 
-  test("codex model options come from dynamic codexModels prop, not local static list", async () => {
+  test("codex model CyberSelect shows Select model by default when no model set", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const codexHtml = renderToStaticMarkup(
+    const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
-        codexModels={[{ slug: "o3-pro", displayName: "o3-pro" }, { slug: "o4-mini", displayName: "o4-mini" }]}
-        codexReasoningOptions={[{ effort: "low" }, { effort: "high" }]} />,
+        codexModels={[{ slug: "o3-pro", displayName: "o3-pro" }]} />,
     );
-    expect(codexHtml).toContain("o3-pro");
-    expect(codexHtml).toContain("o4-mini");
-    expect(codexHtml).not.toContain("Sonnet (latest)");
+    expect(html).toContain('data-model-select="true"');
+    expect(html).toContain("Select model");
   });
 
-  test("no free-form text input for model or effort", async () => {
+  test("no free-form text input for model, effort, or role", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
@@ -361,6 +341,35 @@ describe("TaskSetupDialog", () => {
     );
     expect(html).not.toContain('placeholder="model"');
     expect(html).not.toContain('placeholder="effort"');
+    expect(html).not.toContain('placeholder="role"');
+  });
+
+  test("role is a CyberSelect dropdown showing selected role label", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('data-role-select="true"');
+    // CyberSelect shows the matched label as button text
+    expect(html).toContain("Lead");
+    // No free-form text input for role
+    expect(html).not.toContain('placeholder="role"');
+  });
+
+  test("dialog uses CyberSelect instead of native select for main controls", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    // CyberSelect renders as <button> not <select>
+    // The right-pane provider card should have no native <select> elements
+    const cardMatch = html.match(/data-provider-card="true"([\s\S]*)/);
+    expect(cardMatch).toBeTruthy();
+    expect(cardMatch![1]).not.toContain("<select");
   });
 
   test("history dropdown pre-selects matching entry when historyAction is resumeExternal", async () => {
@@ -374,8 +383,8 @@ describe("TaskSetupDialog", () => {
           archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
     );
     expect(html).toContain('data-history-select="true"');
-    // React SSR marks the matching option as selected=""
-    expect(html).toContain('value="sess-x" selected=""');
+    // CyberSelect shows the selected label as button text
+    expect(html).toContain("Old session");
   });
 
   // TDD: two-pane shell — these fail against current code

@@ -4,34 +4,23 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  PROVIDER_CAPS, NEW_PROVIDER_SESSION_VALUE, buildProviderHistoryOptions,
-  findProviderHistoryEntry, resolveProviderHistoryAction,
-  historyActionToSelectValue, buildDraftConfigFromDef,
-  type AgentDraftConfig, type ProviderHistoryAction,
+  PROVIDER_CAPS, buildProviderHistoryOptions, findProviderHistoryEntry, resolveProviderHistoryAction,
+  historyActionToSelectValue, buildDraftConfigFromDef, type AgentDraftConfig, type ProviderHistoryAction,
 } from "@/components/AgentStatus/provider-session-view-model";
 import type { ProviderHistoryInfo } from "@/stores/task-store/types";
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
+import { CyberSelect } from "@/components/ui/cyber-select";
+import { AGENT_ROLE_OPTIONS } from "@/components/AgentStatus/RoleSelect";
 import type { Provider } from "@/stores/task-store/types";
 
 export interface AgentDef {
-  provider: Provider;
-  role: string;
-  model?: string;
-  effort?: string;
-  historyAction?: ProviderHistoryAction;
-  agentId?: string;
-  displayName?: string | null;
+  provider: Provider; role: string; model?: string; effort?: string;
+  historyAction?: ProviderHistoryAction; agentId?: string; displayName?: string | null;
 }
-
 export interface TaskSetupSubmitPayload {
-  agents: AgentDef[];
-  claudeConfig: AgentDraftConfig | null;
-  codexConfig: AgentDraftConfig | null;
-  requestLaunch: boolean;
+  agents: AgentDef[]; claudeConfig: AgentDraftConfig | null; codexConfig: AgentDraftConfig | null; requestLaunch: boolean;
 }
-
 export type TaskSetupMode = "create" | "edit";
-
 export interface CodexModelInfo { slug: string; displayName: string }
 export interface CodexReasoningLevel { effort: string }
 
@@ -42,9 +31,7 @@ interface TaskSetupDialogProps {
   codexModels?: CodexModelInfo[]; codexReasoningOptions?: CodexReasoningLevel[];
 }
 
-const PROVIDERS: Provider[] = ["claude", "codex"];
-const inputCls = "w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40";
-const selectCls = "w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40 disabled:opacity-40";
+const PROVIDERS = [{ value: "claude", label: "Claude" }, { value: "codex", label: "Codex" }];
 const DEFAULT_FIRST: AgentDef = { provider: "claude", role: "" };
 
 function ProviderIcon({ provider }: { provider: Provider }) {
@@ -57,10 +44,12 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
   const caps = PROVIDER_CAPS[def.provider], eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
   const mOpts = def.provider === "codex" && codexModels ? codexModels.map(m => ({ value: m.slug, label: m.displayName })) : caps.modelOptions;
   const eOpts = def.provider === "codex" && codexReasoningOptions ? codexReasoningOptions.map(r => ({ value: r.effort, label: r.effort })) : caps.effortOptions;
-  const setP = (p: Provider) => onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
+  const setP = (p: string) => onChange({ ...def, provider: p as Provider, model: "", effort: "", historyAction: { kind: "new" } });
   const histOpts = buildProviderHistoryOptions(def.provider, providerHistory);
   const histVal = historyActionToSelectValue(def.historyAction, providerHistory);
   const onHist = (v: string) => onChange({ ...def, historyAction: resolveProviderHistoryAction(findProviderHistoryEntry(def.provider, providerHistory, v)) });
+  const modelWithDefault = [{ value: "", label: "Select model" }, ...mOpts];
+  const effortWithDefault = [{ value: "", label: "Default" }, ...eOpts];
   return (
     <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
       <div className="flex items-center gap-2 border-b border-border/30 px-4 py-2.5">
@@ -68,24 +57,27 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
         <span className="text-xs font-semibold text-foreground capitalize">{def.provider}</span>
         <div className="flex-1" />{!locked && <button type="button" onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400"><Trash2 className="size-3" /></button>}
       </div>
-      <div className="space-y-3 px-4 py-3">
-        <select data-provider-select="true" value={def.provider} onChange={(e) => setP(e.target.value as Provider)} className={selectCls}>
-          {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
-        {caps.supportsModel && <select data-model-select="true" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} className={selectCls}>
-          <option value="">Select model</option>
-          {mOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>}
-        {caps.supportsEffort && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{caps.effortLabel}</label>
-          <select data-effort-select="true" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} className={selectCls}>
-          <option value="">Default</option>
-          {eOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select></>}
-        {caps.supportsSessionResume && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</label>
-          <select data-history-select="true" value={histVal} onChange={(e) => onHist(e.target.value)} className={selectCls}>
-            {histOpts.map((o) => <option key={o.value} value={o.value}>{o.label}{o.description ? ` — ${o.description}` : ""}</option>)}
-          </select></>}
+      <div className="space-y-2.5 px-4 py-3">
+        <div className="flex items-center justify-between" data-provider-select="true">
+          <span className="text-[10px] text-muted-foreground">Provider</span>
+          <CyberSelect value={def.provider} options={PROVIDERS} onChange={setP} />
+        </div>
+        <div className="flex items-center justify-between" data-role-select="true">
+          <span className="text-[10px] text-muted-foreground">Role</span>
+          <CyberSelect value={def.role} options={AGENT_ROLE_OPTIONS} onChange={(v) => onChange({ ...def, role: v })} placeholder="Select role" />
+        </div>
+        {caps.supportsModel && <div className="flex items-center justify-between" data-model-select="true">
+          <span className="text-[10px] text-muted-foreground">Model</span>
+          <CyberSelect value={def.model ?? ""} options={modelWithDefault} onChange={(v) => onChange({ ...def, model: v })} />
+        </div>}
+        {caps.supportsEffort && <div className="flex items-center justify-between" data-effort-select="true">
+          <span className="text-[10px] text-muted-foreground">{caps.effortLabel}</span>
+          <CyberSelect value={def.effort ?? ""} options={effortWithDefault} onChange={(v) => onChange({ ...def, effort: v })} disabled={eDis} />
+        </div>}
+        {caps.supportsSessionResume && <div className="flex items-center justify-between" data-history-select="true">
+          <span className="text-[10px] text-muted-foreground">Session</span>
+          <CyberSelect variant="history" value={histVal} options={histOpts} onChange={onHist} placeholder="New session" />
+        </div>}
       </div>
     </div>);
 }
