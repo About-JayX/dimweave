@@ -1,6 +1,6 @@
 # Daemon Dispatch Chain Fixes Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 ## Summary
 
@@ -115,3 +115,10 @@ Keep the existing output shape (`agent_id`, `role`, `model_source`) but stop col
 - task-scoped sends to a missing role fail clearly once the task owns explicit agents
 - global online-agent snapshots enumerate real online `agent_id` instances
 - daemon routing verification commands compile and pass from a clean baseline
+
+## Outcome
+
+- daemon verification baseline was restored by updating the remaining `TaskSnapshot` test fixtures to include `agent_runtime_statuses`
+- singleton-era same-role launch/connect conflict gates were removed from the official Claude/Codex live paths while preserving explicit-`agent_id` duplicate no-op guards
+- task-scoped missing-role sends now drop clearly when a task already owns explicit agents, while zero-agent tasks still buffer
+- `online_agents_snapshot()` now enumerates real online task-agent instances and avoids phantom legacy singleton rows when compatibility mirrors are populated
