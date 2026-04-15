@@ -117,6 +117,6 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Replace the split create/edit dialog shell with a unified two-pane layout: left ordered agent list, right selected-agent config pane. | _pending_ | pending |
+| Task 1 | `75d1fce6` | Replaced the split create/edit shell with a unified two-pane dialog: left ordered agent list, right selected-agent config pane, empty create-mode default state, and no standalone provider/runtime block. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 26 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Add provider-aware selected-agent configuration with separate provider/model fields and unified submit behavior. | _pending_ | pending |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the unified task-agent dialog redesign. | _pending_ | pending |
