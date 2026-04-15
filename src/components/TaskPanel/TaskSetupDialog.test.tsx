@@ -200,13 +200,13 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-drag-handle="true"');
   });
 
-  test("create mode does not add draggable row markers when empty", async () => {
+  test("create mode default row has draggable marker", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}} />,
     );
-    expect(html).not.toContain('data-draggable-row="true"');
+    expect(html).toContain('data-draggable-row="true"');
   });
 
   test("edit-mode diff logic: update existing, add new, remove deleted", () => {
@@ -363,22 +363,44 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-right-pane="true"');
   });
 
-  test("create mode starts with empty agent list by default", async () => {
+  test("create mode starts with one default locked row", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}} />,
     );
-    expect(html).not.toContain('value="lead"');
-    expect(html).not.toContain('value="coder"');
+    expect(html).toContain('data-draggable-row="true"');
+    expect(html).toContain('data-locked-row="true"');
   });
 
-  test("right pane shows placeholder when no agent is selected", async () => {
+  test("left pane rows include provider icon marker", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('data-provider-icon="true"');
+  });
+
+  test("right pane uses provider-card visual grouping", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('data-provider-card="true"');
+  });
+
+  test("right pane shows provider card for the default selected agent", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}} />,
     );
-    expect(html).toContain('data-right-pane-placeholder="true"');
+    // Default row is auto-selected so right pane shows config, not placeholder
+    expect(html).toContain('data-provider-card="true"');
+    expect(html).not.toContain('data-right-pane-placeholder="true"');
   });
 });

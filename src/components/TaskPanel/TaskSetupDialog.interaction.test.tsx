@@ -231,7 +231,22 @@ describe("TaskSetupDialog interaction", () => {
     expect((modelInput as HTMLInputElement).value).toBe("");
   });
 
-  // TDD: new test for two-pane shell — fails against current code
+  test("first row in create mode has no delete button (locked)", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit: () => {},
+      }),
+    );
+    const lockedRow = query('[data-locked-row="true"]');
+    expect(lockedRow).toBeTruthy();
+    // The locked row should not have a delete button
+    const deleteButtons = lockedRow!.querySelectorAll('[data-delete-btn="true"]');
+    expect(deleteButtons.length).toBe(0);
+  });
 
   test("Add Agent button creates a new row in the left pane", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
@@ -245,11 +260,13 @@ describe("TaskSetupDialog interaction", () => {
     );
     const leftPane = query('[data-left-pane="true"]');
     expect(leftPane).toBeTruthy();
+    // Create mode starts with 1 default locked row
+    expect(queryAll('[data-draggable-row="true"]').length).toBe(1);
     const addBtn = queryAll("button").find((b) => b.textContent?.includes("Add"));
     expect(addBtn).toBeTruthy();
     click(addBtn!);
     await new Promise((r) => setTimeout(r, 20));
     const rows = queryAll('[data-draggable-row="true"]');
-    expect(rows.length).toBe(1);
+    expect(rows.length).toBe(2);
   });
 });

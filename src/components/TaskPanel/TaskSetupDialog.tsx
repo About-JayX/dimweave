@@ -7,6 +7,7 @@ import {
   PROVIDER_CAPS, deriveSessionMode, deriveResumeId, buildHistoryAction, buildDraftConfigFromDef,
   type AgentDraftConfig, type ProviderHistoryAction,
 } from "@/components/AgentStatus/provider-session-view-model";
+import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import type { Provider } from "@/stores/task-store/types";
 
 export interface AgentDef {
@@ -39,9 +40,16 @@ interface TaskSetupDialogProps {
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
 const inputCls = "w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40";
+const DEFAULT_FIRST: AgentDef = { provider: "claude", role: "" };
 
-function AgentConfigForm({ def, onChange, onRemove }: {
-  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void;
+function ProviderIcon({ provider }: { provider: Provider }) {
+  return (<span data-provider-icon="true" className="shrink-0">
+    {provider === "claude" ? <ClaudeIcon className="size-3.5" /> : <CodexIcon className="size-3.5" />}
+  </span>);
+}
+
+function AgentConfigForm({ def, onChange, onRemove, locked }: {
+  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean;
 }) {
   const caps = PROVIDER_CAPS[def.provider];
   const sMode = deriveSessionMode(def.historyAction);
@@ -51,78 +59,79 @@ function AgentConfigForm({ def, onChange, onRemove }: {
   const eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
   const rName = `session-${def.agentId ?? "new"}`;
   return (
-    <div className="space-y-3 p-4">
-      <div className="flex items-center gap-2">
-        <select value={def.provider} onChange={(e) => setP(e.target.value as Provider)}
-          className="rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40">
+    <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border/30 px-4 py-2.5">
+        <ProviderIcon provider={def.provider} />
+        <span className="text-xs font-semibold text-foreground capitalize">{def.provider}</span>
+        <div className="flex-1" />{!locked && <button type="button" onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400"><Trash2 className="size-3" /></button>}
+      </div>
+      <div className="space-y-3 px-4 py-3">
+        <select value={def.provider} onChange={(e) => setP(e.target.value as Provider)} className="w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40">
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button type="button" onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400">
-          <Trash2 className="size-3" /></button>
+        <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
+        {caps.supportsModel && <input type="text" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} placeholder="model" className={inputCls} />}
+        {caps.supportsEffort && <input type="text" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} placeholder={caps.effortPlaceholder} className={`${inputCls} disabled:opacity-40`} />}
+        {caps.supportsSessionResume && <fieldset className="space-y-1">
+          <legend className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</legend>
+          <label className="flex items-center gap-1.5 text-xs">
+            <input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
+          <label className="flex items-center gap-1.5 text-xs">
+            <input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
+          {sMode === "resume" && <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder={caps.resumeIdPlaceholder} className={inputCls} />}
+        </fieldset>}
       </div>
-      <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
-      {caps.supportsModel && <input type="text" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} placeholder="model" className={inputCls} />}
-      {caps.supportsEffort && <input type="text" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} placeholder={caps.effortPlaceholder} className={`${inputCls} disabled:opacity-40`} />}
-      {caps.supportsSessionResume && <fieldset className="space-y-1">
-        <legend className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</legend>
-        <label className="flex items-center gap-1.5 text-xs">
-          <input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
-        <label className="flex items-center gap-1.5 text-xs">
-          <input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
-        {sMode === "resume" && <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder={caps.resumeIdPlaceholder} className={inputCls} />}
-      </fieldset>}
     </div>);
 }
 
-function SortableListRow({ id, def, selected, onSelect, onRemove }: {
-  id: string; def: AgentDef; selected: boolean; onSelect: () => void; onRemove: () => void;
+function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: {
+  id: string; def: AgentDef; selected: boolean; onSelect: () => void; onRemove: () => void; locked?: boolean;
 }) {
   const s = useSortable({ id });
   return (
-    <div ref={s.setNodeRef} data-draggable-row="true" onClick={onSelect}
+    <div ref={s.setNodeRef} data-draggable-row="true" {...(locked ? { "data-locked-row": "true" } : {})} onClick={onSelect}
       style={{ transform: CSS.Transform.toString(s.transform), transition: s.transition }}
       className={`flex items-center gap-1.5 px-3 py-2 cursor-pointer hover:bg-muted/30 ${selected ? "bg-muted/50" : ""}`}>
       <button type="button" data-drag-handle="true" {...s.attributes} {...s.listeners}
         className="cursor-grab rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground"
         onClick={(e) => e.stopPropagation()}><GripVertical className="size-3 shrink-0" /></button>
+      <ProviderIcon provider={def.provider} />
       <div className="flex-1 min-w-0 text-xs truncate">
         <span className="font-medium text-foreground">{def.provider}</span>
-        {def.role && <span className="ml-1 text-muted-foreground">{def.role}</span>}</div>
-      <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        {def.role && <span className="ml-1 text-muted-foreground">{def.role}</span>}
+        {def.model && <span className="ml-1 text-muted-foreground/60">{def.model}</span>}</div>
+      {!locked && <button type="button" data-delete-btn="true" onClick={(e) => { e.stopPropagation(); onRemove(); }}
         className="rounded p-0.5 text-muted-foreground/40 hover:bg-rose-500/20 hover:text-rose-400">
-        <Trash2 className="size-3 shrink-0" /></button>
+        <Trash2 className="size-3 shrink-0" /></button>}
     </div>);
 }
 
-export function TaskSetupDialog({
-  mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents = [],
-}: TaskSetupDialogProps) {
-  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(initialAgents);
-  const [sortIds, setSortIds] = useState<string[]>(() => initialAgents.map((d, i) => d.agentId ?? `new-${i}`));
-  const [selectedId, setSelectedId] = useState<string | null>(initialAgents.length > 0 ? (initialAgents[0].agentId ?? "new-0") : null);
+export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents }: TaskSetupDialogProps) {
+  const init = initialAgents ?? [{ ...DEFAULT_FIRST }];
+  const [agentDefs, setAgentDefs] = useState<AgentDef[]>(init);
+  const [sortIds, setSortIds] = useState<string[]>(() => init.map((d, i) => d.agentId ?? `new-${i}`));
+  const [selectedId, setSelectedId] = useState<string | null>(init.length > 0 ? (init[0].agentId ?? "new-0") : null);
   const sensors = useSensors(useSensor(PointerSensor));
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
-
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
+    document.addEventListener("keydown", h); return () => document.removeEventListener("keydown", h);
   }, [open, handleClose]);
   if (!open) return null;
   const selectedIdx = sortIds.indexOf(selectedId ?? "");
   const updateDef = (i: number, u: AgentDef) => setAgentDefs(p => p.map((d, j) => j === i ? u : d));
   const removeDef = (i: number) => {
+    if (i === 0) return;
     const rid = sortIds[i];
     setAgentDefs(p => p.filter((_, j) => j !== i));
     setSortIds(p => p.filter((_, j) => j !== i));
     if (selectedId === rid) setSelectedId(null);
   };
   const addDef = () => {
-    const newId = `new-${Date.now()}`;
+    const nid = `new-${Date.now()}`;
     setAgentDefs(p => [...p, { provider: "claude", role: "" }]);
-    setSortIds(p => [...p, newId]);
-    setSelectedId(newId);
+    setSortIds(p => [...p, nid]); setSelectedId(nid);
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -140,11 +149,9 @@ export function TaskSetupDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
-      <div role="dialog" aria-modal="true"
-        className="relative z-10 flex flex-col w-full max-w-2xl max-h-[90vh] rounded-xl border border-border/50 bg-card shadow-xl">
+      <div role="dialog" aria-modal="true" className="relative z-10 flex flex-col w-full max-w-2xl max-h-[90vh] rounded-xl border border-border/50 bg-card shadow-xl">
         <div className="shrink-0 px-4 pt-4 pb-2">
-          <h3 className="text-sm font-semibold text-foreground">{mode === "edit" ? "Edit Task" : "New Task"}</h3>
-        </div>
+          <h3 className="text-sm font-semibold text-foreground">{mode === "edit" ? "Edit Task" : "New Task"}</h3></div>
         <div className="min-h-0 flex-1 flex overflow-hidden border-t border-border/30">
           <div data-left-pane="true" className="flex w-52 shrink-0 flex-col border-r border-border/30">
             <div className="flex items-center justify-between px-3 py-2">
@@ -157,7 +164,7 @@ export function TaskSetupDialog({
                 <SortableContext items={sortIds} strategy={verticalListSortingStrategy}>
                   {agentDefs.map((def, i) => (
                     <SortableListRow key={sortIds[i]} id={sortIds[i]} def={def} selected={selectedId === sortIds[i]}
-                      onSelect={() => setSelectedId(sortIds[i])} onRemove={() => removeDef(i)} />
+                      onSelect={() => setSelectedId(sortIds[i])} onRemove={() => removeDef(i)} locked={i === 0} />
                   ))}
                 </SortableContext>
               </DndContext>
@@ -168,7 +175,7 @@ export function TaskSetupDialog({
               <div data-right-pane-placeholder="true" className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
                 Select an agent to configure</div>
             ) : (
-              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} />
+              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} />
             )}
           </div>
         </div>
