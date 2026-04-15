@@ -1,6 +1,6 @@
 # Task Agent Dialog Live UX Fix Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task-agent dialog has already been unified into a two-pane layout, restyled, and partially aligned with the older provider panels. The user still reports three live-product defects:
 >
