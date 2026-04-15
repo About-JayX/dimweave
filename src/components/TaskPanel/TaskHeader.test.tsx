@@ -12,6 +12,20 @@ mock.module("@/stores/task-store", () => ({
         { agentId: "a1", taskId: "task-001", provider: "claude", role: "lead", order: 0, createdAt: 1 },
         { agentId: "a2", taskId: "task-001", provider: "codex", role: "coder", order: 1, createdAt: 2 },
       ],
+      "task-same-prov": [
+        { agentId: "sp1", taskId: "task-same-prov", provider: "claude", role: "lead", order: 0, createdAt: 1 },
+        { agentId: "sp2", taskId: "task-same-prov", provider: "claude", role: "coder", order: 1, createdAt: 2 },
+      ],
+    },
+    agentRuntimeStatuses: {
+      "task-001": [
+        { agentId: "a1", online: true },
+        { agentId: "a2", online: false },
+      ],
+      "task-same-prov": [
+        { agentId: "sp1", online: true },
+        { agentId: "sp2", online: false },
+      ],
     },
   }),
 }));
@@ -252,5 +266,61 @@ describe("collapsed accordion header", () => {
     );
     expect(html).not.toContain("lead:");
     expect(html).not.toContain("claude");
+  });
+});
+
+describe("agent runtime status dots", () => {
+  test("online agent pill renders green dot", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain('data-agent-online="true"');
+    expect(html).toContain("bg-emerald-400");
+  });
+
+  test("offline agent pill renders gray dot", () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain('data-agent-online="false"');
+    expect(html).toContain("bg-zinc-500");
+  });
+
+  test("online and offline dots coexist for different agents in same task", () => {
+    // task-001 has a1=online, a2=offline
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain('data-agent-online="true"');
+    expect(html).toContain('data-agent-online="false"');
+    expect(html).toContain("bg-emerald-400");
+    expect(html).toContain("bg-zinc-500");
+  });
+
+  test("two same-provider agents render different dot states independently", () => {
+    // task-same-prov has two claude agents: sp1=online, sp2=offline
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, {
+        task: { ...baseTask, taskId: "task-same-prov" },
+      }),
+    );
+    // Both agents render as claude pills
+    const firstOnline = html.indexOf('data-agent-online="true"');
+    const firstOffline = html.indexOf('data-agent-online="false"');
+    expect(firstOnline).toBeGreaterThan(-1);
+    expect(firstOffline).toBeGreaterThan(-1);
+    // Both green and gray dots present
+    expect(html).toContain("bg-emerald-400");
+    expect(html).toContain("bg-zinc-500");
+  });
+
+  test("missing runtime status defaults to offline gray dot", () => {
+    // task-no-agents has no agents or statuses at all
+    // task-other has no statuses entry
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: { ...baseTask, taskId: "task-other" } }),
+    );
+    // No agents → no dots rendered at all
+    expect(html).not.toContain("data-agent-online");
   });
 });

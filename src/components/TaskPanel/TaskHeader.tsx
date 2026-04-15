@@ -78,6 +78,7 @@ export function TaskHeader({
   onClick?: () => void;
 }) {
   const agents = useTaskStore((s) => s.taskAgents[task.taskId] ?? NO_AGENTS);
+  const agentStatuses = useTaskStore((s) => s.agentRuntimeStatuses[task.taskId]);
   const showDetail = !collapsed;
   return (
     <div
@@ -113,9 +114,10 @@ export function TaskHeader({
                 const provStyle = agent.provider === "claude"
                   ? "border-claude/30 bg-claude/8 text-claude/80"
                   : "border-codex/30 bg-codex/8 text-codex/80";
+                const isOnline = agentStatuses?.find((s) => s.agentId === agent.agentId)?.online ?? false;
                 return (
                   <span key={agent.agentId} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-500" />
+                    <span data-agent-online={isOnline ? "true" : "false"} className={`inline-block h-1.5 w-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
                     {agent.displayName ?? agent.role}: {agent.provider}
                   </span>
                 );
