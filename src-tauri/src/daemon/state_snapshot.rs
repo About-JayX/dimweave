@@ -51,11 +51,14 @@ impl DaemonState {
     pub fn online_agents_snapshot(&self) -> Vec<OnlineAgentInfo> {
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
+        let mut has_claude_slot = false;
+        let mut has_codex_slot = false;
 
         // Phase 1: task-scoped per-agent slots (authoritative view)
         for rt in self.task_runtimes.values() {
             for slot in rt.all_claude_slots() {
                 if !slot.is_online() { continue; }
+                has_claude_slot = true;
                 let aid = slot.agent_id.as_deref().unwrap_or("claude");
                 if !seen.insert(aid.to_string()) { continue; }
                 let role = self.task_graph.get_task_agent(aid)
@@ -67,6 +70,7 @@ impl DaemonState {
             }
             for slot in rt.all_codex_slots() {
                 if !slot.is_online() { continue; }
+                has_codex_slot = true;
                 let aid = slot.agent_id.as_deref().unwrap_or("codex");
                 if !seen.insert(aid.to_string()) { continue; }
                 let role = self.task_graph.get_task_agent(aid)
@@ -78,8 +82,11 @@ impl DaemonState {
             }
         }
 
-        // Phase 2: singleton fallbacks for pre-migration callers
-        if self.claude_sdk_ws_tx.is_some() && !seen.contains("claude") {
+        // Phase 2: singleton fallbacks for pre-migration callers.
+        // Skip when Phase 1 already found real per-agent slots for the
+        // provider — the singleton field is a compatibility mirror of those
+        // same slots and must not produce a duplicate row.
+        if !has_claude_slot && self.claude_sdk_ws_tx.is_some() && !seen.contains("claude") {
             seen.insert("claude".into());
             result.push(OnlineAgentInfo {
                 agent_id: "claude".into(),
@@ -87,7 +94,7 @@ impl DaemonState {
                 model_source: "claude".into(),
             });
         }
-        if self.codex_inject_tx.is_some() && !seen.contains("codex") {
+        if !has_codex_slot && self.codex_inject_tx.is_some() && !seen.contains("codex") {
             seen.insert("codex".into());
             result.push(OnlineAgentInfo {
                 agent_id: "codex".into(),

@@ -183,6 +183,54 @@ fn online_agents_snapshot_offline_slots_excluded() {
 }
 
 #[test]
+fn online_agents_snapshot_no_phantom_singleton_when_per_agent_online() {
+    // Regression: attach_claude_task_ws_for_agent and
+    // attach_codex_task_session_for_agent mirror the channel into
+    // the singleton fields. Phase 2 must not emit an extra "claude"/"codex"
+    // row when a real per-agent slot already covers that provider.
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "Mirror");
+    let claude_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let codex_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+    s.claude_role = "lead".into();
+    s.codex_role = "coder".into();
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+
+    // Use the real attach paths that mirror into singleton fields.
+    let (claude_tx, _claude_rx) = tokio::sync::mpsc::channel::<String>(1);
+    let claude_epoch = s.begin_claude_task_launch_for_agent(
+        &task.task_id, &claude_agent.agent_id, "nonce-c".into(),
+    ).unwrap();
+    s.attach_claude_task_ws_for_agent(
+        &task.task_id, &claude_agent.agent_id, claude_epoch, "nonce-c", claude_tx,
+    ).unwrap();
+
+    let (codex_tx, _codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    let codex_epoch = s.begin_codex_task_launch_for_agent(
+        &task.task_id, &codex_agent.agent_id, 4500,
+    ).unwrap();
+    s.attach_codex_task_session_for_agent(
+        &task.task_id, &codex_agent.agent_id, codex_epoch, codex_tx, None,
+    );
+
+    // Singleton mirrors are now set (verified precondition).
+    assert!(s.claude_sdk_ws_tx.is_some(), "singleton mirror should be set");
+    assert!(s.codex_inject_tx.is_some(), "singleton mirror should be set");
+
+    let snapshot = s.online_agents_snapshot();
+    // Must have exactly 2 rows — the real agent_ids — no phantom "claude"/"codex".
+    assert_eq!(snapshot.len(), 2, "snapshot: {snapshot:?}");
+    assert!(snapshot.iter().all(|a| a.agent_id != "claude"), "no phantom claude row");
+    assert!(snapshot.iter().all(|a| a.agent_id != "codex"), "no phantom codex row");
+    let claude = snapshot.iter().find(|a| a.agent_id == claude_agent.agent_id).unwrap();
+    let codex = snapshot.iter().find(|a| a.agent_id == codex_agent.agent_id).unwrap();
+    assert_eq!(claude.role, "lead");
+    assert_eq!(claude.model_source, "claude");
+    assert_eq!(codex.role, "coder");
+    assert_eq!(codex.model_source, "codex");
+}
+
+#[test]
 fn status_snapshot_includes_runtime_health() {
     let mut s = DaemonState::new();
     s.set_runtime_health(RuntimeHealthStatus {
