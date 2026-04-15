@@ -83,5 +83,5 @@
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | _pending_ | Replace native edit-dialog drag with `dnd-kit` sortable behavior and keep ordered save payloads intact. | _pending_ | pending |
+| Task 1 | `51213dac` | Replaced the unreliable native edit-dialog drag path with `dnd-kit` sortable behavior, constrained drag start to the grip handle, and preserved ordered submit payloads while leaving create mode behavior intact. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 22 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | _pending_ | Finalize docs and regression evidence for the `dnd-kit` sort fix. | _pending_ | pending |
