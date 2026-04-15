@@ -38,7 +38,7 @@ mock.module("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
 }));
 
-import { setupDOM, render, queryAll, click, teardownDOM } from "./dom-test-env";
+import { setupDOM, render, query, queryAll, click, teardownDOM } from "./dom-test-env";
 
 beforeEach(() => { setupDOM(); capturedDragEnd = null; });
 afterEach(() => teardownDOM());
@@ -179,5 +179,27 @@ describe("TaskSetupDialog interaction", () => {
     expect(cancelBtn).toBeTruthy();
     click(cancelBtn!);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // TDD: new test for two-pane shell — fails against current code
+
+  test("Add Agent button creates a new row in the left pane", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    await render(
+      createElement(TaskSetupDialog, {
+        workspace: "/repo",
+        open: true,
+        onOpenChange: () => {},
+        onSubmit: () => {},
+      }),
+    );
+    const leftPane = query('[data-left-pane="true"]');
+    expect(leftPane).toBeTruthy();
+    const addBtn = queryAll("button").find((b) => b.textContent?.includes("Add"));
+    expect(addBtn).toBeTruthy();
+    click(addBtn!);
+    await new Promise((r) => setTimeout(r, 20));
+    const rows = queryAll('[data-draggable-row="true"]');
+    expect(rows.length).toBe(1);
   });
 });

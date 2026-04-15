@@ -48,11 +48,12 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('role="dialog"');
   });
 
-  test("renders default agent defs (claude lead + codex coder)", async () => {
+  test("agent list shows rows matching provided initialAgents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead" }, { provider: "codex", role: "coder" }]} />,
     );
     expect(html).toContain("claude");
     expect(html).toContain("codex");
@@ -154,7 +155,7 @@ describe("TaskSetupDialog", () => {
     expect(html).not.toContain("overflow-y-auto max-h-[90vh]");
   });
 
-  test("provider panels live inside a dedicated inner scroll region", async () => {
+  test("agent list section has a scrollable region", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
@@ -199,7 +200,7 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('data-drag-handle="true"');
   });
 
-  test("create mode does not add draggable row markers", async () => {
+  test("create mode does not add draggable row markers when empty", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog workspace="/repo" open={true}
@@ -227,5 +228,36 @@ describe("TaskSetupDialog", () => {
     expect(toUpdate.map((a) => a.agentId)).toEqual(["a1"]);
     expect(toAdd.length).toBe(1);
     expect(toAdd[0].role).toBe("tester");
+  });
+
+  // TDD: new tests for two-pane shell — these fail against current code
+
+  test("dialog renders two-pane layout with left pane and right pane", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain('data-left-pane="true"');
+    expect(html).toContain('data-right-pane="true"');
+  });
+
+  test("create mode starts with empty agent list by default", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).not.toContain('value="lead"');
+    expect(html).not.toContain('value="coder"');
+  });
+
+  test("right pane shows placeholder when no agent is selected", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain('data-right-pane-placeholder="true"');
   });
 });
