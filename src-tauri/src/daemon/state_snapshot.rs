@@ -46,38 +46,70 @@ impl DaemonState {
         }
     }
 
-    /// Compatibility-only: global online agents using singleton role labels.
+    /// Global online agents enumerating real per-agent-id instances.
     /// Task-scoped callers should use `task_scoped_online_agents(task_id)`.
     pub fn online_agents_snapshot(&self) -> Vec<OnlineAgentInfo> {
+        let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
-        if self.is_agent_online("claude") {
+
+        // Phase 1: task-scoped per-agent slots (authoritative view)
+        for rt in self.task_runtimes.values() {
+            for slot in rt.all_claude_slots() {
+                if !slot.is_online() { continue; }
+                let aid = slot.agent_id.as_deref().unwrap_or("claude");
+                if !seen.insert(aid.to_string()) { continue; }
+                let role = self.task_graph.get_task_agent(aid)
+                    .map(|a| a.role.clone())
+                    .unwrap_or_else(|| self.claude_role.clone());
+                result.push(OnlineAgentInfo {
+                    agent_id: aid.into(), role, model_source: "claude".into(),
+                });
+            }
+            for slot in rt.all_codex_slots() {
+                if !slot.is_online() { continue; }
+                let aid = slot.agent_id.as_deref().unwrap_or("codex");
+                if !seen.insert(aid.to_string()) { continue; }
+                let role = self.task_graph.get_task_agent(aid)
+                    .map(|a| a.role.clone())
+                    .unwrap_or_else(|| self.codex_role.clone());
+                result.push(OnlineAgentInfo {
+                    agent_id: aid.into(), role, model_source: "codex".into(),
+                });
+            }
+        }
+
+        // Phase 2: singleton fallbacks for pre-migration callers
+        if self.claude_sdk_ws_tx.is_some() && !seen.contains("claude") {
+            seen.insert("claude".into());
             result.push(OnlineAgentInfo {
                 agent_id: "claude".into(),
                 role: self.claude_role.clone(),
                 model_source: "claude".into(),
             });
         }
-        if self.is_agent_online("codex") {
+        if self.codex_inject_tx.is_some() && !seen.contains("codex") {
+            seen.insert("codex".into());
             result.push(OnlineAgentInfo {
                 agent_id: "codex".into(),
                 role: self.codex_role.clone(),
                 model_source: "codex".into(),
             });
         }
-        let mut others: Vec<_> = self
-            .attached_agents
-            .keys()
+
+        // Phase 3: other attached bridge agents (non-claude/codex)
+        let mut others: Vec<_> = self.attached_agents.keys()
             .filter(|k| k.as_str() != "claude" && k.as_str() != "codex")
+            .filter(|k| !seen.contains(k.as_str()))
             .cloned()
             .collect();
         others.sort();
         for agent_id in others {
             result.push(OnlineAgentInfo {
-                agent_id: agent_id.clone(),
-                role: "unknown".into(),
-                model_source: "claude".into(),
+                agent_id, role: "unknown".into(), model_source: "claude".into(),
             });
         }
+
+        result.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));
         result
     }
 

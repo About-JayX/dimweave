@@ -1,4 +1,5 @@
 use super::*;
+use crate::daemon::task_graph::types::Provider;
 use crate::daemon::types::{OnlineAgentInfo, RuntimeHealthLevel, RuntimeHealthStatus};
 
 #[test]
@@ -108,6 +109,77 @@ fn online_agents_snapshot_role_reflects_current_state() {
     let snapshot = s.online_agents_snapshot();
     assert_eq!(snapshot[0].role, "coder");
     assert_eq!(snapshot[1].role, "lead");
+}
+
+#[test]
+fn online_agents_snapshot_multi_claude_per_agent_slots() {
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "Multi");
+    let agent_a = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let agent_b = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    s.claude_role = "lead".into();
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let (tx_a, _rx_a) = tokio::sync::mpsc::channel::<String>(1);
+    let (tx_b, _rx_b) = tokio::sync::mpsc::channel::<String>(1);
+    s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_a.agent_id).ws_tx = Some(tx_a);
+    s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_b.agent_id).ws_tx = Some(tx_b);
+
+    let snapshot = s.online_agents_snapshot();
+    assert_eq!(snapshot.len(), 2, "two Claude agents should both appear");
+    let ids: Vec<_> = snapshot.iter().map(|a| a.agent_id.as_str()).collect();
+    assert!(ids.contains(&agent_a.agent_id.as_str()));
+    assert!(ids.contains(&agent_b.agent_id.as_str()));
+    let a = snapshot.iter().find(|a| a.agent_id == agent_a.agent_id).unwrap();
+    let b = snapshot.iter().find(|a| a.agent_id == agent_b.agent_id).unwrap();
+    assert_eq!(a.role, "lead");
+    assert_eq!(a.model_source, "claude");
+    assert_eq!(b.role, "coder");
+    assert_eq!(b.model_source, "claude");
+}
+
+#[test]
+fn online_agents_snapshot_mixed_providers_per_agent() {
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "Mixed");
+    let claude_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    let codex_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "lead");
+    s.claude_role = "coder".into();
+    s.codex_role = "lead".into();
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let (claude_tx, _) = tokio::sync::mpsc::channel::<String>(1);
+    let (codex_tx, _) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(1);
+    s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&claude_agent.agent_id).ws_tx = Some(claude_tx);
+    s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_codex_slot(&codex_agent.agent_id, 4500).inject_tx = Some(codex_tx);
+
+    let snapshot = s.online_agents_snapshot();
+    assert_eq!(snapshot.len(), 2);
+    let claude = snapshot.iter().find(|a| a.agent_id == claude_agent.agent_id).unwrap();
+    let codex = snapshot.iter().find(|a| a.agent_id == codex_agent.agent_id).unwrap();
+    assert_eq!(claude.role, "coder");
+    assert_eq!(claude.model_source, "claude");
+    assert_eq!(codex.role, "lead");
+    assert_eq!(codex.model_source, "codex");
+}
+
+#[test]
+fn online_agents_snapshot_offline_slots_excluded() {
+    let mut s = DaemonState::new();
+    let task = s.create_and_select_task("/ws", "Partial");
+    let agent_a = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let _agent_b = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "coder");
+    s.init_task_runtime(&task.task_id, std::path::PathBuf::from("/ws"));
+    let (tx, _) = tokio::sync::mpsc::channel::<String>(1);
+    // Only agent_a gets a channel (online); agent_b has no slot
+    s.task_runtimes.get_mut(&task.task_id).unwrap()
+        .get_or_create_claude_slot(&agent_a.agent_id).ws_tx = Some(tx);
+
+    let snapshot = s.online_agents_snapshot();
+    assert_eq!(snapshot.len(), 1);
+    assert_eq!(snapshot[0].agent_id, agent_a.agent_id);
 }
 
 #[test]
