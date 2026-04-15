@@ -119,5 +119,5 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `e817eeaa` | Added daemon-backed per-agent runtime status to task snapshots and task context events, hydrated that data into frontend store state by `taskId`, and added store tests proving multi-agent independent status handling and cleanup. | `bun test tests/task-store.test.ts` ✅ 85 passed; `cargo build -p dimweave-bridge` ✅; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | not started | Execution has not started yet. | No task-local verification yet. | not started |
+| Task 2 | `ccd79531` | Updated `TaskHeader` to color each agent pill dot from daemon-backed per-agent runtime status by `agentId`, including independent same-provider agent states, with focused task-header regression coverage. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 28 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | not started | Execution has not started yet. | No task-local verification yet. | not started |

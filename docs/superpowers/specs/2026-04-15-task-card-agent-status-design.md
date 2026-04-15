@@ -1,5 +1,7 @@
 # Task Card Agent Status Design
 
+> **Status:** Accepted
+
 ## Summary
 
 Task cards currently render each agent pill with a hard-coded gray dot, even when the corresponding task agent is already connected. The daemon already owns runtime truth, but the task card does not consume agent-scoped online status from daemon-driven task context data.
