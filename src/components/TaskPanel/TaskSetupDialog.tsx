@@ -4,9 +4,12 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  PROVIDER_CAPS, deriveSessionMode, deriveResumeId, buildHistoryAction, buildDraftConfigFromDef,
+  PROVIDER_CAPS, NEW_PROVIDER_SESSION_VALUE, buildProviderHistoryOptions,
+  findProviderHistoryEntry, resolveProviderHistoryAction,
+  historyActionToSelectValue, buildDraftConfigFromDef,
   type AgentDraftConfig, type ProviderHistoryAction,
 } from "@/components/AgentStatus/provider-session-view-model";
+import type { ProviderHistoryInfo } from "@/stores/task-store/types";
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import type { Provider } from "@/stores/task-store/types";
 
@@ -36,6 +39,7 @@ interface TaskSetupDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: TaskSetupSubmitPayload) => void;
   initialAgents?: AgentDef[];
+  providerHistory?: ProviderHistoryInfo[];
 }
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
@@ -49,13 +53,14 @@ function ProviderIcon({ provider }: { provider: Provider }) {
   </span>);
 }
 
-function AgentConfigForm({ def, onChange, onRemove, locked }: {
-  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean;
+function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = [] }: {
+  def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean; providerHistory?: ProviderHistoryInfo[];
 }) {
-  const caps = PROVIDER_CAPS[def.provider], sMode = deriveSessionMode(def.historyAction), rId = deriveResumeId(def.historyAction);
+  const caps = PROVIDER_CAPS[def.provider], eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
   const setP = (p: Provider) => onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
-  const setSM = (m: "new" | "resume") => onChange({ ...def, historyAction: buildHistoryAction(m, m === "new" ? "" : rId) });
-  const eDis = caps.effortRequiresModel && !(def.model ?? "").trim(), rName = `session-${def.agentId ?? "new"}`;
+  const histOpts = buildProviderHistoryOptions(def.provider, providerHistory);
+  const histVal = historyActionToSelectValue(def.historyAction, providerHistory);
+  const onHist = (v: string) => onChange({ ...def, historyAction: resolveProviderHistoryAction(findProviderHistoryEntry(def.provider, providerHistory, v)) });
   return (
     <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
       <div className="flex items-center gap-2 border-b border-border/30 px-4 py-2.5">
@@ -77,19 +82,15 @@ function AgentConfigForm({ def, onChange, onRemove, locked }: {
           <option value="">Default</option>
           {caps.effortOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select></>}
-        {caps.supportsSessionResume && <fieldset className="space-y-1">
-          <legend className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</legend>
-          <label className="flex items-center gap-1.5 text-xs"><input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
-          <label className="flex items-center gap-1.5 text-xs"><input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
-          {sMode === "resume" && <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder={caps.resumeIdPlaceholder} className={inputCls} />}
-        </fieldset>}
+        {caps.supportsSessionResume && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</label>
+          <select data-history-select="true" value={histVal} onChange={(e) => onHist(e.target.value)} className={selectCls}>
+            {histOpts.map((o) => <option key={o.value} value={o.value}>{o.label}{o.description ? ` — ${o.description}` : ""}</option>)}
+          </select></>}
       </div>
     </div>);
 }
 
-function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: {
-  id: string; def: AgentDef; selected: boolean; onSelect: () => void; onRemove: () => void; locked?: boolean;
-}) {
+function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: { id: string; def: AgentDef; selected: boolean; onSelect: () => void; onRemove: () => void; locked?: boolean }) {
   const s = useSortable({ id });
   return (
     <div ref={s.setNodeRef} data-draggable-row="true" {...(locked ? { "data-locked-row": "true" } : {})} onClick={onSelect}
@@ -109,7 +110,7 @@ function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: {
     </div>);
 }
 
-export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents }: TaskSetupDialogProps) {
+export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [] }: TaskSetupDialogProps) {
   const init = initialAgents ?? [{ ...DEFAULT_FIRST }];
   const [agentDefs, setAgentDefs] = useState<AgentDef[]>(init);
   const [sortIds, setSortIds] = useState<string[]>(() => init.map((d, i) => d.agentId ?? `new-${i}`));
@@ -175,7 +176,7 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
               <div data-right-pane-placeholder="true" className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
                 Select an agent to configure</div>
             ) : (
-              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} />
+              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} providerHistory={providerHistory} />
             )}
           </div>
         </div>

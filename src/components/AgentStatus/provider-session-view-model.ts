@@ -183,3 +183,16 @@ export function buildDraftConfigFromDef(def: {
     historyAction: def.historyAction ?? { kind: "new" },
   };
 }
+
+export function historyActionToSelectValue(
+  ha: ProviderHistoryAction | undefined,
+  history?: ProviderHistoryInfo[],
+): string {
+  if (!ha || ha.kind === "new") return NEW_PROVIDER_SESSION_VALUE;
+  if (ha.kind === "resumeExternal") return ha.externalId;
+  if (ha.kind === "resumeNormalized" && history) {
+    const entry = history.find((e) => e.normalizedSessionId === ha.sessionId);
+    if (entry) return entry.externalId;
+  }
+  return NEW_PROVIDER_SESSION_VALUE;
+}

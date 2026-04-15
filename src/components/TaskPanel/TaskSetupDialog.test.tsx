@@ -256,27 +256,42 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("Select model");
   });
 
-  test("right pane config form shows New session and Resume session options", async () => {
+  test("session section uses a history dropdown with New session sentinel", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
+    expect(html).toContain('data-history-select="true"');
     expect(html).toContain("New session");
-    expect(html).toContain("Resume session");
+    // No radio controls
+    expect(html).not.toContain('type="radio"');
   });
 
-  test("resume session mode shows session ID input when historyAction is resumeExternal", async () => {
+  test("history dropdown shows provider history entries when provided", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
-          historyAction: { kind: "resumeExternal", externalId: "sess-abc" } } as any]} />,
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+        providerHistory={[{ provider: "claude", externalId: "sess-abc", title: "Debug session",
+          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
     );
-    expect(html).toContain('placeholder="session ID"');
-    expect(html).toContain('value="sess-abc"');
+    expect(html).toContain("Debug session");
+    expect(html).toContain("sess-abc");
+  });
+
+  test("history dropdown defaults to New session when no history action set", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    expect(html).toContain('data-history-select="true"');
+    // The sentinel value should be selected
+    expect(html).toContain("__new_session__");
   });
 
   test("effort field is a select dropdown", async () => {
@@ -341,22 +356,19 @@ describe("TaskSetupDialog", () => {
     expect(html).not.toContain('placeholder="effort"');
   });
 
-  test("claude resume placeholder is 'session ID', codex is 'thread ID'", async () => {
+  test("history dropdown pre-selects matching entry when historyAction is resumeExternal", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const claudeHtml = renderToStaticMarkup(
+    const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
-          historyAction: { kind: "resumeExternal", externalId: "s1" } } as any]} />,
+          historyAction: { kind: "resumeExternal", externalId: "sess-x" } }]}
+        providerHistory={[{ provider: "claude", externalId: "sess-x", title: "Old session",
+          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
     );
-    expect(claudeHtml).toContain('placeholder="session ID"');
-    const codexHtml = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1",
-          historyAction: { kind: "resumeExternal", externalId: "t1" } } as any]} />,
-    );
-    expect(codexHtml).toContain('placeholder="thread ID"');
+    expect(html).toContain('data-history-select="true"');
+    // React SSR marks the matching option as selected=""
+    expect(html).toContain('value="sess-x" selected=""');
   });
 
   // TDD: two-pane shell — these fail against current code
