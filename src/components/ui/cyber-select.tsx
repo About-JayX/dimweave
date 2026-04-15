@@ -17,14 +17,15 @@ interface CyberSelectProps {
   value: string;
   options: CyberSelectOption[];
   onChange: (value: string) => void;
-  disabled?: boolean;
-  placeholder?: string;
-  variant?: "default" | "history";
+  disabled?: boolean; placeholder?: string;
+  variant?: "default" | "history"; compact?: boolean;
 }
 
 export function getCyberSelectMenuPanelClassName(
-  variant: "default" | "history",
+  variant: "default" | "history", compact?: boolean,
 ): string {
+  if (variant === "history" && compact)
+    return "right-0 top-7 min-w-44 max-w-64 max-h-48 rounded-lg p-1";
   return variant === "history"
     ? "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1"
     : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
@@ -64,12 +65,8 @@ export function HistoryMenuOption({
 }
 
 export function CyberSelect({
-  value,
-  options,
-  onChange,
-  disabled = false,
-  placeholder,
-  variant = "default",
+  value, options, onChange, disabled = false,
+  placeholder, variant = "default", compact = false,
 }: CyberSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -93,7 +90,7 @@ export function CyberSelect({
       ref={ref}
       className={cn(
         "relative",
-        isHistory ? "flex min-w-0 flex-1" : "inline-flex",
+        isHistory && !compact ? "flex min-w-0 flex-1" : "inline-flex",
       )}
     >
       <button
@@ -101,7 +98,7 @@ export function CyberSelect({
         onClick={() => !disabled && setOpen(!open)}
         className={cn(
           "inline-flex items-center gap-1 border outline-none transition-colors duration-200 font-medium",
-          isHistory
+          isHistory && !compact
             ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-1.5 text-[10px]"
             : "rounded px-1.5 py-0.5 text-[10px]",
           disabled
@@ -124,7 +121,7 @@ export function CyberSelect({
           <span
             className={cn(
               "min-w-0 truncate text-left",
-              isHistory ? "flex-1" : "max-w-28",
+              isHistory && !compact ? "flex-1" : "max-w-28",
             )}
           >
             {isHistory && selected
@@ -153,7 +150,7 @@ export function CyberSelect({
         <div
           className={cn(
             "absolute z-50 overflow-y-auto border border-border/60 bg-popover shadow-xl animate-in fade-in zoom-in-95 duration-150",
-            getCyberSelectMenuPanelClassName(variant),
+            getCyberSelectMenuPanelClassName(variant, compact),
           )}
         >
           {options.map((opt) =>

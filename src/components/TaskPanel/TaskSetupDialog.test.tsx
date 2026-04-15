@@ -398,6 +398,36 @@ describe("TaskSetupDialog", () => {
     expect(cardMatch![1]).not.toContain("<select");
   });
 
+  test("dialog session trigger is compact — no flex-1 full-width expansion", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    const histBlock = html.split('data-history-select="true"')[1];
+    expect(histBlock).toBeTruthy();
+    // Compact history trigger uses inline-flex container, not flex-1
+    expect(histBlock).toContain("inline-flex");
+    expect(histBlock).not.toContain("rounded-full");
+  });
+
+  test("dialog session and role triggers share the same compact class family", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+    );
+    const roleBlock = html.split('data-role-select="true"')[1]?.split('data-')[0] ?? "";
+    const histBlock = html.split('data-history-select="true"')[1]?.split('data-')[0] ?? "";
+    // Both triggers use the same compact trigger class (rounded, py-0.5)
+    expect(roleBlock).toContain("py-0.5");
+    expect(histBlock).toContain("py-0.5");
+    expect(roleBlock).toContain("rounded");
+    expect(histBlock).toContain("rounded");
+  });
+
   test("history trigger in dialog applies middle ellipsis to long selected label", async () => {
     const { middleEllipsis } = await import("../ui/cyber-select");
     const longTitle = "Implement the entire authentication middleware refactor for compliance";

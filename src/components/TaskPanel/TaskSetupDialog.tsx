@@ -78,7 +78,7 @@ function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = []
         </div>}
         {caps.supportsSessionResume && <div className="flex items-center justify-between" data-history-select="true">
           <span className="text-[10px] text-muted-foreground">Session</span>
-          <CyberSelect variant="history" value={histVal} options={histOpts} onChange={onHist} placeholder="New session" />
+          <CyberSelect compact variant="history" value={histVal} options={histOpts} onChange={onHist} placeholder="New session" />
         </div>}
       </div>
     </div>);

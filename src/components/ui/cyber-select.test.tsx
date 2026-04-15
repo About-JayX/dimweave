@@ -138,6 +138,48 @@ describe("CyberSelect history variant", () => {
     expect(html).toContain("New session");
   });
 
+  test("compact history trigger uses default-style classes (no flex-1, no rounded-full)", async () => {
+    const { CyberSelect } = await import("./cyber-select");
+    const html = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "h1",
+        variant: "history",
+        compact: true,
+        options: [{ value: "h1", label: "Session title" }],
+        onChange: () => {},
+      }),
+    );
+    expect(html).toContain("inline-flex");
+    expect(html).not.toContain("flex-1");
+    expect(html).not.toContain("rounded-full");
+    expect(html).toContain("rounded");
+    expect(html).toContain("max-w-28");
+  });
+
+  test("compact history trigger still applies middle ellipsis", async () => {
+    const { CyberSelect, middleEllipsis } = await import("./cyber-select");
+    const longLabel = "A very long session title that should be middle-ellipsed";
+    const expected = middleEllipsis(longLabel, 36);
+    const html = renderToStaticMarkup(
+      createElement(CyberSelect, {
+        value: "h1",
+        variant: "history",
+        compact: true,
+        options: [{ value: "h1", label: longLabel }],
+        onChange: () => {},
+      }),
+    );
+    expect(expected).not.toBe(longLabel);
+    expect(html).toContain(expected);
+  });
+
+  test("compact history menu panel uses fixed min-width instead of 150%", async () => {
+    const { getCyberSelectMenuPanelClassName } = await import("./cyber-select");
+    const cls = getCyberSelectMenuPanelClassName("history", true);
+    expect(cls).toContain("min-w-44");
+    expect(cls).not.toContain("w-[150%]");
+  });
+
   test("history trigger uses taller padding than default variant", async () => {
     const { CyberSelect } = await import("./cyber-select");
     const historyHtml = renderToStaticMarkup(
