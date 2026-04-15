@@ -119,6 +119,18 @@ After edit persistence completes, `TaskPanel` should derive the saved task agent
 
 The connect pass should iterate over the saved agent list, not collapse by provider.
 
+The frontend should not make the final online/offline decision for a specific saved agent from role-level summary data. It may submit the saved `agentId` targets, but daemon must remain authoritative for whether that exact agent is already online.
+
+### Daemon online/no-op decision
+
+For explicit `agentId` launches:
+
+- daemon checks whether that specific task agent is already online
+- if yes, it returns success/no-op without creating a new agent or restarting the session
+- if no, it launches and binds the runtime to that existing `agentId`
+
+This is the only way to support multiple same-provider agents cleanly, because role-level or provider-level frontend summaries cannot distinguish one `codex` task agent from another.
+
 ## Behavior Changes
 
 ### Delete flow
@@ -156,13 +168,13 @@ The connect pass should iterate over the saved agent list, not collapse by provi
 - Add focused React tests for the confirmation dialog component.
 - Extend task-panel tests so task-card and dialog delete entry points open the shared confirmation dialog instead of deleting immediately.
 - Extend dialog interaction tests so edit-mode `Save & Connect` proves offline-only launch intent.
-- Add backend or launch-level tests proving explicit `agentId` launch paths reuse existing task agents instead of creating duplicates.
-- Re-run focused frontend tests plus full frontend build; re-run focused Rust tests if the daemon launch command surface changes.
+- Add backend or launch-level checks proving explicit `agentId` launch paths reuse existing task agents instead of creating duplicates, and that already-online explicit agents become daemon-side no-ops.
+- Re-run focused frontend tests, Rust verification for the changed launch path, and the full frontend build.
 
 ## Acceptance Criteria
 
 - No task deletion path uses `window.confirm(...)`.
 - Task card and edit dialog both use the same React confirmation dialog before deleting.
-- `Save & Connect` in edit mode only connects offline saved agents.
+- `Save & Connect` in edit mode only connects offline saved agents, with daemon making the final online/no-op decision per explicit `agentId`.
 - Multiple same-provider agents remain distinct task-bound sessions rather than collapsing to one provider instance or duplicating agents.
 - Focused verification commands pass.

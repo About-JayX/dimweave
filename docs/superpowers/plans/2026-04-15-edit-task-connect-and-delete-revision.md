@@ -88,13 +88,16 @@
 **acceptance criteria:**
 
 - edit-mode `Save & Connect` iterates over saved task agents, not provider family shortcuts
-- only offline saved agents are launched
+- frontend submits saved task agents by explicit `agentId` instead of collapsing by provider family
+- daemon makes the final online/no-op decision per explicit `agentId`
+- only offline saved agents are actually launched
 - explicit `agentId` is carried through launch so existing agents are reused
 - multiple same-provider agents remain distinct sessions and do not create duplicate task-agent records
 
 **verification_commands:**
 
 - `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx`
+- `cargo check --manifest-path src-tauri/Cargo.toml`
 - `bun run build`
 - `git diff --check`
 
