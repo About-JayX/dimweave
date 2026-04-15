@@ -21,14 +21,13 @@ export interface TaskSetupSubmitPayload {
   agents: AgentDef[]; claudeConfig: AgentDraftConfig | null; codexConfig: AgentDraftConfig | null; requestLaunch: boolean;
 }
 export type TaskSetupMode = "create" | "edit";
-export interface CodexModelInfo { slug: string; displayName: string }
-export interface CodexReasoningLevel { effort: string }
+export interface CodexModelInfo { slug: string; displayName: string; reasoningLevels?: { effort: string }[] }
 
 interface TaskSetupDialogProps {
   mode?: TaskSetupMode; workspace: string; open: boolean;
   onOpenChange: (open: boolean) => void; onSubmit: (payload: TaskSetupSubmitPayload) => void;
   initialAgents?: AgentDef[]; providerHistory?: ProviderHistoryInfo[];
-  codexModels?: CodexModelInfo[]; codexReasoningOptions?: CodexReasoningLevel[];
+  codexModels?: CodexModelInfo[];
 }
 
 const PROVIDERS = [{ value: "claude", label: "Claude" }, { value: "codex", label: "Codex" }];
@@ -40,15 +39,18 @@ function ProviderIcon({ provider }: { provider: Provider }) {
   </span>);
 }
 
-function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = [], codexModels, codexReasoningOptions }: { def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean; providerHistory?: ProviderHistoryInfo[]; codexModels?: CodexModelInfo[]; codexReasoningOptions?: CodexReasoningLevel[] }) {
+function AgentConfigForm({ def, onChange, onRemove, locked, providerHistory = [], codexModels }: { def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean; providerHistory?: ProviderHistoryInfo[]; codexModels?: CodexModelInfo[] }) {
   const caps = PROVIDER_CAPS[def.provider], eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
-  const mOpts = def.provider === "codex" && codexModels ? codexModels.map(m => ({ value: m.slug, label: m.displayName })) : caps.modelOptions;
-  const eOpts = def.provider === "codex" && codexReasoningOptions ? codexReasoningOptions.map(r => ({ value: r.effort, label: r.effort })) : caps.effortOptions;
+  const isCodex = def.provider === "codex";
+  const mOpts = isCodex && codexModels ? codexModels.map(m => ({ value: m.slug, label: m.displayName })) : caps.modelOptions;
+  const selCodexModel = isCodex && codexModels ? codexModels.find(m => m.slug === def.model) : undefined;
+  const eOpts = isCodex && selCodexModel?.reasoningLevels ? selCodexModel.reasoningLevels.map(r => ({ value: r.effort, label: r.effort })) : (isCodex ? [] : caps.effortOptions);
+  const modelPlaceholder = isCodex && codexModels?.length === 0 ? "Loading models…" : "Select model";
   const setP = (p: string) => onChange({ ...def, provider: p as Provider, model: "", effort: "", historyAction: { kind: "new" } });
   const histOpts = buildProviderHistoryOptions(def.provider, providerHistory);
   const histVal = historyActionToSelectValue(def.historyAction, providerHistory);
   const onHist = (v: string) => onChange({ ...def, historyAction: resolveProviderHistoryAction(findProviderHistoryEntry(def.provider, providerHistory, v)) });
-  const modelWithDefault = [{ value: "", label: "Select model" }, ...mOpts];
+  const modelWithDefault = [{ value: "", label: modelPlaceholder }, ...mOpts];
   const effortWithDefault = [{ value: "", label: "Default" }, ...eOpts];
   return (
     <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
@@ -102,7 +104,7 @@ function SortableListRow({ id, def, selected, onSelect, onRemove, locked }: { id
     </div>);
 }
 
-export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [], codexModels, codexReasoningOptions }: TaskSetupDialogProps) {
+export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, onOpenChange, onSubmit, initialAgents, providerHistory = [], codexModels }: TaskSetupDialogProps) {
   const init = initialAgents ?? [{ ...DEFAULT_FIRST }];
   const [agentDefs, setAgentDefs] = useState<AgentDef[]>(init);
   const [sortIds, setSortIds] = useState<string[]>(() => init.map((d, i) => d.agentId ?? `new-${i}`));
@@ -168,7 +170,7 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
               <div data-right-pane-placeholder="true" className="flex flex-1 items-center justify-center text-xs text-muted-foreground/60">
                 Select an agent to configure</div>
             ) : (
-              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} providerHistory={providerHistory} codexModels={codexModels} codexReasoningOptions={codexReasoningOptions} />
+              <AgentConfigForm def={agentDefs[selectedIdx]} onChange={(u) => updateDef(selectedIdx, u)} onRemove={() => removeDef(selectedIdx)} locked={selectedIdx === 0} providerHistory={providerHistory} codexModels={codexModels} />
             )}
           </div>
         </div>

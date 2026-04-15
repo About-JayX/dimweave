@@ -320,16 +320,42 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain("disabled");
   });
 
-  test("codex model CyberSelect shows Select model by default when no model set", async () => {
+  test("codex model CyberSelect shows selected model label from live codexModels", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]}
+        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }] }]} />,
+    );
+    expect(html).toContain('data-model-select="true"');
+    // CyberSelect button text should show the matched model label
+    expect(html).toContain("o3-pro");
+  });
+
+  test("codex shows loading placeholder when codexModels is empty", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
-        codexModels={[{ slug: "o3-pro", displayName: "o3-pro" }]} />,
+        codexModels={[]} />,
     );
     expect(html).toContain('data-model-select="true"');
-    expect(html).toContain("Select model");
+    expect(html).toContain("Loading models");
+  });
+
+  test("codex effort derives from selected model reasoning levels", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const html = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro", effort: "medium" }]}
+        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }] }]} />,
+    );
+    expect(html).toContain('data-effort-select="true"');
+    // Effort button should show the selected reasoning level label
+    expect(html).toContain("medium");
   });
 
   test("no free-form text input for model, effort, or role", async () => {

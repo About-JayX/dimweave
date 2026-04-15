@@ -1,9 +1,10 @@
 import { Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildCodexLaunchConfig } from "@/components/AgentStatus/codex-launch-config";
 import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
@@ -32,8 +33,12 @@ export function TaskPanel() {
   const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
   const reorderTaskAgents = useTaskStore((s) => s.reorderTaskAgents);
   const applyConfig = useBridgeStore((s) => s.applyConfig);
+  const codexModels = useCodexAccountStore((s) => s.models);
+  const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
+
+  useEffect(() => { fetchCodexModels(); }, [fetchCodexModels]);
 
   const handleSetupSubmit = useCallback(
     async (payload: TaskSetupSubmitPayload) => {
@@ -153,7 +158,8 @@ export function TaskPanel() {
       {dialogOpen && dialogWorkspace && (
         <TaskSetupDialog mode={dialogMode} workspace={dialogWorkspace}
           open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleDialogSubmit}
-          initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined} />
+          initialAgents={dialogMode === "edit" ? agents.map((a) => ({ provider: a.provider, role: a.role, agentId: a.agentId, displayName: a.displayName })) : undefined}
+          codexModels={codexModels} />
       )}
     </div>
   );
