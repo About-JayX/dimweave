@@ -117,3 +117,26 @@
 | Task 1 | `2dbf70be` | Restored the old history-dropdown session behavior in the unified task-agent dialog by removing the radio-plus-input flow and reusing the existing `New session` sentinel plus provider-history dropdown helpers. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | `56ffb5f7` | Aligned dialog dropdown sources with the old provider panels by reusing Claude option lists from `ClaudeConfigRows`, threading dynamic Codex model/reasoning options into the dialog, and preserving the restored history-dropdown semantics from Task 1. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 42 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | `94974feb` | Closed spec to Accepted; added provider-source-fix regression test proving card pills render in persisted order after history dropdown restore and source alignment. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 19 passed; `git diff --check` ✅ | accepted |
+
+## Post-Release Addendum — Review Miss Analysis
+
+The user reported that this follow-up was also accepted while the live dialog still behaved incorrectly. That report was valid.
+
+The concrete miss in this plan was:
+
+- Task 2 verified that the dialog **could** consume dynamic Codex model data when the prop was provided
+- review did **not** verify that the live caller actually passed that data into `TaskSetupDialog`
+
+So the review approved a component-level capability, but the product still failed in the real app because the integration boundary was not part of the verified acceptance path.
+
+Additional process error:
+
+- the plan focused on restoring old-panel *semantics* for option sources and session selection
+- it did not explicitly require verification of the final live UX gaps the user still cared about, such as:
+  - role remaining a text input instead of a constrained dropdown
+  - the dialog still using plain native `<select>` styling rather than the prior panel’s stronger select treatment
+
+Operational lesson:
+
+- when the defect is user-visible in the running app, at least one acceptance criterion must verify the full live data path, not only the leaf component
+- when the user expectation depends on a specific existing surface (“same as the old panel”), the review must trace both semantics and visual component reuse instead of assuming one implies the other

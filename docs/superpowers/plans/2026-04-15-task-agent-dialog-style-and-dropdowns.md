@@ -118,3 +118,25 @@
 | Task 1 | `92ab537a` | Restyled the unified dialog shell with branded left rows, provider-card right pane visuals, and a default locked first row that exists in create mode and cannot be deleted. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 40 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 2 | `a7035b23` | Replaced free-form provider fields with provider-aware dropdowns for provider/model/effort, kept model unselected by default, preserved history selection semantics, and removed invalid free-form model/effort entry paths. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 41 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | `f3a5a328` | Closed spec to Accepted; added style-and-dropdowns regression test proving card pills render in persisted order after branded rows and dropdown restyle. | `bun test src/components/TaskPanel/TaskHeader.test.tsx` ✅ 18 passed; `git diff --check` ✅ | accepted |
+
+## Post-Release Addendum — Review Miss Analysis
+
+The user correctly reported that this plan was marked accepted while important product expectations were still unmet. The miss happened for two separate reasons:
+
+1. **The approved acceptance criteria were too narrow.**
+   - The plan locked review on branded rows, locked first row behavior, provider-card styling, and dropdown conversion.
+   - It did **not** explicitly require:
+     - `role` to become a dropdown with only `lead` / `coder`
+     - the dialog dropdowns to reuse the exact old-panel visual component (`CyberSelect`)
+     - the live dialog call site to supply Codex model data end-to-end
+   - Because those expectations were not written into the acceptance criteria, review passed against the narrower documented scope instead of the fuller product expectation.
+
+2. **The verification was too component-local and not integration-authoritative.**
+   - The tests proved that the dialog could render dropdowns and branded rows in isolation.
+   - They did **not** prove that the live `TaskPanel -> TaskSetupDialog` integration provided the real Codex model source to the dialog.
+   - This created a false-positive review outcome: component tests passed, but the real app still showed an empty Codex model dropdown.
+
+Operational lesson:
+
+- future dialog reviews must not treat component-local tests as sufficient when live data is supplied by an outer call site
+- product-critical expectations such as fixed role sets or exact select component reuse must be written into acceptance criteria explicitly, not inferred during review
