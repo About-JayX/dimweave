@@ -115,5 +115,5 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `9c744547` | Converted `role` to a constrained `lead` / `coder` dropdown, replaced the dialog’s native `<select>` controls with `CyberSelect`-based controls aligned to the old provider panel styling, and removed the last free-form role/model/effort inputs from the live dialog. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 43 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
-| Task 2 | _pending_ | Wire the live Codex model/reasoning source into the task dialog caller path and verify the real integration path. | _pending_ | pending |
+| Task 2 | `c456d7af` | Wired the live Codex model source from `TaskPanel` / `codex-account-store` into `TaskSetupDialog`, derived reasoning options from the selected live Codex model, and added a valid loading placeholder when Codex model data is unavailable. | `bun test src/components/TaskPanel/TaskSetupDialog.test.tsx src/components/TaskPanel/TaskSetupDialog.interaction.test.tsx` ✅ 45 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
 | Task 3 | _pending_ | Finalize docs and regression evidence for the live task-agent dialog fixes. | _pending_ | pending |
