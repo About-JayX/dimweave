@@ -140,6 +140,7 @@ mod tests {
             }],
             task_agents: vec![],
             provider_summary: None,
+            agent_runtime_statuses: vec![],
         }
     }
 
