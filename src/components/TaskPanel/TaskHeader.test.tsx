@@ -165,6 +165,19 @@ describe("collapsed accordion header", () => {
     expect(html).not.toContain("Edit task");
   });
 
+  test("dialog-redesign regression: card pills show both providers in store order", () => {
+    // After the unified two-pane dialog redesign (75d1fce6, 81fc11ac, 48759edd),
+    // card pills must still render from the persisted agent store order.
+    const html = renderToStaticMarkup(
+      createElement(TaskHeader, { task: baseTask }),
+    );
+    expect(html).toContain("claude");
+    expect(html).toContain("codex");
+    const claudeIdx = html.indexOf("claude");
+    const codexIdx = html.indexOf("codex");
+    expect(claudeIdx).toBeLessThan(codexIdx);
+  });
+
   test("does not leak active task agents into a different task header", () => {
     // Mock has agents for task-001 (active). Render header for task-other.
     const html = renderToStaticMarkup(

@@ -1,6 +1,6 @@
 # Task Agent List And Config Dialog Unification Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task pane is already card-only, the task card is now the only always-visible task surface, and `Edit Task` is the only in-pane entry point for task-agent management. The current create/edit dialog still mixes an `Agents` list with a second provider/runtime block, which does not match the desired product flow.
 
