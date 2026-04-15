@@ -1,6 +1,6 @@
 # Edit Dialog DnD-Kit Sort Fix Design
 
-> **Status:** Proposed
+> **Status:** Accepted
 
 > **Context:** The task pane is already card-only, and `Edit Task` is now the only in-pane agent-management surface. The first drag-reorder implementation used native HTML drag events and passed synthetic tests, but it does not behave reliably in the real Tauri app.
 
