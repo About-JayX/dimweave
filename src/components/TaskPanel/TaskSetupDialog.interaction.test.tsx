@@ -192,7 +192,7 @@ describe("TaskSetupDialog interaction", () => {
         open: true,
         onOpenChange: () => {},
         onSubmit,
-        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-opus" } as any],
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-sonnet-4-5-20250514" }],
       }),
     );
     const createBtn = queryAll("button").find(
@@ -203,7 +203,7 @@ describe("TaskSetupDialog interaction", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const payload = (onSubmit.mock.calls as any[][])[0][0];
     expect(payload.claudeConfig).not.toBeNull();
-    expect(payload.claudeConfig.model).toBe("claude-opus");
+    expect(payload.claudeConfig.model).toBe("claude-sonnet-4-5-20250514");
   });
 
   test("provider change in right pane clears model value", async () => {
@@ -215,20 +215,20 @@ describe("TaskSetupDialog interaction", () => {
         open: true,
         onOpenChange: () => {},
         onSubmit: () => {},
-        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-opus" } as any],
+        initialAgents: [{ provider: "claude", role: "lead", agentId: "a1", model: "claude-sonnet-4-5-20250514" }],
       }),
     );
     // Change provider select to codex — should clear model
-    const providerSelect = query("select") as HTMLSelectElement | null;
+    const providerSelect = query('[data-provider-select="true"]') as HTMLSelectElement | null;
     expect(providerSelect).toBeTruthy();
     const DOMEvent = (globalThis as any).window.Event;
     (providerSelect as HTMLSelectElement).value = "codex";
     providerSelect!.dispatchEvent(new DOMEvent("change", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 20));
-    // model input should now be empty
-    const modelInput = query('input[placeholder="model"]') as HTMLInputElement | null;
-    expect(modelInput).toBeTruthy();
-    expect((modelInput as HTMLInputElement).value).toBe("");
+    // model select should now be empty (reset to "")
+    const modelSelect = query('[data-model-select="true"]') as HTMLSelectElement | null;
+    expect(modelSelect).toBeTruthy();
+    expect((modelSelect as HTMLSelectElement).value).toBe("");
   });
 
   test("first row in create mode has no delete button (locked)", async () => {

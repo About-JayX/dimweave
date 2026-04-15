@@ -40,6 +40,7 @@ interface TaskSetupDialogProps {
 
 const PROVIDERS: Provider[] = ["claude", "codex"];
 const inputCls = "w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/40";
+const selectCls = "w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40 disabled:opacity-40";
 const DEFAULT_FIRST: AgentDef = { provider: "claude", role: "" };
 
 function ProviderIcon({ provider }: { provider: Provider }) {
@@ -51,13 +52,10 @@ function ProviderIcon({ provider }: { provider: Provider }) {
 function AgentConfigForm({ def, onChange, onRemove, locked }: {
   def: AgentDef; onChange: (u: AgentDef) => void; onRemove: () => void; locked?: boolean;
 }) {
-  const caps = PROVIDER_CAPS[def.provider];
-  const sMode = deriveSessionMode(def.historyAction);
-  const rId = deriveResumeId(def.historyAction);
+  const caps = PROVIDER_CAPS[def.provider], sMode = deriveSessionMode(def.historyAction), rId = deriveResumeId(def.historyAction);
   const setP = (p: Provider) => onChange({ ...def, provider: p, model: "", effort: "", historyAction: { kind: "new" } });
   const setSM = (m: "new" | "resume") => onChange({ ...def, historyAction: buildHistoryAction(m, m === "new" ? "" : rId) });
-  const eDis = caps.effortRequiresModel && !(def.model ?? "").trim();
-  const rName = `session-${def.agentId ?? "new"}`;
+  const eDis = caps.effortRequiresModel && !(def.model ?? "").trim(), rName = `session-${def.agentId ?? "new"}`;
   return (
     <div data-provider-card="true" className="m-3 rounded-xl border border-border/40 bg-card/60 shadow-sm">
       <div className="flex items-center gap-2 border-b border-border/30 px-4 py-2.5">
@@ -66,18 +64,23 @@ function AgentConfigForm({ def, onChange, onRemove, locked }: {
         <div className="flex-1" />{!locked && <button type="button" onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-rose-500/20 hover:text-rose-400"><Trash2 className="size-3" /></button>}
       </div>
       <div className="space-y-3 px-4 py-3">
-        <select value={def.provider} onChange={(e) => setP(e.target.value as Provider)} className="w-full rounded-lg border border-border/50 bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary/40">
+        <select data-provider-select="true" value={def.provider} onChange={(e) => setP(e.target.value as Provider)} className={selectCls}>
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <input type="text" value={def.role} onChange={(e) => onChange({ ...def, role: e.target.value })} placeholder="role" className={inputCls} />
-        {caps.supportsModel && <input type="text" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} placeholder="model" className={inputCls} />}
-        {caps.supportsEffort && <input type="text" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} placeholder={caps.effortPlaceholder} className={`${inputCls} disabled:opacity-40`} />}
+        {caps.supportsModel && <select data-model-select="true" value={def.model ?? ""} onChange={(e) => onChange({ ...def, model: e.target.value })} className={selectCls}>
+          <option value="">Select model</option>
+          {caps.modelOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>}
+        {caps.supportsEffort && <><label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{caps.effortLabel}</label>
+          <select data-effort-select="true" value={def.effort ?? ""} disabled={eDis} onChange={(e) => onChange({ ...def, effort: e.target.value })} className={selectCls}>
+          <option value="">Default</option>
+          {caps.effortOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select></>}
         {caps.supportsSessionResume && <fieldset className="space-y-1">
           <legend className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">Session</legend>
-          <label className="flex items-center gap-1.5 text-xs">
-            <input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
-          <label className="flex items-center gap-1.5 text-xs">
-            <input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
+          <label className="flex items-center gap-1.5 text-xs"><input type="radio" name={rName} checked={sMode === "new"} onChange={() => setSM("new")} /> New session</label>
+          <label className="flex items-center gap-1.5 text-xs"><input type="radio" name={rName} checked={sMode === "resume"} onChange={() => setSM("resume")} /> Resume session</label>
           {sMode === "resume" && <input type="text" value={rId} onChange={(e) => onChange({ ...def, historyAction: buildHistoryAction("resume", e.target.value) })} placeholder={caps.resumeIdPlaceholder} className={inputCls} />}
         </fieldset>}
       </div>
@@ -123,10 +126,8 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
   const updateDef = (i: number, u: AgentDef) => setAgentDefs(p => p.map((d, j) => j === i ? u : d));
   const removeDef = (i: number) => {
     if (i === 0) return;
-    const rid = sortIds[i];
-    setAgentDefs(p => p.filter((_, j) => j !== i));
-    setSortIds(p => p.filter((_, j) => j !== i));
-    if (selectedId === rid) setSelectedId(null);
+    const rid = sortIds[i]; setAgentDefs(p => p.filter((_, j) => j !== i));
+    setSortIds(p => p.filter((_, j) => j !== i)); if (selectedId === rid) setSelectedId(null);
   };
   const addDef = () => {
     const nid = `new-${Date.now()}`;
@@ -135,14 +136,13 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    setAgentDefs(p => arrayMove(p, sortIds.indexOf(active.id as string), sortIds.indexOf(over.id as string)));
-    setSortIds(p => arrayMove(p, p.indexOf(active.id as string), p.indexOf(over.id as string)));
+    const ai = sortIds.indexOf(active.id as string), oi = sortIds.indexOf(over.id as string);
+    setAgentDefs(p => arrayMove(p, ai, oi)); setSortIds(p => arrayMove(p, ai, oi));
   };
-  const validAgents = agentDefs.filter(d => d.role.trim().length > 0);
+  const valid = agentDefs.filter(d => d.role.trim().length > 0);
   const submit = (launch: boolean) => {
-    const ca = validAgents.find(a => a.provider === "claude");
-    const cx = validAgents.find(a => a.provider === "codex");
-    onSubmit({ agents: validAgents, claudeConfig: ca ? buildDraftConfigFromDef(ca) : null, codexConfig: cx ? buildDraftConfigFromDef(cx) : null, requestLaunch: launch });
+    const ca = valid.find(a => a.provider === "claude"), cx = valid.find(a => a.provider === "codex");
+    onSubmit({ agents: valid, claudeConfig: ca ? buildDraftConfigFromDef(ca) : null, codexConfig: cx ? buildDraftConfigFromDef(cx) : null, requestLaunch: launch });
     onOpenChange(false);
   };
 
@@ -186,7 +186,7 @@ export function TaskSetupDialog({ mode = "create", workspace: _workspace, open, 
             <button type="button" onClick={() => submit(false)}
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">Save</button>
           ) : (<>
-            <button type="button" onClick={() => submit(true)} disabled={validAgents.length === 0}
+            <button type="button" onClick={() => submit(true)} disabled={valid.length === 0}
               className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-40">
               Create &amp; Connect</button>
             <button type="button" onClick={() => submit(false)}

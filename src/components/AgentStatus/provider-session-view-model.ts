@@ -102,13 +102,17 @@ export function resolveProviderHistoryWorkspace(
 
 // --- Provider capability flags (shared with TaskSetupDialog) ---
 
+export interface SelectOption { value: string; label: string }
+
 export interface ProviderCaps {
   supportsModel: boolean;
   supportsEffort: boolean;
   effortRequiresModel: boolean;
   supportsSessionResume: boolean;
-  effortPlaceholder: string;
+  effortLabel: string;
   resumeIdPlaceholder: string;
+  modelOptions: SelectOption[];
+  effortOptions: SelectOption[];
 }
 
 export const PROVIDER_CAPS: Record<"claude" | "codex", ProviderCaps> = {
@@ -117,16 +121,36 @@ export const PROVIDER_CAPS: Record<"claude" | "codex", ProviderCaps> = {
     supportsEffort: true,
     effortRequiresModel: false,
     supportsSessionResume: true,
-    effortPlaceholder: "effort",
+    effortLabel: "Effort",
     resumeIdPlaceholder: "session ID",
+    modelOptions: [
+      { value: "claude-sonnet-4-5-20250514", label: "Sonnet 4.5" },
+      { value: "claude-opus-4-5-20250514", label: "Opus 4.5" },
+      { value: "claude-haiku-3-5-20241022", label: "Haiku 3.5" },
+    ],
+    effortOptions: [
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+    ],
   },
   codex: {
     supportsModel: true,
     supportsEffort: true,
     effortRequiresModel: true,
     supportsSessionResume: true,
-    effortPlaceholder: "reasoning effort",
+    effortLabel: "Reasoning effort",
     resumeIdPlaceholder: "thread ID",
+    modelOptions: [
+      { value: "o3-pro", label: "o3-pro" },
+      { value: "o3", label: "o3" },
+      { value: "o4-mini", label: "o4-mini" },
+    ],
+    effortOptions: [
+      { value: "low", label: "Low" },
+      { value: "medium", label: "Medium" },
+      { value: "high", label: "High" },
+    ],
   },
 };
 

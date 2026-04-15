@@ -232,27 +232,28 @@ describe("TaskSetupDialog", () => {
 
   // TDD: provider-aware config fields — these fail against current (Task 1) code
 
-  test("right pane config form has a separate model field", async () => {
+  test("model field is a select dropdown with provider-specific options", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
-    expect(html).toContain('placeholder="model"');
+    expect(html).toContain('data-model-select="true"');
+    expect(html).toContain("Sonnet 4.5");
+    expect(html).not.toContain("o3-pro");
   });
 
-  test("model field renders empty for agents without a preselected model", async () => {
+  test("model select starts unselected for new agents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
-    // model input present but has no preselected value
-    expect(html).toContain('placeholder="model"');
-    expect(html).not.toContain('value="claude-opus"');
-    expect(html).not.toContain('value="claude-sonnet"');
+    expect(html).toContain('data-model-select="true"');
+    // First option should be the empty placeholder
+    expect(html).toContain("Select model");
   });
 
   test("right pane config form shows New session and Resume session options", async () => {
@@ -278,59 +279,66 @@ describe("TaskSetupDialog", () => {
     expect(html).toContain('value="sess-abc"');
   });
 
-  test("right pane config form has an effort field", async () => {
+  test("effort field is a select dropdown", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
-    expect(html).toContain('placeholder="effort"');
+    expect(html).toContain('data-effort-select="true"');
+    expect(html).toContain("Low");
+    expect(html).toContain("High");
   });
 
-  // Provider-capability gating tests
-
-  test("claude effort placeholder is 'effort', codex is 'reasoning effort'", async () => {
+  test("claude effort label differs from codex effort label", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const claudeHtml = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
-    expect(claudeHtml).toContain('placeholder="effort"');
-    expect(claudeHtml).not.toContain('placeholder="reasoning effort"');
+    expect(claudeHtml).toContain("Effort");
+    expect(claudeHtml).not.toContain("Reasoning effort");
     const codexHtml = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
     );
-    expect(codexHtml).toContain('placeholder="reasoning effort"');
-    expect(codexHtml).not.toContain('placeholder="effort"');
+    expect(codexHtml).toContain("Reasoning effort");
   });
 
-  test("codex effort is disabled when model is empty", async () => {
+  test("codex effort select is disabled when model is empty", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
         initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
     );
-    expect(html).toContain('placeholder="reasoning effort"');
+    expect(html).toContain('data-effort-select="true"');
     expect(html).toContain("disabled");
   });
 
-  test("codex effort is enabled when model is set", async () => {
+  test("codex model options differ from claude model options", async () => {
+    const { TaskSetupDialog } = await import("./TaskSetupDialog");
+    const codexHtml = renderToStaticMarkup(
+      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
+        onOpenChange={() => {}} onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+    );
+    expect(codexHtml).toContain("o3-pro");
+    expect(codexHtml).not.toContain("Sonnet 4.5");
+  });
+
+  test("no free-form text input for model or effort", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
       <TaskSetupDialog mode="edit" workspace="/repo" open={true}
         onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]} />,
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
     );
-    expect(html).toContain('placeholder="reasoning effort"');
-    // When model is set, the effort input should not have the disabled="" attribute
-    const effortMatch = html.match(/<input[^>]*placeholder="reasoning effort"[^>]*/);
-    expect(effortMatch).toBeTruthy();
-    expect(effortMatch![0]).not.toContain('disabled=""');
+    expect(html).not.toContain('placeholder="model"');
+    expect(html).not.toContain('placeholder="effort"');
   });
 
   test("claude resume placeholder is 'session ID', codex is 'thread ID'", async () => {
