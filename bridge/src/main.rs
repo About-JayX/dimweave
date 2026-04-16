@@ -19,14 +19,7 @@ async fn main() {
             std::process::exit(1);
         });
     let agent_id = std::env::var("AGENTBRIDGE_AGENT").unwrap_or_else(|_| "claude".into());
-    let role_raw = std::env::var("AGENTBRIDGE_ROLE").unwrap_or_else(|_| "lead".into());
-    let role = match role_raw.as_str() {
-        "user" | "lead" | "coder" => role_raw,
-        _ => {
-            tracing::warn!(role = %role_raw, "unknown role, defaulting to lead");
-            "lead".into()
-        }
-    };
+    let role = std::env::var("AGENTBRIDGE_ROLE").unwrap_or_else(|_| "lead".into());
     let sdk_mode = std::env::var("AGENTBRIDGE_SDK_MODE")
         .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);

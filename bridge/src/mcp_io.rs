@@ -1,7 +1,7 @@
 use crate::channel_state::ChannelState;
 use crate::mcp_protocol::id_to_value;
 use crate::tools::handle_tool_call;
-use crate::types::{BridgeOutbound, DaemonInbound};
+use crate::types::{BridgeOutbound, DaemonInbound, MessageTarget};
 use tokio::io::AsyncWriteExt;
 
 /// Handle tool/call and produce a JSON-RPC response.
@@ -17,10 +17,10 @@ pub(crate) async fn tool_call_response(
     if crate::tools::is_get_online_agents(params) {
         return handle_get_online_agents(agent_id, reply_tx, &msg.id).await;
     }
-    match handle_tool_call(params, agent_id) {
-        Ok(Some(bridge_msg)) => {
-            eprintln!("[Bridge/{agent_id}] reply tool → {}", bridge_msg.to);
-            match reply_tx.send(BridgeOutbound::AgentReply(bridge_msg)).await {
+    match handle_tool_call(params) {
+        Ok(Some(parsed)) => {
+            eprintln!("[Bridge/{agent_id}] reply tool → {}", target_label(&parsed.target));
+            match reply_tx.send(BridgeOutbound::AgentReply(parsed)).await {
                 Ok(()) => tool_ok(&msg.id, "sent"),
                 Err(_) => tool_error(&msg.id, -32001, "bridge outbound channel is closed"),
             }
@@ -54,24 +54,20 @@ async fn handle_get_online_agents(
     }
 }
 
-fn tool_ok(id: &Option<crate::mcp_protocol::RpcId>, text: &str) -> serde_json::Value {
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id_to_value(id),
-        "result": { "content": [{ "type": "text", "text": text }] }
-    })
+fn target_label(t: &MessageTarget) -> &str {
+    match t {
+        MessageTarget::User => "user",
+        MessageTarget::Role { role } => role,
+        MessageTarget::Agent { agent_id } => agent_id,
+    }
 }
 
-fn tool_error(
-    id: &Option<crate::mcp_protocol::RpcId>,
-    code: i32,
-    message: &str,
-) -> serde_json::Value {
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id_to_value(id),
-        "error": { "code": code, "message": message }
-    })
+fn tool_ok(id: &Option<crate::mcp_protocol::RpcId>, text: &str) -> serde_json::Value {
+    serde_json::json!({"jsonrpc":"2.0","id":id_to_value(id),"result":{"content":[{"type":"text","text":text}]}})
+}
+
+fn tool_error(id: &Option<crate::mcp_protocol::RpcId>, code: i32, msg: &str) -> serde_json::Value {
+    serde_json::json!({"jsonrpc":"2.0","id":id_to_value(id),"error":{"code":code,"message":msg}})
 }
 
 /// Handle a daemon inbound message. Returns false if stdout write failed.
@@ -84,22 +80,12 @@ pub(crate) async fn handle_daemon_inbound_checked(
     let payload = match inbound {
         DaemonInbound::RoutedMessage(msg) => {
             let notif = channel_state.prepare_channel_message(&msg);
-            if notif.is_some() {
-                eprintln!(
-                    "[Bridge/{agent_id}] channel event {} from {}",
-                    msg.id, msg.from
-                );
-            }
+            if notif.is_some() { eprintln!("[Bridge/{agent_id}] channel event {} from {}", msg.id, msg.from); }
             notif
         }
         DaemonInbound::PermissionVerdict(verdict) => {
             let notif = channel_state.permission_notification(verdict.clone());
-            if notif.is_some() {
-                eprintln!(
-                    "[Bridge/{agent_id}] permission verdict {} → {:?}",
-                    verdict.request_id, verdict.behavior
-                );
-            }
+            if notif.is_some() { eprintln!("[Bridge/{agent_id}] permission verdict {} → {:?}", verdict.request_id, verdict.behavior); }
             notif
         }
     };
@@ -144,7 +130,10 @@ mod tests {
             method: Some("tools/call".into()),
             params: Some(serde_json::json!({
                 "name": "reply",
-                "arguments": { "to": "lead", "text": "hello", "status": "waiting" }
+                "arguments": {
+                    "target": { "kind": "role", "role": "lead" },
+                    "text": "hello", "status": "waiting"
+                }
             })),
         };
         let response = tool_call_response("claude", &reply_tx, &msg).await;

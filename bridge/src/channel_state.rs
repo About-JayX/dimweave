@@ -1,8 +1,6 @@
 use crate::types::{BridgeMessage, PermissionRequest, PermissionVerdict};
 use std::collections::HashMap;
 
-const ALLOWED_SENDERS: &[&str] = &["user", "system", "lead", "coder"];
-
 /// Minimal channel state: sender validation + pending permission tracking.
 /// Routing is handled by the daemon, not the bridge.
 #[derive(Default)]
@@ -16,13 +14,11 @@ impl ChannelState {
     }
 
     /// Convert a daemon-routed BridgeMessage into a Claude channel notification.
-    /// Returns None if the sender is not in the allow list.
+    /// Returns None only if the sender field is empty (the daemon is the routing
+    /// authority, so arbitrary role names are accepted).
     pub fn prepare_channel_message(&self, msg: &BridgeMessage) -> Option<serde_json::Value> {
-        if !ALLOWED_SENDERS.contains(&msg.from.as_str()) {
-            eprintln!(
-                "[Bridge/channel] dropped message {} from unknown sender {}",
-                msg.id, msg.from
-            );
+        if msg.from.trim().is_empty() {
+            eprintln!("[Bridge/channel] dropped message {} with empty sender", msg.id);
             return None;
         }
 
@@ -124,14 +120,17 @@ mod tests {
     }
 
     #[test]
-    fn unknown_sender_is_dropped() {
+    fn arbitrary_role_sender_is_accepted() {
         let state = ChannelState::new();
-        assert!(state.prepare_channel_message(&msg("intruder")).is_none());
+        let notif = state.prepare_channel_message(&msg("reviewer"));
+        assert!(notif.is_some());
+        assert_eq!(notif.unwrap()["params"]["meta"]["from"], "reviewer");
     }
 
     #[test]
-    fn removed_role_sender_is_dropped() {
+    fn empty_sender_is_dropped() {
         let state = ChannelState::new();
-        assert!(state.prepare_channel_message(&msg("tester")).is_none());
+        assert!(state.prepare_channel_message(&msg("")).is_none());
+        assert!(state.prepare_channel_message(&msg("  ")).is_none());
     }
 }

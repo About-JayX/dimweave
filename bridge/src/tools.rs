@@ -1,14 +1,11 @@
-use crate::types::{BridgeMessage, MessageStatus};
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::types::{MessageStatus, MessageTarget, ParsedReply};
 
-static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
-
-const VALID_REPLY_TARGETS: &[&str] = &["user", "lead", "coder"];
 const VALID_REPLY_STATUSES: &[&str] = &["in_progress", "done", "error"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolCallError {
     InvalidStatus(String),
+    InvalidTarget(String),
 }
 
 impl std::fmt::Display for ToolCallError {
@@ -18,6 +15,7 @@ impl std::fmt::Display for ToolCallError {
                 f,
                 "Invalid status: \"{value}\". Expected \"in_progress\", \"done\", or \"error\"."
             ),
+            Self::InvalidTarget(msg) => write!(f, "Invalid target: {msg}"),
         }
     }
 }
@@ -25,14 +23,29 @@ impl std::fmt::Display for ToolCallError {
 pub fn reply_tool_schema() -> serde_json::Value {
     serde_json::json!({
         "name": "reply",
-        "description": "Send a message to another agent role in Dimweave. The system routes it automatically.",
+        "description": "Send a message to another role or agent in Dimweave. The system routes it automatically.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "to": {
-                    "type": "string",
-                    "enum": VALID_REPLY_TARGETS,
-                    "description": "Target role: user, lead, or coder"
+                "target": {
+                    "type": "object",
+                    "description": "Message target",
+                    "properties": {
+                        "kind": {
+                            "type": "string",
+                            "enum": ["user", "role", "agent"],
+                            "description": "Target type"
+                        },
+                        "role": {
+                            "type": "string",
+                            "description": "Required when kind is role"
+                        },
+                        "agentId": {
+                            "type": "string",
+                            "description": "Required when kind is agent"
+                        }
+                    },
+                    "required": ["kind"]
                 },
                 "text": {
                     "type": "string",
@@ -44,7 +57,7 @@ pub fn reply_tool_schema() -> serde_json::Value {
                     "description": "Message lifecycle status"
                 }
             },
-            "required": ["to", "text", "status"]
+            "required": ["target", "text", "status"]
         }
     })
 }
@@ -67,9 +80,8 @@ pub fn is_get_online_agents(params: &serde_json::Value) -> bool {
 
 pub fn handle_tool_call(
     params: &serde_json::Value,
-    from: &str,
-) -> Result<Option<BridgeMessage>, ToolCallError> {
-    let Some(name) = params.get("name").and_then(|value| value.as_str()) else {
+) -> Result<Option<ParsedReply>, ToolCallError> {
+    let Some(name) = params.get("name").and_then(|v| v.as_str()) else {
         return Ok(None);
     };
     if name != "reply" {
@@ -78,13 +90,8 @@ pub fn handle_tool_call(
     let Some(args) = params.get("arguments") else {
         return Ok(None);
     };
-    let Some(to) = args.get("to").and_then(|value| value.as_str()) else {
-        return Ok(None);
-    };
-    if !VALID_REPLY_TARGETS.contains(&to) {
-        return Ok(None);
-    }
-    let Some(text) = args.get("text").and_then(|value| value.as_str()) else {
+    let target = parse_target(args)?;
+    let Some(text) = args.get("text").and_then(|v| v.as_str()) else {
         return Ok(None);
     };
     if text.trim().is_empty() {
@@ -103,20 +110,52 @@ pub fn handle_tool_call(
         }
         None => MessageStatus::Done,
     };
-    let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
-    Ok(Some(BridgeMessage {
-        id: format!("claude_{}_{seq}", chrono::Utc::now().timestamp_millis()),
-        from: from.to_string(),
-        display_source: None,
-        to: to.to_string(),
+    Ok(Some(ParsedReply {
+        target,
         content: text.to_string(),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        reply_to: None,
-        priority: None,
-        status: Some(status),
-        sender_agent_id: None,
-        attachments: None,
+        status,
     }))
+}
+
+fn parse_target(args: &serde_json::Value) -> Result<MessageTarget, ToolCallError> {
+    let obj = args
+        .get("target")
+        .ok_or_else(|| ToolCallError::InvalidTarget("missing target".into()))?;
+    let kind = obj
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ToolCallError::InvalidTarget("missing target.kind".into()))?;
+    match kind {
+        "user" => Ok(MessageTarget::User),
+        "role" => {
+            let role = obj.get("role").and_then(|v| v.as_str()).ok_or_else(|| {
+                ToolCallError::InvalidTarget("kind=role requires role field".into())
+            })?;
+            if role.trim().is_empty() {
+                return Err(ToolCallError::InvalidTarget("role must not be empty".into()));
+            }
+            Ok(MessageTarget::Role { role: role.into() })
+        }
+        "agent" => {
+            let id = obj
+                .get("agentId")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    ToolCallError::InvalidTarget("kind=agent requires agentId field".into())
+                })?;
+            if id.trim().is_empty() {
+                return Err(ToolCallError::InvalidTarget(
+                    "agentId must not be empty".into(),
+                ));
+            }
+            Ok(MessageTarget::Agent {
+                agent_id: id.into(),
+            })
+        }
+        other => Err(ToolCallError::InvalidTarget(format!(
+            "unknown kind: \"{other}\""
+        ))),
+    }
 }
 
 #[cfg(test)]

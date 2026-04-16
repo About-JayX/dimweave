@@ -110,9 +110,19 @@ pub enum DaemonInbound {
     PermissionVerdict(PermissionVerdict),
 }
 
+/// Structured bridge reply, carried through the outbound runtime path.
+/// Legacy conversion to `BridgeMessage` happens only at the wire serialization seam
+/// in `daemon_client_io.rs`, not here.
+#[derive(Debug, Clone)]
+pub struct ParsedReply {
+    pub target: MessageTarget,
+    pub content: String,
+    pub status: MessageStatus,
+}
+
 #[derive(Debug)]
 pub enum BridgeOutbound {
-    AgentReply(BridgeMessage),
+    AgentReply(ParsedReply),
     PermissionRequest(PermissionRequest),
     GetOnlineAgents(tokio::sync::oneshot::Sender<serde_json::Value>),
 }
