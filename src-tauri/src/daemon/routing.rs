@@ -118,35 +118,64 @@ fn resolve_broadcast_targets(
     let emit_claude_thinking =
         routing_display::should_emit_claude_thinking_pre(msg, &s.claude_role);
 
-    // Resolve matched agents for the target role.
+    // Resolution priority: agent_id → role → user (user handled before this call).
     // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
     let (matched_agents, task_agents_authoritative) = match msg.task_id.as_deref() {
         Some(tid) => {
-            let has_agents = !s.task_graph.agents_for_task(tid).is_empty();
-            let agents = s.resolve_task_role_providers(tid, &msg.to);
-            if agents.is_empty() {
-                if has_agents {
-                    // Task owns agents but none match the target role — fail
-                    // clearly instead of buffering indefinitely.
-                    return BroadcastResolution::Dropped;
+            let task_agents = s.task_graph.agents_for_task(tid);
+            let has_agents = !task_agents.is_empty();
+            // Agent-targeted: check if msg.to matches a concrete agent_id
+            if let Some(agent) = task_agents.iter().find(|a| a.agent_id == msg.to) {
+                let runtime = match agent.provider {
+                    crate::daemon::task_graph::types::Provider::Claude => "claude",
+                    crate::daemon::task_graph::types::Provider::Codex => "codex",
+                };
+                (vec![MatchedTaskAgent {
+                    agent_id: agent.agent_id.clone(),
+                    runtime,
+                }], true)
+            } else {
+                // Role-targeted: broadcast to all matching agents for this role
+                let agents = s.resolve_task_role_providers(tid, &msg.to);
+                if agents.is_empty() {
+                    if has_agents {
+                        return BroadcastResolution::Dropped;
+                    }
+                    return BroadcastResolution::NeedBuffer;
                 }
-                return BroadcastResolution::NeedBuffer;
+                (agents, has_agents)
             }
-            (agents, has_agents)
         }
         None => {
             let mut agents = Vec::new();
-            if s.claude_role == msg.to {
-                agents.push(MatchedTaskAgent {
-                    agent_id: "claude".into(),
-                    runtime: "claude",
-                });
-            }
-            if s.codex_role == msg.to {
-                agents.push(MatchedTaskAgent {
-                    agent_id: "codex".into(),
-                    runtime: "codex",
-                });
+            // Agent-targeted: check if msg.to is a known concrete agent_id
+            let agent_targeted = match msg.to.as_str() {
+                "claude" => {
+                    agents.push(MatchedTaskAgent {
+                        agent_id: "claude".into(), runtime: "claude",
+                    });
+                    true
+                }
+                "codex" => {
+                    agents.push(MatchedTaskAgent {
+                        agent_id: "codex".into(), runtime: "codex",
+                    });
+                    true
+                }
+                _ => false,
+            };
+            // Role-targeted (only when not agent-targeted)
+            if !agent_targeted {
+                if s.claude_role == msg.to {
+                    agents.push(MatchedTaskAgent {
+                        agent_id: "claude".into(), runtime: "claude",
+                    });
+                }
+                if s.codex_role == msg.to {
+                    agents.push(MatchedTaskAgent {
+                        agent_id: "codex".into(), runtime: "codex",
+                    });
+                }
             }
             if agents.is_empty() {
                 if crate::daemon::is_valid_agent_role(&msg.to) {

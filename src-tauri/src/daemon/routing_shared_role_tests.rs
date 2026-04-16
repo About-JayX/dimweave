@@ -602,6 +602,117 @@ async fn agent_id_routing_missing_role_drops_when_task_has_agents() {
     );
 }
 
+// ── agent-targeted routing within task scope ─────────────────────
+
+/// Agent-targeted message reaches exactly the intended agent, not all
+/// agents sharing the same role.
+#[tokio::test]
+async fn agent_targeted_delivers_to_one_agent_not_all_same_role() {
+    let (state, task_id, _lead_sid, _coder_sid, mut claude_rx, mut codex_rx) =
+        seeded_task_with_codex_lead_and_claude_coder().await;
+    // Get the codex agent_id (lead role) from task_agents
+    let codex_agent_id = {
+        let s = state.read().await;
+        let agents = s.task_graph.agents_for_task(&task_id);
+        agents
+            .iter()
+            .find(|a| a.provider == Provider::Codex)
+            .unwrap()
+            .agent_id
+            .clone()
+    };
+    // Target codex agent by agent_id, not by role "lead"
+    let msg = BridgeMessage {
+        id: "agent-target-task-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: codex_agent_id,
+        content: "direct to codex lead".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::InProgress),
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "agent-targeted message should deliver to the exact agent"
+    );
+    assert!(
+        codex_rx.try_recv().is_ok(),
+        "codex agent should receive the agent-targeted message"
+    );
+    assert!(
+        claude_rx.try_recv().is_err(),
+        "claude agent should NOT receive the message targeted at codex"
+    );
+}
+
+/// Agent-targeted message for a non-existent agent_id in task scope drops.
+#[tokio::test]
+async fn agent_targeted_unknown_id_in_task_drops() {
+    let (state, task_id, _lead_sid, _coder_sid, _claude_rx, _codex_rx) =
+        seeded_task_with_codex_lead_and_claude_coder().await;
+    let msg = BridgeMessage {
+        id: "agent-target-unknown-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "nonexistent-agent-xyz".into(),
+        content: "should drop".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Dropped),
+        "unknown agent_id in task with agents must drop"
+    );
+}
+
+/// Role-targeted message still broadcasts to both agents when two agents
+/// share the same task (verifies agent-targeted doesn't break role broadcast).
+#[tokio::test]
+async fn role_targeted_still_broadcasts_after_agent_routing_added() {
+    let (state, task_id, lead_sid, _coder_sid, mut claude_rx, mut codex_rx) =
+        seeded_task_with_codex_lead_and_claude_coder().await;
+    // Target "coder" role — should reach the claude agent (which is coder)
+    let msg = BridgeMessage {
+        id: "role-target-1".into(),
+        from: "user".into(),
+        display_source: Some("user".into()),
+        to: "coder".into(),
+        content: "role broadcast to coder".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: Some(lead_sid),
+        sender_agent_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(matches!(result, RouteResult::Delivered));
+    assert!(
+        claude_rx.try_recv().is_ok(),
+        "claude (coder) should receive the role-targeted message"
+    );
+    assert!(
+        codex_rx.try_recv().is_err(),
+        "codex (lead) should NOT receive a message targeted at coder role"
+    );
+}
+
 /// When a task has NO agents yet, a message to a valid role should still
 /// buffer — agents may be added later.
 #[tokio::test]

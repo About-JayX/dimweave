@@ -511,6 +511,25 @@ fn take_buffered_for_drains_only_matching_role() {
 }
 
 #[test]
+fn take_buffered_for_matches_agent_id_target() {
+    let mut s = DaemonState::new();
+    s.buffer_message(BridgeMessage::system("a", "lead"));
+    s.buffer_message(BridgeMessage::system("b", "claude"));
+    s.buffer_message(BridgeMessage::system("c", "coder"));
+    // Taking by role "lead" should NOT drain agent-targeted "claude" messages
+    let taken_role = s.take_buffered_for("lead");
+    assert_eq!(taken_role.len(), 1);
+    assert_eq!(taken_role[0].content, "a");
+    // Taking by agent_id "claude" should drain agent-targeted messages
+    let taken_agent = s.take_buffered_for("claude");
+    assert_eq!(taken_agent.len(), 1);
+    assert_eq!(taken_agent[0].content, "b");
+    // Only "coder" should remain
+    assert_eq!(s.buffered_messages.len(), 1);
+    assert_eq!(s.buffered_messages[0].to, "coder");
+}
+
+#[test]
 fn buffered_verdicts_round_trip() {
     let mut s = DaemonState::new();
     s.buffer_permission_verdict(

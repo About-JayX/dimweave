@@ -66,7 +66,9 @@ fn resolve_agent_identity(
             _ => None,
         };
         let agents = s.task_graph.agents_for_task(&task_id);
-        // Match by concrete slot agent_id first, then fall back to first provider match
+        // Match by concrete slot agent_id first; only fall back to provider
+        // match when exactly one agent uses this provider (avoids ambiguity
+        // when multiple same-provider agents exist).
         let matched = concrete_id
             .as_deref()
             .and_then(|cid| agents.iter().find(|a| a.agent_id == cid))
@@ -76,7 +78,15 @@ fn resolve_agent_identity(
                     "codex" => Some(crate::daemon::task_graph::types::Provider::Codex),
                     _ => None,
                 };
-                prov.and_then(|p| agents.iter().find(|a| a.provider == p))
+                prov.and_then(|p| {
+                    let matching: Vec<_> =
+                        agents.iter().filter(|a| a.provider == p).collect();
+                    if matching.len() == 1 {
+                        Some(matching[0])
+                    } else {
+                        None
+                    }
+                })
             });
         if let Some(agent) = matched {
             return (
@@ -162,10 +172,14 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         id.clone(),
                         crate::daemon::state::AgentSender::new(tx.clone(), gen),
                     );
-                    let buffered = role
+                    let mut buffered = role
                         .as_deref()
                         .map(|role_id| daemon.take_buffered_for(role_id))
                         .unwrap_or_default();
+                    // Also take agent-targeted messages (msg.to == agent_id)
+                    if role.as_deref() != Some(id.as_str()) {
+                        buffered.extend(daemon.take_buffered_for(&id));
+                    }
                     let verdicts = daemon.take_buffered_verdicts_for(&id);
                     (buffered, verdicts, role)
                 };
@@ -553,11 +567,66 @@ mod tests {
         assert_eq!(role_b, "coder");
         assert_eq!(id_b, agent_b.agent_id);
 
-        // resolve_agent_identity would pick whichever is first online —
-        // validate_claimed_agent_id avoids this ambiguity
+        // When slots have concrete agent_ids, resolve finds the first online
+        // slot by agent_id.  validate_claimed_agent_id is the precise path.
         let (resolved_role, _, _) = resolve_agent_identity(&s, "claude");
-        // Just verify it returns something — the point is validate is precise
         assert!(!resolved_role.is_empty());
+    }
+
+    /// Two Claude agents, legacy slot without agent_id — ambiguous provider
+    /// fallback must NOT pick one arbitrarily; falls to global singleton.
+    #[test]
+    fn resolve_agent_identity_ambiguous_falls_to_global() {
+        let mut s = DaemonState::new();
+        s.claude_role = "lead".into();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        s.task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        // Legacy slot: online but agent_id is None
+        let slot = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot("__default");
+        slot.agent_id = None;
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        slot.ws_tx = Some(tx);
+
+        let (role, aid, _) = resolve_agent_identity(&s, "claude");
+        // Two agents match Claude — ambiguous.  Must fall to global singleton.
+        assert_eq!(role, "lead");
+        assert_eq!(aid, "claude");
+    }
+
+    /// Single Claude agent in task — unambiguous provider fallback works.
+    #[test]
+    fn resolve_agent_identity_single_provider_agent() {
+        let mut s = DaemonState::new();
+        s.claude_role = "lead".into();
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let agent = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        // Legacy slot: online but agent_id is None
+        let slot = s
+            .task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot("__default");
+        slot.agent_id = None;
+        let (tx, _rx) = tokio::sync::mpsc::channel::<String>(1);
+        slot.ws_tx = Some(tx);
+
+        // Only one Claude agent — unambiguous, should resolve to it
+        let (role, aid, _) = resolve_agent_identity(&s, "claude");
+        assert_eq!(role, "coder");
+        assert_eq!(aid, agent.agent_id);
     }
 }
 
