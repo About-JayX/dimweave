@@ -394,6 +394,7 @@
 - `src-tauri/src/daemon/codex/mod.rs`
 - `src-tauri/src/daemon/routing_dispatch.rs`
 - `src-tauri/src/daemon/routing_display.rs`
+- `src-tauri/src/daemon/state_delivery.rs`
 - `src-tauri/src/daemon/state_task_flow.rs`
 - `src-tauri/src/daemon/routing_target_session.rs`
 - `src-tauri/src/daemon/orchestrator/task_flow.rs`
@@ -538,6 +539,14 @@ The implementation is not complete until these scenarios are covered by automate
   - `tests/message-panel-view-model.test.ts`
   - `tests/message-render-performance.test.ts`
 - increase Task 7 budget to `max_files_changed: 46`, `max_added_loc: 700`, `max_deleted_loc: 800`
+
+## Plan Revision 8 — 2026-04-16
+
+**Reason:** Final Task 7 review showed one remaining backend consumer omission: `src-tauri/src/daemon/state_delivery.rs` still mutates or inspects message target state and is touched by the final hard-cut candidate, so it must be included in the Task 7 scope.
+
+**Revised Task 7 scope:**
+
+- add `src-tauri/src/daemon/state_delivery.rs` to `allowed_files`
 
 ## Plan Revision 1 — 2026-04-16
 
