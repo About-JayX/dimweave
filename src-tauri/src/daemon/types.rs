@@ -199,6 +199,60 @@ pub enum FromAgent {
     AgentDisconnect,
 }
 
+// ── Structured routing types (migration target) ─────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MessageSource {
+    User,
+    System,
+    Agent {
+        #[serde(rename = "agentId")]
+        agent_id: String,
+        role: String,
+        provider: crate::daemon::task_graph::types::Provider,
+        #[serde(rename = "displaySource", skip_serializing_if = "Option::is_none")]
+        display_source: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MessageTarget {
+    User,
+    Role { role: String },
+    Agent {
+        #[serde(rename = "agentId")]
+        agent_id: String,
+    },
+}
+
+/// Migration-target message type with structured `source`/`target`/`reply_target`.
+/// Coexists with legacy `BridgeMessage` until all producers/consumers migrate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectedBridgeMessage {
+    pub id: String,
+    pub source: MessageSource,
+    pub target: MessageTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<MessageTarget>,
+    pub content: String,
+    pub timestamp: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<MessageStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<Attachment>>,
+}
+
 #[cfg(test)]
 #[path = "types_tests.rs"]
 mod tests;

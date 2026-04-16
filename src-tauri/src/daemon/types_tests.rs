@@ -210,3 +210,112 @@ fn serialize_online_agents_response_to_agent() {
     assert!(json["online_agents"].is_array());
     assert_eq!(json["online_agents"][0]["agentId"], "claude");
 }
+
+// ── DirectedBridgeMessage serialization tests ───────────────────
+
+#[test]
+fn directed_msg_user_to_role_target() {
+    let msg = DirectedBridgeMessage {
+        id: "msg_1".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
+        content: "Implement this.".into(),
+        timestamp: 1770000000000,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some("task_1".into()),
+        session_id: None,
+        attachments: None,
+    };
+    let json = serde_json::to_value(&msg).unwrap();
+    assert_eq!(json["source"]["kind"], "user");
+    assert_eq!(json["target"]["kind"], "role");
+    assert_eq!(json["target"]["role"], "coder");
+    assert_eq!(json["taskId"], "task_1");
+    // Optional fields that are None must not appear
+    assert!(json.get("replyTarget").is_none());
+    assert!(json.get("sessionId").is_none());
+    assert!(json.get("priority").is_none());
+}
+
+#[test]
+fn directed_msg_agent_to_agent_with_reply_target() {
+    use crate::daemon::task_graph::types::Provider;
+    let msg = DirectedBridgeMessage {
+        id: "msg_2".into(),
+        source: MessageSource::Agent {
+            agent_id: "agent_lead_1".into(),
+            role: "lead".into(),
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: MessageTarget::Agent { agent_id: "agent_coder_2".into() },
+        reply_target: Some(MessageTarget::Agent { agent_id: "agent_lead_1".into() }),
+        content: "Review and implement the daemon fix.".into(),
+        timestamp: 1770000000100,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::InProgress),
+        task_id: Some("task_1".into()),
+        session_id: Some("session_9".into()),
+        attachments: None,
+    };
+    let json = serde_json::to_value(&msg).unwrap();
+    // Source fields
+    assert_eq!(json["source"]["kind"], "agent");
+    assert_eq!(json["source"]["agentId"], "agent_lead_1");
+    assert_eq!(json["source"]["role"], "lead");
+    assert_eq!(json["source"]["provider"], "claude");
+    assert_eq!(json["source"]["displaySource"], "claude");
+    // Target fields
+    assert_eq!(json["target"]["kind"], "agent");
+    assert_eq!(json["target"]["agentId"], "agent_coder_2");
+    // Reply target
+    assert_eq!(json["replyTarget"]["kind"], "agent");
+    assert_eq!(json["replyTarget"]["agentId"], "agent_lead_1");
+    // Retained fields
+    assert_eq!(json["status"], "in_progress");
+    assert_eq!(json["sessionId"], "session_9");
+}
+
+#[test]
+fn directed_msg_roundtrip() {
+    use crate::daemon::task_graph::types::Provider;
+    let msg = DirectedBridgeMessage {
+        id: "msg_3".into(),
+        source: MessageSource::Agent {
+            agent_id: "agent_coder_2".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: None,
+        },
+        target: MessageTarget::User,
+        reply_target: None,
+        content: "Task is done.".into(),
+        timestamp: 1770000000200,
+        reply_to: Some("msg_2".into()),
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        attachments: None,
+    };
+    let json_str = serde_json::to_string(&msg).unwrap();
+    let decoded: DirectedBridgeMessage = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(decoded.id, "msg_3");
+    assert_eq!(decoded.source, MessageSource::Agent {
+        agent_id: "agent_coder_2".into(),
+        role: "coder".into(),
+        provider: Provider::Codex,
+        display_source: None,
+    });
+    assert_eq!(decoded.target, MessageTarget::User);
+    assert_eq!(decoded.reply_target, None);
+    assert_eq!(decoded.status, Some(MessageStatus::Done));
+    assert_eq!(decoded.reply_to, Some("msg_2".into()));
+    // displaySource must not appear when None
+    let json = serde_json::to_value(&decoded).unwrap();
+    assert!(json["source"].get("displaySource").is_none());
+}
