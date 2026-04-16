@@ -80,6 +80,7 @@
 
 - `src-tauri/src/daemon/routing_dispatch.rs`
 - `src-tauri/src/daemon/routing_display.rs`
+- `src-tauri/src/daemon/routing_format.rs`
 - `src-tauri/src/daemon/state_task_flow.rs`
 - `src-tauri/src/daemon/routing_target_session.rs`
 - `src-tauri/src/daemon/state_persistence.rs`
@@ -339,7 +340,7 @@
 - `src-tauri/src/daemon/feishu_project_task_link_tests.rs`
 - `src-tauri/src/feishu_project/task_link_tests.rs`
 
-**max_files_changed:** `40`
+**max_files_changed:** `41`
 **max_added_loc:** `420`
 **max_deleted_loc:** `700`
 
@@ -508,6 +509,15 @@ The implementation is not complete until these scenarios are covered by automate
   - `src-tauri/src/feishu_project/task_link_tests.rs`
   - `src-tauri/src/daemon/feishu_project_task_link_tests.rs`
 - increase Task 7 budget to `max_files_changed: 41`, `max_added_loc: 600`, `max_deleted_loc: 700`
+
+## Plan Revision 6 — 2026-04-16
+
+**Reason:** Task 6 review showed one remaining scope hole: `src-tauri/src/daemon/routing_format.rs` is a backend production consumer that still read legacy `BridgeMessage` fields and was correctly updated by the candidate, but it was omitted from Task 6 `allowed_files`.
+
+**Revised Task 6 scope:**
+
+- add `src-tauri/src/daemon/routing_format.rs` to `allowed_files`
+- increase Task 6 budget to `max_files_changed: 41`
 
 ## Plan Revision 1 — 2026-04-16
 
