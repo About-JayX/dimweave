@@ -748,3 +748,186 @@ async fn agent_id_routing_missing_role_buffers_when_task_has_no_agents() {
     );
     assert_eq!(state.read().await.buffered_messages.len(), 1);
 }
+
+// ── reply-target: two-lead cross-talk prevention ─────────────
+
+/// Two leads delegate to two coders (agent-targeted). Each coder's
+/// role-targeted reply goes only to its own delegating lead.
+#[tokio::test]
+async fn reply_target_two_leads_separate_coder_chains() {
+    clear_reply_targets();
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (lead1_tx, mut lead1_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (lead2_tx, mut lead2_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (coder1_tx, mut coder1_rx) =
+        tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
+    let (coder2_tx, mut coder2_rx) =
+        tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
+    let (task_id, lead1_id, lead2_id, coder1_id, coder2_id) = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let lead1 = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let lead2 = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let coder1 = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+        let coder2 = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let rt = s.task_runtimes.get_mut(&task.task_id).unwrap();
+        rt.get_or_create_claude_slot(&lead1.agent_id).ws_tx = Some(lead1_tx);
+        rt.get_or_create_claude_slot(&lead2.agent_id).ws_tx = Some(lead2_tx);
+        rt.get_or_create_codex_slot(&coder1.agent_id, 4500).inject_tx = Some(coder1_tx);
+        rt.get_or_create_codex_slot(&coder2.agent_id, 4500).inject_tx = Some(coder2_tx);
+        (task.task_id, lead1.agent_id, lead2.agent_id,
+         coder1.agent_id, coder2.agent_id)
+    };
+    // lead_1 → coder_1 (agent-targeted delegation)
+    let msg1 = BridgeMessage {
+        id: "del-l1-c1".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: coder1_id.clone(),
+        content: "task A".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::InProgress),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(lead1_id.clone()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, msg1).await, RouteResult::Delivered));
+    assert!(coder1_rx.try_recv().is_ok());
+    // lead_2 → coder_2 (agent-targeted delegation)
+    let msg2 = BridgeMessage {
+        id: "del-l2-c2".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: coder2_id.clone(),
+        content: "task B".into(),
+        timestamp: 2,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::InProgress),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(lead2_id.clone()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, msg2).await, RouteResult::Delivered));
+    assert!(coder2_rx.try_recv().is_ok());
+    // coder_1 replies to "lead" → should go to lead_1 only
+    let r1 = BridgeMessage {
+        id: "reply-c1".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "A done".into(),
+        timestamp: 3,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(coder1_id.clone()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, r1).await, RouteResult::Delivered));
+    assert!(lead1_rx.try_recv().is_ok(), "lead_1 receives coder_1's reply");
+    assert!(lead2_rx.try_recv().is_err(), "lead_2 must NOT receive coder_1's reply");
+    // coder_2 replies to "lead" → should go to lead_2 only
+    let r2 = BridgeMessage {
+        id: "reply-c2".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "B done".into(),
+        timestamp: 4,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(coder2_id.clone()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, r2).await, RouteResult::Delivered));
+    assert!(lead2_rx.try_recv().is_ok(), "lead_2 receives coder_2's reply");
+    assert!(lead1_rx.try_recv().is_err(), "lead_1 must NOT receive coder_2's reply");
+}
+
+/// When a coder explicitly targets a different agent_id, the reply-target
+/// redirect does NOT interfere — explicit override wins.
+#[tokio::test]
+async fn reply_target_explicit_agent_override_bypasses_redirect() {
+    clear_reply_targets();
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (lead1_tx, mut lead1_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (lead2_tx, mut lead2_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (coder1_tx, mut coder1_rx) =
+        tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
+    let (task_id, lead1_id, lead2_id, coder1_id) = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "T");
+        s.active_task_id = Some(task.task_id.clone());
+        let lead1 = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let lead2 = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let coder1 = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let rt = s.task_runtimes.get_mut(&task.task_id).unwrap();
+        rt.get_or_create_claude_slot(&lead1.agent_id).ws_tx = Some(lead1_tx);
+        rt.get_or_create_claude_slot(&lead2.agent_id).ws_tx = Some(lead2_tx);
+        rt.get_or_create_codex_slot(&coder1.agent_id, 4500).inject_tx = Some(coder1_tx);
+        (task.task_id, lead1.agent_id, lead2.agent_id, coder1.agent_id)
+    };
+    // lead_1 → coder_1 (records coder_1 → lead_1)
+    let del = BridgeMessage {
+        id: "del-override".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: coder1_id.clone(),
+        content: "work".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::InProgress),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(lead1_id.clone()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, del).await, RouteResult::Delivered));
+    assert!(coder1_rx.try_recv().is_ok());
+    // coder_1 explicitly targets lead_2 by agent_id → bypasses redirect
+    let explicit = BridgeMessage {
+        id: "explicit-override".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: lead2_id.clone(),
+        content: "to lead_2 directly".into(),
+        timestamp: 2,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id.clone()),
+        session_id: None,
+        sender_agent_id: Some(coder1_id),
+        attachments: None,
+    };
+    assert!(matches!(
+        route_message_inner(&state, explicit).await,
+        RouteResult::Delivered
+    ));
+    assert!(
+        lead2_rx.try_recv().is_ok(),
+        "explicit agent_id target goes to lead_2"
+    );
+    assert!(
+        lead1_rx.try_recv().is_err(),
+        "lead_1 must NOT receive msg explicitly targeted at lead_2"
+    );
+}

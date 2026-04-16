@@ -267,6 +267,151 @@ fn task_session_mismatch_buffer_message_is_not_reported_as_offline() {
     assert!(!text.contains("offline"));
 }
 
+// ── reply-target redirect tests ──────────────────────────────────
+
+#[tokio::test]
+async fn reply_target_redirects_role_reply_to_delegating_agent() {
+    clear_reply_targets();
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (claude_tx, mut claude_rx) = tokio::sync::mpsc::channel(8);
+    let (codex_tx, mut codex_rx) = tokio::sync::mpsc::channel(8);
+    {
+        let mut s = state.write().await;
+        let epoch = s.begin_claude_sdk_launch("nonce-rt".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-rt", claude_tx);
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
+        s.codex_inject_tx = Some(codex_tx);
+    }
+    // Step 1: Lead (Claude) sends agent-targeted message to "codex"
+    let delegate = BridgeMessage {
+        id: "delegate-rt-1".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "codex".into(),
+        content: "implement this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::InProgress),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+        attachments: None,
+    };
+    let result = route_message_inner(&state, delegate).await;
+    assert!(matches!(result, RouteResult::Delivered));
+    assert!(codex_rx.try_recv().is_ok(), "codex receives delegation");
+    // Step 2: Coder (Codex) replies to role "lead" → redirected to "claude"
+    let reply = BridgeMessage {
+        id: "reply-rt-1".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "done".into(),
+        timestamp: 2,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("codex".into()),
+        attachments: None,
+    };
+    let result = route_message_inner(&state, reply).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "reply must be redirected to delegating agent"
+    );
+    assert!(
+        claude_rx.try_recv().is_ok(),
+        "Claude (delegator) should receive the redirected reply"
+    );
+}
+
+/// Regression: a redirected reply must NOT create a reciprocal mapping
+/// that turns subsequent non-reply lead messages into sticky redirects.
+#[tokio::test]
+async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
+    clear_reply_targets();
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (claude_tx, mut claude_rx) = tokio::sync::mpsc::channel(8);
+    let (codex_tx, mut codex_rx) = tokio::sync::mpsc::channel(8);
+    {
+        let mut s = state.write().await;
+        let epoch = s.begin_claude_sdk_launch("nonce-recip".into());
+        s.attach_claude_sdk_ws(epoch, "nonce-recip", claude_tx);
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
+        s.codex_inject_tx = Some(codex_tx);
+    }
+    // Step 1: Lead delegates to coder by agent_id
+    let delegate = BridgeMessage {
+        id: "del-recip-1".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "codex".into(),
+        content: "implement".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::InProgress),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, delegate).await, RouteResult::Delivered));
+    assert!(codex_rx.try_recv().is_ok());
+    // Step 2: Coder replies to "lead" → redirected to claude
+    let reply = BridgeMessage {
+        id: "reply-recip-1".into(),
+        from: "coder".into(),
+        display_source: Some("codex".into()),
+        to: "lead".into(),
+        content: "done".into(),
+        timestamp: 2,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::Done),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("codex".into()),
+        attachments: None,
+    };
+    assert!(matches!(route_message_inner(&state, reply).await, RouteResult::Delivered));
+    assert!(claude_rx.try_recv().is_ok());
+    // Step 3: Lead sends a NEW message to role "coder" — must NOT be
+    // redirected by a reciprocal mapping; should reach codex via normal
+    // role resolution.
+    let new_msg = BridgeMessage {
+        id: "new-lead-msg-1".into(),
+        from: "lead".into(),
+        display_source: Some("claude".into()),
+        to: "coder".into(),
+        content: "next task".into(),
+        timestamp: 3,
+        reply_to: None,
+        priority: None,
+        status: Some(crate::daemon::types::MessageStatus::InProgress),
+        task_id: None,
+        session_id: None,
+        sender_agent_id: Some("claude".into()),
+        attachments: None,
+    };
+    let result = route_message_inner(&state, new_msg).await;
+    assert!(matches!(result, RouteResult::Delivered));
+    assert!(
+        codex_rx.try_recv().is_ok(),
+        "codex receives via normal role resolution"
+    );
+    // Verify the message was NOT also redirected to claude (self-delivery)
+    assert!(
+        claude_rx.try_recv().is_err(),
+        "no reciprocal redirect — claude must NOT receive its own message"
+    );
+}
+
 // ── task_runtime_routing: AC1/AC2 task-first provider resolution ────
 
 #[tokio::test]

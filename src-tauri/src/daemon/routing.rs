@@ -10,6 +10,34 @@ use crate::daemon::{
 };
 use tauri::AppHandle;
 
+// ── reply-target tracking ────────────────────────────────────
+// When A delegates to B (agent-targeted), record B → (A, A_role).
+// When B later replies to A_role, redirect to A's specific agent.
+
+fn reply_target_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, (String, String)>> {
+    static MAP: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, (String, String)>>> = std::sync::OnceLock::new();
+    MAP.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn apply_reply_target(sender_agent_id: &str, target: &str) -> Option<String> {
+    if matches!(target, "user" | "claude" | "codex") { return None; }
+    let guard = reply_target_map().lock().unwrap();
+    let (agent_id, role) = guard.get(sender_agent_id)?;
+    if role == target { Some(agent_id.clone()) } else { None }
+}
+
+fn record_reply_target(recipient_id: &str, sender_id: &str, sender_role: &str) {
+    reply_target_map().lock().unwrap().insert(
+        recipient_id.to_string(),
+        (sender_id.to_string(), sender_role.to_string()),
+    );
+}
+
+#[cfg(test)]
+fn clear_reply_targets() {
+    reply_target_map().lock().unwrap().clear();
+}
+
 #[path = "routing_dispatch.rs"]
 mod dispatch;
 pub use dispatch::{route_message, route_message_silent};
@@ -48,6 +76,17 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         };
     }
 
+    // Reply-target redirect: if sender has a recorded delegator,
+    // redirect role-targeted replies to that specific agent.
+    let redirect = msg.sender_agent_id.as_deref()
+        .and_then(|sid| apply_reply_target(sid, &msg.to));
+    let was_redirected = redirect.is_some();
+    let msg = if let Some(new_to) = redirect {
+        BridgeMessage { to: new_to, ..msg }
+    } else {
+        msg
+    };
+
     // Resolution phase: resolve ALL providers for the target role.
     // Broadcast: target=<role> may resolve to multiple providers (AC2).
     // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
@@ -77,8 +116,14 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         BroadcastResolution::Targets {
             deliveries,
             emit_claude_thinking,
+            agent_targeted,
         } => {
-            deliver_broadcast(state, msg, deliveries, emit_claude_thinking).await
+            // Suppress reply-target recording for redirected replies:
+            // a redirect already made this agent-targeted, but recording
+            // would create a reciprocal mapping that turns subsequent
+            // non-reply messages into sticky one-to-one redirects.
+            let record = agent_targeted && !was_redirected;
+            deliver_broadcast(state, msg, deliveries, emit_claude_thinking, record).await
         }
     }
 }
@@ -96,7 +141,6 @@ enum DeliveryChannel {
 }
 
 struct ResolvedDelivery {
-    #[allow(dead_code)]
     agent_id: String,
     channel: DeliveryChannel,
 }
@@ -107,6 +151,7 @@ enum BroadcastResolution {
     Targets {
         deliveries: Vec<ResolvedDelivery>,
         emit_claude_thinking: bool,
+        agent_targeted: bool,
     },
 }
 
@@ -120,7 +165,7 @@ fn resolve_broadcast_targets(
 
     // Resolution priority: agent_id → role → user (user handled before this call).
     // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
-    let (matched_agents, task_agents_authoritative) = match msg.task_id.as_deref() {
+    let (matched_agents, task_agents_authoritative, agent_targeted) = match msg.task_id.as_deref() {
         Some(tid) => {
             let task_agents = s.task_graph.agents_for_task(tid);
             let has_agents = !task_agents.is_empty();
@@ -133,7 +178,7 @@ fn resolve_broadcast_targets(
                 (vec![MatchedTaskAgent {
                     agent_id: agent.agent_id.clone(),
                     runtime,
-                }], true)
+                }], true, true)
             } else {
                 // Role-targeted: broadcast to all matching agents for this role
                 let agents = s.resolve_task_role_providers(tid, &msg.to);
@@ -143,7 +188,7 @@ fn resolve_broadcast_targets(
                     }
                     return BroadcastResolution::NeedBuffer;
                 }
-                (agents, has_agents)
+                (agents, has_agents, false)
             }
         }
         None => {
@@ -183,7 +228,7 @@ fn resolve_broadcast_targets(
                 }
                 return BroadcastResolution::Dropped;
             }
-            (agents, false)
+            (agents, false, agent_targeted)
         }
     };
 
@@ -275,6 +320,7 @@ fn resolve_broadcast_targets(
     BroadcastResolution::Targets {
         deliveries,
         emit_claude_thinking,
+        agent_targeted,
     }
 }
 
@@ -300,17 +346,21 @@ async fn deliver_broadcast(
     msg: BridgeMessage,
     deliveries: Vec<ResolvedDelivery>,
     emit_claude_thinking: bool,
+    agent_targeted: bool,
 ) -> RouteOutcome {
     let mut any_delivered = false;
     let mut needs_claude_turn = false;
+    let mut delivered_agent_ids: Vec<String> = Vec::new();
 
     for delivery in deliveries {
+        let aid = delivery.agent_id;
         match delivery.channel {
             DeliveryChannel::ClaudeSdk(tx) => {
                 let ndjson = format_ndjson_user_message(&msg).await;
                 if tx.send(ndjson).await.is_ok() {
                     needs_claude_turn = true;
                     any_delivered = true;
+                    delivered_agent_ids.push(aid);
                 }
             }
             DeliveryChannel::ClaudeBridge(tx) => {
@@ -323,6 +373,7 @@ async fn deliver_broadcast(
                 {
                     needs_claude_turn = true;
                     any_delivered = true;
+                    delivered_agent_ids.push(aid);
                 }
             }
             DeliveryChannel::Codex {
@@ -332,7 +383,17 @@ async fn deliver_broadcast(
             } => {
                 if tx.send((items, from_user)).await.is_ok() {
                     any_delivered = true;
+                    delivered_agent_ids.push(aid);
                 }
+            }
+        }
+    }
+
+    // Record reply-target mappings for agent-targeted delegations
+    if agent_targeted {
+        if let Some(sender_id) = msg.sender_agent_id.as_deref() {
+            for rid in &delivered_agent_ids {
+                record_reply_target(rid, sender_id, &msg.from);
             }
         }
     }
