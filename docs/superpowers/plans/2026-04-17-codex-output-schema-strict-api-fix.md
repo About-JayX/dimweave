@@ -128,38 +128,38 @@ The API returned `invalid_json_schema` errors on every `turn/start`, but the dae
 
 ### Task 1 CM: schema_fix
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 2-6)
+- **Commit:** `b6958989`
 - **Files:** `roles.rs`, `roles_tests.rs`
 - **Verification:** `cargo test -p dimweave role_config` — 28 passed
 - **Runtime:** Codex `turn/start` no longer returns `invalid_json_schema` error
 
 ### Task 2 CM: error_handler
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 1, 3-6)
+- **Commit:** `b6958989`
 - **Files:** `session_event.rs`
 - **Verification:** `cargo test -p dimweave session_event` — passed; runtime confirmed error messages reach GUI
 
 ### Task 3 CM: prompt_update
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 1-2, 4-6)
+- **Commit:** `b6958989`
 - **Files:** `roles.rs`, `roles_tests.rs`
 - **Verification:** `cargo test -p dimweave role_config` — 28 passed; lead examples show delegation to coder
 
 ### Task 4 CM: parser_compat
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 1-3, 5-6)
+- **Commit:** `b6958989`
 - **Files:** `structured_output_tests.rs`
 - **Verification:** `cargo test -p dimweave structured_output` — 36 passed (3 new empty-field tests)
 
 ### Task 5 CM: scrollerref_fix
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 1-4, 6)
+- **Commit:** `b6958989`
 - **Files:** `MessageList.tsx`
 - **Verification:** dev mode — no "Maximum update depth exceeded" error
 
 ### Task 6 CM: vite_debug
 - **Status:** complete
-- **Commit:** (uncommitted — staged with Tasks 1-5)
+- **Commit:** `b6958989`
 - **Files:** `vite.config.ts`
 - **Verification:** `bun run build` — assets named `index.js`, `markdown.js` (no hash)
 
