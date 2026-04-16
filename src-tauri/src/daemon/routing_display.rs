@@ -26,30 +26,30 @@ pub(crate) fn emit_route_side_effects(
         RouteResult::Dropped => "dropped",
         RouteResult::ToGui => "gui",
     };
-    eprintln!("[Route] {} → {} {tag}", msg.from, msg.to);
+    eprintln!("[Route] {} → {} {tag}", msg.source_role(), msg.target_str());
 
     match result {
         RouteResult::Delivered => {
             gui::emit_system_log(
                 app,
                 "info",
-                &format!("[Route] {} → {} delivered", msg.from, msg.to),
+                &format!("[Route] {} → {} delivered", msg.source_role(), msg.target_str()),
             );
         }
         RouteResult::Buffered => {
             gui::emit_system_log(
                 app,
                 "warn",
-                &buffered_route_message(&msg.to, buffer_reason),
+                &buffered_route_message(msg.target_str(), buffer_reason),
             );
         }
         RouteResult::Dropped => {
-            let reason = if !crate::daemon::is_valid_agent_role(&msg.to) && msg.to != "user" {
-                format!("[Route] dropped invalid target '{}'", msg.to)
+            let reason = if !crate::daemon::is_valid_agent_role(msg.target_str()) && !msg.is_to_user() {
+                format!("[Route] dropped invalid target '{}'", msg.target_str())
             } else {
                 format!(
                     "[Route] dropped unauthorized sender '{}' → '{}'",
-                    msg.from, msg.to
+                    msg.source_role(), msg.target_str()
                 )
             };
             gui::emit_system_log(app, "warn", &reason);
@@ -76,7 +76,7 @@ pub(crate) fn is_renderable_message(msg: &BridgeMessage) -> bool {
 
 /// Pre-route check: is this message targeting Claude and eligible for thinking indicator?
 pub(crate) fn should_emit_claude_thinking_pre(msg: &BridgeMessage, claude_role: &str) -> bool {
-    msg.to == claude_role && msg.from != claude_role && is_renderable_message(msg)
+    msg.target_str() == claude_role && msg.source_role() != claude_role && is_renderable_message(msg)
 }
 
 #[cfg(test)]

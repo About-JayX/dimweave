@@ -80,7 +80,7 @@ pub(crate) async fn handle_daemon_inbound_checked(
     let payload = match inbound {
         DaemonInbound::RoutedMessage(msg) => {
             let notif = channel_state.prepare_channel_message(&msg);
-            if notif.is_some() { eprintln!("[Bridge/{agent_id}] channel event {} from {}", msg.id, msg.from); }
+            if notif.is_some() { eprintln!("[Bridge/{agent_id}] channel event {} from {}", msg.id, msg.source_role()); }
             notif
         }
         DaemonInbound::PermissionVerdict(verdict) => {

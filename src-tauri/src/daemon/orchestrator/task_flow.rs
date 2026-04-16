@@ -7,7 +7,7 @@ pub fn process_message(store: &mut TaskGraphStore, task_id: &str, msg: &BridgeMe
     let status = msg.status.unwrap_or(MessageStatus::Done);
 
     // lead → coder: start implementation (only if not already implementing+)
-    if msg.from == "lead" && msg.to == "coder" {
+    if msg.source_role() == "lead" && msg.target_str() == "coder" {
         let current = store.get_task(task_id).map(|t| t.status);
         if matches!(current, Some(TaskStatus::Draft) | Some(TaskStatus::Planning)) {
             store.update_task_status(task_id, TaskStatus::Implementing);
@@ -15,13 +15,13 @@ pub fn process_message(store: &mut TaskGraphStore, task_id: &str, msg: &BridgeMe
     }
 
     // coder → lead (done): lead reviews next
-    if msg.from == "coder" && msg.to == "lead" && status.is_terminal() {
+    if msg.source_role() == "coder" && msg.target_str() == "lead" && status.is_terminal() {
         store.update_task_status(task_id, TaskStatus::Reviewing);
         return Vec::new();
     }
 
     // lead → user (done): task complete
-    if msg.from == "lead" && msg.to == "user" && status == MessageStatus::Done {
+    if msg.source_role() == "lead" && msg.is_to_user() && status == MessageStatus::Done {
         store.update_task_status(task_id, TaskStatus::Done);
     }
 

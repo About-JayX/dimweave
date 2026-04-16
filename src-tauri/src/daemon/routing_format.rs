@@ -15,12 +15,12 @@ fn append_file_attachment_context(base: &mut String, atts: &[Attachment]) {
 
 /// Build base text content for Codex (handles agent vs user formatting).
 fn build_codex_text(msg: &BridgeMessage) -> String {
-    if msg.from == "user" {
+    if msg.is_from_user() {
         msg.content.clone()
     } else {
-        let sender_label = match &msg.sender_agent_id {
-            Some(aid) => format!("{} [{}]", msg.from, aid),
-            None => msg.from.clone(),
+        let sender_label = match msg.source_agent_id() {
+            Some(aid) => format!("{} [{}]", msg.source_role(), aid),
+            None => msg.source_role().to_string(),
         };
         match msg.status {
             Some(status) => format!(
@@ -55,7 +55,7 @@ pub async fn format_ndjson_user_message(msg: &BridgeMessage) -> String {
     if let Some(atts) = &msg.attachments {
         append_file_attachment_context(&mut text, atts);
     }
-    let wrapped = crate::daemon::claude_sdk::protocol::wrap_channel_content(&msg.from, &text);
+    let wrapped = crate::daemon::claude_sdk::protocol::wrap_channel_content(msg.source_role(), &text);
     let mut blocks = vec![serde_json::json!({"type": "text", "text": wrapped})];
     if let Some(atts) = &msg.attachments {
         for att in atts.iter().filter(|a| a.is_image) {

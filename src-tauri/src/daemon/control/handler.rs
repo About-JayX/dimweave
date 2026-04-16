@@ -107,7 +107,7 @@ fn resolve_agent_identity(
 fn claude_terminal_reply_claims_visible_result(
     message: &crate::daemon::types::BridgeMessage,
 ) -> bool {
-    message.to == "user"
+    message.is_to_user()
         && message.status.is_some_and(|s| s.is_terminal())
         && !message.content.trim().is_empty()
 }
@@ -115,13 +115,13 @@ fn claude_terminal_reply_claims_visible_result(
 fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
     format!(
         "BridgeMessage{{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id,attachments}} from={} to={} status={} content_len={} task_id={} session_id={} sender_agent_id={} attachments={}",
-        message.from,
-        message.to,
+        message.source_role(),
+        message.target_str(),
         message.status.map(MessageStatus::as_str).unwrap_or("none"),
         message.content.len(),
         message.task_id.as_deref().unwrap_or("-"),
         message.session_id.as_deref().unwrap_or("-"),
-        message.sender_agent_id.as_deref().unwrap_or("-"),
+        message.source_agent_id().unwrap_or("-"),
         message.attachments.as_ref().map_or(0, |a| a.len()),
     )
 }

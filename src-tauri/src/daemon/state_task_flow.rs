@@ -88,7 +88,7 @@ impl DaemonState {
     }
 
     pub fn agent_matches_task_message(&self, agent: &str, message: &BridgeMessage) -> bool {
-        if message.to != "lead" && message.to != "coder" {
+        if message.target_str() != "lead" && message.target_str() != "coder" {
             return true;
         }
 
@@ -106,7 +106,7 @@ impl DaemonState {
     }
 
     pub fn route_buffer_reason(&self, message: &BridgeMessage) -> Option<&'static str> {
-        if message.to != "lead" && message.to != "coder" {
+        if message.target_str() != "lead" && message.target_str() != "coder" {
             return Some("target_agent_offline");
         }
 
@@ -115,11 +115,11 @@ impl DaemonState {
         }
 
         let claude_online_mismatch =
-            self.claude_role == message.to
+            self.claude_role == message.target_str()
                 && self.is_agent_online("claude")
                 && !self.agent_matches_task_message("claude", message);
         let codex_online_mismatch =
-            self.codex_role == message.to
+            self.codex_role == message.target_str()
                 && self.is_agent_online("codex")
                 && !self.agent_matches_task_message("codex", message);
 

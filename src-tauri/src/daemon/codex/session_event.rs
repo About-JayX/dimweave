@@ -193,7 +193,7 @@ async fn handle_completed_agent_message(
         let s = state.read().await;
         s.stamp_message_context_for_task(task_id, role_id, &mut msg);
     }
-    eprintln!("[Codex] route {} → {}", role_id, msg.to);
+    eprintln!("[Codex] route {} → {}", role_id, msg.target_str());
     routing::route_message(state, app, msg).await;
 }
 
@@ -376,7 +376,7 @@ mod tests {
             status: MessageStatus::Done,
         };
         let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "user");
+        assert_eq!(msg.target_str(), "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
     }
 
@@ -389,7 +389,7 @@ mod tests {
             status: MessageStatus::Done,
         };
         let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "reviewer");
+        assert_eq!(msg.target_str(), "reviewer");
     }
 
     #[test]
@@ -401,7 +401,7 @@ mod tests {
             status: MessageStatus::Done,
         };
         let msg = build_completed_output_message("coder", &parsed, true, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "claude");
+        assert_eq!(msg.target_str(), "claude");
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
             status: MessageStatus::Done,
         };
         let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "user");
+        assert_eq!(msg.target_str(), "user");
     }
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
             status: MessageStatus::InProgress,
         };
         let msg = build_completed_output_message("coder", &parsed, false, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "user");
+        assert_eq!(msg.target_str(), "user");
     }
 
     #[test]

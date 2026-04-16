@@ -61,6 +61,15 @@ pub struct BridgeMessage {
     pub attachments: Option<Vec<Attachment>>,
 }
 
+impl BridgeMessage {
+    pub fn is_from_user(&self) -> bool { self.from == "user" }
+    pub fn source_role(&self) -> &str { &self.from }
+    pub fn target_str(&self) -> &str { &self.to }
+    pub fn is_to_user(&self) -> bool { self.to == "user" }
+    pub fn source_agent_id(&self) -> Option<&str> { self.sender_agent_id.as_deref() }
+    pub fn source_display(&self) -> Option<&str> { self.display_source.as_deref() }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct PermissionRequest {

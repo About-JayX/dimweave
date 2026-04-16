@@ -104,6 +104,23 @@ pub struct BridgeMessage {
 }
 
 impl BridgeMessage {
+    // ── Structured accessors (backend hard-cut) ─────────────────
+    // Backend code MUST use these instead of reading `from`/`to`/
+    // `display_source`/`sender_agent_id` directly.  The raw fields
+    // remain only for frontend wire serialization (Task 7).
+
+    pub fn is_from_user(&self) -> bool { self.from == "user" }
+    pub fn is_from_system(&self) -> bool { self.from == "system" }
+    /// The role string of the message originator.
+    pub fn source_role(&self) -> &str { &self.from }
+    /// The raw target string (role name, agent id, or "user").
+    pub fn target_str(&self) -> &str { &self.to }
+    pub fn is_to_user(&self) -> bool { self.to == "user" }
+    /// The concrete agent instance that originated this message.
+    pub fn source_agent_id(&self) -> Option<&str> { self.sender_agent_id.as_deref() }
+    /// Display-friendly source label (e.g. "claude", "codex").
+    pub fn source_display(&self) -> Option<&str> { self.display_source.as_deref() }
+
     #[cfg(test)]
     pub fn system(content: &str, to: &str) -> Self {
         Self {

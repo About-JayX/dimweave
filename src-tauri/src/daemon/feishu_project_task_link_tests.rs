@@ -54,9 +54,9 @@ fn build_handoff_message_has_correct_fields() {
     let item = sample_item();
     let context = sample_context();
     let msg = build_handoff_message(&item, &context, "task_42", "/tmp/snap.json");
-    assert_eq!(msg.from, "system");
-    assert_eq!(msg.display_source.as_deref(), Some("feishu_project"));
-    assert_eq!(msg.to, "lead");
+    assert_eq!(msg.source_role(), "system");
+    assert_eq!(msg.source_display(), Some("feishu_project"));
+    assert_eq!(msg.target_str(), "lead");
     assert_eq!(msg.task_id.as_deref(), Some("task_42"));
     assert!(msg.content.contains("Crash on launch"));
     assert!(msg.content.contains("1001"));

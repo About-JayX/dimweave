@@ -136,13 +136,8 @@ pub(super) fn parse_structured_output(raw: &str) -> Result<ParsedOutput, Structu
 }
 
 fn parse_target_field(v: &Value) -> Option<MessageTarget> {
-    if let Some(obj) = v.get("target") {
-        if let Ok(t) = serde_json::from_value::<MessageTarget>(obj.clone()) {
-            return Some(t);
-        }
-    }
-    let s = v["send_to"].as_str()?;
-    Some(if s == "user" { MessageTarget::User } else { MessageTarget::Role { role: s.into() } })
+    let obj = v.get("target")?;
+    serde_json::from_value::<MessageTarget>(obj.clone()).ok()
 }
 
 fn parse_reply_target_field(v: &Value) -> Option<MessageTarget> {

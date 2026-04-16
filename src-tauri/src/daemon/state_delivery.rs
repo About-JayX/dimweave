@@ -75,7 +75,7 @@ impl DaemonState {
 
     pub fn migrate_buffered_role(&mut self, old_role: &str, new_role: &str) {
         for msg in &mut self.buffered_messages {
-            if msg.to == old_role {
+            if msg.target_str() == old_role {
                 msg.to = new_role.to_string();
             }
         }
@@ -97,7 +97,7 @@ impl DaemonState {
                 (Some(_), None) => false,
                 _ => true,
             };
-            if msg.to == role && same_task {
+            if msg.target_str() == role && same_task {
                 ready.push(msg.clone());
                 false
             } else {

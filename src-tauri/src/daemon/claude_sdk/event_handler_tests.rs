@@ -13,12 +13,12 @@ fn terminal_sdk_text_creates_visible_gui_message() {
     let msg = build_direct_sdk_gui_message("lead", "final reply", MessageStatus::Done, "agent-1", "claude")
         .expect("done messages should be visible");
 
-    assert_eq!(msg.from, "lead");
-    assert_eq!(msg.display_source.as_deref(), Some("claude"));
-    assert_eq!(msg.to, "user");
+    assert_eq!(msg.source_role(), "lead");
+    assert_eq!(msg.source_display(), Some("claude"));
+    assert_eq!(msg.target_str(), "user");
     assert_eq!(msg.content, "final reply");
     assert_eq!(msg.status, Some(MessageStatus::Done));
-    assert_eq!(msg.sender_agent_id.as_deref(), Some("agent-1"));
+    assert_eq!(msg.source_agent_id(), Some("agent-1"));
 }
 
 #[test]

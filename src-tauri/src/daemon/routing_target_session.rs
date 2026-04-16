@@ -35,7 +35,7 @@ pub fn resolve_target_bound_session<'a>(
     task_graph: &'a TaskGraphStore,
     message: &BridgeMessage,
 ) -> Option<&'a SessionHandle> {
-    if !is_task_role(&message.to) {
+    if !is_task_role(message.target_str()) {
         return None;
     }
 
@@ -47,11 +47,11 @@ pub fn resolve_target_bound_session<'a>(
             .as_deref()
             .is_none_or(|task_id| session.task_id == task_id);
 
-        if stamped_role == message.to && stamped_matches_task {
+        if stamped_role == message.target_str() && stamped_matches_task {
             return Some(session);
         }
     }
 
     let task_id = message.task_id.as_deref()?;
-    target_role_session(task_graph, task_id, &message.to)
+    target_role_session(task_graph, task_id, message.target_str())
 }

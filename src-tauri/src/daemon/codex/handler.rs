@@ -105,7 +105,7 @@ async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState
     }
 
     msgs.iter()
-        .map(|m| format!("[{}] {}: {}", m.timestamp, m.from, m.content))
+        .map(|m| format!("[{}] {}: {}", m.timestamp, m.source_role(), m.content))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -133,7 +133,7 @@ mod tests {
         });
 
         let msg = build_reply_message(&args, "lead", "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.to, "user");
+        assert_eq!(msg.target_str(), "user");
         assert_eq!(msg.status, Some(MessageStatus::Error));
     }
 

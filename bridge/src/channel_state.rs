@@ -17,7 +17,7 @@ impl ChannelState {
     /// Returns None only if the sender field is empty (the daemon is the routing
     /// authority, so arbitrary role names are accepted).
     pub fn prepare_channel_message(&self, msg: &BridgeMessage) -> Option<serde_json::Value> {
-        if msg.from.trim().is_empty() {
+        if msg.source_role().trim().is_empty() {
             eprintln!("[Bridge/channel] dropped message {} with empty sender", msg.id);
             return None;
         }
@@ -55,11 +55,11 @@ impl ChannelState {
 
 fn build_meta(msg: &BridgeMessage) -> serde_json::Value {
     let mut meta = serde_json::Map::new();
-    meta.insert("from".into(), serde_json::json!(msg.from));
+    meta.insert("from".into(), serde_json::json!(msg.source_role()));
     if let Some(status) = msg.status {
         meta.insert("status".into(), serde_json::json!(status.as_str()));
     }
-    if let Some(ref agent_id) = msg.sender_agent_id {
+    if let Some(agent_id) = msg.source_agent_id() {
         meta.insert("sender_agent_id".into(), serde_json::json!(agent_id));
     }
     serde_json::Value::Object(meta)

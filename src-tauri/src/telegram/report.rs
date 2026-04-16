@@ -5,7 +5,7 @@ const TELEGRAM_MAX_LENGTH: usize = 4096;
 /// All lead messages trigger Telegram reports.
 /// Runtime gates (enabled flag, outbound tx, paired chat) live in `routing_dispatch.rs`.
 pub fn should_send_telegram_report(msg: &BridgeMessage) -> bool {
-    msg.from == "lead"
+    msg.source_role() == "lead"
 }
 
 /// Escape dynamic text for safe embedding in Telegram HTML messages.

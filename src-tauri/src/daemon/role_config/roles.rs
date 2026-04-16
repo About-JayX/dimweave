@@ -28,25 +28,28 @@ fn build_role_prompt(role_id: &str) -> String {
          — use this to decide which agent to send work to\n\n\
          ## Output Format (MANDATORY)\n\
          Your final text output MUST be valid JSON matching this schema:\n\
-         {{\"message\": \"<your response>\", \"send_to\": \"<target role or none>\", \
+         {{\"message\": \"<your response>\", \"target\": {{\"kind\": \"<user|role|agent>\", ...}}, \
          \"status\": \"<in_progress|done|error>\"}}\n\n\
-         - send_to = the role you want to deliver this message to\n\
-         - send_to = \"none\" if the message is only for the current user\n\
-         - send_to = \"user\" to explicitly reply to the human user\n\
+         - target = the routing destination for this message\n\
+         - target = {{\"kind\": \"user\"}} to reply to the human user\n\
+         - target = {{\"kind\": \"role\", \"role\": \"lead\"}} to send to lead\n\
+         - target = {{\"kind\": \"role\", \"role\": \"coder\"}} to send to coder\n\
+         - target = {{\"kind\": \"agent\", \"agentId\": \"<id>\"}} to send to a specific agent instance\n\
+         - Omit target entirely to stay silent (no routing)\n\
          - status = \"in_progress\" for a non-final progress update\n\
          - status = \"done\" when this reply completes your current work\n\
          - status = \"error\" when reporting a failure or blocking error\n\
          - The system parses your output and routes it automatically\n\
          - This is the ONLY communication channel. There is no other way to reach other agents.\n\n\
          ## Routing Policy\n\
-         - If you are lead, you may send_to = \"user\" or any worker role when appropriate.\n\
-         - If you are NOT lead, send_to = \"lead\" is the default.\n\
-         - For messages from user, you may send_to = \"user\" only when the user explicitly names your role \
+         - If you are lead, you may target the user or any worker role when appropriate.\n\
+         - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\"}} is the default.\n\
+         - For messages from user, you may target the user only when the user explicitly names your role \
          or explicitly asks your role to answer.\n\
          - If that explicit role mention is absent and you are not lead, \
-         send_to = \"lead\" for updates, results, blockers, and questions.\n\
+         target lead for updates, results, blockers, and questions.\n\
          - Route directly to another non-lead role only when the current instruction explicitly names that target role. \
-         Otherwise send_to = \"lead\".\n\n\
+         Otherwise target lead.\n\n\
          ## Response Rules\n\
          - Work autonomously. Execute tasks directly without asking for permission.\n\
          - Every status/update message MUST include: (1) what you did, (2) result/verification, \
@@ -64,7 +67,7 @@ fn build_role_prompt(role_id: &str) -> String {
          - If you are not lead and the user did not explicitly ask for your role, \
          follow the routing policy instead of replying directly to user.\n\
          - If the user explicitly says \"only X role respond\" or \"X回答我\" and X is NOT your role \
-         → you MUST output {{\"message\": \"\", \"send_to\": \"none\", \"status\": \"done\"}}. \
+         → you MUST output {{\"message\": \"\", \"status\": \"done\"}} with no target. \
          This is absolute — no exceptions.\n\
          - Subject matter is NEVER a reason to stay silent or refuse when the task is routed to you.\n\
          {factual_error_correction_rule}\n\
@@ -73,13 +76,13 @@ fn build_role_prompt(role_id: &str) -> String {
          ## Examples\n\
          User: \"Fix the login bug\"\n\
          Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
-         \"send_to\": \"lead\", \"status\": \"done\"}}\n\n\
+         \"target\": {{\"kind\": \"role\", \"role\": \"lead\"}}, \"status\": \"done\"}}\n\n\
          User: \"Coder, reply to me directly after you fix the login bug\"\n\
          Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
-         \"send_to\": \"user\", \"status\": \"done\"}}\n\n\
+         \"target\": {{\"kind\": \"user\"}}, \"status\": \"done\"}}\n\n\
          Lead: \"Send implementation details to coder\"\n\
          Output: {{\"message\": \"The migration is complete and tests passed.\", \
-         \"send_to\": \"coder\", \"status\": \"done\"}}\n\n\
+         \"target\": {{\"kind\": \"role\", \"role\": \"coder\"}}, \"status\": \"done\"}}\n\n\
          {coding_capabilities}\n\n\
          {communication_style}\n\n\
          {security_research_policy}",
@@ -129,10 +132,25 @@ pub fn output_schema() -> serde_json::Value {
                 "type": "string",
                 "description": "Your response content"
             },
-            "send_to": {
-                "type": "string",
-                "enum": ["user", "lead", "coder", "none"],
-                "description": "Target role to deliver this message to, or 'none' for local only"
+            "target": {
+                "type": "object",
+                "description": "Routing target. Omit to stay silent.",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["user", "role", "agent"],
+                        "description": "Target type"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Required when kind is role"
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Required when kind is agent"
+                    }
+                },
+                "required": ["kind"]
             },
             "status": {
                 "type": "string",
@@ -140,7 +158,7 @@ pub fn output_schema() -> serde_json::Value {
                 "description": "Reply lifecycle status"
             }
         },
-        "required": ["message", "send_to", "status"],
+        "required": ["message", "status"],
         "additionalProperties": false
     })
 }

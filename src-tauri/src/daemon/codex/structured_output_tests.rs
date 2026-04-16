@@ -8,7 +8,7 @@ fn preview(raw: &str) -> Option<String> {
 #[test]
 fn preview_complete_json() {
     assert_eq!(
-        preview(r#"{"message":"Hello world","send_to":"none"}"#),
+        preview(r#"{"message":"Hello world","status":"done"}"#),
         Some("Hello world".into())
     );
 }
@@ -28,30 +28,30 @@ fn preview_decodes_escapes() {
 }
 #[test]
 fn preview_none_without_message_field() {
-    assert_eq!(preview(r#"{"send_to":"lead"}"#), None);
+    assert_eq!(preview(r#"{"target":{"kind":"role","role":"lead"}}"#), None);
 }
 #[test]
 fn final_empty_message_not_emitted() {
-    let parsed = parse_structured_output(r#"{"message":"   ","send_to":"lead"}"#).unwrap();
+    let parsed = parse_structured_output(r#"{"message":"   ","target":{"kind":"role","role":"lead"}}"#).unwrap();
     assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
     assert!(!should_emit_final_message(&parsed.message));
 }
 #[test]
 fn status_defaults_to_done_when_missing() {
-    let parsed = parse_structured_output(r#"{"message":"done","send_to":"lead"}"#).unwrap();
+    let parsed = parse_structured_output(r#"{"message":"done","target":{"kind":"role","role":"lead"}}"#).unwrap();
     assert_eq!(parsed.status.as_str(), "done");
 }
 #[test]
 fn parses_explicit_in_progress_status() {
     let parsed =
-        parse_structured_output(r#"{"message":"working","send_to":"lead","status":"in_progress"}"#)
+        parse_structured_output(r#"{"message":"working","target":{"kind":"role","role":"lead"},"status":"in_progress"}"#)
             .unwrap();
     assert_eq!(parsed.status.as_str(), "in_progress");
 }
 #[test]
 fn invalid_status_returns_error() {
     let err =
-        parse_structured_output(r#"{"message":"working","send_to":"lead","status":"waiting"}"#)
+        parse_structured_output(r#"{"message":"working","target":{"kind":"role","role":"lead"},"status":"waiting"}"#)
             .unwrap_err();
     assert!(
         err.to_string().contains("Invalid status: \"waiting\""),
@@ -72,13 +72,13 @@ fn truncation_does_not_leak_json_wrapper() {
     let rest = format!(
         "{}{}",
         "A".repeat(RAW_DELTA_CAP + 200),
-        r#"","send_to":"lead"}"#
+        r#"","target":{"kind":"role","role":"lead"}}"#
     );
     assert!(
         s.ingest_delta(&rest).is_none(),
         "no new preview after truncation"
     );
-    assert!(!s.last_preview.contains("send_to"));
+    assert!(!s.last_preview.contains("target"));
     assert_eq!(s.last_preview, "Hello preview");
     assert!(s.truncated);
 }
@@ -122,7 +122,7 @@ fn reasoning_boundary_separates_sections() {
 #[test]
 fn ignores_unknown_report_telegram_field_gracefully() {
     let parsed = parse_structured_output(
-        r#"{"message":"done","send_to":"lead","status":"done","report_telegram":true}"#,
+        r#"{"message":"done","target":{"kind":"role","role":"lead"},"status":"done","report_telegram":true}"#,
     )
     .unwrap();
     assert_eq!(parsed.message, "done");
@@ -133,15 +133,9 @@ fn ignores_unknown_report_telegram_field_gracefully() {
 // ── Structured target tests ──────────────────────────────────
 
 #[test]
-fn legacy_send_to_converts_to_role_target() {
+fn send_to_field_is_ignored_after_hard_cut() {
     let parsed = parse_structured_output(r#"{"message":"hi","send_to":"coder"}"#).unwrap();
-    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "coder".into() }));
-}
-
-#[test]
-fn legacy_send_to_user_converts_to_user_target() {
-    let parsed = parse_structured_output(r#"{"message":"hi","send_to":"user"}"#).unwrap();
-    assert_eq!(parsed.target, Some(MessageTarget::User));
+    assert_eq!(parsed.target, None, "send_to must no longer produce a target");
 }
 
 #[test]
@@ -166,7 +160,7 @@ fn structured_agent_target_object() {
 }
 
 #[test]
-fn structured_target_takes_precedence_over_send_to() {
+fn structured_target_ignores_stale_send_to() {
     let raw = r#"{"message":"hi","send_to":"user","target":{"kind":"role","role":"lead"}}"#;
     let parsed = parse_structured_output(raw).unwrap();
     assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
@@ -194,7 +188,7 @@ fn reply_target_parsed_from_snake_case() {
 
 #[test]
 fn reply_target_absent_yields_none() {
-    let parsed = parse_structured_output(r#"{"message":"hi","send_to":"lead"}"#).unwrap();
+    let parsed = parse_structured_output(r#"{"message":"hi","target":{"kind":"role","role":"lead"}}"#).unwrap();
     assert_eq!(parsed.reply_target, None);
 }
 

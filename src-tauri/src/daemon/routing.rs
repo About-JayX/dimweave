@@ -68,7 +68,7 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         };
     }
 
-    if msg.to == "user" {
+    if msg.is_to_user() {
         return RouteOutcome {
             result: RouteResult::ToGui,
             emit_claude_thinking: false,
@@ -78,8 +78,8 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
 
     // Reply-target redirect: if sender has a recorded delegator,
     // redirect role-targeted replies to that specific agent.
-    let redirect = msg.sender_agent_id.as_deref()
-        .and_then(|sid| apply_reply_target(sid, &msg.to));
+    let redirect = msg.source_agent_id()
+        .and_then(|sid| apply_reply_target(sid, msg.target_str()));
     let was_redirected = redirect.is_some();
     let msg = if let Some(new_to) = redirect {
         BridgeMessage { to: new_to, ..msg }
@@ -169,8 +169,8 @@ fn resolve_broadcast_targets(
         Some(tid) => {
             let task_agents = s.task_graph.agents_for_task(tid);
             let has_agents = !task_agents.is_empty();
-            // Agent-targeted: check if msg.to matches a concrete agent_id
-            if let Some(agent) = task_agents.iter().find(|a| a.agent_id == msg.to) {
+            // Agent-targeted: check if msg.target_str() matches a concrete agent_id
+            if let Some(agent) = task_agents.iter().find(|a| a.agent_id == msg.target_str()) {
                 let runtime = match agent.provider {
                     crate::daemon::task_graph::types::Provider::Claude => "claude",
                     crate::daemon::task_graph::types::Provider::Codex => "codex",
@@ -181,7 +181,7 @@ fn resolve_broadcast_targets(
                 }], true, true)
             } else {
                 // Role-targeted: broadcast to all matching agents for this role
-                let agents = s.resolve_task_role_providers(tid, &msg.to);
+                let agents = s.resolve_task_role_providers(tid, msg.target_str());
                 if agents.is_empty() {
                     if has_agents {
                         return BroadcastResolution::Dropped;
@@ -193,8 +193,8 @@ fn resolve_broadcast_targets(
         }
         None => {
             let mut agents = Vec::new();
-            // Agent-targeted: check if msg.to is a known concrete agent_id
-            let agent_targeted = match msg.to.as_str() {
+            // Agent-targeted: check if target matches a known concrete agent_id
+            let agent_targeted = match msg.target_str() {
                 "claude" => {
                     agents.push(MatchedTaskAgent {
                         agent_id: "claude".into(), runtime: "claude",
@@ -211,19 +211,19 @@ fn resolve_broadcast_targets(
             };
             // Role-targeted (only when not agent-targeted)
             if !agent_targeted {
-                if s.claude_role == msg.to {
+                if s.claude_role == msg.target_str() {
                     agents.push(MatchedTaskAgent {
                         agent_id: "claude".into(), runtime: "claude",
                     });
                 }
-                if s.codex_role == msg.to {
+                if s.codex_role == msg.target_str() {
                     agents.push(MatchedTaskAgent {
                         agent_id: "codex".into(), runtime: "codex",
                     });
                 }
             }
             if agents.is_empty() {
-                if crate::daemon::is_valid_agent_role(&msg.to) {
+                if crate::daemon::is_valid_agent_role(msg.target_str()) {
                     return BroadcastResolution::NeedBuffer;
                 }
                 return BroadcastResolution::Dropped;
@@ -235,7 +235,7 @@ fn resolve_broadcast_targets(
     let task_id = msg.task_id.as_deref();
     let ta_resolved = task_agents_authoritative;
     let claude_sender_ok =
-        msg.from == "user" || msg.from == "system" || msg.from == s.codex_role;
+        msg.is_from_user() || msg.is_from_system() || msg.source_role() == s.codex_role;
 
     // Iterate per-agent and collect deliveries keyed by agent_id (AC1/AC2).
     // Each agent gets its own channel lookup; no provider-level dedup.
@@ -299,7 +299,7 @@ fn resolve_broadcast_targets(
                         channel: DeliveryChannel::Codex {
                             tx,
                             items: build_codex_input_items(msg),
-                            from_user: msg.from == "user",
+                            from_user: msg.is_from_user(),
                         },
                     });
                 }
@@ -391,9 +391,9 @@ async fn deliver_broadcast(
 
     // Record reply-target mappings for agent-targeted delegations
     if agent_targeted {
-        if let Some(sender_id) = msg.sender_agent_id.as_deref() {
+        if let Some(sender_id) = msg.source_agent_id() {
             for rid in &delivered_agent_ids {
-                record_reply_target(rid, sender_id, &msg.from);
+                record_reply_target(rid, sender_id, msg.source_role());
             }
         }
     }
