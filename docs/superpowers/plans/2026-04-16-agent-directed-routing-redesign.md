@@ -372,6 +372,19 @@
 - `bridge/src/daemon_client_io.rs`
 - `bridge/src/channel_state.rs`
 - `bridge/src/mcp_io.rs`
+- `src-tauri/src/daemon/routing.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/feishu_project_task_link.rs`
+- `src-tauri/src/telegram/runtime_handlers.rs`
+- `src-tauri/src/daemon/state_persistence.rs`
+- `src-tauri/src/daemon/routing_format.rs`
+- `src-tauri/src/daemon/state_tests.rs`
+- `src-tauri/src/daemon/routing_tests.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/orchestrator/tests.rs`
+- `src-tauri/src/feishu_project/task_link_tests.rs`
+- `src-tauri/src/daemon/feishu_project_task_link_tests.rs`
 - `src-tauri/src/daemon/control/handler.rs`
 - `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
 - `src-tauri/src/daemon/claude_sdk/event_handler.rs`
@@ -394,9 +407,9 @@
 - `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
 - `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
 
-**max_files_changed:** `28`
-**max_added_loc:** `420`
-**max_deleted_loc:** `520`
+**max_files_changed:** `41`
+**max_added_loc:** `600`
+**max_deleted_loc:** `700`
 
 **acceptance criteria:**
 
@@ -472,6 +485,29 @@ The implementation is not complete until these scenarios are covered by automate
 
 - Task 6: backend compatibility cutover + prompt/schema cleanup
 - Task 7: shared-contract field deletion + bridge/frontend final alignment + full regression
+
+## Plan Revision 5 — 2026-04-16
+
+**Reason:** Final feasibility audit after the Task 6 review found that Task 7 still omitted a set of backend and test files that construct `BridgeMessage` directly. Once the legacy shared-contract fields are deleted, those construction sites will fail to compile unless they are included in the final hard-cut task.
+
+**Revised Task 7 scope:**
+
+- add backend construction/wire files:
+  - `src-tauri/src/daemon/routing.rs`
+  - `src-tauri/src/daemon/routing_user_input.rs`
+  - `src-tauri/src/daemon/feishu_project_task_link.rs`
+  - `src-tauri/src/telegram/runtime_handlers.rs`
+  - `src-tauri/src/daemon/state_persistence.rs`
+  - `src-tauri/src/daemon/routing_format.rs`
+- add backend/test construction sites:
+  - `src-tauri/src/daemon/state_tests.rs`
+  - `src-tauri/src/daemon/routing_tests.rs`
+  - `src-tauri/src/daemon/routing_behavior_tests.rs`
+  - `src-tauri/src/daemon/routing_shared_role_tests.rs`
+  - `src-tauri/src/daemon/orchestrator/tests.rs`
+  - `src-tauri/src/feishu_project/task_link_tests.rs`
+  - `src-tauri/src/daemon/feishu_project_task_link_tests.rs`
+- increase Task 7 budget to `max_files_changed: 41`, `max_added_loc: 600`, `max_deleted_loc: 700`
 
 ## Plan Revision 1 — 2026-04-16
 
