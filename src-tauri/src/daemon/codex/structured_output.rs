@@ -37,6 +37,10 @@ pub(super) struct StreamPreviewState {
     /// Once truncation destroys the JSON prefix, stop re-parsing.
     truncated: bool,
     reasoning: String,
+    /// Set when a durable message (delivered/buffered/ToGui) was produced this turn.
+    had_durable_output: bool,
+    /// Set when any transient activity (reasoning, deltas, tool calls) occurred this turn.
+    had_transient_content: bool,
 }
 
 const REASONING_CAP: usize = 8_000;
@@ -47,9 +51,12 @@ impl StreamPreviewState {
         self.last_preview.clear();
         self.truncated = false;
         self.reasoning.clear();
+        self.had_durable_output = false;
+        self.had_transient_content = false;
     }
 
     pub(super) fn append_reasoning(&mut self, delta: &str) {
+        self.had_transient_content = true;
         self.reasoning.push_str(delta);
         if self.reasoning.len() > REASONING_CAP {
             let drop = self.reasoning.len() - REASONING_CAP;
@@ -77,6 +84,7 @@ impl StreamPreviewState {
     }
 
     pub(super) fn ingest_delta(&mut self, text: &str) -> Option<String> {
+        self.had_transient_content = true;
         self.raw_delta.push_str(text);
         if self.raw_delta.len() > RAW_DELTA_CAP {
             let drop = self.raw_delta.len() - RAW_DELTA_CAP;
@@ -101,6 +109,22 @@ impl StreamPreviewState {
     pub(super) fn sync_final_raw(&mut self, raw: &str) {
         self.raw_delta.clear();
         self.raw_delta.push_str(raw);
+    }
+
+    pub(super) fn mark_durable_output(&mut self) {
+        self.had_durable_output = true;
+    }
+
+    pub(super) fn mark_transient_content(&mut self) {
+        self.had_transient_content = true;
+    }
+
+    pub(super) fn had_durable_output(&self) -> bool {
+        self.had_durable_output
+    }
+
+    pub(super) fn had_transient_content(&self) -> bool {
+        self.had_transient_content
     }
 }
 

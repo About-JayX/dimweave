@@ -958,3 +958,126 @@ async fn reply_target_explicit_agent_override_bypasses_redirect() {
         "lead_1 must NOT receive msg explicitly targeted at lead_2"
     );
 }
+
+// ── Mixed-provider guard regression ─────────────────────────
+// Verifies that with the standard Claude-lead / Codex-coder setup,
+// bidirectional routing delivers correctly and unknown-role targets
+// are dropped (not buffered or misrouted).
+
+async fn seeded_task_claude_lead_codex_coder() -> (
+    SharedState,
+    String,
+    tokio::sync::mpsc::Receiver<String>,
+    tokio::sync::mpsc::Receiver<(Vec<serde_json::Value>, bool)>,
+) {
+    use crate::daemon::task_graph::types::Provider;
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let (claude_tx, claude_rx) = tokio::sync::mpsc::channel::<String>(8);
+    let (codex_tx, codex_rx) = tokio::sync::mpsc::channel::<(Vec<serde_json::Value>, bool)>(8);
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task_with_config(
+            "/repo-mp", "repo-mp", Provider::Claude, Provider::Codex,
+        );
+        s.active_task_id = Some(task.task_id.clone());
+        let claude_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let codex_agent = s.task_graph.add_task_agent(&task.task_id, Provider::Codex, "coder");
+        s.claude_role = "lead".into();
+        s.codex_role = "coder".into();
+        s.init_task_runtime(&task.task_id, "/repo-mp".into());
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_claude_slot(&claude_agent.agent_id)
+            .ws_tx = Some(claude_tx);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_codex_slot(&codex_agent.agent_id, 4500)
+            .inject_tx = Some(codex_tx);
+        task.task_id
+    };
+    (state, task_id, claude_rx, codex_rx)
+}
+
+#[tokio::test]
+async fn mixed_provider_guard_coder_to_lead_delivered() {
+    let (state, task_id, mut claude_rx, _codex_rx) =
+        seeded_task_claude_lead_codex_coder().await;
+    let msg = BridgeMessage {
+        id: "mp-coder-lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
+        content: "task done".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "coder→lead must deliver to Claude"
+    );
+    assert!(claude_rx.try_recv().is_ok());
+}
+
+#[tokio::test]
+async fn mixed_provider_guard_lead_to_coder_delivered() {
+    let (state, task_id, _claude_rx, mut codex_rx) =
+        seeded_task_claude_lead_codex_coder().await;
+    let msg = BridgeMessage {
+        id: "mp-lead-coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
+        content: "implement this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "user→coder must deliver to Codex"
+    );
+    assert!(codex_rx.try_recv().is_ok());
+}
+
+#[tokio::test]
+async fn mixed_provider_guard_unknown_role_dropped() {
+    let (state, task_id, _claude_rx, _codex_rx) =
+        seeded_task_claude_lead_codex_coder().await;
+    let msg = BridgeMessage {
+        id: "mp-unknown".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "reviewer".into() },
+        reply_target: None,
+        content: "review please".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Dropped),
+        "unknown role with task_agents must drop, not buffer"
+    );
+}

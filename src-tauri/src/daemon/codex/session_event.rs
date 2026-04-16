@@ -27,7 +27,7 @@ pub(super) async fn handle_codex_event(
         return;
     };
     match method {
-        "item/tool/call" => handle_tool_call(v, role_id, task_id, agent_id, state, app, ws_tx).await,
+        "item/tool/call" => handle_tool_call(v, role_id, task_id, agent_id, state, app, ws_tx, stream_preview).await,
         "turn/started" => {
             stream_preview.reset();
             gui::emit_codex_stream(app, CodexStreamPayload::Thinking);
@@ -35,7 +35,10 @@ pub(super) async fn handle_codex_event(
         "thread/status/changed" => sync_thread_status_change(v, state, app).await,
         "thread/archived" => sync_thread_archive(v, state, app).await,
         "thread/unarchived" => sync_thread_unarchive(v, state, app).await,
-        "item/started" => emit_activity_from_item(v, app),
+        "item/started" => {
+            stream_preview.mark_transient_content();
+            emit_activity_from_item(v, app);
+        }
         "item/reasoning/summaryTextDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
                 stream_preview.append_reasoning(delta);
@@ -60,6 +63,7 @@ pub(super) async fn handle_codex_event(
         }
         "item/commandExecution/outputDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
+                stream_preview.mark_transient_content();
                 gui::emit_codex_stream(
                     app,
                     CodexStreamPayload::CommandOutput {
@@ -92,7 +96,16 @@ pub(super) async fn handle_codex_event(
             .await;
         }
         "turn/completed" => {
+            let fallback_msg = build_silent_turn_fallback(role_id, agent_id, stream_preview);
             stream_preview.reset();
+            if let Some(mut fb) = fallback_msg {
+                gui::emit_system_log(app, "info", &fb.content);
+                {
+                    let s = state.read().await;
+                    s.stamp_message_context_for_task(task_id, role_id, &mut fb);
+                }
+                gui::emit_agent_message(app, &fb);
+            }
             let status = v["params"]["turn"]["status"].as_str().unwrap_or("unknown");
             gui::emit_codex_stream(
                 app,
@@ -113,13 +126,18 @@ async fn handle_tool_call(
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsTx,
+    stream_preview: &mut StreamPreviewState,
 ) {
     let name = v["params"]["tool"]
         .as_str()
         .or_else(|| v["params"]["name"].as_str());
     if let (Some(id), Some(name)) = (v["id"].as_u64(), name) {
+        stream_preview.mark_transient_content();
         let args = v["params"]["arguments"].clone();
-        handler::handle_dynamic_tool(id, name, &args, role_id, task_id, agent_id, state, app, ws_tx).await;
+        let had_durable = handler::handle_dynamic_tool(id, name, &args, role_id, task_id, agent_id, state, app, ws_tx).await;
+        if had_durable {
+            stream_preview.mark_durable_output();
+        }
     }
 }
 
@@ -170,6 +188,7 @@ async fn handle_completed_agent_message(
                 role_id, MessageTarget::User, &hint, MessageStatus::Error, agent_id, "codex",
             );
             gui::emit_agent_message(app, &error_msg);
+            stream_preview.mark_durable_output();
             return;
         }
     };
@@ -179,18 +198,37 @@ async fn handle_completed_agent_message(
     ) else {
         return;
     };
-    gui::emit_codex_stream(
-        app,
-        CodexStreamPayload::Message {
-            text: parsed.message.clone(),
-        },
-    );
     {
         let s = state.read().await;
         s.stamp_message_context_for_task(task_id, role_id, &mut msg);
     }
-    eprintln!("[Codex] route {} → {}", role_id, msg.target_str());
-    routing::route_message(state, app, msg).await;
+    let target_str = msg.target_str().to_string();
+    eprintln!("[Codex] route {} → {}", role_id, target_str);
+    let route_result = routing::route_message(state, app, msg).await;
+    match route_result {
+        routing::RouteResult::Dropped => {
+            let diag = format!("[Codex] {role_id} message dropped — target '{target_str}' has no online agent");
+            gui::emit_system_log(app, "warn", &diag);
+            let mut diag_msg = build_msg_with_status(
+                role_id, MessageTarget::User, &diag, MessageStatus::Done, agent_id, "system",
+            );
+            {
+                let s = state.read().await;
+                s.stamp_message_context_for_task(task_id, role_id, &mut diag_msg);
+            }
+            gui::emit_agent_message(app, &diag_msg);
+            stream_preview.mark_durable_output();
+        }
+        _ => {
+            gui::emit_codex_stream(
+                app,
+                CodexStreamPayload::Message {
+                    text: parsed.message.clone(),
+                },
+            );
+            stream_preview.mark_durable_output();
+        }
+    }
 }
 
 fn emit_activity_from_item(v: &Value, app: &AppHandle) {
@@ -362,6 +400,23 @@ fn build_msg_with_status(
     }
 }
 
+/// Build a fallback diagnostic when a Codex turn had transient activity but
+/// produced no durable output. Returns `None` when no fallback is needed
+/// (durable output was produced, or no transient content occurred).
+fn build_silent_turn_fallback(
+    role_id: &str,
+    agent_id: &str,
+    stream_preview: &StreamPreviewState,
+) -> Option<BridgeMessage> {
+    if stream_preview.had_durable_output() || !stream_preview.had_transient_content() {
+        return None;
+    }
+    let diag = format!("[Codex] {role_id} turn completed with no visible output");
+    Some(build_msg_with_status(
+        role_id, MessageTarget::User, &diag, MessageStatus::Done, agent_id, "system",
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -506,6 +561,107 @@ mod tests {
         assert_eq!(
             map_thread_runtime_status("notLoaded"),
             crate::daemon::task_graph::types::SessionStatus::Paused
+        );
+    }
+
+    // ── Diagnostic task-scoping regression ───────────────────
+
+    #[test]
+    fn diagnostic_msg_starts_without_task_id() {
+        let msg = build_msg_with_status(
+            "coder", MessageTarget::User,
+            "[Codex] coder message dropped — target 'lead' has no online agent",
+            MessageStatus::Done, "codex-agent-1", "system",
+        );
+        assert!(msg.task_id.is_none(), "build_msg_with_status must not set task_id");
+        assert!(msg.session_id.is_none(), "build_msg_with_status must not set session_id");
+    }
+
+    #[test]
+    fn diagnostic_msg_becomes_task_scoped_after_stamp() {
+        use crate::daemon::state::DaemonState;
+        use crate::daemon::task_graph::types::{Provider, SessionRole};
+
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task_with_config("/ws", "ws", Provider::Claude, Provider::Codex);
+        let sess = s.task_graph.create_session(crate::daemon::task_graph::types::CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder session",
+            agent_id: None,
+        });
+        s.task_graph.set_coder_session(&task.task_id, &sess.session_id);
+
+        let mut msg = build_msg_with_status(
+            "coder", MessageTarget::User,
+            "[Codex] coder turn completed with no visible output",
+            MessageStatus::Done, "codex-agent-1", "system",
+        );
+        assert!(msg.task_id.is_none(), "pre-stamp must be None");
+
+        s.stamp_message_context_for_task(&task.task_id, "coder", &mut msg);
+        assert_eq!(msg.task_id.as_deref(), Some(task.task_id.as_str()), "post-stamp must have task_id");
+        assert_eq!(msg.session_id.as_deref(), Some(sess.session_id.as_str()), "post-stamp must have session_id");
+    }
+
+    // ── Silent turn fallback branch regression ──────────────
+
+    #[test]
+    fn silent_turn_fallback_fires_when_transient_only() {
+        use crate::daemon::state::DaemonState;
+        use crate::daemon::task_graph::types::{Provider, SessionRole};
+
+        let mut sp = StreamPreviewState::default();
+        sp.mark_transient_content();
+        // No mark_durable_output — simulates silent turn
+        let fb = build_silent_turn_fallback("coder", "codex-agent-1", &sp);
+        assert!(fb.is_some(), "fallback must fire when transient-only");
+
+        let fb = fb.unwrap();
+        assert!(fb.content.contains("no visible output"), "content: {}", fb.content);
+        assert!(fb.content.contains("coder"), "must name the role");
+        assert_eq!(fb.target_str(), "user");
+        assert!(fb.task_id.is_none(), "pre-stamp task_id must be None");
+
+        // Verify stamping makes it task-scoped
+        let mut s = DaemonState::new();
+        let task = s.task_graph.create_task_with_config("/ws", "ws", Provider::Claude, Provider::Codex);
+        let sess = s.task_graph.create_session(crate::daemon::task_graph::types::CreateSessionParams {
+            task_id: &task.task_id,
+            parent_session_id: None,
+            provider: Provider::Codex,
+            role: SessionRole::Coder,
+            cwd: "/ws",
+            title: "Coder",
+            agent_id: None,
+        });
+        s.task_graph.set_coder_session(&task.task_id, &sess.session_id);
+        let mut fb_stamped = fb;
+        s.stamp_message_context_for_task(&task.task_id, "coder", &mut fb_stamped);
+        assert_eq!(fb_stamped.task_id.as_deref(), Some(task.task_id.as_str()));
+        assert_eq!(fb_stamped.session_id.as_deref(), Some(sess.session_id.as_str()));
+    }
+
+    #[test]
+    fn silent_turn_fallback_suppressed_when_durable_output_exists() {
+        let mut sp = StreamPreviewState::default();
+        sp.mark_transient_content();
+        sp.mark_durable_output();
+        assert!(
+            build_silent_turn_fallback("coder", "codex-agent-1", &sp).is_none(),
+            "fallback must NOT fire when durable output was produced"
+        );
+    }
+
+    #[test]
+    fn silent_turn_fallback_suppressed_when_no_activity() {
+        let sp = StreamPreviewState::default();
+        assert!(
+            build_silent_turn_fallback("coder", "codex-agent-1", &sp).is_none(),
+            "fallback must NOT fire when no activity at all (idle turn)"
         );
     }
 }

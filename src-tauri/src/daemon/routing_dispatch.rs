@@ -1,11 +1,11 @@
 use super::*;
 
-pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
-    route_message_with_display(state, app, msg, true).await;
+pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) -> RouteResult {
+    route_message_with_display(state, app, msg, true).await
 }
 
-pub async fn route_message_silent(state: &SharedState, app: &AppHandle, msg: BridgeMessage) {
-    route_message_with_display(state, app, msg, false).await;
+pub async fn route_message_silent(state: &SharedState, app: &AppHandle, msg: BridgeMessage) -> RouteResult {
+    route_message_with_display(state, app, msg, false).await
 }
 
 async fn route_message_with_display(
@@ -13,7 +13,7 @@ async fn route_message_with_display(
     app: &AppHandle,
     msg: BridgeMessage,
     display_in_gui: bool,
-) {
+) -> RouteResult {
     let outcome = route_message_inner_with_meta(state, msg.clone()).await;
     routing_display::emit_route_side_effects(
         app,
@@ -86,4 +86,5 @@ async fn route_message_with_display(
             }
         }
     }
+    outcome.result
 }

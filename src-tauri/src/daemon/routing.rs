@@ -42,6 +42,7 @@ fn clear_reply_targets() {
 mod dispatch;
 pub use dispatch::{route_message, route_message_silent};
 
+#[derive(Clone, Copy)]
 pub enum RouteResult {
     Delivered,
     Buffered,

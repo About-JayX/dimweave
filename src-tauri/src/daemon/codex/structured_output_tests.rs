@@ -199,3 +199,76 @@ fn raw_text_fallback_has_no_target() {
     assert_eq!(parsed.reply_target, None);
     assert_eq!(parsed.message, "plain text output");
 }
+
+// ── Durable/transient tracking tests ────────────────────────
+
+#[test]
+fn tracking_flags_default_to_false() {
+    let s = StreamPreviewState::default();
+    assert!(!s.had_durable_output());
+    assert!(!s.had_transient_content());
+}
+
+#[test]
+fn ingest_delta_sets_transient_content() {
+    let mut s = StreamPreviewState::default();
+    s.ingest_delta("hello");
+    assert!(s.had_transient_content());
+    assert!(!s.had_durable_output());
+}
+
+#[test]
+fn append_reasoning_sets_transient_content() {
+    let mut s = StreamPreviewState::default();
+    s.append_reasoning("thinking...");
+    assert!(s.had_transient_content());
+    assert!(!s.had_durable_output());
+}
+
+#[test]
+fn mark_durable_output_sets_flag() {
+    let mut s = StreamPreviewState::default();
+    s.mark_durable_output();
+    assert!(s.had_durable_output());
+}
+
+#[test]
+fn mark_transient_content_sets_flag() {
+    let mut s = StreamPreviewState::default();
+    s.mark_transient_content();
+    assert!(s.had_transient_content());
+}
+
+#[test]
+fn reset_clears_tracking_flags() {
+    let mut s = StreamPreviewState::default();
+    s.mark_durable_output();
+    s.mark_transient_content();
+    s.ingest_delta("data");
+    s.append_reasoning("think");
+    assert!(s.had_durable_output());
+    assert!(s.had_transient_content());
+    s.reset();
+    assert!(!s.had_durable_output());
+    assert!(!s.had_transient_content());
+}
+
+#[test]
+fn silent_turn_detected_when_transient_only() {
+    let mut s = StreamPreviewState::default();
+    s.ingest_delta("partial");
+    s.append_reasoning("thinking");
+    s.mark_transient_content();
+    // No mark_durable_output — simulates a silent turn
+    assert!(!s.had_durable_output() && s.had_transient_content());
+}
+
+#[test]
+fn durable_turn_not_flagged_as_silent() {
+    let mut s = StreamPreviewState::default();
+    s.ingest_delta("partial");
+    s.mark_transient_content();
+    s.mark_durable_output();
+    // Both flags set — not a silent turn
+    assert!(s.had_durable_output());
+}

@@ -11,6 +11,7 @@ type WsSend = mpsc::Sender<String>;
 
 /// Dispatch a `item/tool/call` dynamic-tool invocation from Codex.
 /// Sends a JSON response back via `ws_tx`.
+/// Returns `true` when the tool call produced durable output (routed message).
 pub async fn handle_dynamic_tool(
     id: u64,
     tool_name: &str,
@@ -21,12 +22,12 @@ pub async fn handle_dynamic_tool(
     state: &SharedState,
     app: &AppHandle,
     ws_tx: &WsSend,
-) {
-    let result_text = match tool_name {
+) -> bool {
+    let (result_text, had_durable) = match tool_name {
         "reply" => handle_reply(args, role_id, task_id, agent_id, state, app).await,
-        "check_messages" => handle_check_messages(role_id, task_id, state).await,
-        "get_status" => handle_get_status(task_id, state).await,
-        other => format!("Unknown tool: {other}"),
+        "check_messages" => (handle_check_messages(role_id, task_id, state).await, false),
+        "get_status" => (handle_get_status(task_id, state).await, false),
+        other => (format!("Unknown tool: {other}"), false),
     };
 
     let response = json!({
@@ -39,6 +40,7 @@ pub async fn handle_dynamic_tool(
     if ws_tx.send(response.to_string()).await.is_err() {
         eprintln!("[Codex] failed to send tool response for id={id}");
     }
+    had_durable
 }
 
 fn build_reply_message(
@@ -90,19 +92,34 @@ async fn handle_reply(
     agent_id: &str,
     state: &SharedState,
     app: &AppHandle,
-) -> String {
+) -> (String, bool) {
     let to = args["to"].as_str().unwrap_or("user");
     let display_source = "codex";
     let Some(mut msg) = build_reply_message(args, from, agent_id, display_source) else {
-        return format!("Ignored empty message to {to}");
+        return (format!("Ignored empty message to {to}"), false);
     };
     {
         let s = state.read().await;
         s.stamp_message_context_for_task(task_id, from, &mut msg);
     }
 
-    crate::daemon::routing::route_message(state, app, msg).await;
-    format!("Message sent to {to}")
+    let result = crate::daemon::routing::route_message(state, app, msg).await;
+    reply_acknowledgement(to, result)
+}
+
+fn reply_acknowledgement(to: &str, result: crate::daemon::routing::RouteResult) -> (String, bool) {
+    use crate::daemon::routing::RouteResult;
+    match result {
+        RouteResult::Delivered | RouteResult::ToGui => {
+            (format!("Message delivered to {to}"), true)
+        }
+        RouteResult::Buffered => {
+            (format!("Message to {to} buffered — target offline, will deliver when available"), true)
+        }
+        RouteResult::Dropped => {
+            (format!("Message to {to} dropped — no agent with role '{to}'"), false)
+        }
+    }
 }
 
 async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState) -> String {
@@ -205,5 +222,27 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&status).expect("must be valid JSON");
         let agents = v["online_agents"].as_array().expect("must be array");
         assert!(agents.is_empty(), "no agents should be online by default");
+    }
+
+    #[test]
+    fn reply_ack_dropped_returns_dropped_text_and_not_durable() {
+        let (text, durable) = reply_acknowledgement("reviewer", crate::daemon::routing::RouteResult::Dropped);
+        assert!(text.contains("dropped"), "dropped ack must say 'dropped', got: {text}");
+        assert!(text.contains("reviewer"), "dropped ack must name target role");
+        assert!(!durable, "dropped route must not be durable");
+    }
+
+    #[test]
+    fn reply_ack_delivered_returns_delivered_text_and_durable() {
+        let (text, durable) = reply_acknowledgement("lead", crate::daemon::routing::RouteResult::Delivered);
+        assert!(text.contains("delivered"), "delivered ack must say 'delivered', got: {text}");
+        assert!(durable, "delivered route must be durable");
+    }
+
+    #[test]
+    fn reply_ack_buffered_returns_buffered_text_and_durable() {
+        let (text, durable) = reply_acknowledgement("coder", crate::daemon::routing::RouteResult::Buffered);
+        assert!(text.contains("buffered"), "buffered ack must say 'buffered', got: {text}");
+        assert!(durable, "buffered route must be durable");
     }
 }
