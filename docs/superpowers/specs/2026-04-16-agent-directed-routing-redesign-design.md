@@ -33,6 +33,7 @@ The final merged protocol is still a hard cut, but the implementation will use a
 
 - daemon message DTO redesign
 - bridge protocol redesign
+- bridge runtime boundary redesign so structured targets survive end-to-end
 - Claude/Codex provider output contract redesign
 - daemon routing rewrite to consume structured targets
 - default reply-target propagation for delegation/reporting
@@ -295,6 +296,16 @@ Instead it should accept:
   "status": "in_progress|done|error"
 }
 ```
+
+## Bridge Runtime Boundary
+
+It is not enough for the bridge to merely parse a structured `target`.
+
+The bridge runtime boundary must carry the structured message shape end-to-end:
+
+- bridge outbound replies must not down-convert back into legacy `from/to` message fields
+- bridge inbound channel metadata must remain valid for arbitrary role strings
+- removing startup role coercion and leaving hard-coded channel sender allowlists in place is not acceptable
 
 ## Codex Structured Output
 

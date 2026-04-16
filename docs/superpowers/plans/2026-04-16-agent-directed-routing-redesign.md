@@ -124,6 +124,7 @@
 
 **allowed_files:**
 
+- `bridge/src/types.rs`
 - `bridge/src/tools.rs`
 - `bridge/src/tools_tests.rs`
 - `bridge/src/mcp_io.rs`
@@ -131,15 +132,17 @@
 - `bridge/src/channel_state.rs`
 - `bridge/src/main.rs`
 
-**max_files_changed:** `6`
-**max_added_loc:** `300`
-**max_deleted_loc:** `160`
+**max_files_changed:** `7`
+**max_added_loc:** `420`
+**max_deleted_loc:** `220`
 
 **acceptance criteria:**
 
 - bridge reply tool accepts structured `target`
+- bridge runtime emits/consumes the new structured message type instead of immediately down-converting back to legacy role-string messages
 - `user|lead|coder` hard-coded target enums are removed from the reply schema
 - bridge startup no longer coerces unknown roles to `lead`
+- bridge channel sender validation stays consistent with arbitrary-role support and no longer drops valid non-`lead`/`coder` roles by legacy allowlist assumptions
 - tests prove invalid target objects fail clearly
 
 **verification_commands:**
@@ -148,6 +151,16 @@
 - `cargo test --manifest-path bridge/Cargo.toml mcp_protocol -- --nocapture`
 - `cargo test --manifest-path bridge/Cargo.toml channel_state -- --nocapture`
 - `git diff --check`
+
+## Plan Revision 2 — 2026-04-16
+
+**Reason:** Task 2 review proved the original scope was too narrow for the approved acceptance criteria. `bridge/src/types.rs` also has to move so the bridge runtime can carry the structured message shape end-to-end, and Task 2 must explicitly cover the arbitrary-role sender validation gap in `channel_state.rs`.
+
+**Revised Task 2 scope:**
+
+- add `bridge/src/types.rs` to `allowed_files`
+- require bridge runtime emission/consumption of the structured message type
+- require channel sender validation to align with arbitrary-role support
 
 ## Task 3: Upgrade Codex output and event handling to the new target model
 
