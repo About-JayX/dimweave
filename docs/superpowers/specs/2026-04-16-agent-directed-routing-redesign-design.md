@@ -456,6 +456,10 @@ The implementation plan must include explicit tests for every boundary below.
 - cover `Claude=lead / Codex=coder`
 - cover at least one multi-agent task with a same-role case
 
+Because the currently exposed external interfaces do not provide a complete code-level orchestration surface for task creation, agent creation, and provider launch, these live scenarios require a dedicated headless validation harness in the daemon test layer.
+
+That harness is part of the redesign deliverable, not an optional follow-up.
+
 ## Implementation sequencing note
 
 Because the bridge and daemon currently compile against legacy `BridgeMessage` across many subsystems, the remaining implementation must separate:

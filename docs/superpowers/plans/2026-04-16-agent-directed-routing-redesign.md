@@ -425,11 +425,58 @@
 - frontend bridge/message display types align with the final structured message protocol
 - no frontend production path still depends on the removed legacy routing fields
 - automated communication regression evidence is documented
-- headless real-scenario runtime tests are executed after implementation, without relying on the frontend UI
 
 **verification_commands:**
 
 - `bun test src/lib/message-payload.test.ts`
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml user_target_tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot_tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config -- --nocapture`
+- `cargo test --manifest-path bridge/Cargo.toml -- --nocapture`
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `cargo build -p dimweave-bridge`
+- `bun run build`
+- `git diff --check`
+
+## Task 8: Headless live runtime harness and real-scenario validation
+
+**task_id:** `agent-directed-headless-live-validation`
+
+**allowed_files:**
+
+- `src-tauri/src/daemon/mod.rs`
+- `src-tauri/src/daemon/cmd.rs`
+- `src-tauri/src/daemon/control/server.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/codex/mod.rs`
+- `src-tauri/src/daemon/codex/session.rs`
+- `src-tauri/src/daemon/claude_sdk/mod.rs`
+- `src-tauri/src/daemon/claude_sdk/runtime.rs`
+- `src-tauri/src/daemon/launch_task_sync.rs`
+- `src-tauri/src/daemon/live_runtime_validation_tests.rs`
+- `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
+- `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
+
+**max_files_changed:** `12`
+**max_added_loc:** `500`
+**max_deleted_loc:** `120`
+
+**acceptance criteria:**
+
+- a code-level headless validation harness exists for orchestrating daemon/provider scenarios without using the frontend UI
+- the harness can create/select a task, attach task agents, launch Codex/Claude, and observe routed messages through code-level entrypoints
+- the following live scenarios are executed and verified in this environment:
+  - `Codex=lead / Claude=coder`
+  - `Claude=lead / Codex=coder`
+  - at least one multi-agent task with a same-role case
+- CM records contain the real accepted commit hashes and live validation evidence
+
+**verification_commands:**
+
+- `cargo test --manifest-path src-tauri/Cargo.toml live_runtime_validation -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml user_target_tests -- --nocapture`
@@ -471,6 +518,7 @@ The implementation is not complete until these scenarios are covered by automate
 | Task 5 | `30b7d6fd` | Added runtime reply-target tracking so agent-targeted delegations record a one-way default report-back target, role-targeted replies from the delegated worker redirect to the delegating agent, explicit agent overrides still win, and redirected replies no longer create reciprocal sticky mappings. | `cargo test --manifest-path src-tauri/Cargo.toml reply_target -- --nocapture` ✅ 8 passed; `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 17 passed; `git diff --check` ✅ | accepted |
 | Task 6 | `0499a7c8` | Converted backend production consumers from raw legacy field reads to accessors/structured helpers, cut prompt/tool/schema guidance over to structured `target`, and locked the backend-compatible staged state while explicitly leaving shared-contract field deletion for the final task. | `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 41 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 13 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config -- --nocapture` ✅ 28 passed; `cargo test --manifest-path bridge/Cargo.toml -- --nocapture` ✅ 41 passed; `git diff --check` ✅ | accepted |
 | Task 7 | `70dabf89` | Removed the legacy flat fields from the shared `BridgeMessage` contract itself, aligned bridge/daemon wire consumers and frontend message/display types to the structured `source/target/replyTarget` model, and brought the automated regression suites back to green. Headless live provider scenarios remain pending as the last acceptance step. | `bun test src/lib/message-payload.test.ts` ✅ 2 passed; `bun test src/components/MessagePanel/MessageBubble.test.tsx src/components/MessagePanel/MessageList.test.tsx tests/message-panel-view-model.test.ts tests/message-render-performance.test.ts src/lib/message-payload.test.ts` ✅ 34 passed; `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 41 passed; `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 17 passed; `cargo test --manifest-path src-tauri/Cargo.toml user_target_tests -- --nocapture` ✅ 13 passed; `cargo test --manifest-path src-tauri/Cargo.toml state_snapshot_tests -- --nocapture` ✅ 14 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 13 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config -- --nocapture` ✅ 28 passed; `cargo test --manifest-path bridge/Cargo.toml -- --nocapture` ✅ 41 passed; `cargo check --manifest-path src-tauri/Cargo.toml` ✅; `cargo build -p dimweave-bridge` ✅; `bun run build` ✅; `git diff --check` ✅ | accepted |
+| Task 8 | not started | Add a code-level headless validation harness and execute the required live Codex/Claude scenarios without using the frontend UI, then record the final acceptance evidence. | Not run yet. | planned |
 
 ## Plan Revision 3 — 2026-04-16
 
