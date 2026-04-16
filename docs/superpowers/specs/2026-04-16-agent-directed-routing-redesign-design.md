@@ -467,6 +467,13 @@ Because the bridge and daemon currently compile against legacy `BridgeMessage` a
 
 That sequencing is required so each task remains independently compilable and verifiable while the final merged result is still a complete hard cut.
 
+In practice, the staged sequence now means:
+
+1. introduce new structured message types
+2. migrate bridge/provider/routing behavior onto them
+3. convert backend consumers away from direct legacy field reads
+4. only after backend, bridge wire, and frontend message consumers are all aligned, remove the legacy role-string fields from the shared contract itself
+
 ## Acceptance Criteria
 
 - the protocol no longer relies on `from/to/send_to` role strings as primary routing truth

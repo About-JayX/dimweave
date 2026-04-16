@@ -290,9 +290,9 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture`
 - `git diff --check`
 
-## Task 6: Final backend hard-cut cleanup
+## Task 6: Backend compatibility cutover and prompt/schema cleanup
 
-**task_id:** `agent-directed-backend-hard-cut`
+**task_id:** `agent-directed-backend-compat-cutover`
 
 **allowed_files:**
 
@@ -336,6 +336,8 @@
 - `src-tauri/src/daemon/role_config/roles_tests.rs`
 - `src-tauri/src/daemon/role_config/claude_prompt.rs`
 - `src-tauri/src/daemon/role_config/claude_prompt_tests.rs`
+- `src-tauri/src/daemon/feishu_project_task_link_tests.rs`
+- `src-tauri/src/feishu_project/task_link_tests.rs`
 
 **max_files_changed:** `40`
 **max_added_loc:** `420`
@@ -343,11 +345,12 @@
 
 **acceptance criteria:**
 
-- legacy role-string message fields are removed from the shared message contract
-- no backend production path still depends on `from/to/display_source/sender_agent_id`
+- no backend production path still depends on raw `from/to/display_source/sender_agent_id` field reads
+- backend consumers use accessors / structured helpers instead of direct legacy field access
 - prompt/tool guidance no longer tells providers to emit role-only `send_to`
 - Codex output schema is upgraded from `send_to` to structured `target`
-- tests lock the final hard-cut contract
+- tests lock the backend compatibility cutover
+- shared message contract field deletion is explicitly deferred to Task 7
 
 **verification_commands:**
 
@@ -357,12 +360,29 @@
 - `cargo test --manifest-path bridge/Cargo.toml -- --nocapture`
 - `git diff --check`
 
-## Task 7: Frontend hard-cut alignment and final regression
+## Task 7: Final shared-contract hard cut, frontend alignment, and final regression
 
-**task_id:** `agent-directed-frontend-and-regression`
+**task_id:** `agent-directed-final-hard-cut-and-regression`
 
 **allowed_files:**
 
+- `src-tauri/src/daemon/types.rs`
+- `src-tauri/src/daemon/types_tests.rs`
+- `bridge/src/types.rs`
+- `bridge/src/daemon_client_io.rs`
+- `bridge/src/channel_state.rs`
+- `bridge/src/mcp_io.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler.rs`
+- `src-tauri/src/daemon/codex/session_event.rs`
+- `src-tauri/src/daemon/codex/handler.rs`
+- `src-tauri/src/daemon/routing_dispatch.rs`
+- `src-tauri/src/daemon/routing_display.rs`
+- `src-tauri/src/daemon/state_task_flow.rs`
+- `src-tauri/src/daemon/routing_target_session.rs`
+- `src-tauri/src/daemon/orchestrator/task_flow.rs`
+- `src-tauri/src/telegram/report.rs`
 - `src/types.ts`
 - `src/stores/bridge-store/types.ts`
 - `src/stores/bridge-store/listener-payloads.ts`
@@ -374,12 +394,14 @@
 - `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
 - `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
 
-**max_files_changed:** `10`
-**max_added_loc:** `260`
-**max_deleted_loc:** `260`
+**max_files_changed:** `28`
+**max_added_loc:** `420`
+**max_deleted_loc:** `520`
 
 **acceptance criteria:**
 
+- legacy role-string fields are removed from the shared message contract itself
+- bridge/daemon wire protocol no longer depends on `from/to/display_source/sender_agent_id`
 - frontend bridge/message display types align with the final structured message protocol
 - no frontend production path still depends on the removed legacy routing fields
 - automated communication regression evidence is documented
@@ -427,8 +449,8 @@ The implementation is not complete until these scenarios are covered by automate
 | Task 3 | `3283dd1d` | Upgraded Codex structured-output parsing/building to use `MessageTarget` / parsed `replyTarget` in its intermediate model, removed the hard-coded known-role filter, and explicitly left true agent-targeted routing activation for the routing-kernel task. | `cargo test --manifest-path src-tauri/Cargo.toml codex::structured_output -- --nocapture` ✅ 26 passed; `cargo test --manifest-path src-tauri/Cargo.toml codex::handler -- --nocapture` ✅ 6 passed; `git diff --check` ✅ | accepted |
 | Task 4 | `d5db14b9` | Activated the directed-routing kernel while keeping `route_message(BridgeMessage)` callable as a compatibility shim: task and non-task paths now resolve concrete agent targets before role broadcast, user-input internally resolves structured targets before flattening at the compatibility boundary, Claude SDK direct delivery now builds a structured user target internally, and sender identity no longer falls back to the first online slot when multiple same-provider agents are live. | `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture` ✅ 41 passed; `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 15 passed; `cargo test --manifest-path src-tauri/Cargo.toml user_target_tests -- --nocapture` ✅ 13 passed; `cargo test --manifest-path src-tauri/Cargo.toml daemon::state::state_tests:: -- --nocapture` ✅ 94 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk::event_handler -- --nocapture` ✅ 10 passed; `cargo test --manifest-path src-tauri/Cargo.toml claude_sdk_handler_processing -- --nocapture` ✅ 0 matched tests; `git diff --check` ✅ | accepted |
 | Task 5 | `30b7d6fd` | Added runtime reply-target tracking so agent-targeted delegations record a one-way default report-back target, role-targeted replies from the delegated worker redirect to the delegating agent, explicit agent overrides still win, and redirected replies no longer create reciprocal sticky mappings. | `cargo test --manifest-path src-tauri/Cargo.toml reply_target -- --nocapture` ✅ 8 passed; `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture` ✅ 17 passed; `git diff --check` ✅ | accepted |
-| Task 6 | not started | Perform the backend hard cut: remove legacy role-string routing fields across daemon/bridge/backend side-effect paths and upgrade provider prompt/schema contracts. | Not run yet. | planned |
-| Task 7 | not started | Align frontend message types/display and run the full automated + headless live communication regression sweep. | Not run yet. | planned |
+| Task 6 | not started | Convert backend consumers away from raw legacy field reads, finish prompt/schema migration, and lock a backend-compatible staged state while deferring actual shared-contract field deletion to the final task. | Not run yet. | planned |
+| Task 7 | not started | Remove the legacy fields from the shared contract itself, align bridge/frontend/wire consumers, and run the full automated + headless live communication regression sweep. | Not run yet. | planned |
 
 ## Plan Revision 3 — 2026-04-16
 
@@ -441,6 +463,15 @@ The implementation is not complete until these scenarios are covered by automate
 - Task 5: replyTarget flow
 - Task 6: backend hard-cut cleanup
 - Task 7: frontend alignment + final automated/headless regression
+
+## Plan Revision 4 — 2026-04-16
+
+**Reason:** Task 6 implementation review proved the prior Task 6/Task 7 split was still too aggressive. Backend code can be migrated away from *reading* raw legacy fields before the shared contract fields themselves are deleted, and Task 6 also needed two Feishu test files already touched by the candidate. The final field deletion must move into the last hard-cut + regression task where bridge wire consumers and frontend display types are updated together.
+
+**Revised final sequence:**
+
+- Task 6: backend compatibility cutover + prompt/schema cleanup
+- Task 7: shared-contract field deletion + bridge/frontend final alignment + full regression
 
 ## Plan Revision 1 — 2026-04-16
 
