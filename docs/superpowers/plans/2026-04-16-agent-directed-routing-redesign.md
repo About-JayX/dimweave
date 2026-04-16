@@ -4,7 +4,7 @@
 
 **Goal:** Replace role-string message targeting with a structured agent-directed routing protocol so the daemon can support multiple same-role agents without report-chain ambiguity.
 
-**Architecture:** Perform a deliberate hard cut from `from/to/send_to` routing into a single structured `source/target/replyTarget` message model. First update the shared DTOs and wire format, then upgrade bridge/Claude/Codex producer contracts, then rewrite daemon routing and default reply-target semantics, and finally remove the old string-target compatibility path. Communication tests are mandatory at every boundary.
+**Architecture:** The final merged state is a hard cut to `source/target/replyTarget`, but implementation will proceed in a staged migration so each task still compiles and can be verified. First add the new structured message types in parallel, then migrate bridge/Claude/Codex/daemon boundaries onto them, then remove the legacy role-string message fields in one dedicated cleanup task. Communication tests are mandatory at every boundary, and final acceptance also requires headless real-scenario runtime checks against live Codex/Claude providers.
 
 **Tech Stack:** Rust 1.75+, Tokio, Tauri 2, bridge crate, Claude SDK event chain, Codex app-server session handling, Cargo test/check, Bun build, git
 
@@ -26,7 +26,7 @@
   - `task_agents[]` and concrete `agent_id` remain the sole runtime identity truth
   - explicit role-broadcast remains a supported feature
   - communication tests are mandatory because this is the core daemon chain
-  - this redesign is a hard cut; mixed old/new protocol compatibility is out of scope
+- the final merged state is a hard cut, but the feature branch may carry a short-lived migration bridge so each task remains verifiable
 
 ## Baseline
 
@@ -88,9 +88,9 @@
 - `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
 - `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
 
-## Task 1: Replace the shared message DTO with structured source/target types
+## Task 1: Introduce structured message types without breaking the crate
 
-**task_id:** `agent-directed-message-dto`
+**task_id:** `directed-message-types`
 
 **allowed_files:**
 
@@ -104,10 +104,13 @@
 
 **acceptance criteria:**
 
-- `BridgeMessage` uses `source`, `target`, and optional `replyTarget`
-- old `from/to/display_source/sender_agent_id` fields are removed
-- daemon and bridge share the same structural message contract
-- serialization tests cover user, role-targeted, and agent-targeted messages
+- daemon and bridge define shared structured types for:
+  - `MessageSource`
+  - `MessageTarget`
+  - a new structured message type (for example `DirectedBridgeMessage`)
+- the repository still compiles after this task
+- serialization tests cover user, role-targeted, and agent-targeted messages on the new structured message type
+- legacy `BridgeMessage` remains temporarily untouched in this task so downstream consumers can still compile
 
 **verification_commands:**
 
@@ -269,33 +272,62 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml shared_role_tests -- --nocapture`
 - `git diff --check`
 
-## Task 7: Remove old role-target protocol assumptions from prompts and docs
+## Task 7: Remove legacy role-string message fields and old target assumptions
 
-**task_id:** `agent-directed-prompt-contract`
+**task_id:** `agent-directed-hard-cut-cleanup`
 
 **allowed_files:**
 
+- `src-tauri/src/daemon/types.rs`
+- `src-tauri/src/daemon/types_tests.rs`
+- `bridge/src/types.rs`
+- `bridge/src/tools.rs`
+- `bridge/src/tools_tests.rs`
+- `bridge/src/mcp_io.rs`
+- `bridge/src/mcp_protocol_tests.rs`
+- `bridge/src/channel_state.rs`
+- `bridge/src/main.rs`
+- `src-tauri/src/daemon/codex/structured_output.rs`
+- `src-tauri/src/daemon/codex/structured_output_tests.rs`
+- `src-tauri/src/daemon/codex/session_event.rs`
+- `src-tauri/src/daemon/codex/session.rs`
+- `src-tauri/src/daemon/codex/handler.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_delivery.rs`
+- `src-tauri/src/daemon/claude_sdk/event_handler_tests.rs`
+- `src-tauri/src/daemon/control/claude_sdk_handler_processing.rs`
+- `src-tauri/src/daemon/routing.rs`
+- `src-tauri/src/daemon/routing_user_input.rs`
+- `src-tauri/src/daemon/control/handler.rs`
+- `src-tauri/src/daemon/state_delivery.rs`
+- `src-tauri/src/daemon/state_tests.rs`
+- `src-tauri/src/daemon/routing_shared_role_tests.rs`
+- `src-tauri/src/daemon/routing_user_target_tests.rs`
+- `src-tauri/src/daemon/routing_behavior_tests.rs`
+- `src-tauri/src/daemon/routing_tests.rs`
 - `src-tauri/src/daemon/role_config/roles.rs`
 - `src-tauri/src/daemon/role_config/roles_tests.rs`
 - `src-tauri/src/daemon/role_config/claude_prompt.rs`
 - `src-tauri/src/daemon/role_config/claude_prompt_tests.rs`
-- `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
-- `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
 
-**max_files_changed:** `6`
-**max_added_loc:** `240`
-**max_deleted_loc:** `120`
+**max_files_changed:** `31`
+**max_added_loc:** `260`
+**max_deleted_loc:** `420`
 
 **acceptance criteria:**
 
-- prompt/tool guidance no longer tells agents to output role-only `send_to`
-- provider-facing protocol text explains `target` / `replyTarget`
-- tests lock the updated prompt contract
+- legacy role-string message fields are removed from the shared message contract
+- no production path still depends on `from/to/display_source/sender_agent_id`
+- prompt/tool guidance no longer tells providers to emit role-only `send_to`
+- tests lock the final hard-cut contract
 
 **verification_commands:**
 
+- `cargo test --manifest-path src-tauri/Cargo.toml routing_ -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::role_config -- --nocapture`
-- `git diff --check -- src-tauri/src/daemon/role_config/roles.rs src-tauri/src/daemon/role_config/roles_tests.rs src-tauri/src/daemon/role_config/claude_prompt.rs src-tauri/src/daemon/role_config/claude_prompt_tests.rs docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
+- `cargo test --manifest-path bridge/Cargo.toml -- --nocapture`
+- `git diff --check`
 
 ## Task 8: Full communication regression sweep and close-out
 
@@ -315,6 +347,7 @@
 - CM records contain the real accepted commit hashes and verification evidence
 - full communication regression evidence is documented
 - no old `to/send_to` assumptions remain in the accepted scope
+- headless real-scenario runtime tests are executed after implementation, without relying on the frontend UI
 
 **verification_commands:**
 
@@ -344,16 +377,19 @@ The implementation is not complete until these scenarios are covered by automate
 8. reconnect/resume preserves concrete sender and reply target
 9. user-targeted terminal replies still surface correctly
 10. explicit role broadcast remains supported after agent-targeted routing lands
+11. headless live scenario: Codex as lead, Claude as coder
+12. headless live scenario: Claude as lead, Codex as coder
+13. headless live scenario: multi-agent task with at least one same-role case
 
 ## CM Record
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Replace role-string message fields with the structured `source/target/replyTarget` DTO shared by daemon and bridge. | Not run yet. | planned |
+| Task 1 | not started | Introduce the new structured message types in daemon/bridge without yet removing the legacy `BridgeMessage` fields, so the repository remains buildable while downstream consumers migrate. | Not run yet. | planned |
 | Task 2 | not started | Rebuild bridge tooling and startup/runtime identity rules around structured targets and unrestricted role strings. | Not run yet. | planned |
 | Task 3 | not started | Upgrade Codex parsing and event handling to emit the new structured target model. | Not run yet. | planned |
 | Task 4 | not started | Upgrade Claude event delivery and processing to the new structured target model. | Not run yet. | planned |
 | Task 5 | not started | Rewrite daemon routing to resolve explicit agent targets before role broadcast and remove old sender/receiver assumptions. | Not run yet. | planned |
 | Task 6 | not started | Introduce concrete `replyTarget` semantics for delegation and default report-back. | Not run yet. | planned |
-| Task 7 | not started | Update prompt/tool contracts so providers produce the new structured routing output. | Not run yet. | planned |
+| Task 7 | not started | Remove the legacy role-string message fields and finish the hard cut once all producers/consumers have moved to the new structured model. | Not run yet. | planned |
 | Task 8 | not started | Run the full communication regression sweep and close out docs/CM with accepted hashes and evidence. | Not run yet. | planned |

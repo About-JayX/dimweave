@@ -17,6 +17,7 @@ That split is now the main source of ambiguity in the core dispatch chain:
 This works when each role has at most one live agent, but it becomes fundamentally ambiguous when a task contains multiple same-role agents or multiple same-provider agents.
 
 The redesign replaces role-string targeting with an explicit structured routing protocol.
+The final merged protocol is still a hard cut, but the implementation will use a staged migration inside the feature branch so each task can compile and be verified independently.
 
 ## Product Goal
 
@@ -42,7 +43,7 @@ The redesign replaces role-string targeting with an explicit structured routing 
 - task-pane visual redesign
 - provider launch UI changes
 - task persistence schema beyond what is needed to support message routing
-- mixed-version compatibility between old and new bridge/daemon runtimes
+- long-lived mixed-version compatibility between old and new bridge/daemon runtimes
 
 ## Current Protocol
 
@@ -101,6 +102,35 @@ The current daemon `BridgeMessage` effectively carries:
 - `source`
 - `target`
 - `reply_target`
+
+## Transitional Execution Model
+
+The **final merged state** of this redesign is:
+
+- no `from`
+- no `display_source`
+- no `to`
+- no `sender_agent_id`
+- only structured `source`, `target`, and `reply_target`
+
+However, Rust test commands compile the whole crate, so removing those fields in a DTO-only task would make the repository unverifiable before downstream producers and consumers migrate.
+
+To keep the work auditable and testable, implementation will proceed in two layers:
+
+1. introduce the new structured message types first
+2. migrate bridge, provider, and daemon boundaries onto those new types
+3. remove the legacy role-string message fields only after the whole call graph has moved
+
+This is an execution strategy only. It does **not** change the final protocol described in this spec.
+
+### Transitional shared types
+
+During migration the codebase may temporarily contain:
+
+- legacy `BridgeMessage` for still-unmigrated call sites
+- new structured message types for the migration target
+
+The final cleanup task removes the legacy role-string message shape.
 
 ## New Types
 
@@ -333,13 +363,13 @@ Task-scoped user input should stay task-first.
 
 ## Migration Strategy
 
-This redesign is a deliberate hard cut, not a long-lived compatibility patch.
+This redesign is a deliberate hard cut in the **final merged state**, not a long-lived compatibility patch.
 
 That means:
 
-- bridge and daemon must be upgraded together
-- old `to/send_to` producers are not considered supported after the cut
-- migration work still happens in tasks, but the final merged protocol is the new one only
+- bridge and daemon must ultimately be upgraded together
+- old `to/send_to` producers are not considered supported after the final cleanup task
+- migration work still happens in tasks so each step remains compilable and verifiable
 
 ## Testing
 
@@ -405,6 +435,13 @@ The implementation plan must include explicit tests for every boundary below.
 - user -> lead(role) -> coder(agent) -> lead(agent) -> user
 - two same-role leads + two coders in one task maintain independent report chains
 - explicit role broadcast still works after agent-directed routing is introduced
+
+### 10. Headless live runtime tests
+
+- run real daemon/provider communication scenarios directly through code-level entrypoints, not by clicking the frontend UI
+- cover `Codex=lead / Claude=coder`
+- cover `Claude=lead / Codex=coder`
+- cover at least one multi-agent task with a same-role case
 
 ## Acceptance Criteria
 
