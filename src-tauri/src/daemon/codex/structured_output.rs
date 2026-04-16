@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::fmt;
 
-use crate::daemon::types::MessageStatus;
+use crate::daemon::types::{MessageStatus, MessageTarget};
 
 /// Max bytes in raw delta buffer; bounds Rust-side memory for long responses.
 const RAW_DELTA_CAP: usize = 512_000;
@@ -9,7 +9,8 @@ const RAW_DELTA_CAP: usize = 512_000;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ParsedOutput {
     pub(super) message: String,
-    pub(super) send_to: Option<String>,
+    pub(super) target: Option<MessageTarget>,
+    pub(super) reply_target: Option<MessageTarget>,
     pub(super) status: MessageStatus,
 }
 
@@ -120,16 +121,33 @@ pub(super) fn parse_structured_output(raw: &str) -> Result<ParsedOutput, Structu
         };
         Ok(ParsedOutput {
             message: v["message"].as_str().unwrap_or(raw).to_string(),
-            send_to: v["send_to"].as_str().map(str::to_string),
+            target: parse_target_field(&v),
+            reply_target: parse_reply_target_field(&v),
             status,
         })
     } else {
         Ok(ParsedOutput {
             message: raw.to_string(),
-            send_to: None,
+            target: None,
+            reply_target: None,
             status: MessageStatus::Done,
         })
     }
+}
+
+fn parse_target_field(v: &Value) -> Option<MessageTarget> {
+    if let Some(obj) = v.get("target") {
+        if let Ok(t) = serde_json::from_value::<MessageTarget>(obj.clone()) {
+            return Some(t);
+        }
+    }
+    let s = v["send_to"].as_str()?;
+    Some(if s == "user" { MessageTarget::User } else { MessageTarget::Role { role: s.into() } })
+}
+
+fn parse_reply_target_field(v: &Value) -> Option<MessageTarget> {
+    let obj = v.get("replyTarget").or_else(|| v.get("reply_target"))?;
+    serde_json::from_value::<MessageTarget>(obj.clone()).ok()
 }
 
 pub(super) fn should_emit_final_message(text: &str) -> bool {

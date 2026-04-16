@@ -6,7 +6,7 @@ use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::gui::{self, CodexStreamPayload};
 use crate::daemon::gui_task::TaskUiEvent;
 use crate::daemon::task_graph::types::{Provider, SessionStatus};
-use crate::daemon::types::{BridgeMessage, MessageStatus};
+use crate::daemon::types::{BridgeMessage, MessageStatus, MessageTarget};
 use crate::daemon::{routing, SharedState};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -135,11 +135,11 @@ fn build_completed_output_message(
     }
 
     let target = if schema_route_enabled {
-        parsed
-            .send_to
-            .as_deref()
-            .filter(|t| matches!(*t, "user" | "lead" | "coder"))
-            .unwrap_or("user")
+        match parsed.target.as_ref() {
+            Some(MessageTarget::User) | None => "user",
+            Some(MessageTarget::Role { role }) => role.as_str(),
+            Some(MessageTarget::Agent { agent_id }) => agent_id.as_str(),
+        }
     } else {
         "user"
     };
@@ -371,23 +371,47 @@ mod tests {
     fn completed_output_builder_routes_to_schema_target() {
         let parsed = ParsedOutput {
             message: "final review result".into(),
-            send_to: Some("user".into()),
+            target: Some(MessageTarget::User),
+            reply_target: None,
             status: MessageStatus::Done,
         };
-
         let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
     }
 
     #[test]
-    fn completed_output_builder_restricts_schema_routes_to_known_roles() {
+    fn completed_output_builder_accepts_arbitrary_role_targets() {
         let parsed = ParsedOutput {
             message: "final review result".into(),
-            send_to: Some("reviewer".into()),
+            target: Some(MessageTarget::Role { role: "reviewer".into() }),
+            reply_target: None,
             status: MessageStatus::Done,
         };
+        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
+        assert_eq!(msg.to, "reviewer");
+    }
 
+    #[test]
+    fn completed_output_builder_routes_agent_target() {
+        let parsed = ParsedOutput {
+            message: "done".into(),
+            target: Some(MessageTarget::Agent { agent_id: "claude".into() }),
+            reply_target: None,
+            status: MessageStatus::Done,
+        };
+        let msg = build_completed_output_message("coder", &parsed, true, "codex-agent-1", "codex").expect("message");
+        assert_eq!(msg.to, "claude");
+    }
+
+    #[test]
+    fn completed_output_builder_defaults_to_user_when_target_none() {
+        let parsed = ParsedOutput {
+            message: "fallback".into(),
+            target: None,
+            reply_target: None,
+            status: MessageStatus::Done,
+        };
         let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
     }
@@ -396,10 +420,10 @@ mod tests {
     fn completed_output_builder_defaults_to_user_when_schema_disabled() {
         let parsed = ParsedOutput {
             message: "status update".into(),
-            send_to: Some("lead".into()),
+            target: Some(MessageTarget::Role { role: "lead".into() }),
+            reply_target: None,
             status: MessageStatus::InProgress,
         };
-
         let msg = build_completed_output_message("coder", &parsed, false, "codex-agent-1", "codex").expect("message");
         assert_eq!(msg.to, "user");
     }
@@ -408,10 +432,10 @@ mod tests {
     fn completed_output_builder_rejects_empty_message() {
         let parsed = ParsedOutput {
             message: "   ".into(),
-            send_to: Some("user".into()),
+            target: Some(MessageTarget::User),
+            reply_target: None,
             status: MessageStatus::Done,
         };
-
         assert!(build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").is_none());
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::daemon::types::MessageTarget;
 
 fn preview(raw: &str) -> Option<String> {
     extract_structured_message_preview(raw)
@@ -32,7 +33,7 @@ fn preview_none_without_message_field() {
 #[test]
 fn final_empty_message_not_emitted() {
     let parsed = parse_structured_output(r#"{"message":"   ","send_to":"lead"}"#).unwrap();
-    assert_eq!(parsed.send_to.as_deref(), Some("lead"));
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
     assert!(!should_emit_final_message(&parsed.message));
 }
 #[test]
@@ -125,5 +126,82 @@ fn ignores_unknown_report_telegram_field_gracefully() {
     )
     .unwrap();
     assert_eq!(parsed.message, "done");
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
     assert_eq!(parsed.status.as_str(), "done");
+}
+
+// ── Structured target tests ──────────────────────────────────
+
+#[test]
+fn legacy_send_to_converts_to_role_target() {
+    let parsed = parse_structured_output(r#"{"message":"hi","send_to":"coder"}"#).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "coder".into() }));
+}
+
+#[test]
+fn legacy_send_to_user_converts_to_user_target() {
+    let parsed = parse_structured_output(r#"{"message":"hi","send_to":"user"}"#).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::User));
+}
+
+#[test]
+fn structured_role_target_object() {
+    let raw = r#"{"message":"hi","target":{"kind":"role","role":"lead"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
+}
+
+#[test]
+fn structured_user_target_object() {
+    let raw = r#"{"message":"hi","target":{"kind":"user"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::User));
+}
+
+#[test]
+fn structured_agent_target_object() {
+    let raw = r#"{"message":"hi","target":{"kind":"agent","agentId":"claude"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Agent { agent_id: "claude".into() }));
+}
+
+#[test]
+fn structured_target_takes_precedence_over_send_to() {
+    let raw = r#"{"message":"hi","send_to":"user","target":{"kind":"role","role":"lead"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "lead".into() }));
+}
+
+#[test]
+fn missing_target_and_send_to_yields_none() {
+    let parsed = parse_structured_output(r#"{"message":"hi"}"#).unwrap();
+    assert_eq!(parsed.target, None);
+}
+
+#[test]
+fn reply_target_parsed_from_camel_case() {
+    let raw = r#"{"message":"hi","target":{"kind":"role","role":"lead"},"replyTarget":{"kind":"agent","agentId":"codex"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.reply_target, Some(MessageTarget::Agent { agent_id: "codex".into() }));
+}
+
+#[test]
+fn reply_target_parsed_from_snake_case() {
+    let raw = r#"{"message":"hi","reply_target":{"kind":"user"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.reply_target, Some(MessageTarget::User));
+}
+
+#[test]
+fn reply_target_absent_yields_none() {
+    let parsed = parse_structured_output(r#"{"message":"hi","send_to":"lead"}"#).unwrap();
+    assert_eq!(parsed.reply_target, None);
+}
+
+#[test]
+fn raw_text_fallback_has_no_target() {
+    let parsed = parse_structured_output("plain text output").unwrap();
+    assert_eq!(parsed.target, None);
+    assert_eq!(parsed.reply_target, None);
+    assert_eq!(parsed.message, "plain text output");
 }
