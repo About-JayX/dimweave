@@ -5,17 +5,41 @@ import type { TaskStoreState } from "../src/stores/task-store/types";
 const NOOP = () => {};
 const NOOP_ASYNC = async () => ({}) as any;
 const STUB_ACTIONS = {
-  createTask: NOOP_ASYNC, startWorkspaceTask: NOOP_ASYNC,
-  selectTask: NOOP_ASYNC, setReplyTarget: NOOP, fetchSnapshot: NOOP_ASYNC,
-  fetchProviderHistory: NOOP_ASYNC, resumeSession: NOOP_ASYNC,
-  attachProviderHistory: NOOP_ASYNC, cleanup: NOOP,
-} as unknown as Pick<TaskStoreState, "createTask" | "startWorkspaceTask" | "selectTask" | "setReplyTarget" | "fetchSnapshot" | "fetchProviderHistory" | "resumeSession" | "attachProviderHistory" | "cleanup">;
+  createTask: NOOP_ASYNC,
+  startWorkspaceTask: NOOP_ASYNC,
+  selectTask: NOOP_ASYNC,
+  setReplyTarget: NOOP,
+  fetchSnapshot: NOOP_ASYNC,
+  fetchProviderHistory: NOOP_ASYNC,
+  resumeSession: NOOP_ASYNC,
+  attachProviderHistory: NOOP_ASYNC,
+  cleanup: NOOP,
+} as unknown as Pick<
+  TaskStoreState,
+  | "createTask"
+  | "startWorkspaceTask"
+  | "selectTask"
+  | "setReplyTarget"
+  | "fetchSnapshot"
+  | "fetchProviderHistory"
+  | "resumeSession"
+  | "attachProviderHistory"
+  | "cleanup"
+>;
 
 const EMPTY_DATA = {
-  activeTaskId: null, tasks: {}, replyTargets: {}, sessions: {},
-  artifacts: {}, providerSummaries: {}, providerHistory: {},
-  providerHistoryLoading: {}, providerHistoryError: {},
-  bootstrapComplete: false, bootstrapError: null, lastSave: null,
+  activeTaskId: null,
+  tasks: {},
+  replyTargets: {},
+  sessions: {},
+  artifacts: {},
+  providerSummaries: {},
+  providerHistory: {},
+  providerHistoryLoading: {},
+  providerHistoryError: {},
+  bootstrapComplete: false,
+  bootstrapError: null,
+  lastSave: null,
 };
 
 function makeState(o: Partial<TaskStoreState> = {}): TaskStoreState {
@@ -23,22 +47,35 @@ function makeState(o: Partial<TaskStoreState> = {}): TaskStoreState {
 }
 
 const TASK_T1 = {
-  taskId: "t1", workspaceRoot: "/ws", title: "Task",
-  status: "implementing" as const, leadProvider: "claude" as const,
-  coderProvider: "codex" as const, createdAt: 0, updatedAt: 0,
+  taskId: "t1",
+  projectRoot: "/ws",
+  taskWorktreeRoot: "/ws",
+  workspaceRoot: "/ws",
+  title: "Task",
+  status: "implementing" as const,
+  leadProvider: "claude" as const,
+  coderProvider: "codex" as const,
+  createdAt: 0,
+  updatedAt: 0,
 };
 const SUMMARY_T1 = {
-  taskId: "t1", leadProvider: "claude", coderProvider: "codex",
-  leadOnline: false, coderOnline: false,
+  taskId: "t1",
+  leadProvider: "claude",
+  coderProvider: "codex",
+  leadOnline: false,
+  coderOnline: false,
 };
 
 describe("selectActiveTaskProviderBindings", () => {
   test("returns stable reference for unchanged state", () => {
     const s = makeState({
-      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      activeTaskId: "t1",
+      tasks: { t1: TASK_T1 },
       providerSummaries: { t1: { ...SUMMARY_T1, leadOnline: true } },
     });
-    expect(selectActiveTaskProviderBindings(s)).toBe(selectActiveTaskProviderBindings(s));
+    expect(selectActiveTaskProviderBindings(s)).toBe(
+      selectActiveTaskProviderBindings(s),
+    );
   });
 
   test("returns DEFAULT_BINDINGS for no active task", () => {
@@ -51,11 +88,13 @@ describe("selectActiveTaskProviderBindings", () => {
 
   test("updates when provider summary changes", () => {
     const s1 = makeState({
-      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      activeTaskId: "t1",
+      tasks: { t1: TASK_T1 },
       providerSummaries: { t1: SUMMARY_T1 },
     });
     const s2 = makeState({
-      activeTaskId: "t1", tasks: { t1: TASK_T1 },
+      activeTaskId: "t1",
+      tasks: { t1: TASK_T1 },
       providerSummaries: { t1: { ...SUMMARY_T1, leadOnline: true } },
     });
     const a = selectActiveTaskProviderBindings(s1);
@@ -63,5 +102,41 @@ describe("selectActiveTaskProviderBindings", () => {
     expect(a).not.toBe(b);
     expect(a.leadOnline).toBe(false);
     expect(b.leadOnline).toBe(true);
+  });
+
+  test("prefers summary providers over task singleton fields", () => {
+    const task = {
+      ...TASK_T1,
+      leadProvider: "claude" as const,
+      coderProvider: "codex" as const,
+    };
+    const summary = {
+      ...SUMMARY_T1,
+      leadProvider: "codex",
+      coderProvider: "claude",
+    };
+    const s = makeState({
+      activeTaskId: "t1",
+      tasks: { t1: task },
+      providerSummaries: { t1: summary },
+    });
+    const b = selectActiveTaskProviderBindings(s);
+    expect(b.leadProvider).toBe("codex");
+    expect(b.coderProvider).toBe("claude");
+  });
+
+  test("falls back to task singleton when summary is missing", () => {
+    const task = {
+      ...TASK_T1,
+      leadProvider: "codex" as const,
+      coderProvider: "claude" as const,
+    };
+    const s = makeState({
+      activeTaskId: "t1",
+      tasks: { t1: task },
+    });
+    const b = selectActiveTaskProviderBindings(s);
+    expect(b.leadProvider).toBe("codex");
+    expect(b.coderProvider).toBe("claude");
   });
 });

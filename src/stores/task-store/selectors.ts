@@ -17,32 +17,38 @@ const EMPTY_AGENTS: TaskAgentInfo[] = [];
 const AUTO_ONLY: string[] = ["auto"];
 
 export function selectActiveTask(state: TaskStoreState) {
-  return state.activeTaskId ? state.tasks[state.activeTaskId] ?? null : null;
+  return state.activeTaskId ? (state.tasks[state.activeTaskId] ?? null) : null;
 }
 
 export function selectActiveReplyTarget(state: TaskStoreState): string {
   if (!state.activeTaskId) return "auto";
-  return state.replyTargets[state.activeTaskId] ?? selectDefaultReplyTarget(state);
+  return (
+    state.replyTargets[state.activeTaskId] ?? selectDefaultReplyTarget(state)
+  );
 }
 
 export function selectActiveTaskSessions(state: TaskStoreState) {
   return state.activeTaskId
-    ? state.sessions[state.activeTaskId] ?? EMPTY_SESSIONS
+    ? (state.sessions[state.activeTaskId] ?? EMPTY_SESSIONS)
     : EMPTY_SESSIONS;
 }
 
 export function selectActiveTaskArtifacts(state: TaskStoreState) {
   return state.activeTaskId
-    ? state.artifacts[state.activeTaskId] ?? EMPTY_ARTIFACTS
+    ? (state.artifacts[state.activeTaskId] ?? EMPTY_ARTIFACTS)
     : EMPTY_ARTIFACTS;
 }
 
 export function selectActiveTaskSessionCount(state: TaskStoreState) {
-  return state.activeTaskId ? (state.sessions[state.activeTaskId] ?? []).length : 0;
+  return state.activeTaskId
+    ? (state.sessions[state.activeTaskId] ?? []).length
+    : 0;
 }
 
 export function selectActiveTaskArtifactCount(state: TaskStoreState) {
-  return state.activeTaskId ? (state.artifacts[state.activeTaskId] ?? []).length : 0;
+  return state.activeTaskId
+    ? (state.artifacts[state.activeTaskId] ?? []).length
+    : 0;
 }
 
 export interface TaskProviderBindings {
@@ -84,8 +90,8 @@ export function selectActiveTaskProviderBindings(
   _prevTask = task;
   _prevSummary = summary;
   _prevResult = {
-    leadProvider: task.leadProvider,
-    coderProvider: task.coderProvider,
+    leadProvider: (summary?.leadProvider as Provider) ?? task.leadProvider,
+    coderProvider: (summary?.coderProvider as Provider) ?? task.coderProvider,
     leadOnline: summary?.leadOnline ?? false,
     coderOnline: summary?.coderOnline ?? false,
     leadProviderSession: summary?.leadProviderSession ?? null,
@@ -101,28 +107,32 @@ export function selectProviderSummary(
   return state.providerSummaries[state.activeTaskId] ?? null;
 }
 
-export function makeProviderHistorySelector(workspace: string | null | undefined) {
+export function makeProviderHistorySelector(
+  workspace: string | null | undefined,
+) {
   return (state: TaskStoreState) =>
-    workspace ? state.providerHistory[workspace] ?? EMPTY_PROVIDER_HISTORY : EMPTY_PROVIDER_HISTORY;
+    workspace
+      ? (state.providerHistory[workspace] ?? EMPTY_PROVIDER_HISTORY)
+      : EMPTY_PROVIDER_HISTORY;
 }
 
 export function makeProviderHistoryLoadingSelector(
   workspace: string | null | undefined,
 ) {
   return (state: TaskStoreState) =>
-    workspace ? state.providerHistoryLoading[workspace] ?? false : false;
+    workspace ? (state.providerHistoryLoading[workspace] ?? false) : false;
 }
 
 export function makeProviderHistoryErrorSelector(
   workspace: string | null | undefined,
 ) {
   return (state: TaskStoreState) =>
-    workspace ? state.providerHistoryError[workspace] ?? null : null;
+    workspace ? (state.providerHistoryError[workspace] ?? null) : null;
 }
 
 export function selectActiveTaskAgents(state: TaskStoreState): TaskAgentInfo[] {
   return state.activeTaskId
-    ? state.taskAgents[state.activeTaskId] ?? EMPTY_AGENTS
+    ? (state.taskAgents[state.activeTaskId] ?? EMPTY_AGENTS)
     : EMPTY_AGENTS;
 }
 
@@ -160,7 +170,8 @@ let _wsPrevResult: TaskInfo[] = EMPTY_TASKS;
 export function selectWorkspaceTasks(state: TaskStoreState): TaskInfo[] {
   const ws = state.selectedWorkspace;
   if (!ws) return EMPTY_TASKS;
-  if (ws === _wsPrevWorkspace && state.tasks === _wsPrevTasks) return _wsPrevResult;
+  if (ws === _wsPrevWorkspace && state.tasks === _wsPrevTasks)
+    return _wsPrevResult;
   _wsPrevWorkspace = ws;
   _wsPrevTasks = state.tasks;
   const filtered = Object.values(state.tasks)
