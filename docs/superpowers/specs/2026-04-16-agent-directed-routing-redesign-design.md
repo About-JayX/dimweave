@@ -37,6 +37,8 @@ The final merged protocol is still a hard cut, but the implementation will use a
 - Claude/Codex provider output contract redesign
 - daemon routing rewrite to consume structured targets
 - default reply-target propagation for delegation/reporting
+- backend side-effect and display paths that still consume legacy role-string `BridgeMessage` fields
+- frontend bridge/message display contracts that still consume legacy role-string `BridgeMessage` fields
 - comprehensive communication test coverage across bridge/provider/daemon boundaries
 
 ### Excluded
@@ -453,6 +455,17 @@ The implementation plan must include explicit tests for every boundary below.
 - cover `Codex=lead / Claude=coder`
 - cover `Claude=lead / Codex=coder`
 - cover at least one multi-agent task with a same-role case
+
+## Implementation sequencing note
+
+Because the bridge and daemon currently compile against legacy `BridgeMessage` across many subsystems, the remaining implementation must separate:
+
+1. provider-side parsing/building of the new structured target model
+2. core routing-kernel activation of structured targets
+3. reply-target propagation
+4. final hard-cut cleanup of all legacy role-string message consumers
+
+That sequencing is required so each task remains independently compilable and verifiable while the final merged result is still a complete hard cut.
 
 ## Acceptance Criteria
 
