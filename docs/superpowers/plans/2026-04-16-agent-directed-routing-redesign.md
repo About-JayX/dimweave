@@ -99,7 +99,7 @@
 - `bridge/src/types.rs`
 
 **max_files_changed:** `3`
-**max_added_loc:** `220`
+**max_added_loc:** `340`
 **max_deleted_loc:** `120`
 
 **acceptance criteria:**
@@ -393,3 +393,11 @@ The implementation is not complete until these scenarios are covered by automate
 | Task 6 | not started | Introduce concrete `replyTarget` semantics for delegation and default report-back. | Not run yet. | planned |
 | Task 7 | not started | Remove the legacy role-string message fields and finish the hard cut once all producers/consumers have moved to the new structured model. | Not run yet. | planned |
 | Task 8 | not started | Run the full communication regression sweep and close out docs/CM with accepted hashes and evidence. | Not run yet. | planned |
+
+## Plan Revision 1 — 2026-04-16
+
+**Reason:** The original Task 1 LOC budget assumed a direct field swap. The approved staged migration requires a full parallel structured message type in both daemon and bridge plus focused serialization coverage in both crates. The first verified implementation came in at `+322` LOC across the three allowed files while staying within scope and passing all Task 1 verification commands.
+
+**Revised Task 1 budget:**
+
+- `max_added_loc: 340`
