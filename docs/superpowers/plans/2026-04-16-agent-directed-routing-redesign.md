@@ -385,7 +385,7 @@ The implementation is not complete until these scenarios are covered by automate
 
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
-| Task 1 | not started | Introduce the new structured message types in daemon/bridge without yet removing the legacy `BridgeMessage` fields, so the repository remains buildable while downstream consumers migrate. | Not run yet. | planned |
+| Task 1 | `03c5d526` | Introduced the shared structured routing types (`MessageSource`, `MessageTarget`, and `DirectedBridgeMessage`) in both daemon and bridge while leaving the legacy `BridgeMessage` untouched so downstream consumers still compile during migration. | `cargo test --manifest-path src-tauri/Cargo.toml daemon::types::tests -- --nocapture` ✅ 13 passed; `cargo test --manifest-path bridge/Cargo.toml types -- --nocapture` ✅ 3 passed; `git diff --check` ✅ | accepted |
 | Task 2 | not started | Rebuild bridge tooling and startup/runtime identity rules around structured targets and unrestricted role strings. | Not run yet. | planned |
 | Task 3 | not started | Upgrade Codex parsing and event handling to emit the new structured target model. | Not run yet. | planned |
 | Task 4 | not started | Upgrade Claude event delivery and processing to the new structured target model. | Not run yet. | planned |
