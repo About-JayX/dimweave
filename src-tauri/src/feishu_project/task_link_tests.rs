@@ -1,5 +1,5 @@
 use crate::daemon::state::DaemonState;
-use crate::daemon::types::{Attachment, BridgeMessage};
+use crate::daemon::types::{Attachment, BridgeMessage, MessageSource, MessageTarget};
 use crate::feishu_project::types::{FeishuProjectInboxItem, IngressSource};
 
 fn sample_item() -> FeishuProjectInboxItem {
@@ -63,9 +63,9 @@ fn handoff_message_structure() {
     let now = chrono::Utc::now().timestamp_millis() as u64;
     let msg = BridgeMessage {
         id: format!("fp_handoff_task_42_{now}"),
-        from: "system".into(),
-        display_source: Some("feishu_project".into()),
-        to: "lead".into(),
+        source: MessageSource::System,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: format!(
             "Feishu Project repair task created.\n\n\
              **[{}]** {}\n\
@@ -81,7 +81,6 @@ fn handoff_message_structure() {
         status: None,
         task_id: Some("task_42".into()),
         session_id: None,
-        sender_agent_id: None,
         attachments: Some(vec![Attachment {
             file_path: "/tmp/snap.json".into(),
             file_name: "task_42.json".into(),
@@ -90,7 +89,7 @@ fn handoff_message_structure() {
         }]),
     };
     assert_eq!(msg.source_role(), "system");
-    assert_eq!(msg.source_display(), Some("feishu_project"));
+    assert!(msg.source_display().is_none());
     assert_eq!(msg.target_str(), "lead");
     assert!(msg.content.contains("repair plan"));
     assert!(msg.content.contains("plan → execute → review → CM flow"));

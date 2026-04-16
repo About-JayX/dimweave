@@ -1,7 +1,7 @@
 use crate::daemon::{
     gui::{self, ClaudeStreamPayload},
     routing,
-    types::{FromAgent, MessageStatus, ToAgent},
+    types::{FromAgent, MessageSource, MessageStatus, ToAgent},
     SharedState,
 };
 use axum::extract::ws::{Message, WebSocket};
@@ -114,7 +114,7 @@ fn claude_terminal_reply_claims_visible_result(
 
 fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
     format!(
-        "BridgeMessage{{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id,attachments}} from={} to={} status={} content_len={} task_id={} session_id={} sender_agent_id={} attachments={}",
+        "BridgeMessage{{id,source,target,reply_target,content,timestamp,reply_to,priority,status,task_id,session_id,attachments}} source={} target={} status={} content_len={} task_id={} session_id={} agent_id={} attachments={}",
         message.source_role(),
         message.target_str(),
         message.status.map(MessageStatus::as_str).unwrap_or("none"),
@@ -206,17 +206,25 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 if let Some(id) = agent_id.as_deref() {
                     // Preserve inbound sender_agent_id when it validates against
                     // the task's agents; otherwise resolve from runtime state.
+                    let claimed_agent_id = message.source_agent_id().map(|s| s.to_string());
                     let (role, real_agent_id, display_src) = {
                         let s = state.read().await;
-                        message
-                            .sender_agent_id
+                        claimed_agent_id
                             .as_deref()
                             .and_then(|claimed| validate_claimed_agent_id(&s, id, claimed))
                             .unwrap_or_else(|| resolve_agent_identity(&s, id))
                     };
-                    message.from = role.clone();
-                    message.display_source = Some(display_src);
-                    message.sender_agent_id = Some(real_agent_id);
+                    let provider = if id == "claude" {
+                        crate::daemon::task_graph::types::Provider::Claude
+                    } else {
+                        crate::daemon::task_graph::types::Provider::Codex
+                    };
+                    message.source = MessageSource::Agent {
+                        agent_id: real_agent_id,
+                        role: role.clone(),
+                        provider,
+                        display_source: Some(display_src),
+                    };
                     let status = message.status.unwrap_or(MessageStatus::Done);
                     message.status = Some(status);
                     {
@@ -355,14 +363,24 @@ mod tests {
     };
     use crate::daemon::state::DaemonState;
     use crate::daemon::task_graph::types::Provider;
-    use crate::daemon::types::{BridgeMessage, MessageStatus};
+    use crate::daemon::types::{BridgeMessage, MessageSource, MessageStatus, MessageTarget};
 
     fn make_msg(to: &str, content: &str, status: MessageStatus) -> BridgeMessage {
+        let target = if to == "user" {
+            MessageTarget::User
+        } else {
+            MessageTarget::Role { role: to.to_string() }
+        };
         BridgeMessage {
             id: "test".into(),
-            from: "lead".into(),
-            display_source: Some("claude".into()),
-            to: to.to_string(),
+            source: MessageSource::Agent {
+                agent_id: "claude".into(),
+                role: "lead".into(),
+                provider: Provider::Claude,
+                display_source: Some("claude".into()),
+            },
+            target,
+            reply_target: None,
             content: content.to_string(),
             timestamp: 1,
             reply_to: None,
@@ -370,8 +388,8 @@ mod tests {
             status: Some(status),
             task_id: None,
             session_id: None,
-            sender_agent_id: Some("claude".into()),
-            attachments: None,        }
+            attachments: None,
+        }
     }
 
     #[test]
@@ -434,9 +452,14 @@ mod tests {
     fn summarize_bridge_reply_reports_shape_and_lengths() {
         let message = BridgeMessage {
             id: "msg-1".into(),
-            from: "lead".into(),
-            display_source: Some("claude".into()),
-            to: "user".into(),
+            source: MessageSource::Agent {
+                agent_id: "claude".into(),
+                role: "lead".into(),
+                provider: Provider::Claude,
+                display_source: Some("claude".into()),
+            },
+            target: MessageTarget::User,
+            reply_target: None,
             content: "final answer".into(),
             timestamp: 1,
             reply_to: None,
@@ -444,14 +467,14 @@ mod tests {
             status: Some(MessageStatus::Done),
             task_id: Some("task-1".into()),
             session_id: Some("session-1".into()),
-            sender_agent_id: Some("claude".into()),
-            attachments: None,        };
+            attachments: None,
+        };
 
         let summary = summarize_bridge_message_shape(&message);
 
-        assert!(summary.contains("BridgeMessage{id,from,display_source,to,content,timestamp,reply_to,priority,status,task_id,session_id,sender_agent_id,attachments}"));
-        assert!(summary.contains("from=lead"));
-        assert!(summary.contains("to=user"));
+        assert!(summary.contains("BridgeMessage{id,source,target,reply_target,content,timestamp,reply_to,priority,status,task_id,session_id,attachments}"));
+        assert!(summary.contains("source=lead"));
+        assert!(summary.contains("target=user"));
         assert!(summary.contains("status=done"));
         assert!(summary.contains("content_len=12"));
         assert!(summary.contains("task_id=task-1"));

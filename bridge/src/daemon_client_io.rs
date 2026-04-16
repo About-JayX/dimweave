@@ -1,4 +1,4 @@
-use crate::types::{BridgeMessage, BridgeMsg, BridgeOutbound, DaemonInbound, DaemonMsg, MessageTarget, ParsedReply};
+use crate::types::{BridgeMessage, BridgeMsg, BridgeOutbound, DaemonInbound, DaemonMsg, MessageSource, ParsedReply, Provider};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, warn};
@@ -29,24 +29,26 @@ pub fn serialize_outbound(agent_id: &str, outbound: &BridgeOutbound) -> Result<S
     })
 }
 
-fn target_label(t: &MessageTarget) -> &str {
-    match t {
-        MessageTarget::User => "user",
-        MessageTarget::Role { role } => role,
-        MessageTarget::Agent { agent_id } => agent_id,
-    }
-}
-
-/// Convert structured `ParsedReply` to legacy `BridgeMessage` at the wire boundary.
-/// This temporary shim keeps the daemon wire envelope compatible until Task 7.
-fn to_wire_message(from: &str, reply: &ParsedReply) -> BridgeMessage {
+/// Build a structured `BridgeMessage` from a bridge `ParsedReply`.
+fn to_wire_message(agent_id: &str, reply: &ParsedReply) -> BridgeMessage {
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     let ts = chrono::Utc::now().timestamp_millis();
     BridgeMessage {
-        id: format!("claude_{ts}_{seq}"), from: from.into(), display_source: None,
-        to: target_label(&reply.target).into(), content: reply.content.clone(),
-        timestamp: ts as u64, reply_to: None, priority: None,
-        status: Some(reply.status), sender_agent_id: None, attachments: None,
+        id: format!("claude_{ts}_{seq}"),
+        source: MessageSource::Agent {
+            agent_id: agent_id.into(),
+            role: String::new(), // daemon stamps authoritative role
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: reply.target.clone(),
+        reply_target: None,
+        content: reply.content.clone(),
+        timestamp: ts as u64,
+        reply_to: None,
+        priority: None,
+        status: Some(reply.status),
+        attachments: None,
     }
 }
 

@@ -8,8 +8,8 @@ describe("MessageBubble", () => {
       <MessageBubbleView
         msg={{
           id: "msg_1",
-          from: "claude",
-          to: "user",
+          source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
+          target: { kind: "user" },
           content: "See attached",
           timestamp: 1,
           attachments: [

@@ -1,5 +1,6 @@
 use crate::daemon::{
-    types::{BridgeMessage, MessageStatus, MessageTarget},
+    task_graph::types::Provider,
+    types::{BridgeMessage, MessageSource, MessageStatus, MessageTarget},
     SharedState,
 };
 
@@ -33,17 +34,16 @@ pub(super) fn build_direct_sdk_gui_message(
         MessageStatus::Error => "claude_sdk_error",
         MessageStatus::InProgress => "claude_sdk",
     };
-    let target = MessageTarget::User;
     Some(BridgeMessage {
         id: format!("{prefix}_{}", chrono::Utc::now().timestamp_millis()),
-        from: role.to_string(),
-        display_source: Some(display_source.to_string()),
-        to: match &target {
-            MessageTarget::User => "user",
-            MessageTarget::Role { role } => role,
-            MessageTarget::Agent { agent_id } => agent_id,
-        }
-        .to_string(),
+        source: MessageSource::Agent {
+            agent_id: agent_id.to_string(),
+            role: role.to_string(),
+            provider: Provider::Claude,
+            display_source: Some(display_source.to_string()),
+        },
+        target: MessageTarget::User,
+        reply_target: None,
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
@@ -51,7 +51,6 @@ pub(super) fn build_direct_sdk_gui_message(
         status: Some(status),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some(agent_id.to_string()),
         attachments: None,
     })
 }

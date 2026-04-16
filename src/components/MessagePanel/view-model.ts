@@ -1,4 +1,5 @@
 import type { BridgeMessage } from "@/types";
+import { sourceRole } from "@/types";
 import type {
   ClaudeStreamState,
   CodexStreamState,
@@ -58,10 +59,11 @@ export function getMessageIdentityPresentation(message: BridgeMessage): {
   badgeSource: string;
   roleLabel: string | null;
 } {
-  const badgeSource = message.displaySource ?? message.from;
+  const role = sourceRole(message.source);
+  const badgeSource = message.source.displaySource ?? role;
   const roleLabel =
-    message.from !== badgeSource && !["user", "system"].includes(message.from)
-      ? message.from
+    role !== badgeSource && !["user", "system"].includes(role)
+      ? role
       : null;
   return { badgeSource, roleLabel };
 }
@@ -71,7 +73,7 @@ export function filterRenderableChatMessages(
 ): BridgeMessage[] {
   return messages.filter(
     (message) =>
-      message.from !== "system" &&
+      message.source.kind !== "system" &&
       hasMessagePayload(message.content, message.attachments),
   );
 }

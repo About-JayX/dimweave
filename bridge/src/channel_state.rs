@@ -68,20 +68,29 @@ fn build_meta(msg: &BridgeMessage) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::BridgeMessage;
+    use crate::types::{BridgeMessage, MessageSource, MessageTarget, Provider};
 
     fn msg(from: &str) -> BridgeMessage {
+        let source = match from {
+            "user" => MessageSource::User,
+            "system" => MessageSource::System,
+            _ => MessageSource::Agent {
+                agent_id: from.into(),
+                role: from.into(),
+                provider: Provider::Claude,
+                display_source: None,
+            },
+        };
         BridgeMessage {
             id: "msg-1".into(),
-            from: from.into(),
-            display_source: None,
-            to: "lead".into(),
+            source,
+            target: MessageTarget::Role { role: "lead".into() },
+            reply_target: None,
             content: "hello".into(),
             timestamp: 1,
             reply_to: None,
             priority: None,
             status: None,
-            sender_agent_id: None,
             attachments: None,
         }
     }
@@ -106,16 +115,15 @@ mod tests {
     #[test]
     fn sender_agent_id_is_forwarded_in_channel_meta() {
         let state = ChannelState::new();
-        let mut message = msg("coder");
-        message.sender_agent_id = Some("codex".into());
-        let notif = state.prepare_channel_message(&message).unwrap();
-        assert_eq!(notif["params"]["meta"]["sender_agent_id"], "codex");
+        // The `msg("coder")` helper creates a MessageSource::Agent with agent_id="coder"
+        let notif = state.prepare_channel_message(&msg("coder")).unwrap();
+        assert_eq!(notif["params"]["meta"]["sender_agent_id"], "coder");
     }
 
     #[test]
-    fn sender_agent_id_absent_when_none() {
+    fn sender_agent_id_absent_when_source_is_user() {
         let state = ChannelState::new();
-        let notif = state.prepare_channel_message(&msg("coder")).unwrap();
+        let notif = state.prepare_channel_message(&msg("user")).unwrap();
         assert!(notif["params"]["meta"]["sender_agent_id"].is_null());
     }
 

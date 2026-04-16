@@ -101,15 +101,15 @@ describe("MessageList", () => {
       [
         {
           id: "msg_1",
-          from: "claude",
-          to: "user",
+          source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
+          target: { kind: "user" },
           content: "Created the rollout plan",
           timestamp: 1,
         },
         {
           id: "msg_2",
-          from: "codex",
-          to: "user",
+          source: { kind: "agent", agentId: "codex", role: "coder", provider: "codex" },
+          target: { kind: "user" },
           content: "Attached the latest screenshot",
           timestamp: 2,
           attachments: [
@@ -220,8 +220,8 @@ describe("MessageList", () => {
     // Post-fix: route_message() ran before Done, so the final message is here.
     const finalMessage = {
       id: "msg_final",
-      from: "claude",
-      to: "user",
+      source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+      target: { kind: "user" as const },
       content: "Final report delivered to the user.",
       timestamp: 2,
     };
@@ -290,7 +290,7 @@ describe("MessageList", () => {
     renderToStaticMarkup(
       <MessageList
         messages={[{
-          id: "msg_1", from: "claude", to: "user",
+          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
           content: "Found the root cause", timestamp: 1,
         }]}
         searchActive={true}
@@ -325,7 +325,7 @@ describe("MessageList", () => {
     renderToStaticMarkup(
       <MessageList
         messages={[{
-          id: "msg_1", from: "claude", to: "user",
+          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
           content: "Found the root cause", timestamp: 1,
         }]}
         searchActive={false}
@@ -364,7 +364,7 @@ describe("MessageList", () => {
     renderToStaticMarkup(
       <MessageList
         messages={[{
-          id: "msg_1", from: "user", to: "claude",
+          id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
           content: "Start streaming", timestamp: 1,
         }]}
         searchActive={false}
@@ -383,7 +383,7 @@ describe("MessageList", () => {
     renderToStaticMarkup(
       <ML2
         messages={[{
-          id: "msg_1", from: "user", to: "claude",
+          id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
           content: "Start streaming", timestamp: 1,
         }]}
         searchActive={true}
@@ -416,7 +416,7 @@ describe("MessageList", () => {
     renderToStaticMarkup(
       <MessageList
         messages={[{
-          id: "msg_1", from: "claude", to: "user",
+          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
           content: "Streaming content", timestamp: 1,
         }]}
         searchActive={false}

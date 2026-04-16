@@ -337,7 +337,7 @@ async fn launch(
     {
         let mut i = 0;
         while i < buffered.len() {
-            let from_user = buffered[i].from == "user";
+            let from_user = buffered[i].is_from_user();
             let text = crate::daemon::routing::format_codex_input(&buffered[i]);
             if inject_tx.send((vec![serde_json::json!({"type":"text","text":text})], from_user)).await.is_err() {
                 let mut s = state.write().await;

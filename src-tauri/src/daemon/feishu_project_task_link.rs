@@ -2,7 +2,7 @@ use super::gui::{self};
 use super::gui_task;
 use super::routing;
 use super::SharedState;
-use crate::daemon::types::{Attachment, BridgeMessage};
+use crate::daemon::types::{Attachment, BridgeMessage, MessageSource, MessageTarget};
 use crate::feishu_project::types::FeishuProjectInboxItem;
 use serde_json::{json, Value};
 use tauri::AppHandle;
@@ -299,9 +299,9 @@ fn build_handoff_message(
     ));
     BridgeMessage {
         id: format!("fp_handoff_{task_id}_{now}"),
-        from: "system".into(),
-        display_source: Some("feishu_project".into()),
-        to: "lead".into(),
+        source: MessageSource::System,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: summary,
         timestamp: now,
         reply_to: None,
@@ -309,7 +309,6 @@ fn build_handoff_message(
         status: None,
         task_id: Some(task_id.into()),
         session_id: None,
-        sender_agent_id: None,
         attachments: Some(vec![Attachment {
             file_path: snapshot_path.into(),
             file_name: format!("{task_id}.json"),

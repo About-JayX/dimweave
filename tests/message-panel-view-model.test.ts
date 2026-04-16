@@ -12,22 +12,22 @@ describe("filterRenderableChatMessages", () => {
     const messages = [
       {
         id: "1",
-        from: "system",
-        to: "user",
+        source: { kind: "system" },
+        target: { kind: "user" },
         content: "system notice",
         timestamp: 1,
       },
       {
         id: "2",
-        from: "claude",
-        to: "user",
+        source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
+        target: { kind: "user" },
         content: "   \n\t",
         timestamp: 2,
       },
       {
         id: "3",
-        from: "codex",
-        to: "user",
+        source: { kind: "agent", agentId: "codex", role: "coder", provider: "codex" },
+        target: { kind: "user" },
         content: "visible",
         timestamp: 3,
       },
@@ -44,9 +44,8 @@ describe("getMessageIdentityPresentation", () => {
     expect(
       getMessageIdentityPresentation({
         id: "1",
-        from: "coder",
-        displaySource: "claude",
-        to: "user",
+        source: { kind: "agent", agentId: "claude", role: "coder", provider: "claude", displaySource: "claude" },
+        target: { kind: "user" },
         content: "done",
         timestamp: 1,
       } as any),
@@ -60,8 +59,8 @@ describe("getMessageIdentityPresentation", () => {
     expect(
       getMessageIdentityPresentation({
         id: "2",
-        from: "user",
-        to: "lead",
+        source: { kind: "user" },
+        target: { kind: "role", role: "lead" },
         content: "hello",
         timestamp: 1,
       } as any),

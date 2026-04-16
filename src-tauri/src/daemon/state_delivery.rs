@@ -1,4 +1,5 @@
 use super::*;
+use crate::daemon::types::MessageTarget;
 
 impl DaemonState {
     pub fn should_route_claude_sdk_text_directly(&self) -> bool {
@@ -76,7 +77,7 @@ impl DaemonState {
     pub fn migrate_buffered_role(&mut self, old_role: &str, new_role: &str) {
         for msg in &mut self.buffered_messages {
             if msg.target_str() == old_role {
-                msg.to = new_role.to_string();
+                msg.target = MessageTarget::Role { role: new_role.to_string() };
             }
         }
     }

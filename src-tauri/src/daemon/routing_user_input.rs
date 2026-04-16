@@ -1,7 +1,7 @@
 use crate::daemon::{
     gui, routing,
     state::DaemonState,
-    types::{Attachment, BridgeMessage, MessageTarget},
+    types::{Attachment, BridgeMessage, MessageSource, MessageTarget},
     SharedState,
 };
 use tauri::AppHandle;
@@ -174,9 +174,13 @@ fn build_user_message(
     let suffix = if to == "user" { String::new() } else { format!("_{to}") };
     BridgeMessage {
         id: format!("user_{now}{suffix}"),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: to.to_string(),
+        source: MessageSource::User,
+        target: if to == "user" {
+            MessageTarget::User
+        } else {
+            MessageTarget::Role { role: to.to_string() }
+        },
+        reply_target: None,
         content: content.to_string(),
         timestamp: now,
         reply_to: None,
@@ -184,7 +188,6 @@ fn build_user_message(
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
         attachments: attachments.clone(),
     }
 }

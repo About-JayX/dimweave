@@ -7,21 +7,19 @@ describe("areMessageBubblePropsEqual", () => {
     const prev = {
       msg: {
         id: "1",
-        from: "lead",
-        to: "user",
+        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const, displaySource: "claude" },
+        target: { kind: "user" as const },
         content: "same content",
         timestamp: 123,
-        displaySource: "claude",
       },
     };
     const next = {
       msg: {
         id: "1",
-        from: "lead",
-        to: "user",
+        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const, displaySource: "claude" },
+        target: { kind: "user" as const },
         content: "same content",
         timestamp: 123,
-        displaySource: "claude",
       },
     };
 
@@ -32,8 +30,8 @@ describe("areMessageBubblePropsEqual", () => {
     const prev = {
       msg: {
         id: "1",
-        from: "lead",
-        to: "user",
+        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+        target: { kind: "user" as const },
         content: "before",
         timestamp: 123,
       },
@@ -41,8 +39,8 @@ describe("areMessageBubblePropsEqual", () => {
     const next = {
       msg: {
         id: "1",
-        from: "lead",
-        to: "user",
+        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+        target: { kind: "user" as const },
         content: "after",
         timestamp: 123,
       },

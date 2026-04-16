@@ -5,7 +5,7 @@ pub use crate::daemon::routing_user_input::resolve_user_targets_for_task;
 pub use crate::daemon::routing_user_input::route_user_input;
 use crate::daemon::{
     routing_display,
-    types::{BridgeMessage, ToAgent},
+    types::{BridgeMessage, MessageTarget, ToAgent},
     SharedState,
 };
 use tauri::AppHandle;
@@ -82,7 +82,12 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         .and_then(|sid| apply_reply_target(sid, msg.target_str()));
     let was_redirected = redirect.is_some();
     let msg = if let Some(new_to) = redirect {
-        BridgeMessage { to: new_to, ..msg }
+        let new_target = if new_to == "user" {
+            MessageTarget::User
+        } else {
+            MessageTarget::Agent { agent_id: new_to }
+        };
+        BridgeMessage { target: new_target, ..msg }
     } else {
         msg
     };

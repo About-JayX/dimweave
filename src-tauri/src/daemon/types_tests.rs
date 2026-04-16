@@ -211,11 +211,11 @@ fn serialize_online_agents_response_to_agent() {
     assert_eq!(json["online_agents"][0]["agentId"], "claude");
 }
 
-// ── DirectedBridgeMessage serialization tests ───────────────────
+// ── BridgeMessage serialization tests ───────────────────
 
 #[test]
 fn directed_msg_user_to_role_target() {
-    let msg = DirectedBridgeMessage {
+    let msg = BridgeMessage {
         id: "msg_1".into(),
         source: MessageSource::User,
         target: MessageTarget::Role { role: "coder".into() },
@@ -243,7 +243,7 @@ fn directed_msg_user_to_role_target() {
 #[test]
 fn directed_msg_agent_to_agent_with_reply_target() {
     use crate::daemon::task_graph::types::Provider;
-    let msg = DirectedBridgeMessage {
+    let msg = BridgeMessage {
         id: "msg_2".into(),
         source: MessageSource::Agent {
             agent_id: "agent_lead_1".into(),
@@ -283,7 +283,7 @@ fn directed_msg_agent_to_agent_with_reply_target() {
 #[test]
 fn directed_msg_roundtrip() {
     use crate::daemon::task_graph::types::Provider;
-    let msg = DirectedBridgeMessage {
+    let msg = BridgeMessage {
         id: "msg_3".into(),
         source: MessageSource::Agent {
             agent_id: "agent_coder_2".into(),
@@ -303,7 +303,7 @@ fn directed_msg_roundtrip() {
         attachments: None,
     };
     let json_str = serde_json::to_string(&msg).unwrap();
-    let decoded: DirectedBridgeMessage = serde_json::from_str(&json_str).unwrap();
+    let decoded: BridgeMessage = serde_json::from_str(&json_str).unwrap();
     assert_eq!(decoded.id, "msg_3");
     assert_eq!(decoded.source, MessageSource::Agent {
         agent_id: "agent_coder_2".into(),

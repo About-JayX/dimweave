@@ -3,7 +3,8 @@ use crate::daemon::{
     state::DaemonState,
     task_graph::types::{CreateSessionParams, Provider, SessionRole},
     types::{
-        BridgeMessage, MessageStatus, ProviderConnectionMode, ProviderConnectionState, ToAgent,
+        BridgeMessage, MessageSource, MessageStatus, MessageTarget,
+        ProviderConnectionMode, ProviderConnectionState, ToAgent,
     },
 };
 use std::sync::Arc;
@@ -32,9 +33,9 @@ async fn route_to_live_codex_when_offline_claude_shares_role() {
     }
     let msg = BridgeMessage {
         id: "shared-role-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "please summarize".into(),
         timestamp: 1,
         reply_to: None,
@@ -42,8 +43,8 @@ async fn route_to_live_codex_when_offline_claude_shares_role() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Delivered),
@@ -71,9 +72,9 @@ async fn shared_role_both_offline_still_buffers() {
     }
     let msg = BridgeMessage {
         id: "both-off-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "hello".into(),
         timestamp: 1,
         reply_to: None,
@@ -81,8 +82,8 @@ async fn shared_role_both_offline_still_buffers() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Buffered),
@@ -108,9 +109,9 @@ async fn route_to_live_claude_when_offline_codex_shares_role() {
     }
     let msg = BridgeMessage {
         id: "mirror-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "hello".into(),
         timestamp: 1,
         reply_to: None,
@@ -118,8 +119,8 @@ async fn route_to_live_claude_when_offline_codex_shares_role() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
     let result = route_message_inner(&state, msg).await;
     assert!(
         matches!(result, RouteResult::Delivered),
@@ -168,9 +169,9 @@ async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not
 
     let msg = BridgeMessage {
         id: "stale-session-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "route only to the current task".into(),
         timestamp: 1,
         reply_to: None,
@@ -178,8 +179,8 @@ async fn stale_online_agent_for_same_role_is_buffered_when_task_session_does_not
         status: None,
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
@@ -278,9 +279,14 @@ async fn lead_to_coder_uses_target_coder_session_not_sender_lead_session() {
         seeded_task_with_codex_lead_and_claude_coder().await;
     let msg = BridgeMessage {
         id: "lead-to-coder-1".into(),
-        from: "lead".into(),
-        display_source: Some("codex".into()),
-        to: "coder".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "lead".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "implement task 1".into(),
         timestamp: 1,
         reply_to: None,
@@ -288,8 +294,8 @@ async fn lead_to_coder_uses_target_coder_session_not_sender_lead_session() {
         status: Some(MessageStatus::Done),
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
-        sender_agent_id: Some("codex".into()),
-        attachments: None,    };
+        attachments: None,
+    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Delivered));
@@ -301,9 +307,14 @@ async fn coder_to_lead_uses_target_lead_session_not_sender_coder_session() {
         seeded_task_with_codex_lead_and_claude_coder().await;
     let msg = BridgeMessage {
         id: "coder-to-lead-1".into(),
-        from: "coder".into(),
-        display_source: Some("claude".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "claude".into(),
+            role: "coder".into(),
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "task 1 complete".into(),
         timestamp: 2,
         reply_to: None,
@@ -311,8 +322,8 @@ async fn coder_to_lead_uses_target_lead_session_not_sender_coder_session() {
         status: Some(MessageStatus::Done),
         task_id: Some(task_id),
         session_id: Some(coder_session_id),
-        sender_agent_id: Some("claude".into()),
-        attachments: None,    };
+        attachments: None,
+    };
 
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Delivered));
@@ -357,9 +368,9 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
 
     let msg = BridgeMessage {
         id: "stale-session-reason-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "route only to the current task".into(),
         timestamp: 1,
         reply_to: None,
@@ -367,8 +378,8 @@ async fn stale_online_agent_reports_task_session_mismatch_reason() {
         status: None,
         task_id: Some(task_id),
         session_id: Some(lead_session_id),
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
 
     let outcome = route_message_inner_with_meta(&state, msg).await;
     assert!(matches!(outcome.result, RouteResult::Buffered));
@@ -415,9 +426,9 @@ async fn agent_id_routing_broadcast_delivers_to_both_providers_for_same_role() {
     };
     let msg = BridgeMessage {
         id: "broadcast-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "implement feature X".into(),
         timestamp: 1,
         reply_to: None,
@@ -425,7 +436,6 @@ async fn agent_id_routing_broadcast_delivers_to_both_providers_for_same_role() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -470,9 +480,9 @@ async fn agent_id_routing_two_same_provider_agents_both_receive_delivery() {
     };
     let msg = BridgeMessage {
         id: "two-claude-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "implement feature X".into(),
         timestamp: 1,
         reply_to: None,
@@ -480,7 +490,6 @@ async fn agent_id_routing_two_same_provider_agents_both_receive_delivery() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -530,9 +539,9 @@ async fn agent_id_routing_no_fallback_to_provider_channel_in_per_agent_mode() {
     };
     let msg = BridgeMessage {
         id: "no-fallback-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "implement feature".into(),
         timestamp: 1,
         reply_to: None,
@@ -540,7 +549,6 @@ async fn agent_id_routing_no_fallback_to_provider_channel_in_per_agent_mode() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -578,9 +586,9 @@ async fn agent_id_routing_missing_role_drops_when_task_has_agents() {
     };
     let msg = BridgeMessage {
         id: "missing-role-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "reviewer".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "reviewer".into() },
+        reply_target: None,
         content: "review please".into(),
         timestamp: 1,
         reply_to: None,
@@ -588,7 +596,6 @@ async fn agent_id_routing_missing_role_drops_when_task_has_agents() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -624,9 +631,9 @@ async fn agent_targeted_delivers_to_one_agent_not_all_same_role() {
     // Target codex agent by agent_id, not by role "lead"
     let msg = BridgeMessage {
         id: "agent-target-task-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: codex_agent_id,
+        source: MessageSource::User,
+        target: MessageTarget::Agent { agent_id: codex_agent_id },
+        reply_target: None,
         content: "direct to codex lead".into(),
         timestamp: 1,
         reply_to: None,
@@ -634,7 +641,6 @@ async fn agent_targeted_delivers_to_one_agent_not_all_same_role() {
         status: Some(MessageStatus::InProgress),
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -659,9 +665,9 @@ async fn agent_targeted_unknown_id_in_task_drops() {
         seeded_task_with_codex_lead_and_claude_coder().await;
     let msg = BridgeMessage {
         id: "agent-target-unknown-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "nonexistent-agent-xyz".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Agent { agent_id: "nonexistent-agent-xyz".into() },
+        reply_target: None,
         content: "should drop".into(),
         timestamp: 1,
         reply_to: None,
@@ -669,7 +675,6 @@ async fn agent_targeted_unknown_id_in_task_drops() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -688,9 +693,9 @@ async fn role_targeted_still_broadcasts_after_agent_routing_added() {
     // Target "coder" role — should reach the claude agent (which is coder)
     let msg = BridgeMessage {
         id: "role-target-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "role broadcast to coder".into(),
         timestamp: 1,
         reply_to: None,
@@ -698,7 +703,6 @@ async fn role_targeted_still_broadcasts_after_agent_routing_added() {
         status: None,
         task_id: Some(task_id),
         session_id: Some(lead_sid),
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -728,9 +732,9 @@ async fn agent_id_routing_missing_role_buffers_when_task_has_no_agents() {
     };
     let msg = BridgeMessage {
         id: "no-agents-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "lead".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "hello".into(),
         timestamp: 1,
         reply_to: None,
@@ -738,7 +742,6 @@ async fn agent_id_routing_missing_role_buffers_when_task_has_no_agents() {
         status: None,
         task_id: Some(task_id),
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -785,9 +788,14 @@ async fn reply_target_two_leads_separate_coder_chains() {
     // lead_1 → coder_1 (agent-targeted delegation)
     let msg1 = BridgeMessage {
         id: "del-l1-c1".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: coder1_id.clone(),
+        source: MessageSource::Agent {
+            agent_id: lead1_id.clone(),
+            role: "lead".into(),
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: MessageTarget::Agent { agent_id: coder1_id.clone() },
+        reply_target: None,
         content: "task A".into(),
         timestamp: 1,
         reply_to: None,
@@ -795,7 +803,6 @@ async fn reply_target_two_leads_separate_coder_chains() {
         status: Some(MessageStatus::InProgress),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(lead1_id.clone()),
         attachments: None,
     };
     assert!(matches!(route_message_inner(&state, msg1).await, RouteResult::Delivered));
@@ -803,9 +810,14 @@ async fn reply_target_two_leads_separate_coder_chains() {
     // lead_2 → coder_2 (agent-targeted delegation)
     let msg2 = BridgeMessage {
         id: "del-l2-c2".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: coder2_id.clone(),
+        source: MessageSource::Agent {
+            agent_id: lead2_id.clone(),
+            role: "lead".into(),
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: MessageTarget::Agent { agent_id: coder2_id.clone() },
+        reply_target: None,
         content: "task B".into(),
         timestamp: 2,
         reply_to: None,
@@ -813,7 +825,6 @@ async fn reply_target_two_leads_separate_coder_chains() {
         status: Some(MessageStatus::InProgress),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(lead2_id.clone()),
         attachments: None,
     };
     assert!(matches!(route_message_inner(&state, msg2).await, RouteResult::Delivered));
@@ -821,9 +832,14 @@ async fn reply_target_two_leads_separate_coder_chains() {
     // coder_1 replies to "lead" → should go to lead_1 only
     let r1 = BridgeMessage {
         id: "reply-c1".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: coder1_id.clone(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "A done".into(),
         timestamp: 3,
         reply_to: None,
@@ -831,7 +847,6 @@ async fn reply_target_two_leads_separate_coder_chains() {
         status: Some(MessageStatus::Done),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(coder1_id.clone()),
         attachments: None,
     };
     assert!(matches!(route_message_inner(&state, r1).await, RouteResult::Delivered));
@@ -840,9 +855,14 @@ async fn reply_target_two_leads_separate_coder_chains() {
     // coder_2 replies to "lead" → should go to lead_2 only
     let r2 = BridgeMessage {
         id: "reply-c2".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: coder2_id.clone(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "B done".into(),
         timestamp: 4,
         reply_to: None,
@@ -850,7 +870,6 @@ async fn reply_target_two_leads_separate_coder_chains() {
         status: Some(MessageStatus::Done),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(coder2_id.clone()),
         attachments: None,
     };
     assert!(matches!(route_message_inner(&state, r2).await, RouteResult::Delivered));
@@ -887,9 +906,14 @@ async fn reply_target_explicit_agent_override_bypasses_redirect() {
     // lead_1 → coder_1 (records coder_1 → lead_1)
     let del = BridgeMessage {
         id: "del-override".into(),
-        from: "lead".into(),
-        display_source: Some("claude".into()),
-        to: coder1_id.clone(),
+        source: MessageSource::Agent {
+            agent_id: lead1_id.clone(),
+            role: "lead".into(),
+            provider: Provider::Claude,
+            display_source: Some("claude".into()),
+        },
+        target: MessageTarget::Agent { agent_id: coder1_id.clone() },
+        reply_target: None,
         content: "work".into(),
         timestamp: 1,
         reply_to: None,
@@ -897,7 +921,6 @@ async fn reply_target_explicit_agent_override_bypasses_redirect() {
         status: Some(MessageStatus::InProgress),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(lead1_id.clone()),
         attachments: None,
     };
     assert!(matches!(route_message_inner(&state, del).await, RouteResult::Delivered));
@@ -905,9 +928,14 @@ async fn reply_target_explicit_agent_override_bypasses_redirect() {
     // coder_1 explicitly targets lead_2 by agent_id → bypasses redirect
     let explicit = BridgeMessage {
         id: "explicit-override".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: lead2_id.clone(),
+        source: MessageSource::Agent {
+            agent_id: coder1_id,
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Agent { agent_id: lead2_id.clone() },
+        reply_target: None,
         content: "to lead_2 directly".into(),
         timestamp: 2,
         reply_to: None,
@@ -915,7 +943,6 @@ async fn reply_target_explicit_agent_override_bypasses_redirect() {
         status: Some(MessageStatus::Done),
         task_id: Some(task_id.clone()),
         session_id: None,
-        sender_agent_id: Some(coder1_id),
         attachments: None,
     };
     assert!(matches!(

@@ -42,10 +42,10 @@ pub struct Attachment {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
     pub id: String,
-    pub from: String,
+    pub source: MessageSource,
+    pub target: MessageTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_source: Option<String>,
-    pub to: String,
+    pub reply_target: Option<MessageTarget>,
     pub content: String,
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,20 +54,44 @@ pub struct BridgeMessage {
     pub priority: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<MessageStatus>,
-    /// The agent instance that originated this message (e.g. "claude", "codex").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sender_agent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<Attachment>>,
 }
 
 impl BridgeMessage {
-    pub fn is_from_user(&self) -> bool { self.from == "user" }
-    pub fn source_role(&self) -> &str { &self.from }
-    pub fn target_str(&self) -> &str { &self.to }
-    pub fn is_to_user(&self) -> bool { self.to == "user" }
-    pub fn source_agent_id(&self) -> Option<&str> { self.sender_agent_id.as_deref() }
-    pub fn source_display(&self) -> Option<&str> { self.display_source.as_deref() }
+    pub fn is_from_user(&self) -> bool { matches!(self.source, MessageSource::User) }
+
+    pub fn source_role(&self) -> &str {
+        match &self.source {
+            MessageSource::User => "user",
+            MessageSource::System => "system",
+            MessageSource::Agent { role, .. } => role,
+        }
+    }
+
+    pub fn target_str(&self) -> &str {
+        match &self.target {
+            MessageTarget::User => "user",
+            MessageTarget::Role { role } => role,
+            MessageTarget::Agent { agent_id } => agent_id,
+        }
+    }
+
+    pub fn is_to_user(&self) -> bool { matches!(self.target, MessageTarget::User) }
+
+    pub fn source_agent_id(&self) -> Option<&str> {
+        match &self.source {
+            MessageSource::Agent { agent_id, .. } => Some(agent_id),
+            _ => None,
+        }
+    }
+
+    pub fn source_display(&self) -> Option<&str> {
+        match &self.source {
+            MessageSource::Agent { display_source, .. } => display_source.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -192,39 +216,13 @@ pub enum MessageTarget {
     },
 }
 
-/// Migration-target message type with structured `source`/`target`/`reply_target`.
-/// Coexists with legacy `BridgeMessage` until all producers/consumers migrate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirectedBridgeMessage {
-    pub id: String,
-    pub source: MessageSource,
-    pub target: MessageTarget,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_target: Option<MessageTarget>,
-    pub content: String,
-    pub timestamp: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub priority: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<MessageStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<Attachment>>,
-}
-
 #[cfg(test)]
-mod directed_tests {
+mod tests {
     use super::*;
 
     #[test]
-    fn directed_msg_user_to_role() {
-        let msg = DirectedBridgeMessage {
+    fn bridge_msg_user_to_role() {
+        let msg = BridgeMessage {
             id: "msg_1".into(),
             source: MessageSource::User,
             target: MessageTarget::Role { role: "coder".into() },
@@ -234,21 +232,18 @@ mod directed_tests {
             reply_to: None,
             priority: None,
             status: None,
-            task_id: Some("t1".into()),
-            session_id: None,
             attachments: None,
         };
         let json = serde_json::to_value(&msg).unwrap();
         assert_eq!(json["source"]["kind"], "user");
         assert_eq!(json["target"]["kind"], "role");
         assert_eq!(json["target"]["role"], "coder");
-        assert_eq!(json["taskId"], "t1");
         assert!(json.get("replyTarget").is_none());
     }
 
     #[test]
-    fn directed_msg_agent_to_agent_with_reply_target() {
-        let msg = DirectedBridgeMessage {
+    fn bridge_msg_agent_to_agent_with_reply_target() {
+        let msg = BridgeMessage {
             id: "msg_2".into(),
             source: MessageSource::Agent {
                 agent_id: "lead_1".into(),
@@ -263,15 +258,11 @@ mod directed_tests {
             reply_to: None,
             priority: None,
             status: Some(MessageStatus::InProgress),
-            task_id: None,
-            session_id: None,
             attachments: None,
         };
         let json = serde_json::to_value(&msg).unwrap();
         assert_eq!(json["source"]["kind"], "agent");
         assert_eq!(json["source"]["agentId"], "lead_1");
-        assert_eq!(json["source"]["provider"], "claude");
-        assert_eq!(json["source"]["displaySource"], "claude");
         assert_eq!(json["target"]["kind"], "agent");
         assert_eq!(json["target"]["agentId"], "coder_2");
         assert_eq!(json["replyTarget"]["kind"], "agent");
@@ -280,8 +271,8 @@ mod directed_tests {
     }
 
     #[test]
-    fn directed_msg_roundtrip() {
-        let msg = DirectedBridgeMessage {
+    fn bridge_msg_roundtrip() {
+        let msg = BridgeMessage {
             id: "msg_3".into(),
             source: MessageSource::Agent {
                 agent_id: "c1".into(),
@@ -296,19 +287,11 @@ mod directed_tests {
             reply_to: Some("msg_2".into()),
             priority: None,
             status: Some(MessageStatus::Done),
-            task_id: None,
-            session_id: None,
             attachments: None,
         };
         let json_str = serde_json::to_string(&msg).unwrap();
-        let decoded: DirectedBridgeMessage = serde_json::from_str(&json_str).unwrap();
+        let decoded: BridgeMessage = serde_json::from_str(&json_str).unwrap();
         assert_eq!(decoded.id, "msg_3");
-        assert_eq!(decoded.source, MessageSource::Agent {
-            agent_id: "c1".into(),
-            role: "coder".into(),
-            provider: Provider::Codex,
-            display_source: None,
-        });
         assert_eq!(decoded.target, MessageTarget::User);
         assert_eq!(decoded.reply_target, None);
         assert_eq!(decoded.status, Some(MessageStatus::Done));

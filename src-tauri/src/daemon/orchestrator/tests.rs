@@ -1,14 +1,34 @@
 use crate::daemon::orchestrator::task_flow;
 use crate::daemon::task_graph::types::*;
 use crate::daemon::task_graph::TaskGraphStore;
-use crate::daemon::types::{BridgeMessage, MessageStatus};
+use crate::daemon::types::{BridgeMessage, MessageSource, MessageTarget, MessageStatus};
+
+fn make_source(role: &str) -> MessageSource {
+    match role {
+        "user" => MessageSource::User,
+        "system" => MessageSource::System,
+        _ => MessageSource::Agent {
+            agent_id: "test".into(),
+            role: role.into(),
+            provider: Provider::Claude,
+            display_source: None,
+        },
+    }
+}
+
+fn make_target(role: &str) -> MessageTarget {
+    match role {
+        "user" => MessageTarget::User,
+        _ => MessageTarget::Role { role: role.into() },
+    }
+}
 
 fn msg(from: &str, to: &str, status: MessageStatus) -> BridgeMessage {
     BridgeMessage {
         id: format!("{from}_to_{to}"),
-        from: from.into(),
-        display_source: None,
-        to: to.into(),
+        source: make_source(from),
+        target: make_target(to),
+        reply_target: None,
         content: "test".into(),
         timestamp: 1,
         reply_to: None,
@@ -16,8 +36,8 @@ fn msg(from: &str, to: &str, status: MessageStatus) -> BridgeMessage {
         status: Some(status),
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    }
+        attachments: None,
+    }
 }
 
 #[test]

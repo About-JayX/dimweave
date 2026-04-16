@@ -1,4 +1,5 @@
 import type { BridgeMessage } from "@/types";
+import { sourceRole } from "@/types";
 
 export interface ExpandableTextState {
   text: string;
@@ -46,8 +47,8 @@ export function filterMessagesByQuery(
   return messages.filter((message) => {
     const haystacks = [
       message.content,
-      message.from,
-      message.displaySource,
+      sourceRole(message.source),
+      message.source.displaySource,
       ...(message.attachments?.map((attachment) => attachment.fileName) ?? []),
     ];
     return haystacks.some((value) => value?.toLowerCase().includes(needle));

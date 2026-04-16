@@ -1,5 +1,9 @@
 use super::*;
-use crate::daemon::{state::DaemonState, types::BridgeMessage};
+use crate::daemon::{
+    state::DaemonState,
+    task_graph::types::Provider,
+    types::{BridgeMessage, MessageSource, MessageTarget},
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -33,9 +37,14 @@ async fn route_to_claude_from_unknown_sender_drops() {
     }
     let msg = BridgeMessage {
         id: "msg-1".into(),
-        from: "intruder".into(),
-        display_source: None,
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "intruder".into(),
+            role: "intruder".into(),
+            provider: Provider::Claude,
+            display_source: None,
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "hello".into(),
         timestamp: 1,
         reply_to: None,
@@ -43,8 +52,8 @@ async fn route_to_claude_from_unknown_sender_drops() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Dropped));
 }
@@ -64,9 +73,9 @@ async fn agent_targeted_to_claude_delivers_when_online() {
     // Target "claude" by agent_id, not by role "lead"
     let msg = BridgeMessage {
         id: "agent-target-1".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "claude".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Agent { agent_id: "claude".into() },
+        reply_target: None,
         content: "direct to claude".into(),
         timestamp: 1,
         reply_to: None,
@@ -74,7 +83,6 @@ async fn agent_targeted_to_claude_delivers_when_online() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -93,9 +101,9 @@ async fn agent_targeted_to_codex_delivers_when_online() {
     }
     let msg = BridgeMessage {
         id: "agent-target-2".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "codex".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Agent { agent_id: "codex".into() },
+        reply_target: None,
         content: "direct to codex".into(),
         timestamp: 1,
         reply_to: None,
@@ -103,7 +111,6 @@ async fn agent_targeted_to_codex_delivers_when_online() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
@@ -121,9 +128,9 @@ async fn agent_targeted_to_offline_agent_buffers() {
     }
     let msg = BridgeMessage {
         id: "agent-target-3".into(),
-        from: "user".into(),
-        display_source: Some("user".into()),
-        to: "claude".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Agent { agent_id: "claude".into() },
+        reply_target: None,
         content: "buffered".into(),
         timestamp: 1,
         reply_to: None,
@@ -131,22 +138,26 @@ async fn agent_targeted_to_offline_agent_buffers() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
         attachments: None,
     };
     let result = route_message_inner(&state, msg).await;
     assert!(matches!(result, RouteResult::Buffered));
     assert_eq!(state.read().await.buffered_messages.len(), 1);
-    assert_eq!(state.read().await.buffered_messages[0].to, "claude");
+    assert_eq!(state.read().await.buffered_messages[0].target_str(), "claude");
 }
 
 #[tokio::test]
 async fn format_ndjson_user_message_wraps_channel_payload() {
     let msg = BridgeMessage {
         id: "msg-1".into(),
-        from: "coder".into(),
-        display_source: None,
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: None,
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "finished".into(),
         timestamp: 1,
         reply_to: None,
@@ -154,8 +165,8 @@ async fn format_ndjson_user_message_wraps_channel_payload() {
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
 
     let ndjson = format_ndjson_user_message(&msg).await;
     let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();

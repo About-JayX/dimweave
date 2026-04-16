@@ -79,10 +79,10 @@ pub struct Attachment {
 #[serde(rename_all = "camelCase")]
 pub struct BridgeMessage {
     pub id: String,
-    pub from: String,
+    pub source: MessageSource,
+    pub target: MessageTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_source: Option<String>,
-    pub to: String,
+    pub reply_target: Option<MessageTarget>,
     pub content: String,
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,39 +95,57 @@ pub struct BridgeMessage {
     pub task_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
-    /// The agent instance that originated this message (e.g. "claude", "codex").
-    /// Set by the daemon on inbound AgentReply; distinct from `from` (which is the role).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sender_agent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<Attachment>>,
 }
 
 impl BridgeMessage {
-    // ── Structured accessors (backend hard-cut) ─────────────────
-    // Backend code MUST use these instead of reading `from`/`to`/
-    // `display_source`/`sender_agent_id` directly.  The raw fields
-    // remain only for frontend wire serialization (Task 7).
+    pub fn is_from_user(&self) -> bool { matches!(self.source, MessageSource::User) }
+    pub fn is_from_system(&self) -> bool { matches!(self.source, MessageSource::System) }
 
-    pub fn is_from_user(&self) -> bool { self.from == "user" }
-    pub fn is_from_system(&self) -> bool { self.from == "system" }
-    /// The role string of the message originator.
-    pub fn source_role(&self) -> &str { &self.from }
-    /// The raw target string (role name, agent id, or "user").
-    pub fn target_str(&self) -> &str { &self.to }
-    pub fn is_to_user(&self) -> bool { self.to == "user" }
-    /// The concrete agent instance that originated this message.
-    pub fn source_agent_id(&self) -> Option<&str> { self.sender_agent_id.as_deref() }
-    /// Display-friendly source label (e.g. "claude", "codex").
-    pub fn source_display(&self) -> Option<&str> { self.display_source.as_deref() }
+    pub fn source_role(&self) -> &str {
+        match &self.source {
+            MessageSource::User => "user",
+            MessageSource::System => "system",
+            MessageSource::Agent { role, .. } => role,
+        }
+    }
+
+    pub fn target_str(&self) -> &str {
+        match &self.target {
+            MessageTarget::User => "user",
+            MessageTarget::Role { role } => role,
+            MessageTarget::Agent { agent_id } => agent_id,
+        }
+    }
+
+    pub fn is_to_user(&self) -> bool { matches!(self.target, MessageTarget::User) }
+
+    pub fn source_agent_id(&self) -> Option<&str> {
+        match &self.source {
+            MessageSource::Agent { agent_id, .. } => Some(agent_id),
+            _ => None,
+        }
+    }
+
+    pub fn source_display(&self) -> Option<&str> {
+        match &self.source {
+            MessageSource::Agent { display_source, .. } => display_source.as_deref(),
+            _ => None,
+        }
+    }
 
     #[cfg(test)]
     pub fn system(content: &str, to: &str) -> Self {
         Self {
             id: format!("sys_{}", chrono::Utc::now().timestamp_millis()),
-            from: "system".into(),
-            display_source: Some("system".into()),
-            to: to.into(),
+            source: MessageSource::System,
+            target: if to == "user" {
+                MessageTarget::User
+            } else {
+                MessageTarget::Role { role: to.into() }
+            },
+            reply_target: None,
             content: content.into(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             reply_to: None,
@@ -135,7 +153,6 @@ impl BridgeMessage {
             status: None,
             task_id: None,
             session_id: None,
-            sender_agent_id: None,
             attachments: None,
         }
     }
@@ -242,32 +259,6 @@ pub enum MessageTarget {
         #[serde(rename = "agentId")]
         agent_id: String,
     },
-}
-
-/// Migration-target message type with structured `source`/`target`/`reply_target`.
-/// Coexists with legacy `BridgeMessage` until all producers/consumers migrate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirectedBridgeMessage {
-    pub id: String,
-    pub source: MessageSource,
-    pub target: MessageTarget,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_target: Option<MessageTarget>,
-    pub content: String,
-    pub timestamp: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reply_to: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub priority: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<MessageStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub task_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attachments: Option<Vec<Attachment>>,
 }
 
 #[cfg(test)]

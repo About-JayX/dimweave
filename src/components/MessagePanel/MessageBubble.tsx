@@ -12,11 +12,12 @@ export function areMessageBubblePropsEqual(
 ): boolean {
   return (
     prev.msg.id === next.msg.id &&
-    prev.msg.from === next.msg.from &&
-    prev.msg.to === next.msg.to &&
+    prev.msg.source.kind === next.msg.source.kind &&
+    prev.msg.source.role === next.msg.source.role &&
+    prev.msg.target.kind === next.msg.target.kind &&
     prev.msg.content === next.msg.content &&
     prev.msg.timestamp === next.msg.timestamp &&
-    prev.msg.displaySource === next.msg.displaySource &&
+    prev.msg.source.displaySource === next.msg.source.displaySource &&
     prev.msg.attachments?.length === next.msg.attachments?.length
   );
 }
@@ -96,7 +97,7 @@ export function MessageBubbleView({
   msg: BridgeMessage;
   onOpenImage?: (attachment: Attachment) => void;
 }) {
-  const isUser = msg.from === "user";
+  const isUser = msg.source.kind === "user";
   const { badgeSource, roleLabel } = getMessageIdentityPresentation(msg);
   const surface = getMessageSurfacePresentation(badgeSource);
   return (

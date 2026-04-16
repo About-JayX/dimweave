@@ -1,4 +1,6 @@
 use crate::daemon::types::{BridgeMessage, MessageStatus};
+#[cfg(test)]
+use crate::daemon::types::{MessageSource, MessageTarget};
 
 const TELEGRAM_MAX_LENGTH: usize = 4096;
 
@@ -67,11 +69,26 @@ mod tests {
     use super::*;
 
     fn test_message(from: &str, to: &str, status: Option<MessageStatus>) -> BridgeMessage {
+        let source = match from {
+            "user" => MessageSource::User,
+            "system" => MessageSource::System,
+            _ => MessageSource::Agent {
+                agent_id: from.into(),
+                role: from.into(),
+                provider: crate::daemon::task_graph::types::Provider::Claude,
+                display_source: None,
+            },
+        };
+        let target = if to == "user" {
+            MessageTarget::User
+        } else {
+            MessageTarget::Role { role: to.into() }
+        };
         BridgeMessage {
             id: "test".into(),
-            from: from.into(),
-            display_source: None,
-            to: to.into(),
+            source,
+            target,
+            reply_target: None,
             content: "result text".into(),
             timestamp: 1,
             reply_to: None,
@@ -79,7 +96,6 @@ mod tests {
             status,
             task_id: None,
             session_id: None,
-            sender_agent_id: None,
             attachments: None,
         }
     }

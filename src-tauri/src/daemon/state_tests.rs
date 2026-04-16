@@ -1,6 +1,7 @@
 use super::*;
 use crate::daemon::state::MatchedTaskAgent;
 use crate::daemon::task_graph::types::{CreateSessionParams, Provider};
+use crate::daemon::types::{MessageSource, MessageTarget};
 
 fn matched(agent_id: &str, runtime: &'static str) -> MatchedTaskAgent {
     MatchedTaskAgent { agent_id: agent_id.into(), runtime }
@@ -494,8 +495,8 @@ fn migrate_buffered_role_retargets_messages() {
     s.buffer_message(BridgeMessage::system("hello", "lead"));
     s.buffer_message(BridgeMessage::system("world", "coder"));
     s.migrate_buffered_role("lead", "coder");
-    assert!(s.buffered_messages.iter().all(|m| m.to != "lead"));
-    assert!(s.buffered_messages.iter().any(|m| m.to == "coder"));
+    assert!(s.buffered_messages.iter().all(|m| m.target_str() != "lead"));
+    assert!(s.buffered_messages.iter().any(|m| m.target_str() == "coder"));
 }
 
 #[test]
@@ -507,7 +508,7 @@ fn take_buffered_for_drains_only_matching_role() {
     let taken = s.take_buffered_for("lead");
     assert_eq!(taken.len(), 2);
     assert_eq!(s.buffered_messages.len(), 1);
-    assert_eq!(s.buffered_messages[0].to, "coder");
+    assert_eq!(s.buffered_messages[0].target_str(), "coder");
 }
 
 #[test]
@@ -526,7 +527,7 @@ fn take_buffered_for_matches_agent_id_target() {
     assert_eq!(taken_agent[0].content, "b");
     // Only "coder" should remain
     assert_eq!(s.buffered_messages.len(), 1);
-    assert_eq!(s.buffered_messages[0].to, "coder");
+    assert_eq!(s.buffered_messages[0].target_str(), "coder");
 }
 
 #[test]
@@ -683,9 +684,14 @@ fn observe_task_message_moves_task_to_reviewing_without_gate() {
 
     let coder_done = BridgeMessage {
         id: "coder_done".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "finished current todo".into(),
         timestamp: 1,
         reply_to: None,
@@ -693,8 +699,8 @@ fn observe_task_message_moves_task_to_reviewing_without_gate() {
         status: Some(crate::daemon::types::MessageStatus::Done),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some("codex".into()),
-        attachments: None,    };
+        attachments: None,
+    };
     assert!(s.prepare_task_routing(&coder_done).is_allowed);
     let released = s.observe_task_message(&coder_done);
     assert!(released.is_empty());
@@ -716,9 +722,14 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
 
     let coder_done = BridgeMessage {
         id: "coder_done".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "finished current todo".into(),
         timestamp: 1,
         reply_to: None,
@@ -726,8 +737,8 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
         status: Some(crate::daemon::types::MessageStatus::Done),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some("codex".into()),
-        attachments: None,    };
+        attachments: None,
+    };
 
     let effects = s.observe_task_message_effects(&coder_done);
 
@@ -748,9 +759,9 @@ fn prepare_task_routing_allows_direct_coder_messages() {
     s.set_active_task(Some(task.task_id.clone()));
     let decision = s.prepare_task_routing(&BridgeMessage {
         id: "user_to_coder".into(),
-        from: "user".into(),
-        display_source: None,
-        to: "coder".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
         content: "resume".into(),
         timestamp: 1,
         reply_to: None,
@@ -758,8 +769,8 @@ fn prepare_task_routing_allows_direct_coder_messages() {
         status: Some(crate::daemon::types::MessageStatus::Done),
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    });
+        attachments: None,
+    });
 
     assert!(decision.is_allowed);
     assert!(decision.buffer_reason.is_none());
@@ -859,9 +870,14 @@ fn observe_task_message_auto_saves_without_explicit_call() {
     // Simulate coder -> lead done message (triggers auto-save internally)
     let coder_done = BridgeMessage {
         id: "cd".into(),
-        from: "coder".into(),
-        display_source: Some("codex".into()),
-        to: "lead".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: "done".into(),
         timestamp: 1,
         reply_to: None,
@@ -869,8 +885,8 @@ fn observe_task_message_auto_saves_without_explicit_call() {
         status: Some(crate::daemon::types::MessageStatus::Done),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some("codex".into()),
-        attachments: None,    };
+        attachments: None,
+    };
     let _ = s.observe_task_message(&coder_done);
 
     // Load from disk WITHOUT calling save_task_graph() — the auto-save

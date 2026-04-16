@@ -53,9 +53,9 @@ pub(super) async fn handle_update(
     );
     let msg = crate::daemon::types::BridgeMessage {
         id: uuid::Uuid::new_v4().to_string(),
-        from: "user".into(),
-        display_source: Some("telegram".into()),
-        to: "lead".into(),
+        source: crate::daemon::types::MessageSource::User,
+        target: crate::daemon::types::MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
         content: text.clone(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
@@ -63,8 +63,8 @@ pub(super) async fn handle_update(
         status: None,
         task_id: None,
         session_id: None,
-        sender_agent_id: None,
-        attachments: None,    };
+        attachments: None,
+    };
     routing::route_message(state, app, msg).await;
 }
 

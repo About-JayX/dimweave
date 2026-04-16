@@ -13,8 +13,8 @@ function buildMessage(
 ): BridgeMessage {
   return {
     id: "msg-1",
-    from: "user",
-    to: "coder",
+    source: { kind: "user" },
+    target: { kind: "role", role: "coder" },
     content: "",
     timestamp: 1,
     ...overrides,

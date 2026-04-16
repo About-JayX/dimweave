@@ -1,5 +1,6 @@
 use crate::daemon::{
-    types::{BridgeMessage, MessageStatus},
+    task_graph::types::Provider,
+    types::{BridgeMessage, MessageSource, MessageStatus, MessageTarget},
     SharedState,
 };
 use serde_json::{json, Value};
@@ -42,7 +43,7 @@ pub async fn handle_dynamic_tool(
 
 fn build_reply_message(
     args: &Value,
-    from: &str,
+    role: &str,
     agent_id: &str,
     display_source: &str,
 ) -> Option<BridgeMessage> {
@@ -56,11 +57,21 @@ fn build_reply_message(
         .as_str()
         .and_then(MessageStatus::parse)
         .unwrap_or(MessageStatus::Done);
+    let target = if to == "user" {
+        MessageTarget::User
+    } else {
+        MessageTarget::Role { role: to.to_string() }
+    };
     Some(BridgeMessage {
         id: format!("codex_{}", chrono::Utc::now().timestamp_millis()),
-        from: from.to_string(),
-        display_source: Some(display_source.to_string()),
-        to: to.to_string(),
+        source: MessageSource::Agent {
+            agent_id: agent_id.to_string(),
+            role: role.to_string(),
+            provider: Provider::Codex,
+            display_source: Some(display_source.to_string()),
+        },
+        target,
+        reply_target: None,
         content: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
@@ -68,7 +79,6 @@ fn build_reply_message(
         status: Some(status),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some(agent_id.to_string()),
         attachments: None,
     })
 }

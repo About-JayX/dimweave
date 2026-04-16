@@ -6,7 +6,7 @@ use crate::daemon::codex::ws_client::WsTx;
 use crate::daemon::gui::{self, CodexStreamPayload};
 use crate::daemon::gui_task::TaskUiEvent;
 use crate::daemon::task_graph::types::{Provider, SessionStatus};
-use crate::daemon::types::{BridgeMessage, MessageStatus, MessageTarget};
+use crate::daemon::types::{BridgeMessage, MessageSource, MessageStatus, MessageTarget};
 use crate::daemon::{routing, SharedState};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -135,13 +135,9 @@ fn build_completed_output_message(
     }
 
     let target = if schema_route_enabled {
-        match parsed.target.as_ref() {
-            Some(MessageTarget::User) | None => "user",
-            Some(MessageTarget::Role { role }) => role.as_str(),
-            Some(MessageTarget::Agent { agent_id }) => agent_id.as_str(),
-        }
+        parsed.target.clone().unwrap_or(MessageTarget::User)
     } else {
-        "user"
+        MessageTarget::User
     };
 
     Some(build_msg_with_status(role_id, target, &parsed.message, parsed.status, agent_id, display_source))
@@ -171,7 +167,7 @@ async fn handle_completed_agent_message(
             let hint = err.to_string();
             gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
             let error_msg = build_msg_with_status(
-                role_id, "user", &hint, MessageStatus::Error, agent_id, "codex",
+                role_id, MessageTarget::User, &hint, MessageStatus::Error, agent_id, "codex",
             );
             gui::emit_agent_message(app, &error_msg);
             return;
@@ -337,8 +333,8 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn build_msg_with_status(
-    from: &str,
-    to: &str,
+    role: &str,
+    target: MessageTarget,
     content: &str,
     status: MessageStatus,
     agent_id: &str,
@@ -347,9 +343,14 @@ fn build_msg_with_status(
     let seq = MSG_SEQ.fetch_add(1, Ordering::Relaxed);
     BridgeMessage {
         id: format!("codex_{}_{seq}", chrono::Utc::now().timestamp_millis()),
-        from: from.to_string(),
-        display_source: Some(display_source.to_string()),
-        to: to.to_string(),
+        source: MessageSource::Agent {
+            agent_id: agent_id.to_string(),
+            role: role.to_string(),
+            provider: Provider::Codex,
+            display_source: Some(display_source.to_string()),
+        },
+        target,
+        reply_target: None,
         content: content.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
@@ -357,7 +358,6 @@ fn build_msg_with_status(
         status: Some(status),
         task_id: None,
         session_id: None,
-        sender_agent_id: Some(agent_id.to_string()),
         attachments: None,
     }
 }

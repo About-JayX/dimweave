@@ -85,6 +85,7 @@ pub fn format_codex_input(msg: &BridgeMessage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::daemon::types::MessageSource;
 
     fn file_att() -> Attachment {
         Attachment {
@@ -107,7 +108,7 @@ mod tests {
     #[test]
     fn codex_items_text_only() {
         let mut msg = BridgeMessage::system("hello", "coder");
-        msg.from = "user".into();
+        msg.source = MessageSource::User;
         let items = build_codex_input_items(&msg);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["type"], "text");
@@ -116,7 +117,7 @@ mod tests {
     #[test]
     fn codex_items_with_image_and_file() {
         let mut msg = BridgeMessage::system("analyze", "coder");
-        msg.from = "user".into();
+        msg.source = MessageSource::User;
         msg.attachments = Some(vec![file_att(), image_att()]);
         let items = build_codex_input_items(&msg);
         assert_eq!(items.len(), 2); // 1 text (with file path) + 1 localImage
@@ -129,7 +130,7 @@ mod tests {
     #[test]
     fn codex_items_image_not_in_text() {
         let mut msg = BridgeMessage::system("look", "coder");
-        msg.from = "user".into();
+        msg.source = MessageSource::User;
         msg.attachments = Some(vec![image_att()]);
         let items = build_codex_input_items(&msg);
         // Image path should NOT appear in text (it's a localImage item)
@@ -140,7 +141,7 @@ mod tests {
     #[test]
     fn no_attachments_unchanged() {
         let mut msg = BridgeMessage::system("hello", "coder");
-        msg.from = "user".into();
+        msg.source = MessageSource::User;
         let items = build_codex_input_items(&msg);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["text"], "hello");

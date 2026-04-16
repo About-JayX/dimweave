@@ -22,21 +22,45 @@ export interface Attachment {
   mediaType?: string;
 }
 
+export interface MessageSource {
+  kind: "user" | "system" | "agent";
+  agentId?: string;
+  role?: string;
+  provider?: "claude" | "codex";
+  displaySource?: string;
+}
+
+export interface MessageTarget {
+  kind: "user" | "role" | "agent";
+  role?: string;
+  agentId?: string;
+}
+
 export interface BridgeMessage {
   id: string;
-  from: string;
-  displaySource?: string;
-  to: string;
+  source: MessageSource;
+  target: MessageTarget;
+  replyTarget?: MessageTarget;
   content: string;
   timestamp: number;
-  type?: "task" | "review" | "result" | "question" | "system";
   replyTo?: string;
   priority?: "normal" | "urgent";
   status?: MessageStatus;
   taskId?: string;
   sessionId?: string;
-  senderAgentId?: string;
   attachments?: Attachment[];
+}
+
+export function sourceRole(source: MessageSource): string {
+  if (source.kind === "user") return "user";
+  if (source.kind === "system") return "system";
+  return source.role ?? "";
+}
+
+export function targetStr(target: MessageTarget): string {
+  if (target.kind === "user") return "user";
+  if (target.kind === "role") return target.role ?? "";
+  return target.agentId ?? "";
 }
 
 export type PermissionBehavior = "allow" | "deny";
