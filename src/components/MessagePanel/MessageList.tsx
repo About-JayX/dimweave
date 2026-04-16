@@ -216,7 +216,7 @@ export function MessageList({
           scrollerRef={(el) => {
             const node = el instanceof HTMLElement ? el : null;
             scrollerRef.current = node;
-            setScrollerNode(node);
+            setScrollerNode((prev) => (prev === node ? prev : node));
           }}
           totalCount={totalCount}
           atBottomStateChange={handleAtBottomChange}

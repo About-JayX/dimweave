@@ -5,7 +5,7 @@ fn output_schema_requires_status_enum() {
     let schema = output_schema();
     assert_eq!(
         schema["required"],
-        serde_json::json!(["message", "status"])
+        serde_json::json!(["message", "target", "status"])
     );
     assert_eq!(
         schema["properties"]["status"]["enum"],
@@ -24,7 +24,7 @@ fn output_schema_requires_status_enum() {
 #[test]
 fn non_lead_prompt_defaults_to_lead_routing() {
     let prompt = get_role("coder").unwrap().base_instructions;
-    assert!(prompt.contains(r#"target = {"kind": "role", "role": "lead"} is the default"#));
+    assert!(prompt.contains(r#"target = {"kind": "role", "role": "lead", "agentId": ""} is the default"#));
     assert!(prompt.contains("may target the user only when the user explicitly names your role"));
 }
 

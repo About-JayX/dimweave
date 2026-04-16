@@ -77,6 +77,7 @@ pub(super) async fn handle_codex_event(
                 .as_str()
                 .filter(|text| !text.is_empty())
             {
+                stream_preview.mark_transient_content();
                 if let Some(preview) = stream_preview.ingest_delta(text) {
                     gui::emit_codex_stream(app, CodexStreamPayload::Delta { text: preview });
                 }
@@ -113,6 +114,26 @@ pub(super) async fn handle_codex_event(
                     status: status.into(),
                 },
             );
+        }
+        "error" => {
+            let msg = v["params"]["message"].as_str()
+                .or_else(|| v["params"]["error"].as_str())
+                .or_else(|| v["error"]["message"].as_str())
+                .unwrap_or("unknown error");
+            let code = v["params"]["code"].as_i64()
+                .or_else(|| v["error"]["code"].as_i64());
+            let detail = if let Some(c) = code {
+                format!("[Codex] error (code {c}): {msg}")
+            } else {
+                format!("[Codex] error: {msg}")
+            };
+            eprintln!("{detail}");
+            gui::emit_system_log(app, "error", &detail);
+            let error_msg = build_msg_with_status(
+                role_id, MessageTarget::User, &detail, MessageStatus::Error, agent_id, "codex",
+            );
+            gui::emit_agent_message(app, &error_msg);
+            stream_preview.mark_durable_output();
         }
         _ => {}
     }

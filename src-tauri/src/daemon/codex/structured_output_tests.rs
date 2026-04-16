@@ -153,6 +153,28 @@ fn structured_user_target_object() {
 }
 
 #[test]
+fn structured_user_target_with_empty_extra_fields() {
+    // Codex strict schema requires all three fields; serde should ignore empty extras
+    let raw = r#"{"message":"hi","target":{"kind":"user","role":"","agentId":""}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::User));
+}
+
+#[test]
+fn structured_role_target_with_empty_agent_id() {
+    let raw = r#"{"message":"hi","target":{"kind":"role","role":"coder","agentId":""}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Role { role: "coder".into() }));
+}
+
+#[test]
+fn structured_agent_target_with_empty_role() {
+    let raw = r#"{"message":"hi","target":{"kind":"agent","role":"","agentId":"claude-1"}}"#;
+    let parsed = parse_structured_output(raw).unwrap();
+    assert_eq!(parsed.target, Some(MessageTarget::Agent { agent_id: "claude-1".into() }));
+}
+
+#[test]
 fn structured_agent_target_object() {
     let raw = r#"{"message":"hi","target":{"kind":"agent","agentId":"claude"}}"#;
     let parsed = parse_structured_output(raw).unwrap();

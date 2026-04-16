@@ -14,6 +14,32 @@ pub struct RoleConfig {
     pub network_access: bool,
 }
 
+fn role_examples(role_id: &str) -> &'static str {
+    match role_id {
+        "lead" =>
+            "User: \"Fix the login bug\"\n\
+             Output: {\"message\": \"Delegating login bug fix to coder. Task: investigate token validation in auth.rs.\", \
+             \"target\": {\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}, \"status\": \"in_progress\"}\n\n\
+             Coder: \"Fixed the login bug by correcting the token validation logic in auth.rs.\"\n\
+             Output: {\"message\": \"Login bug fix verified and committed. The issue was an expired token check in auth.rs line 42.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}\n\n\
+             User: \"Lead, what is the project status?\"\n\
+             Output: {\"message\": \"Project status: all tasks complete, no blockers.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}",
+        "coder" =>
+            "Lead: \"Fix the login bug in auth.rs\"\n\
+             Output: {\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
+             \"target\": {\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}, \"status\": \"done\"}\n\n\
+             User: \"Coder, reply to me directly after you fix the login bug\"\n\
+             Output: {\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}",
+        _ =>
+            "User: \"Do something\"\n\
+             Output: {\"message\": \"Done.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}",
+    }
+}
+
 fn build_role_prompt(role_id: &str) -> String {
     format!(
         "{identity}\n\n\
@@ -30,12 +56,12 @@ fn build_role_prompt(role_id: &str) -> String {
          Your final text output MUST be valid JSON matching this schema:\n\
          {{\"message\": \"<your response>\", \"target\": {{\"kind\": \"<user|role|agent>\", ...}}, \
          \"status\": \"<in_progress|done|error>\"}}\n\n\
-         - target = the routing destination for this message\n\
-         - target = {{\"kind\": \"user\"}} to reply to the human user\n\
-         - target = {{\"kind\": \"role\", \"role\": \"lead\"}} to send to lead\n\
-         - target = {{\"kind\": \"role\", \"role\": \"coder\"}} to send to coder\n\
-         - target = {{\"kind\": \"agent\", \"agentId\": \"<id>\"}} to send to a specific agent instance\n\
-         - Omit target entirely to stay silent (no routing)\n\
+         - target = the routing destination for this message (all three fields kind/role/agentId are required)\n\
+         - target = {{\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}} to reply to the human user\n\
+         - target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} to send to lead\n\
+         - target = {{\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}} to send to coder\n\
+         - target = {{\"kind\": \"agent\", \"role\": \"\", \"agentId\": \"<id>\"}} to send to a specific agent instance\n\
+         - To stay silent, output an empty message with status done\n\
          - status = \"in_progress\" for a non-final progress update\n\
          - status = \"done\" when this reply completes your current work\n\
          - status = \"error\" when reporting a failure or blocking error\n\
@@ -43,7 +69,7 @@ fn build_role_prompt(role_id: &str) -> String {
          - This is the ONLY communication channel. There is no other way to reach other agents.\n\n\
          ## Routing Policy\n\
          - If you are lead, you may target the user or any worker role when appropriate.\n\
-         - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\"}} is the default.\n\
+         - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} is the default.\n\
          - For messages from user, you may target the user only when the user explicitly names your role \
          or explicitly asks your role to answer.\n\
          - If that explicit role mention is absent and you are not lead, \
@@ -67,28 +93,21 @@ fn build_role_prompt(role_id: &str) -> String {
          - If you are not lead and the user did not explicitly ask for your role, \
          follow the routing policy instead of replying directly to user.\n\
          - If the user explicitly says \"only X role respond\" or \"X回答我\" and X is NOT your role \
-         → you MUST output {{\"message\": \"\", \"status\": \"done\"}} with no target. \
+         → you MUST output {{\"message\": \"\", \"target\": {{\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}}, \"status\": \"done\"}}. \
          This is absolute — no exceptions.\n\
          - Subject matter is NEVER a reason to stay silent or refuse when the task is routed to you.\n\
          {factual_error_correction_rule}\n\
          - When in doubt about whether to respond, DO NOT respond. \
          Silence is always safer than an unwanted reply.\n\n\
          ## Examples\n\
-         User: \"Fix the login bug\"\n\
-         Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
-         \"target\": {{\"kind\": \"role\", \"role\": \"lead\"}}, \"status\": \"done\"}}\n\n\
-         User: \"Coder, reply to me directly after you fix the login bug\"\n\
-         Output: {{\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
-         \"target\": {{\"kind\": \"user\"}}, \"status\": \"done\"}}\n\n\
-         Lead: \"Send implementation details to coder\"\n\
-         Output: {{\"message\": \"The migration is complete and tests passed.\", \
-         \"target\": {{\"kind\": \"role\", \"role\": \"coder\"}}, \"status\": \"done\"}}\n\n\
+         {role_examples}\n\n\
          {coding_capabilities}\n\n\
          {communication_style}\n\n\
          {security_research_policy}",
         identity = codex_base_prompt::identity_and_personality(),
         roles_section = role_protocol::roles_section(),
         subject_matter_authority = role_protocol::subject_matter_authority_section(),
+        role_examples = role_examples(role_id),
         role_intro = role_protocol::codex_role_intro(role_id),
         role_specific_rules = role_protocol::role_specific_rules(role_id),
         factual_error_correction_rule = role_protocol::factual_error_correction_rule(),
@@ -134,7 +153,7 @@ pub fn output_schema() -> serde_json::Value {
             },
             "target": {
                 "type": "object",
-                "description": "Routing target. Omit to stay silent.",
+                "description": "Routing target (all fields required).",
                 "properties": {
                     "kind": {
                         "type": "string",
@@ -150,7 +169,8 @@ pub fn output_schema() -> serde_json::Value {
                         "description": "Required when kind is agent"
                     }
                 },
-                "required": ["kind"]
+                "required": ["kind", "role", "agentId"],
+                "additionalProperties": false
             },
             "status": {
                 "type": "string",
@@ -158,7 +178,7 @@ pub fn output_schema() -> serde_json::Value {
                 "description": "Reply lifecycle status"
             }
         },
-        "required": ["message", "status"],
+        "required": ["message", "target", "status"],
         "additionalProperties": false
     })
 }
