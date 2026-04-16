@@ -108,9 +108,32 @@
 
 - `cargo check --manifest-path src-tauri/Cargo.toml --tests`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::handler::tests -- --nocapture`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::session_event::tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::session::session_event::tests -- --nocapture`
 - `cargo test --manifest-path src-tauri/Cargo.toml daemon::routing::shared_role_tests:: -- --nocapture`
 - `git diff --check`
+
+## Plan Revision 2 — 2026-04-16
+
+**Reason:** Task 2 requires focused tests for the new `StreamPreviewState` durability/transient tracking that lives in `src-tauri/src/daemon/codex/structured_output_tests.rs`. The implementation stayed within the original diff budget, but review cannot proceed without explicitly adding that test file to scope. The user approved a scope revision for this one file only.
+
+**Added to Task 2 allowed_files:**
+
+- `src-tauri/src/daemon/codex/structured_output_tests.rs`
+
+**Revised Task 2 budgets:**
+
+- `max_files_changed: 8`
+- `max_added_loc: 420` (unchanged)
+- `max_deleted_loc: 120` (unchanged)
+
+## Plan Revision 3 — 2026-04-16
+
+**Reason:** Task 2 stayed within the approved file scope and acceptance criteria, but the final branch-level regression coverage for dropped terminal diagnostics and silent-turn fallback pushed the additive diff above the previous `max_added_loc=420` budget. The user approved a budget-only revision with no scope expansion.
+
+**Revised Task 2 budgets:**
+
+- `max_added_loc: 460`
+- `max_deleted_loc: 120` (unchanged)
 
 ## Task 3: Final regression and plan close-out
 
@@ -135,7 +158,7 @@
 **verification_commands:**
 
 - `bun test src/components/TaskPanel/index.test.tsx`
-- `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::session_event::tests -- --nocapture`
+- `cargo test --manifest-path src-tauri/Cargo.toml daemon::codex::session::session_event::tests -- --nocapture`
 - `git diff --check`
 
 ## CM Record
@@ -143,3 +166,14 @@
 | Task | Commit | Summary | Verification | Status |
 | --- | --- | --- | --- | --- |
 | Task 1 | `358813ca` | Realigned the TaskPanel live path with the existing task-config contract by deriving `leadProvider` / `coderProvider` from the current agent list during create and edit flows, preferring provider-summary bindings in the selector, and launching connect flows from `task.taskWorktreeRoot` instead of `selectedWorkspace` / `task.projectRoot`. Added focused regression coverage for selector precedence, create/edit binding sync, and task-worktree cwd selection. | `bun test tests/task-store-selectors.test.ts src/components/TaskPanel/index.test.tsx` ✅ 13 passed; `bun run build` ✅; `git diff --check` ✅ | accepted |
+| Task 2 | `5817368d` | Made `route_message` return `RouteResult` so callers can distinguish delivered/buffered/dropped. Codex `reply()` tool now returns route-aware acknowledgement instead of unconditional success. Dropped terminal messages emit a task-scoped visible diagnostic. Silent turns (transient activity, no durable output) leave a fallback diagnostic bubble. Added `StreamPreviewState` durable/transient tracking, `build_silent_turn_fallback` helper, and branch-level regression tests across handler (9), session_event (16), structured_output (33), and routing_shared_role (20). | `cargo check --tests` ✅; `cargo test handler::tests` ✅ 9; `cargo test session::session_event::tests` ✅ 16; `cargo test shared_role_tests` ✅ 20; `git diff --check` ✅ | accepted |
+
+## Close-Out Addendum
+
+This plan addressed two independent defects confirmed during the provider-binding audit:
+
+1. **Frontend provider drift** (Task 1, `358813ca`): The TaskPanel create/edit flows did not persist explicit `leadProvider`/`coderProvider` via the task-config contract, and the selector did not prefer `providerSummary` over task singletons. This was a display-only issue — routing always used `task_agents[]` as authoritative source.
+
+2. **Codex silent-turn / dropped-terminal visibility** (Task 2, `5817368d`): Three code paths could swallow Codex output: (a) `reply()` tool always claimed success even when routing dropped the message, (b) dropped `item/completed` terminal messages had no visible diagnostic, (c) turns with only transient activity cleared silently on `turn/completed`. All three paths now produce durable visible output.
+
+**Remaining known item:** Neither task includes a headless live-capture validation harness (the subject of `34a6d9eb`). The regression tests cover unit/integration paths but cannot exercise the full Tauri event → frontend store → UI render chain without a running desktop app. This is tracked separately and does not block this plan's close-out.
