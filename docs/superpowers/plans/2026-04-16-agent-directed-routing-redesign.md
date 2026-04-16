@@ -391,6 +391,7 @@
 - `src-tauri/src/daemon/claude_sdk/event_handler.rs`
 - `src-tauri/src/daemon/codex/session_event.rs`
 - `src-tauri/src/daemon/codex/handler.rs`
+- `src-tauri/src/daemon/codex/mod.rs`
 - `src-tauri/src/daemon/routing_dispatch.rs`
 - `src-tauri/src/daemon/routing_display.rs`
 - `src-tauri/src/daemon/state_task_flow.rs`
@@ -401,16 +402,20 @@
 - `src/stores/bridge-store/types.ts`
 - `src/stores/bridge-store/listener-payloads.ts`
 - `src/components/MessagePanel/MessageList.tsx`
+- `src/components/MessagePanel/MessageList.test.tsx`
 - `src/components/MessagePanel/MessageBubble.tsx`
+- `src/components/MessagePanel/MessageBubble.test.tsx`
 - `src/components/MessagePanel/view-model.ts`
 - `src/components/MessagePanel/text-tools.ts`
 - `src/lib/message-payload.test.ts`
+- `tests/message-panel-view-model.test.ts`
+- `tests/message-render-performance.test.ts`
 - `docs/superpowers/specs/2026-04-16-agent-directed-routing-redesign-design.md`
 - `docs/superpowers/plans/2026-04-16-agent-directed-routing-redesign.md`
 
-**max_files_changed:** `41`
-**max_added_loc:** `600`
-**max_deleted_loc:** `700`
+**max_files_changed:** `46`
+**max_added_loc:** `700`
+**max_deleted_loc:** `800`
 
 **acceptance criteria:**
 
@@ -518,6 +523,21 @@ The implementation is not complete until these scenarios are covered by automate
 
 - add `src-tauri/src/daemon/routing_format.rs` to `allowed_files`
 - increase Task 6 budget to `max_files_changed: 41`
+
+## Plan Revision 7 — 2026-04-16
+
+**Reason:** Task 7 review showed the final hard-cut file list still missed one backend production construction site (`src-tauri/src/daemon/codex/mod.rs`) plus four frontend regression test files and one frontend render test file that must be updated once the shared `BridgeMessage` contract deletes the legacy flat fields.
+
+**Revised Task 7 scope:**
+
+- add backend production file:
+  - `src-tauri/src/daemon/codex/mod.rs`
+- add frontend/test files:
+  - `src/components/MessagePanel/MessageList.test.tsx`
+  - `src/components/MessagePanel/MessageBubble.test.tsx`
+  - `tests/message-panel-view-model.test.ts`
+  - `tests/message-render-performance.test.ts`
+- increase Task 7 budget to `max_files_changed: 46`, `max_added_loc: 700`, `max_deleted_loc: 800`
 
 ## Plan Revision 1 — 2026-04-16
 
