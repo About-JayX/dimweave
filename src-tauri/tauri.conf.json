@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickelpack/tauri-v2-nightly/main/tauri-config-schema.json",
-  "productName": "Dimweave",
-  "version": "0.1.0",
+  "productName": "DimweaveV3",
+  "version": "0.3.0",
   "identifier": "com.dimweave.app",
   "build": {
     "frontendDist": "../dist",

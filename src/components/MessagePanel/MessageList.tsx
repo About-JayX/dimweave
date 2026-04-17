@@ -104,6 +104,15 @@ export function MessageList({
     }
   }, []);
 
+  // Virtuoso's internal `useEffect(..., [scrollerRef])` cleanups-and-reattaches
+  // on every new callback reference, producing a null → el → null → el setState
+  // oscillation. Freeze the callback identity to break the loop.
+  const handleScrollerRef = useCallback((el: HTMLElement | Window | null) => {
+    const node = el instanceof HTMLElement ? el : null;
+    scrollerRef.current = node;
+    setScrollerNode((prev) => (prev === node ? prev : node));
+  }, []);
+
   // Detect user-initiated scroll-away. Programmatic scrolls (followOutput,
   // scrollToBottom, initial scroll) set an immunity window to prevent false positives.
   useEffect(() => {
@@ -213,11 +222,7 @@ export function MessageList({
       <div className="flex-1 min-h-0">
         <Virtuoso
           ref={virtuosoRef}
-          scrollerRef={(el) => {
-            const node = el instanceof HTMLElement ? el : null;
-            scrollerRef.current = node;
-            setScrollerNode((prev) => (prev === node ? prev : node));
-          }}
+          scrollerRef={handleScrollerRef}
           totalCount={totalCount}
           atBottomStateChange={handleAtBottomChange}
           atBottomThreshold={STICKY_BOTTOM_THRESHOLD}
