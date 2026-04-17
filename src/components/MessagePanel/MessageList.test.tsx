@@ -103,14 +103,14 @@ describe("MessageList", () => {
           id: "msg_1",
           source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
           target: { kind: "user" },
-          content: "Created the rollout plan",
+          message: "Created the rollout plan",
           timestamp: 1,
         },
         {
           id: "msg_2",
           source: { kind: "agent", agentId: "codex", role: "coder", provider: "codex" },
           target: { kind: "user" },
-          content: "Attached the latest screenshot",
+          message: "Attached the latest screenshot",
           timestamp: 2,
           attachments: [
             {
@@ -222,7 +222,7 @@ describe("MessageList", () => {
       id: "msg_final",
       source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
       target: { kind: "user" as const },
-      content: "Final report delivered to the user.",
+      message: "Final report delivered to the user.",
       timestamp: 2,
     };
     const html = renderToStaticMarkup(<MessageList messages={[finalMessage]} />);
@@ -291,7 +291,7 @@ describe("MessageList", () => {
       <MessageList
         messages={[{
           id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          content: "Found the root cause", timestamp: 1,
+          message: "Found the root cause", timestamp: 1,
         }]}
         searchActive={true}
       />,
@@ -326,7 +326,7 @@ describe("MessageList", () => {
       <MessageList
         messages={[{
           id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          content: "Found the root cause", timestamp: 1,
+          message: "Found the root cause", timestamp: 1,
         }]}
         searchActive={false}
       />,
@@ -365,7 +365,7 @@ describe("MessageList", () => {
       <MessageList
         messages={[{
           id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
-          content: "Start streaming", timestamp: 1,
+          message: "Start streaming", timestamp: 1,
         }]}
         searchActive={false}
       />,
@@ -384,7 +384,7 @@ describe("MessageList", () => {
       <ML2
         messages={[{
           id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
-          content: "Start streaming", timestamp: 1,
+          message: "Start streaming", timestamp: 1,
         }]}
         searchActive={true}
       />,
@@ -417,7 +417,7 @@ describe("MessageList", () => {
       <MessageList
         messages={[{
           id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          content: "Streaming content", timestamp: 1,
+          message: "Streaming content", timestamp: 1,
         }]}
         searchActive={false}
       />,

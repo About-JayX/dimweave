@@ -10,7 +10,7 @@ describe("MessageBubble", () => {
           id: "msg_1",
           source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
           target: { kind: "user" },
-          content: "See attached",
+          message: "See attached",
           timestamp: 1,
           attachments: [
             {

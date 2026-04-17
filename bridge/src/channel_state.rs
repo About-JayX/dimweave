@@ -26,7 +26,7 @@ impl ChannelState {
             "jsonrpc": "2.0",
             "method": "notifications/claude/channel",
             "params": {
-                "content": msg.content,
+                "message": msg.message,
                 "meta": build_meta(msg)
             }
         }))
@@ -86,7 +86,7 @@ mod tests {
             source,
             target: MessageTarget::Role { role: "lead".into() },
             reply_target: None,
-            content: "hello".into(),
+            message: "hello".into(),
             timestamp: 1,
             reply_to: None,
             priority: None,

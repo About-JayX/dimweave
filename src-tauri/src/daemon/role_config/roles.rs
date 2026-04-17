@@ -17,15 +17,31 @@ pub struct RoleConfig {
 fn role_examples(role_id: &str) -> &'static str {
     match role_id {
         "lead" =>
-            "User: \"Fix the login bug\"\n\
-             Output: {\"message\": \"Delegating login bug fix to coder. Task: investigate token validation in auth.rs.\", \
+            "### GATE 1 — plan_approval_gate (the ONLY `status=in_progress` you may send to user)\n\
+             User: \"Fix the login bug\"\n\
+             Output: {\"message\": \"Proposed plan:\\n1. Investigate token validation in auth.rs:42\\n2. Identify root cause of expired-token check\\n3. Patch + write regression test\\nPlease confirm or adjust.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"in_progress\"}\n\n\
+             ### After user confirms plan — DELEGATE (all further in_progress goes to coder, NOT user)\n\
+             User: \"OK, proceed.\"\n\
+             Output: {\"message\": \"Task T1: investigate auth.rs token validation (file: auth.rs, allowed_files=[auth.rs], max_files_changed=1). Acceptance: root cause identified with line reference. Report back with evidence.\", \
              \"target\": {\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}, \"status\": \"in_progress\"}\n\n\
-             Coder: \"Fixed the login bug by correcting the token validation logic in auth.rs.\"\n\
-             Output: {\"message\": \"Login bug fix verified and committed. The issue was an expired token check in auth.rs line 42.\", \
+             ### Coder returns progress → lead acks coder, DOES NOT forward to user\n\
+             Coder: \"Found it — auth.rs:42, expired-token check returns true for null expiry. Evidence: traced via test run.\"\n\
+             Output: {\"message\": \"Accepted T1 evidence. Task T2: patch auth.rs:42 to treat null expiry as expired; add regression test. Max 1 file + 1 test file changed. Report back for review.\", \
+             \"target\": {\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}, \"status\": \"in_progress\"}\n\n\
+             ### GATE 2 — external_blocker_gate (only when a dependency requires user input)\n\
+             Coder: \"Cannot complete T2 — prod secrets are required to run the regression test but not present.\"\n\
+             Output: {\"message\": \"Blocked on T2: regression test needs PROD_AUTH_TOKEN to exercise the real token validator. Please provide the value or confirm we should mock it.\", \
+             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"error\"}\n\n\
+             ### GATE 3 — final_acceptance_gate (only after ALL tasks verified + deep review + merge)\n\
+             Coder: \"All tasks complete. T1+T2 verified, regression test passes, commit abcd123.\"\n\
+             [lead runs final deep review internally, merges worktree]\n\
+             Output: {\"message\": \"Login bug fix complete. Root cause: auth.rs:42 treated null expiry as valid. Fix: treat null as expired + regression test. Commit abcd123 on main. No blockers.\", \
              \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}\n\n\
-             User: \"Lead, what is the project status?\"\n\
-             Output: {\"message\": \"Project status: all tasks complete, no blockers.\", \
-             \"target\": {\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}, \"status\": \"done\"}",
+             ### PROTOCOL VIOLATIONS — do NOT do these\n\
+             BAD: {\"message\": \"Understood, I'll delegate to coder now.\", \"target\": {\"kind\": \"user\", ...}, \"status\": \"in_progress\"}  ← ack-to-user during execution is FORBIDDEN\n\
+             BAD: {\"message\": \"Coder is working on T1 now.\", \"target\": {\"kind\": \"user\", ...}, \"status\": \"in_progress\"}  ← forwarding coder progress to user is FORBIDDEN\n\
+             BAD: [multiple structured outputs in one turn]  ← emit EXACTLY ONE per turn",
         "coder" =>
             "Lead: \"Fix the login bug in auth.rs\"\n\
              Output: {\"message\": \"Fixed the login bug by correcting the token validation logic in auth.rs.\", \
@@ -54,13 +70,14 @@ fn build_role_prompt(role_id: &str) -> String {
          — use this to decide which agent to send work to\n\n\
          ## Output Format (MANDATORY)\n\
          Your final text output MUST be valid JSON matching this schema:\n\
-         {{\"message\": \"<your response>\", \"target\": {{\"kind\": \"<user|role|agent>\", ...}}, \
+         {{\"message\": \"<your response>\", \"target\": {{\"kind\": \"<user|role|agent>\", \"role\": \"\", \"agentId\": \"\"}}, \
          \"status\": \"<in_progress|done|error>\"}}\n\n\
-         - target = the routing destination for this message (all three fields kind/role/agentId are required)\n\
+         - target is the routing destination; ALL three fields (kind/role/agentId) are required. Fill unused fields with \"\".\n\
          - target = {{\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}} to reply to the human user\n\
-         - target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} to send to lead\n\
-         - target = {{\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}} to send to coder\n\
-         - target = {{\"kind\": \"agent\", \"role\": \"\", \"agentId\": \"<id>\"}} to send to a specific agent instance\n\
+         - target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} to send to lead (by role; works when you don't know a specific lead's agent_id)\n\
+         - target = {{\"kind\": \"role\", \"role\": \"coder\", \"agentId\": \"\"}} to send to coder (by role; use this when delegating a task from user to coder)\n\
+         - target = {{\"kind\": \"agent\", \"role\": \"\", \"agentId\": \"<id>\"}} to send to a SPECIFIC agent by id\n\
+         - Incoming agent messages arrive as `Message from <role> [<agent_id>] (status: <status>):\\n<body>`. When you are a WORKER replying to that specific delegator (not the user), you may use `{{\"kind\": \"agent\", \"agentId\": \"<that sender agent_id>\"}}` to route back precisely — this is an OPTIONAL refinement on top of the default `{{\"kind\": \"role\", \"role\": \"lead\"}}` target; both work. Delegation decisions (user→coder, lead→coder, etc.) follow the Routing Policy below — agent_id-first is a reply-precision tool, not a reason to skip delegation.\n\
          - To stay silent, output an empty message with status done\n\
          - status = \"in_progress\" for a non-final progress update\n\
          - status = \"done\" when this reply completes your current work\n\
@@ -68,7 +85,7 @@ fn build_role_prompt(role_id: &str) -> String {
          - The system parses your output and routes it automatically\n\
          - This is the ONLY communication channel. There is no other way to reach other agents.\n\n\
          ## Routing Policy\n\
-         - If you are lead, you may target the user or any worker role when appropriate.\n\
+         - If you are lead, target selection is GOVERNED by the \"Lead Escalation Gate\" rules in your role-specific section below. `target=user` is RESTRICTED to 4 gate scenarios; routine coordination always targets coder.\n\
          - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} is the default.\n\
          - For messages from user, you may target the user only when the user explicitly names your role \
          or explicitly asks your role to answer.\n\

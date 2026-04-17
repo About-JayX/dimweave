@@ -15,7 +15,7 @@ export function areMessageBubblePropsEqual(
     prev.msg.source.kind === next.msg.source.kind &&
     prev.msg.source.role === next.msg.source.role &&
     prev.msg.target.kind === next.msg.target.kind &&
-    prev.msg.content === next.msg.content &&
+    prev.msg.message === next.msg.message &&
     prev.msg.timestamp === next.msg.timestamp &&
     prev.msg.source.displaySource === next.msg.source.displaySource &&
     prev.msg.attachments?.length === next.msg.attachments?.length
@@ -120,7 +120,7 @@ export function MessageBubbleView({
             {new Date(msg.timestamp).toLocaleTimeString()}
           </span>
         </div>
-        <MessageMarkdown content={msg.content} />
+        <MessageMarkdown content={msg.message} />
         {msg.attachments && msg.attachments.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {msg.attachments.map((att, i) =>

@@ -15,7 +15,7 @@ function buildMessage(
     id: "msg-1",
     source: { kind: "user" },
     target: { kind: "role", role: "coder" },
-    content: "",
+    message: "",
     timestamp: 1,
     ...overrides,
   };
@@ -30,7 +30,7 @@ describe("message payload helpers", () => {
   test("chat filtering keeps attachments-only messages", () => {
     const rendered = filterRenderableChatMessages([
       buildMessage({ attachments: [fileAttachment] }),
-      buildMessage({ id: "msg-2", content: "   \n\t" }),
+      buildMessage({ id: "msg-2", message: "   \n\t" }),
     ]);
 
     expect(rendered).toHaveLength(1);

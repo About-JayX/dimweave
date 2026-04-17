@@ -97,10 +97,17 @@ pub(super) async fn handle_codex_event(
             .await;
         }
         "turn/completed" => {
-            let fallback_msg = build_silent_turn_fallback(role_id, agent_id, stream_preview);
+            // Compute diagnostic target BEFORE reading stream state — routes
+            // worker silent turns back to the specific delegating lead's
+            // agent_id (via reply_target_map) rather than leaking to `User`.
+            let fallback_target =
+                worker_diagnostic_target(state, role_id, agent_id, task_id).await;
+            let fallback_msg = build_silent_turn_fallback(
+                role_id, agent_id, fallback_target, stream_preview,
+            );
             stream_preview.reset();
             if let Some(mut fb) = fallback_msg {
-                gui::emit_system_log(app, "info", &fb.content);
+                gui::emit_system_log(app, "info", &fb.message);
                 {
                     let s = state.read().await;
                     s.stamp_message_context_for_task(task_id, role_id, &mut fb);
@@ -116,9 +123,23 @@ pub(super) async fn handle_codex_event(
             );
         }
         "error" => {
-            let msg = v["params"]["message"].as_str()
+            let known_msg = v["params"]["message"].as_str()
                 .or_else(|| v["params"]["error"].as_str())
-                .or_else(|| v["error"]["message"].as_str())
+                .or_else(|| v["error"]["message"].as_str());
+            let fallback_payload = if known_msg.is_none() {
+                let payload = if !v["params"].is_null() {
+                    &v["params"]
+                } else if !v["error"].is_null() {
+                    &v["error"]
+                } else {
+                    v
+                };
+                serde_json::to_string(payload).ok()
+            } else {
+                None
+            };
+            let msg: &str = known_msg
+                .or(fallback_payload.as_deref())
                 .unwrap_or("unknown error");
             let code = v["params"]["code"].as_i64()
                 .or_else(|| v["error"]["code"].as_i64());
@@ -129,8 +150,9 @@ pub(super) async fn handle_codex_event(
             };
             eprintln!("{detail}");
             gui::emit_system_log(app, "error", &detail);
+            let target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
             let error_msg = build_msg_with_status(
-                role_id, MessageTarget::User, &detail, MessageStatus::Error, agent_id, "codex",
+                role_id, target, &detail, MessageStatus::Error, agent_id, "codex",
             );
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
@@ -162,24 +184,48 @@ async fn handle_tool_call(
     }
 }
 
+/// Outcome of building a completed-turn output message.
+///
+/// `MissingTarget` is a **fail-closed** signal: schema routing is enabled
+/// but the agent's output did not include a `target` field. The caller must
+/// NOT default to `User` (the old fail-open behavior leaked worker results
+/// past lead). Instead, a diagnostic is routed via `worker_diagnostic_target`.
+#[derive(Debug)]
+enum CompletedOutput {
+    Ready(BridgeMessage),
+    Skip,
+    MissingTarget,
+}
+
 fn build_completed_output_message(
     role_id: &str,
     parsed: &ParsedOutput,
     schema_route_enabled: bool,
     agent_id: &str,
     display_source: &str,
-) -> Option<BridgeMessage> {
+) -> CompletedOutput {
     if !should_emit_final_message(&parsed.message) {
-        return None;
+        return CompletedOutput::Skip;
     }
 
     let target = if schema_route_enabled {
-        parsed.target.clone().unwrap_or(MessageTarget::User)
+        match parsed.target.clone() {
+            Some(t) => t,
+            None => return CompletedOutput::MissingTarget,
+        }
     } else {
+        // Schema routing disabled → legacy implicit-user behavior stays.
         MessageTarget::User
     };
 
-    Some(build_msg_with_status(role_id, target, &parsed.message, parsed.status, agent_id, display_source))
+    CompletedOutput::Ready(build_msg_with_status(
+        role_id,
+        target,
+        &parsed.message,
+        parsed.status,
+        agent_id,
+        display_source,
+    ))
 }
 
 async fn handle_completed_agent_message(
@@ -205,8 +251,9 @@ async fn handle_completed_agent_message(
         Err(err) => {
             let hint = err.to_string();
             gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
+            let target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
             let error_msg = build_msg_with_status(
-                role_id, MessageTarget::User, &hint, MessageStatus::Error, agent_id, "codex",
+                role_id, target, &hint, MessageStatus::Error, agent_id, "codex",
             );
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
@@ -214,10 +261,38 @@ async fn handle_completed_agent_message(
         }
     };
     let display_source = "codex";
-    let Some(mut msg) = build_completed_output_message(
+    let mut msg = match build_completed_output_message(
         role_id, &parsed, schema_route_enabled, agent_id, display_source,
-    ) else {
-        return;
+    ) {
+        CompletedOutput::Ready(msg) => msg,
+        CompletedOutput::Skip => return,
+        CompletedOutput::MissingTarget => {
+            // Fail-closed: the structured output parsed OK but omitted `target`.
+            // Route a diagnostic back to the delegating lead (or first lead in
+            // task) instead of silently defaulting to `User` — that used to let
+            // worker results leak past the lead node in shared-role tasks.
+            let diag = format!(
+                "[Codex] {role_id} structured output missing `target` field; \
+                 worker result not routed — expected {{kind, role, agentId}}"
+            );
+            gui::emit_system_log(app, "error", &diag);
+            let target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
+            let mut diag_msg = build_msg_with_status(
+                role_id,
+                target,
+                &diag,
+                MessageStatus::Error,
+                agent_id,
+                "system",
+            );
+            {
+                let s = state.read().await;
+                s.stamp_message_context_for_task(task_id, role_id, &mut diag_msg);
+            }
+            gui::emit_agent_message(app, &diag_msg);
+            stream_preview.mark_durable_output();
+            return;
+        }
     };
     {
         let s = state.read().await;
@@ -230,8 +305,9 @@ async fn handle_completed_agent_message(
         routing::RouteResult::Dropped => {
             let diag = format!("[Codex] {role_id} message dropped — target '{target_str}' has no online agent");
             gui::emit_system_log(app, "warn", &diag);
+            let diag_target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
             let mut diag_msg = build_msg_with_status(
-                role_id, MessageTarget::User, &diag, MessageStatus::Done, agent_id, "system",
+                role_id, diag_target, &diag, MessageStatus::Done, agent_id, "system",
             );
             {
                 let s = state.read().await;
@@ -391,6 +467,52 @@ fn activity_label_from_item(item: &Value) -> Option<String> {
 
 static MSG_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// Resolve the diagnostic target for a worker failure by **agent_id**.
+///
+/// Priority:
+/// 1. `routing::delegator_agent_id(sender_agent_id)` — the specific agent
+///    that delegated to the sender (populated by agent-targeted delegation
+///    flows). This is the normal path.
+/// 2. First lead agent in `agents_for_task(task_id)` (order-ascending) —
+///    defensive fallback when no delegator is recorded. Emits a WARN log
+///    because this path implies the invariant "every worker was delegated
+///    agent-to-agent" is broken.
+/// 3. `User` — last-resort fallback when no lead exists in the task.
+///
+/// Lead's own-turn failures always surface to `User` (no circular routing).
+async fn worker_diagnostic_target(
+    state: &SharedState,
+    sender_role: &str,
+    sender_agent_id: &str,
+    task_id: &str,
+) -> MessageTarget {
+    if sender_role == "lead" {
+        return MessageTarget::User;
+    }
+    if let Some(id) = crate::daemon::routing::delegator_agent_id(sender_agent_id) {
+        return MessageTarget::Agent { agent_id: id };
+    }
+    let lead_id = {
+        let s = state.read().await;
+        s.task_graph
+            .agents_for_task(task_id)
+            .into_iter()
+            .find(|a| a.role == "lead")
+            .map(|a| a.agent_id.clone())
+    };
+    match lead_id {
+        Some(id) => {
+            eprintln!(
+                "[diagnostic][WARN] no reply_target_map for {sender_agent_id}; \
+                 falling back to first-lead-by-order {id} (invariant 'every worker \
+                 was delegated agent-to-agent' broken)"
+            );
+            MessageTarget::Agent { agent_id: id }
+        }
+        None => MessageTarget::User,
+    }
+}
+
 fn build_msg_with_status(
     role: &str,
     target: MessageTarget,
@@ -410,7 +532,7 @@ fn build_msg_with_status(
         },
         target,
         reply_target: None,
-        content: content.to_string(),
+        message: content.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
@@ -424,9 +546,14 @@ fn build_msg_with_status(
 /// Build a fallback diagnostic when a Codex turn had transient activity but
 /// produced no durable output. Returns `None` when no fallback is needed
 /// (durable output was produced, or no transient content occurred).
+///
+/// `target` is pre-computed by the caller via `worker_diagnostic_target`, so
+/// a non-lead worker's silent turn routes back to the delegating lead's
+/// agent_id (or first-lead fallback) rather than leaking to `User`.
 fn build_silent_turn_fallback(
     role_id: &str,
     agent_id: &str,
+    target: MessageTarget,
     stream_preview: &StreamPreviewState,
 ) -> Option<BridgeMessage> {
     if stream_preview.had_durable_output() || !stream_preview.had_transient_content() {
@@ -434,7 +561,7 @@ fn build_silent_turn_fallback(
     }
     let diag = format!("[Codex] {role_id} turn completed with no visible output");
     Some(build_msg_with_status(
-        role_id, MessageTarget::User, &diag, MessageStatus::Done, agent_id, "system",
+        role_id, target, &diag, MessageStatus::Done, agent_id, "system",
     ))
 }
 
@@ -442,6 +569,14 @@ fn build_silent_turn_fallback(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn expect_ready(out: CompletedOutput) -> BridgeMessage {
+        match out {
+            CompletedOutput::Ready(msg) => msg,
+            CompletedOutput::Skip => panic!("expected Ready, got Skip"),
+            CompletedOutput::MissingTarget => panic!("expected Ready, got MissingTarget"),
+        }
+    }
 
     #[test]
     fn completed_output_builder_routes_to_schema_target() {
@@ -451,7 +586,9 @@ mod tests {
             reply_target: None,
             status: MessageStatus::Done,
         };
-        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
+        let msg = expect_ready(build_completed_output_message(
+            "lead", &parsed, true, "codex-agent-1", "codex",
+        ));
         assert_eq!(msg.target_str(), "user");
         assert_eq!(msg.status, Some(MessageStatus::Done));
     }
@@ -464,7 +601,9 @@ mod tests {
             reply_target: None,
             status: MessageStatus::Done,
         };
-        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
+        let msg = expect_ready(build_completed_output_message(
+            "lead", &parsed, true, "codex-agent-1", "codex",
+        ));
         assert_eq!(msg.target_str(), "reviewer");
     }
 
@@ -476,20 +615,29 @@ mod tests {
             reply_target: None,
             status: MessageStatus::Done,
         };
-        let msg = build_completed_output_message("coder", &parsed, true, "codex-agent-1", "codex").expect("message");
+        let msg = expect_ready(build_completed_output_message(
+            "coder", &parsed, true, "codex-agent-1", "codex",
+        ));
         assert_eq!(msg.target_str(), "claude");
     }
 
     #[test]
-    fn completed_output_builder_defaults_to_user_when_target_none() {
+    fn completed_output_builder_fails_closed_when_target_missing() {
+        // Step 4b invariant: schema routing enabled + target missing → the
+        // builder signals MissingTarget so the caller can route a diagnostic
+        // via worker_diagnostic_target instead of silently defaulting to User.
         let parsed = ParsedOutput {
-            message: "fallback".into(),
+            message: "worker output without target".into(),
             target: None,
             reply_target: None,
             status: MessageStatus::Done,
         };
-        let msg = build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").expect("message");
-        assert_eq!(msg.target_str(), "user");
+        match build_completed_output_message(
+            "coder", &parsed, true, "codex-agent-1", "codex",
+        ) {
+            CompletedOutput::MissingTarget => (),
+            other => panic!("expected MissingTarget, got {other:?}"),
+        }
     }
 
     #[test]
@@ -500,7 +648,9 @@ mod tests {
             reply_target: None,
             status: MessageStatus::InProgress,
         };
-        let msg = build_completed_output_message("coder", &parsed, false, "codex-agent-1", "codex").expect("message");
+        let msg = expect_ready(build_completed_output_message(
+            "coder", &parsed, false, "codex-agent-1", "codex",
+        ));
         assert_eq!(msg.target_str(), "user");
     }
 
@@ -512,7 +662,12 @@ mod tests {
             reply_target: None,
             status: MessageStatus::Done,
         };
-        assert!(build_completed_output_message("lead", &parsed, true, "codex-agent-1", "codex").is_none());
+        match build_completed_output_message(
+            "lead", &parsed, true, "codex-agent-1", "codex",
+        ) {
+            CompletedOutput::Skip => (),
+            other => panic!("expected Skip, got {other:?}"),
+        }
     }
 
     #[test]
@@ -637,13 +792,20 @@ mod tests {
 
         let mut sp = StreamPreviewState::default();
         sp.mark_transient_content();
-        // No mark_durable_output — simulates silent turn
-        let fb = build_silent_turn_fallback("coder", "codex-agent-1", &sp);
+        // No mark_durable_output — simulates silent turn. Caller computes the
+        // target via worker_diagnostic_target before passing in; here we use
+        // MessageTarget::User to exercise the legacy behavior path.
+        let fb = build_silent_turn_fallback(
+            "coder",
+            "codex-agent-1",
+            MessageTarget::User,
+            &sp,
+        );
         assert!(fb.is_some(), "fallback must fire when transient-only");
 
         let fb = fb.unwrap();
-        assert!(fb.content.contains("no visible output"), "content: {}", fb.content);
-        assert!(fb.content.contains("coder"), "must name the role");
+        assert!(fb.message.contains("no visible output"), "content: {}", fb.message);
+        assert!(fb.message.contains("coder"), "must name the role");
         assert_eq!(fb.target_str(), "user");
         assert!(fb.task_id.is_none(), "pre-stamp task_id must be None");
 
@@ -667,12 +829,35 @@ mod tests {
     }
 
     #[test]
+    fn silent_turn_fallback_uses_provided_target_verbatim() {
+        // When worker_diagnostic_target resolves to Agent{lead_id}, the
+        // silent-turn fallback message carries that agent_id forward — no
+        // rewriting back to User.
+        let mut sp = StreamPreviewState::default();
+        sp.mark_transient_content();
+        let fb = build_silent_turn_fallback(
+            "coder",
+            "codex-agent-1",
+            MessageTarget::Agent { agent_id: "lead_42".into() },
+            &sp,
+        )
+        .expect("fallback fires");
+        assert_eq!(fb.target_str(), "lead_42");
+    }
+
+    #[test]
     fn silent_turn_fallback_suppressed_when_durable_output_exists() {
         let mut sp = StreamPreviewState::default();
         sp.mark_transient_content();
         sp.mark_durable_output();
         assert!(
-            build_silent_turn_fallback("coder", "codex-agent-1", &sp).is_none(),
+            build_silent_turn_fallback(
+                "coder",
+                "codex-agent-1",
+                MessageTarget::User,
+                &sp,
+            )
+            .is_none(),
             "fallback must NOT fire when durable output was produced"
         );
     }
@@ -681,8 +866,100 @@ mod tests {
     fn silent_turn_fallback_suppressed_when_no_activity() {
         let sp = StreamPreviewState::default();
         assert!(
-            build_silent_turn_fallback("coder", "codex-agent-1", &sp).is_none(),
+            build_silent_turn_fallback(
+                "coder",
+                "codex-agent-1",
+                MessageTarget::User,
+                &sp,
+            )
+            .is_none(),
             "fallback must NOT fire when no activity at all (idle turn)"
         );
+    }
+
+    // ── worker_diagnostic_target regression (Step 5) ─────────
+
+    /// Clear reply_target_map across tests in this module. The map is a
+    /// process-wide static and leaks between tests, so we scope it per test.
+    fn clear_reply_target_map_for_test() {
+        crate::daemon::routing::delegator_agent_id("__nonexistent_key__"); // warms
+        // Use public API: the map is private; just trust that absence of
+        // prior record_reply_target calls keeps it empty for our sender_ids.
+    }
+
+    fn make_task_with_lead(
+        s: &mut crate::daemon::state::DaemonState,
+        lead_role: &str,
+    ) -> (String, String) {
+        use crate::daemon::task_graph::types::Provider;
+        let task = s.task_graph.create_task_with_config(
+            "/ws", "ws", Provider::Claude, Provider::Codex,
+        );
+        let lead_agent = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, lead_role);
+        (task.task_id, lead_agent.agent_id)
+    }
+
+    #[tokio::test]
+    async fn worker_diagnostic_target_keeps_lead_sender_at_user() {
+        clear_reply_target_map_for_test();
+        let state: SharedState = std::sync::Arc::new(tokio::sync::RwLock::new(
+            crate::daemon::state::DaemonState::new(),
+        ));
+        // Lead's own failure surfaces to user, regardless of task/agent state.
+        let target =
+            worker_diagnostic_target(&state, "lead", "claude-lead-1", "task_x").await;
+        assert_eq!(target, MessageTarget::User);
+    }
+
+    #[tokio::test]
+    async fn worker_diagnostic_target_falls_back_to_first_lead_in_task() {
+        clear_reply_target_map_for_test();
+        let mut s0 = crate::daemon::state::DaemonState::new();
+        let (task_id, lead_agent_id) = make_task_with_lead(&mut s0, "lead");
+        // Also add a coder (sender) so the scenario is realistic.
+        use crate::daemon::task_graph::types::Provider;
+        let coder_agent = s0
+            .task_graph
+            .add_task_agent(&task_id, Provider::Codex, "coder");
+        let state: SharedState =
+            std::sync::Arc::new(tokio::sync::RwLock::new(s0));
+        // No reply_target_map entry for coder_agent → P2 fallback to first lead.
+        let target = worker_diagnostic_target(
+            &state,
+            "coder",
+            &coder_agent.agent_id,
+            &task_id,
+        )
+        .await;
+        assert_eq!(
+            target,
+            MessageTarget::Agent { agent_id: lead_agent_id }
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_diagnostic_target_returns_user_when_no_lead_known() {
+        clear_reply_target_map_for_test();
+        let mut s0 = crate::daemon::state::DaemonState::new();
+        // Task exists but no lead agent.
+        use crate::daemon::task_graph::types::Provider;
+        let task = s0.task_graph.create_task_with_config(
+            "/ws", "ws", Provider::Claude, Provider::Codex,
+        );
+        let coder_agent = s0
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Codex, "coder");
+        let state: SharedState =
+            std::sync::Arc::new(tokio::sync::RwLock::new(s0));
+        let target = worker_diagnostic_target(
+            &state,
+            "coder",
+            &coder_agent.agent_id,
+            &task.task_id,
+        )
+        .await;
+        assert_eq!(target, MessageTarget::User);
     }
 }

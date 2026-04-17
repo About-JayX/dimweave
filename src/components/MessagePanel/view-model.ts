@@ -62,9 +62,7 @@ export function getMessageIdentityPresentation(message: BridgeMessage): {
   const role = sourceRole(message.source);
   const badgeSource = message.source.displaySource ?? role;
   const roleLabel =
-    role !== badgeSource && !["user", "system"].includes(role)
-      ? role
-      : null;
+    role !== badgeSource && !["user", "system"].includes(role) ? role : null;
   return { badgeSource, roleLabel };
 }
 
@@ -74,7 +72,7 @@ export function filterRenderableChatMessages(
   return messages.filter(
     (message) =>
       message.source.kind !== "system" &&
-      hasMessagePayload(message.content, message.attachments),
+      hasMessagePayload(message.message, message.attachments),
   );
 }
 
@@ -82,7 +80,7 @@ export function getTransientIndicators(
   claudeStream: ClaudeStreamState,
   codexStream: CodexStreamState,
 ): StreamIndicatorId[] {
-  const codexIndicator = getCodexStreamIndicatorViewModel(codexStream);
+  const codexIndicator = getCodexStreamIndicatorViewModel(codexStream); 
   return [
     ...(claudeStream.thinking ? (["claude"] as const) : []),
     ...(codexIndicator.visible ? (["codex"] as const) : []),

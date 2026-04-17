@@ -3,11 +3,23 @@ use super::{claude_append_system_prompt, claude_system_prompt};
 #[test]
 fn prompt_mentions_reply_status_contract() {
     let prompt = claude_system_prompt("lead");
-    assert!(prompt.contains("reply(target, text, status)"));
+    // Step 2: envelope `text` → `message` canonical alignment with Codex.
+    assert!(prompt.contains("reply(target, message, status)"));
     assert!(prompt.contains("in_progress"));
     assert!(prompt.contains("done"));
     assert!(prompt.contains("error"));
     assert!(prompt.contains("You MUST call reply() before ending any turn"));
+}
+
+#[test]
+fn prompt_teaches_agent_id_targeting_via_sender_agent_id() {
+    let prompt = claude_system_prompt("coder");
+    // Step 8: agent_id-first routing — workers should prefer replying to the
+    // specific delegator's agent_id, not role-broadcast.
+    assert!(prompt.contains("sender_agent_id"));
+    assert!(prompt.contains("task_id"));
+    assert!(prompt.contains("\"kind\":\"agent\""));
+    assert!(prompt.contains("\"agentId\":\"<sender_agent_id from incoming channel>\""));
 }
 
 #[test]
@@ -116,8 +128,8 @@ fn factual_error_correction_still_respects_routing_policy() {
 #[test]
 fn claude_prompt_reply_tool_does_not_mention_report_telegram() {
     let prompt = claude_system_prompt("lead");
-    assert!(!prompt.contains("reply(target, text, status, report_telegram?)"));
-    assert!(prompt.contains("reply(target, text, status)"));
+    assert!(!prompt.contains("reply(target, message, status, report_telegram?)"));
+    assert!(prompt.contains("reply(target, message, status)"));
 }
 
 #[test]

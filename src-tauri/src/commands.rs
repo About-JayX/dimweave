@@ -30,7 +30,7 @@ fn validate_claude_launch_args(role_id: &str, cwd: &str) -> Result<(), String> {
 /// User typed a message — daemon handles GUI echo + fan-out internally.
 #[tauri::command]
 pub async fn daemon_send_user_input(
-    content: String,
+    message: String,
     target: String,
     attachments: Option<Vec<crate::daemon::types::Attachment>>,
     task_id: Option<String>,
@@ -42,7 +42,7 @@ pub async fn daemon_send_user_input(
     sender
         .0
         .send(DaemonCmd::SendUserInput {
-            content,
+            message,
             target,
             attachments,
             task_id,

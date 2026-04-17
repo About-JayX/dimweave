@@ -58,8 +58,8 @@ fn build_handoff_message_has_correct_fields() {
     assert!(msg.source_display().is_none());
     assert_eq!(msg.target_str(), "lead");
     assert_eq!(msg.task_id.as_deref(), Some("task_42"));
-    assert!(msg.content.contains("Crash on launch"));
-    assert!(msg.content.contains("1001"));
+    assert!(msg.message.contains("Crash on launch"));
+    assert!(msg.message.contains("1001"));
     let attachments = msg.attachments.unwrap();
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0].file_path, "/tmp/snap.json");
@@ -72,9 +72,9 @@ fn handoff_message_includes_repair_workflow_instructions() {
     let item = sample_item();
     let context = sample_context();
     let msg = build_handoff_message(&item, &context, "task_42", "/tmp/snap.json");
-    assert!(msg.content.contains("repair plan"));
-    assert!(msg.content.contains("plan \u{2192} execute \u{2192} review \u{2192} CM flow"));
-    assert!(msg.content.contains("Feishu Project"));
+    assert!(msg.message.contains("repair plan"));
+    assert!(msg.message.contains("plan \u{2192} execute \u{2192} review \u{2192} CM flow"));
+    assert!(msg.message.contains("Feishu Project"));
 }
 
 #[test]
@@ -133,8 +133,8 @@ fn handoff_description_from_plain_string() {
         "description": "App crashes on cold start",
     });
     let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
-    assert!(msg.content.contains("App crashes on cold start"));
-    assert!(!msg.content.contains("(no description)"));
+    assert!(msg.message.contains("App crashes on cold start"));
+    assert!(!msg.message.contains("(no description)"));
 }
 
 #[test]
@@ -150,8 +150,8 @@ fn handoff_description_from_rich_text_object() {
         },
     });
     let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
-    assert!(msg.content.contains("Steps to reproduce:"));
-    assert!(!msg.content.contains("(no description)"));
+    assert!(msg.message.contains("Steps to reproduce:"));
+    assert!(!msg.message.contains("(no description)"));
 }
 
 #[test]
@@ -225,5 +225,5 @@ fn handoff_description_fallback_when_missing() {
         "name": "Crash on launch",
     });
     let msg = build_handoff_message(&item, &context, "t1", "/tmp/s.json");
-    assert!(msg.content.contains("(no description)"));
+    assert!(msg.message.contains("(no description)"));
 }

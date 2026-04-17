@@ -46,7 +46,7 @@ export function filterMessagesByQuery(
 
   return messages.filter((message) => {
     const haystacks = [
-      message.content,
+      message.message,
       sourceRole(message.source),
       message.source.displaySource,
       ...(message.attachments?.map((attachment) => attachment.fileName) ?? []),

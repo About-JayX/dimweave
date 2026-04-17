@@ -103,17 +103,44 @@ pub fn format_user_message(content: &str) -> String {
 }
 
 /// Wrap text in channel XML tags for Dimweave routing semantics.
-pub fn wrap_channel_content(from: &str, content: &str) -> String {
-    format!(
-        "<channel source=\"agentnexus\" from=\"{}\">{}</channel>",
-        xml_escape_attr(from),
-        xml_escape_text(content)
-    )
+///
+/// `sender_agent_id` and `task_id` are emitted as attributes when present, so
+/// the receiving agent can reply with `{kind:"agent", agentId:<sender>}` and
+/// knows which task context it is working in. User/System sources typically
+/// pass `None` for `sender_agent_id` (they have no agent identity).
+pub fn wrap_channel_content(
+    from: &str,
+    content: &str,
+    sender_agent_id: Option<&str>,
+    task_id: Option<&str>,
+) -> String {
+    let mut tag = String::new();
+    tag.push_str("<channel source=\"agentnexus\" from=\"");
+    tag.push_str(&xml_escape_attr(from));
+    tag.push('"');
+    if let Some(aid) = sender_agent_id.filter(|s| !s.is_empty()) {
+        tag.push_str(" sender_agent_id=\"");
+        tag.push_str(&xml_escape_attr(aid));
+        tag.push('"');
+    }
+    if let Some(tid) = task_id.filter(|s| !s.is_empty()) {
+        tag.push_str(" task_id=\"");
+        tag.push_str(&xml_escape_attr(tid));
+        tag.push('"');
+    }
+    tag.push('>');
+    tag.push_str(&xml_escape_text(content));
+    tag.push_str("</channel>");
+    tag
 }
 
 /// Format a channel-wrapped user message matching Dimweave routing semantics.
+///
+/// Convenience wrapper around `wrap_channel_content` for tests. Production
+/// callers use the full `wrap_channel_content` signature.
+#[cfg(test)]
 pub fn format_channel_user_message(from: &str, content: &str) -> String {
-    format_user_message(&wrap_channel_content(from, content))
+    format_user_message(&wrap_channel_content(from, content, None, None))
 }
 
 /// Format a user message with multi-block content array (text + image blocks).

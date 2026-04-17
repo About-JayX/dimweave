@@ -1,8 +1,8 @@
 import type { Attachment } from "@/types";
 
 export function hasMessagePayload(
-  content: string,
+  message: string,
   attachments?: Attachment[],
 ): boolean {
-  return content.trim().length > 0 || Boolean(attachments?.length);
+  return message.trim().length > 0 || Boolean(attachments?.length);
 }

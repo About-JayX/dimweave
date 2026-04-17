@@ -66,7 +66,7 @@ fn handoff_message_structure() {
         source: MessageSource::System,
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: format!(
+        message: format!(
             "Feishu Project repair task created.\n\n\
              **[{}]** {}\n\
              Type: `{}` | Source: {}\n\
@@ -91,10 +91,10 @@ fn handoff_message_structure() {
     assert_eq!(msg.source_role(), "system");
     assert!(msg.source_display().is_none());
     assert_eq!(msg.target_str(), "lead");
-    assert!(msg.content.contains("repair plan"));
-    assert!(msg.content.contains("plan → execute → review → CM flow"));
-    assert!(msg.content.contains("Feishu Project"));
-    assert!(msg.content.contains("Crash on launch"));
+    assert!(msg.message.contains("repair plan"));
+    assert!(msg.message.contains("plan → execute → review → CM flow"));
+    assert!(msg.message.contains("Feishu Project"));
+    assert!(msg.message.contains("Crash on launch"));
     let att = msg.attachments.as_ref().unwrap();
     assert_eq!(att.len(), 1);
     assert!(!att[0].is_image);

@@ -4,6 +4,7 @@ mod daemon_client_io;
 mod mcp;
 mod mcp_io;
 mod mcp_protocol;
+mod message_target;
 mod tools;
 mod types;
 

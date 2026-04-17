@@ -220,7 +220,7 @@ fn directed_msg_user_to_role_target() {
         source: MessageSource::User,
         target: MessageTarget::Role { role: "coder".into() },
         reply_target: None,
-        content: "Implement this.".into(),
+        message: "Implement this.".into(),
         timestamp: 1770000000000,
         reply_to: None,
         priority: None,
@@ -253,7 +253,7 @@ fn directed_msg_agent_to_agent_with_reply_target() {
         },
         target: MessageTarget::Agent { agent_id: "agent_coder_2".into() },
         reply_target: Some(MessageTarget::Agent { agent_id: "agent_lead_1".into() }),
-        content: "Review and implement the daemon fix.".into(),
+        message: "Review and implement the daemon fix.".into(),
         timestamp: 1770000000100,
         reply_to: None,
         priority: None,
@@ -293,7 +293,7 @@ fn directed_msg_roundtrip() {
         },
         target: MessageTarget::User,
         reply_target: None,
-        content: "Task is done.".into(),
+        message: "Task is done.".into(),
         timestamp: 1770000000200,
         reply_to: Some("msg_2".into()),
         priority: None,
@@ -318,4 +318,32 @@ fn directed_msg_roundtrip() {
     // displaySource must not appear when None
     let json = serde_json::to_value(&decoded).unwrap();
     assert!(json["source"].get("displaySource").is_none());
+}
+
+#[test]
+fn bridge_message_accepts_legacy_content_field_on_deserialize() {
+    // Lock the `#[serde(alias = "content")]` behavior. Persisted buffered
+    // messages in `task_graph.sqlite` written before the message/content
+    // rename must still deserialize — otherwise load_buffered_messages
+    // silently drops them.
+    let legacy_json = serde_json::json!({
+        "id": "legacy_1",
+        "source": { "kind": "user" },
+        "target": { "kind": "user", "role": "", "agentId": "" },
+        "content": "hello from old-schema buffered message",
+        "timestamp": 123
+    });
+    let decoded: BridgeMessage =
+        serde_json::from_value(legacy_json).expect("legacy content alias must deserialize");
+    assert_eq!(decoded.message, "hello from old-schema buffered message");
+    // Re-serialize must emit the new canonical `message` field.
+    let reserialized = serde_json::to_value(&decoded).unwrap();
+    assert!(
+        reserialized.get("message").is_some(),
+        "canonical serialization must emit `message`"
+    );
+    assert!(
+        reserialized.get("content").is_none(),
+        "canonical serialization must NOT emit legacy `content`"
+    );
 }

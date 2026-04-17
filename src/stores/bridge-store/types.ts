@@ -63,7 +63,7 @@ export interface BridgeState {
   setDraft: (text: string) => void;
   clearClaudeAttention: () => void;
   sendToCodex: (
-    content: string,
+    message: string,
     target?: string,
     attachments?: Attachment[],
     taskId?: string,

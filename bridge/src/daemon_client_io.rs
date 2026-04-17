@@ -43,7 +43,7 @@ fn to_wire_message(agent_id: &str, reply: &ParsedReply) -> BridgeMessage {
         },
         target: reply.target.clone(),
         reply_target: None,
-        content: reply.content.clone(),
+        message: reply.message.clone(),
         timestamp: ts as u64,
         reply_to: None,
         priority: None,

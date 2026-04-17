@@ -41,12 +41,12 @@ pub fn initialize_result(role: &str, include_permission_relay: bool) -> serde_js
 }
 
 #[cfg(test)]
-pub fn channel_notification(content: &str, from: &str) -> serde_json::Value {
+pub fn channel_notification(message: &str, from: &str) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0",
         "method": "notifications/claude/channel",
         "params": {
-            "content": content,
+            "message": message,
             "meta": { "from": from }
         }
     })

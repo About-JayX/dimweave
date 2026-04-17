@@ -181,7 +181,7 @@ fn build_user_message(
             MessageTarget::Role { role: to.to_string() }
         },
         reply_target: None,
-        content: content.to_string(),
+        message: content.to_string(),
         timestamp: now,
         reply_to: None,
         priority: None,

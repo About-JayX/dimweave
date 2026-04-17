@@ -109,16 +109,16 @@ fn claude_terminal_reply_claims_visible_result(
 ) -> bool {
     message.is_to_user()
         && message.status.is_some_and(|s| s.is_terminal())
-        && !message.content.trim().is_empty()
+        && !message.message.trim().is_empty()
 }
 
 fn summarize_bridge_message_shape(message: &crate::daemon::types::BridgeMessage) -> String {
     format!(
-        "BridgeMessage{{id,source,target,reply_target,content,timestamp,reply_to,priority,status,task_id,session_id,attachments}} source={} target={} status={} content_len={} task_id={} session_id={} agent_id={} attachments={}",
+        "BridgeMessage{{id,source,target,reply_target,message,timestamp,reply_to,priority,status,task_id,session_id,attachments}} source={} target={} status={} message_len={} task_id={} session_id={} agent_id={} attachments={}",
         message.source_role(),
         message.target_str(),
         message.status.map(MessageStatus::as_str).unwrap_or("none"),
-        message.content.len(),
+        message.message.len(),
         message.task_id.as_deref().unwrap_or("-"),
         message.session_id.as_deref().unwrap_or("-"),
         message.source_agent_id().unwrap_or("-"),
@@ -271,7 +271,7 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                         }
                     }
                 }
-                if suppress_message || message.content.trim().is_empty() {
+                if suppress_message || message.message.trim().is_empty() {
                     continue;
                 }
                 routing::route_message(&state, &app, message).await;
@@ -381,7 +381,7 @@ mod tests {
             },
             target,
             reply_target: None,
-            content: content.to_string(),
+            message: content.to_string(),
             timestamp: 1,
             reply_to: None,
             priority: None,
@@ -460,7 +460,7 @@ mod tests {
             },
             target: MessageTarget::User,
             reply_target: None,
-            content: "final answer".into(),
+            message: "final answer".into(),
             timestamp: 1,
             reply_to: None,
             priority: None,
@@ -472,11 +472,11 @@ mod tests {
 
         let summary = summarize_bridge_message_shape(&message);
 
-        assert!(summary.contains("BridgeMessage{id,source,target,reply_target,content,timestamp,reply_to,priority,status,task_id,session_id,attachments}"));
+        assert!(summary.contains("BridgeMessage{id,source,target,reply_target,message,timestamp,reply_to,priority,status,task_id,session_id,attachments}"));
         assert!(summary.contains("source=lead"));
         assert!(summary.contains("target=user"));
         assert!(summary.contains("status=done"));
-        assert!(summary.contains("content_len=12"));
+        assert!(summary.contains("message_len=12"));
         assert!(summary.contains("task_id=task-1"));
         assert!(summary.contains("session_id=session-1"));
     }

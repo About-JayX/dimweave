@@ -32,7 +32,7 @@ pub fn build_telegram_report(task_title: Option<&str>, msg: &BridgeMessage) -> S
     let emoji = event_emoji(&status);
     let task_id = msg.task_id.as_deref().unwrap_or("—");
     let title = task_title.unwrap_or("No active task");
-    let body = escape_html(msg.content.trim());
+    let body = escape_html(msg.message.trim());
     format!(
         "{emoji} <b>Dimweave</b> · {status}\n\
          \u{1f4cb} <b>{title_escaped}</b>\n\
@@ -89,7 +89,7 @@ mod tests {
             source,
             target,
             reply_target: None,
-            content: "result text".into(),
+            message: "result text".into(),
             timestamp: 1,
             reply_to: None,
             priority: None,
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn html_report_escapes_content() {
         let mut msg = test_message("lead", "user", Some(MessageStatus::Done));
-        msg.content = "<script>alert('xss')</script>".into();
+        msg.message = "<script>alert('xss')</script>".into();
         let report = build_telegram_report(None, &msg);
         assert!(!report.contains("<script>"));
         assert!(report.contains("&lt;script&gt;"));

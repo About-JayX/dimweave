@@ -6,6 +6,7 @@ pub mod gui;
 pub mod gui_task;
 pub mod image_compress;
 mod launch_task_sync;
+pub mod message_target;
 pub mod orchestrator;
 mod permission;
 pub mod ports;
@@ -395,8 +396,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             },
         };
         match cmd {
-            DaemonCmd::SendUserInput { content, target, attachments, task_id } => {
-                routing::route_user_input(&state, &app, content, target, attachments, task_id).await;
+            DaemonCmd::SendUserInput { message, target, attachments, task_id } => {
+                routing::route_user_input(&state, &app, message, target, attachments, task_id).await;
             }
             DaemonCmd::LaunchCodex {
                 task_id,

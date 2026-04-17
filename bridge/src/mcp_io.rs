@@ -132,7 +132,7 @@ mod tests {
                 "name": "reply",
                 "arguments": {
                     "target": { "kind": "role", "role": "lead" },
-                    "text": "hello", "status": "waiting"
+                    "message": "hello", "status": "waiting"
                 }
             })),
         };

@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, oneshot};
 
 pub enum DaemonCmd {
     SendUserInput {
-        content: String,
+        message: String,
         target: String,
         attachments: Option<Vec<crate::daemon::types::Attachment>>,
         task_id: Option<String>,

@@ -83,7 +83,12 @@ pub struct BridgeMessage {
     pub target: MessageTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_target: Option<MessageTarget>,
-    pub content: String,
+    // `alias = "content"` keeps legacy persisted JSON blobs readable (the
+    // `buffered_messages` table in `task_graph.sqlite` may have been
+    // written under the pre-rename schema). Serialization always emits
+    // `message`; deserialization accepts either. One-way ingest shim.
+    #[serde(alias = "content")]
+    pub message: String,
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<String>,
@@ -146,7 +151,7 @@ impl BridgeMessage {
                 MessageTarget::Role { role: to.into() }
             },
             reply_target: None,
-            content: content.into(),
+            message: content.into(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             reply_to: None,
             priority: None,
@@ -250,16 +255,7 @@ pub enum MessageSource {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum MessageTarget {
-    User,
-    Role { role: String },
-    Agent {
-        #[serde(rename = "agentId")]
-        agent_id: String,
-    },
-}
+pub use super::message_target::MessageTarget;
 
 #[cfg(test)]
 #[path = "types_tests.rs"]

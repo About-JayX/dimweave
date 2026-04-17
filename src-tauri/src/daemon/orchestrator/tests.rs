@@ -29,7 +29,7 @@ fn msg(from: &str, to: &str, status: MessageStatus) -> BridgeMessage {
         source: make_source(from),
         target: make_target(to),
         reply_target: None,
-        content: "test".into(),
+        message: "test".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,

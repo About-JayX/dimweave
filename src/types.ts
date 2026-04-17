@@ -41,7 +41,7 @@ export interface BridgeMessage {
   source: MessageSource;
   target: MessageTarget;
   replyTarget?: MessageTarget;
-  content: string;
+  message: string;
   timestamp: number;
   replyTo?: string;
   priority?: "normal" | "urgent";

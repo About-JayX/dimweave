@@ -63,7 +63,7 @@ Bridge reply 到达 (agent_reply, terminal status, to="user"):
 
 注意：claim_claude_bridge_terminal_delivery() 同时覆盖 Active 和 Inactive 两个分支。
   只有 to="user" 且 terminal status 且内容非空的 bridge reply 才触发 visible-result 投递；
-  reply(to="coder") 等非用户路由不走此分支，SDK result 仍可正常兜底投递。
+  reply(target={kind:"role",role:"coder"}) 等非用户路由不走此分支，SDK result 仍可正常兜底投递。
 
 Turn 结束:
   任意状态 → Inactive
@@ -84,9 +84,9 @@ Turn 结束:
 
 `reply(to, text, status)` 是 MCP tool，用途是**跨 agent 路由**：
 
-- `reply(to="user")` — Claude 向用户回复（经过 bridge → daemon → GUI）
-- `reply(to="coder")` — Claude 向 coder agent 发消息（经过 bridge → daemon → Codex）
-- `reply(to="lead")` — worker 向 lead 汇报
+- `reply(target={kind:"user"})` — Claude 向用户回复（经过 bridge → daemon → GUI）
+- `reply(target={kind:"role",role:"coder"})` — Claude 向 coder agent 发消息（经过 bridge → daemon → Codex）
+- `reply(target={kind:"role",role:"lead"})` — worker 向 lead 汇报
 
 reply() 和 SDK result 的关系：
 - Claude 的 prompt 要求 `reply()` 作为主投递方式（`You MUST call reply() before ending any turn`）
@@ -96,8 +96,8 @@ reply() 和 SDK result 的关系：
 ## 已知行为
 
 1. Claude 有时不调 reply() 直接结束 turn → SDK result 兜底投递
-2. Claude 调了 reply(to="user") 且 SDK 也有 result → 先到先赢，另一条去重
-3. Claude 调 reply(to="coder") → bridge 路由到 Codex，不触发 visible-result claim（claude_terminal_reply_claims_visible_result 检查 to=="user"），SDK result 仍可正常兜底投递给 GUI
+2. Claude 调了 reply(target={kind:"user"}) 且 SDK 也有 result → 先到先赢，另一条去重
+3. Claude 调 reply(target={kind:"role",role:"coder"}) → bridge 路由到 Codex，不触发 visible-result claim（claude_terminal_reply_claims_visible_result 检查 to=="user"），SDK result 仍可正常兜底投递给 GUI
 4. bridge 未连接时 → SDK result 始终直投
 5. 前端收到非 preview 的 claude_stream 事件前，先 flush 待处理的 preview 文本再清空 pending，保证最后一帧预览在 draft 清除前落地（stream-batching flushClaudePreviewIfPending）
 6. Rust daemon：route_message() 投递最终消息在 emit ClaudeStreamPayload::Done 之前，保证前端 draft 清除时消息已到达

@@ -14,21 +14,33 @@ fn append_file_attachment_context(base: &mut String, atts: &[Attachment]) {
 }
 
 /// Build base text content for Codex (handles agent vs user formatting).
+///
+/// Sender agent_id is inlined as `[agent_id]` after the role so a worker
+/// can reply with `{kind:"agent", agentId:<sender>}` to the specific
+/// delegator, matching the Claude `<channel sender_agent_id=...>` semantics.
+///
+/// `task_id` is **not** injected into user-input text: each Codex session
+/// is already bound to exactly one task at `thread/start`, so prefixing
+/// user messages with `[task: <uuid>]` was redundant AND empirically caused
+/// the model to emit multiple consecutive `agentMessage` items in a single
+/// turn (Codex treated the prefix as an additional directive). For
+/// agent-source messages we keep a task label only when the agent comes
+/// from a different task context than the receiver's session — in practice
+/// that doesn't happen today (sessions are task-scoped), so we drop it.
 fn build_codex_text(msg: &BridgeMessage) -> String {
     if msg.is_from_user() {
-        msg.content.clone()
-    } else {
-        let sender_label = match msg.source_agent_id() {
-            Some(aid) => format!("{} [{}]", msg.source_role(), aid),
-            None => msg.source_role().to_string(),
-        };
-        match msg.status {
-            Some(status) => format!(
-                "Message from {} (status: {}):\n{}",
-                sender_label, status.as_str(), msg.content
-            ),
-            None => format!("Message from {}:\n{}", sender_label, msg.content),
-        }
+        return msg.message.clone();
+    }
+    let sender_label = match msg.source_agent_id() {
+        Some(aid) => format!("{} [{}]", msg.source_role(), aid),
+        None => msg.source_role().to_string(),
+    };
+    match msg.status {
+        Some(status) => format!(
+            "Message from {} (status: {}):\n{}",
+            sender_label, status.as_str(), msg.message
+        ),
+        None => format!("Message from {}:\n{}", sender_label, msg.message),
     }
 }
 
@@ -51,11 +63,16 @@ pub fn build_codex_input_items(msg: &BridgeMessage) -> Vec<serde_json::Value> {
 /// Format NDJSON user message for Claude SDK, with image compression.
 /// Images are base64 encoded after resize; non-image files are text paths.
 pub async fn format_ndjson_user_message(msg: &BridgeMessage) -> String {
-    let mut text = msg.content.clone();
+    let mut text = msg.message.clone();
     if let Some(atts) = &msg.attachments {
         append_file_attachment_context(&mut text, atts);
     }
-    let wrapped = crate::daemon::claude_sdk::protocol::wrap_channel_content(msg.source_role(), &text);
+    let wrapped = crate::daemon::claude_sdk::protocol::wrap_channel_content(
+        msg.source_role(),
+        &text,
+        msg.source_agent_id(),
+        msg.task_id.as_deref(),
+    );
     let mut blocks = vec![serde_json::json!({"type": "text", "text": wrapped})];
     if let Some(atts) = &msg.attachments {
         for att in atts.iter().filter(|a| a.is_image) {

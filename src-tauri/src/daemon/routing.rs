@@ -26,6 +26,15 @@ fn apply_reply_target(sender_agent_id: &str, target: &str) -> Option<String> {
     if role == target { Some(agent_id.clone()) } else { None }
 }
 
+/// Returns the specific agent_id that delegated to `sender_agent_id`, if
+/// recorded. Used by daemon-fabricated diagnostics (worker silent turn,
+/// parse errors, dropped messages) to route back to the exact delegating
+/// agent rather than falling to `User` or broadcasting to a `Role` target.
+pub fn delegator_agent_id(sender_agent_id: &str) -> Option<String> {
+    let guard = reply_target_map().lock().unwrap();
+    guard.get(sender_agent_id).map(|(id, _)| id.clone())
+}
+
 fn record_reply_target(recipient_id: &str, sender_id: &str, sender_role: &str) {
     reply_target_map().lock().unwrap().insert(
         recipient_id.to_string(),
@@ -70,6 +79,19 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
     }
 
     if msg.is_to_user() {
+        // Soft guard: non-lead workers directing to user bypass the lead node
+        // (which is normally the summarizer to the user). We observe but do
+        // not block — "user explicitly named coder" is a legal edge case, and
+        // a hard deny would false-positive on LLM outputs that follow that
+        // instruction. Log-only for now; promote to deny after observation.
+        if matches!(msg.source_role(), "coder" | "reviewer") {
+            eprintln!(
+                "[routing][WARN] {} → user (non-lead worker routing direct \
+                 to user; lead normally summarizes). Consider prompt review \
+                 if this fires often.",
+                msg.source_role()
+            );
+        }
         return RouteOutcome {
             result: RouteResult::ToGui,
             emit_claude_thinking: false,

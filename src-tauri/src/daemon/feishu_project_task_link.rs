@@ -302,7 +302,7 @@ fn build_handoff_message(
         source: MessageSource::System,
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: summary,
+        message: summary,
         timestamp: now,
         reply_to: None,
         priority: None,

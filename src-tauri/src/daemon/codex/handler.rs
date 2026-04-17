@@ -74,7 +74,7 @@ fn build_reply_message(
         },
         target,
         reply_target: None,
-        content: text.to_string(),
+        message: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
@@ -132,7 +132,7 @@ async fn handle_check_messages(role_id: &str, task_id: &str, state: &SharedState
     }
 
     msgs.iter()
-        .map(|m| format!("[{}] {}: {}", m.timestamp, m.source_role(), m.content))
+        .map(|m| format!("[{}] {}: {}", m.timestamp, m.source_role(), m.message))
         .collect::<Vec<_>>()
         .join("\n")
 }

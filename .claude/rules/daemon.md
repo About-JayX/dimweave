@@ -28,7 +28,11 @@ paths:
 ## 工具边界
 
 - bridge 当前暴露 2 个 MCP tool：`reply` 和 `get_online_agents`
-- `reply` tool 契约为 `to + text`，Claude 自行决定路由目标，bridge 纯转发
+- `reply` tool 契约为 `target + message + status`：
+  - `target` 是扁平 3 字段对象 `{kind, role, agentId}`，全部必填，未用字段填空串。`kind ∈ {"user","role","agent"}`。权威 JSON schema 在 `bridge/src/tools.rs::reply_tool_schema`
+  - `message` 是消息正文（统一字段名，Claude MCP / Codex output_schema / `BridgeMessage` 存储 JSON 全部对齐）
+  - `status` 是 `in_progress|done|error`
+  - Claude 自行决定路由目标，bridge 纯转发；daemon 对 worker 诊断消息按 agent_id 回链（reply_target_map → first-lead-by-order → user），不再默认投 user
 - Claude channel initialize 结果必须带 `instructions`，并显式声明 `experimental['claude/channel']` 与 `experimental['claude/channel/permission']`
 - 如果要给 Claude 增加新 tool，必须同时更新：
   - `bridge/src/tools.rs`

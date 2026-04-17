@@ -45,7 +45,7 @@ async fn route_to_claude_from_unknown_sender_drops() {
         },
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: "hello".into(),
+        message: "hello".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -76,7 +76,7 @@ async fn agent_targeted_to_claude_delivers_when_online() {
         source: MessageSource::User,
         target: MessageTarget::Agent { agent_id: "claude".into() },
         reply_target: None,
-        content: "direct to claude".into(),
+        message: "direct to claude".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -104,7 +104,7 @@ async fn agent_targeted_to_codex_delivers_when_online() {
         source: MessageSource::User,
         target: MessageTarget::Agent { agent_id: "codex".into() },
         reply_target: None,
-        content: "direct to codex".into(),
+        message: "direct to codex".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -131,7 +131,7 @@ async fn agent_targeted_to_offline_agent_buffers() {
         source: MessageSource::User,
         target: MessageTarget::Agent { agent_id: "claude".into() },
         reply_target: None,
-        content: "buffered".into(),
+        message: "buffered".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -158,7 +158,7 @@ async fn format_ndjson_user_message_wraps_channel_payload() {
         },
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: "finished".into(),
+        message: "finished".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -171,8 +171,74 @@ async fn format_ndjson_user_message_wraps_channel_payload() {
     let ndjson = format_ndjson_user_message(&msg).await;
     let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();
 
+    // After Step 7: channel now includes `sender_agent_id` when source is an
+    // Agent variant. task_id is absent here because the fixture sets task_id=None.
     assert_eq!(
         parsed["message"]["content"][0]["text"],
-        "<channel source=\"agentnexus\" from=\"coder\">finished</channel>"
+        "<channel source=\"agentnexus\" from=\"coder\" sender_agent_id=\"codex\">finished</channel>"
+    );
+}
+
+#[tokio::test]
+async fn format_ndjson_user_message_includes_task_id_when_present() {
+    use crate::daemon::task_graph::types::Provider;
+    let msg = BridgeMessage {
+        id: "m".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: None,
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
+        message: "done".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some("task_42".into()),
+        session_id: None,
+        attachments: None,
+    };
+    let ndjson = format_ndjson_user_message(&msg).await;
+    let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();
+    let channel = parsed["message"]["content"][0]["text"]
+        .as_str()
+        .expect("channel text");
+    assert!(
+        channel.contains("sender_agent_id=\"codex\""),
+        "missing sender_agent_id in: {channel}"
+    );
+    assert!(
+        channel.contains("task_id=\"task_42\""),
+        "missing task_id in: {channel}"
+    );
+}
+
+#[tokio::test]
+async fn format_ndjson_user_message_omits_sender_agent_id_for_user_source() {
+    let msg = BridgeMessage {
+        id: "m".into(),
+        source: MessageSource::User,
+        target: MessageTarget::Role { role: "coder".into() },
+        reply_target: None,
+        message: "do this".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: None,
+        session_id: None,
+        attachments: None,
+    };
+    let ndjson = format_ndjson_user_message(&msg).await;
+    let parsed: serde_json::Value = serde_json::from_str(ndjson.trim()).unwrap();
+    let channel = parsed["message"]["content"][0]["text"]
+        .as_str()
+        .expect("channel text");
+    assert!(
+        !channel.contains("sender_agent_id"),
+        "user-source channel must not carry sender_agent_id: {channel}"
     );
 }

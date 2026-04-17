@@ -520,11 +520,11 @@ fn take_buffered_for_matches_agent_id_target() {
     // Taking by role "lead" should NOT drain agent-targeted "claude" messages
     let taken_role = s.take_buffered_for("lead");
     assert_eq!(taken_role.len(), 1);
-    assert_eq!(taken_role[0].content, "a");
+    assert_eq!(taken_role[0].message, "a");
     // Taking by agent_id "claude" should drain agent-targeted messages
     let taken_agent = s.take_buffered_for("claude");
     assert_eq!(taken_agent.len(), 1);
-    assert_eq!(taken_agent[0].content, "b");
+    assert_eq!(taken_agent[0].message, "b");
     // Only "coder" should remain
     assert_eq!(s.buffered_messages.len(), 1);
     assert_eq!(s.buffered_messages[0].target_str(), "coder");
@@ -692,7 +692,7 @@ fn observe_task_message_moves_task_to_reviewing_without_gate() {
         },
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: "finished current todo".into(),
+        message: "finished current todo".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -730,7 +730,7 @@ fn observe_task_message_effects_reports_task_ui_events_on_state_change() {
         },
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: "finished current todo".into(),
+        message: "finished current todo".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -762,7 +762,7 @@ fn prepare_task_routing_allows_direct_coder_messages() {
         source: MessageSource::User,
         target: MessageTarget::Role { role: "coder".into() },
         reply_target: None,
-        content: "resume".into(),
+        message: "resume".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,
@@ -878,7 +878,7 @@ fn observe_task_message_auto_saves_without_explicit_call() {
         },
         target: MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: "done".into(),
+        message: "done".into(),
         timestamp: 1,
         reply_to: None,
         priority: None,

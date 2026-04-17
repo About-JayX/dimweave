@@ -16,7 +16,7 @@ fn terminal_sdk_text_creates_visible_gui_message() {
     assert_eq!(msg.source_role(), "lead");
     assert_eq!(msg.source_display(), Some("claude"));
     assert_eq!(msg.target_str(), "user");
-    assert_eq!(msg.content, "final reply");
+    assert_eq!(msg.message, "final reply");
     assert_eq!(msg.status, Some(MessageStatus::Done));
     assert_eq!(msg.source_agent_id(), Some("agent-1"));
 }

@@ -615,3 +615,21 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - `chat_targets` eviction 是随机的（HashMap 无序），长会话可能影响活跃对话
 - bridge 重连时不重发 pending permission requests
 - 同 agentId 重复 WS 连接会覆盖已有注册，无保护机制
+
+---
+
+## 2026-04-17 — MCP reply tool schema + envelope field canonicalization
+
+**问题**：Claude MCP `reply` tool input schema 与 Codex `output_schema` 字段名和结构形态分裂（`text` vs `message`，松散 object vs 扁平全必填），BridgeMessage wire 存储用第三种形态（judgment enum serde）。三源契约漂移。
+
+**修复**：
+1. `bridge/src/tools.rs::reply_tool_schema` 改为扁平 3-field target（`kind` + `role` + `agentId` 全必填 + `additionalProperties:false`），与 Codex `output_schema::target` 完全对齐。
+2. envelope 字段 `text` → `message`，Claude MCP / Codex output / BridgeMessage 存储全部统一。
+3. `MessageTarget` 移到独立模块，自定义 `Serialize`/`Deserialize` 发射扁平形态，Rust 枚举变体保留（类型安全不损失）。`Deserialize` 兼容老判别联合形态（持久化数据不破）。
+4. `parse_target` 检测 legacy `{to: ..., ...}` 时返回明确错误，帮助模型自修复。
+
+**对 Claude 链路的影响**：
+- Incoming `<channel>` 标签新增 `sender_agent_id` 和 `task_id` 属性（source 为 Agent 时），帮助 worker 用 `{kind:"agent", agentId}` 回链具体 delegator。
+- Prompt 教学增加"agent_id-first targeting" 段，要求模型优先按 `sender_agent_id` 回复而非 role-broadcast。
+
+**详细修复记录**：见 [codex-chain.md 2026-04-17 条目](codex-chain.md)（主要落地在 daemon 侧，两链路共享同一份 wire 契约修复）。

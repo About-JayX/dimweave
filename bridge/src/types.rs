@@ -46,7 +46,11 @@ pub struct BridgeMessage {
     pub target: MessageTarget,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_target: Option<MessageTarget>,
-    pub content: String,
+    // `alias = "content"` mirrors the daemon side — defensive for any
+    // version-skewed JSON arriving over the bridge control channel.
+    // Serialization always emits `message`.
+    #[serde(alias = "content")]
+    pub message: String,
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<String>,
@@ -149,7 +153,7 @@ pub enum DaemonInbound {
 #[derive(Debug, Clone)]
 pub struct ParsedReply {
     pub target: MessageTarget,
-    pub content: String,
+    pub message: String,
     pub status: MessageStatus,
 }
 
@@ -205,16 +209,7 @@ pub enum MessageSource {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum MessageTarget {
-    User,
-    Role { role: String },
-    Agent {
-        #[serde(rename = "agentId")]
-        agent_id: String,
-    },
-}
+pub use crate::message_target::MessageTarget;
 
 #[cfg(test)]
 mod tests {
@@ -227,7 +222,7 @@ mod tests {
             source: MessageSource::User,
             target: MessageTarget::Role { role: "coder".into() },
             reply_target: None,
-            content: "Do this.".into(),
+            message: "Do this.".into(),
             timestamp: 1770000000000,
             reply_to: None,
             priority: None,
@@ -253,7 +248,7 @@ mod tests {
             },
             target: MessageTarget::Agent { agent_id: "coder_2".into() },
             reply_target: Some(MessageTarget::Agent { agent_id: "lead_1".into() }),
-            content: "Fix it.".into(),
+            message: "Fix it.".into(),
             timestamp: 1770000000100,
             reply_to: None,
             priority: None,
@@ -282,7 +277,7 @@ mod tests {
             },
             target: MessageTarget::User,
             reply_target: None,
-            content: "Done.".into(),
+            message: "Done.".into(),
             timestamp: 1770000000200,
             reply_to: Some("msg_2".into()),
             priority: None,

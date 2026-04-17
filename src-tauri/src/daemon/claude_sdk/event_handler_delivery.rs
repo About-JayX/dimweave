@@ -44,7 +44,7 @@ pub(super) fn build_direct_sdk_gui_message(
         },
         target: MessageTarget::User,
         reply_target: None,
-        content: text.to_string(),
+        message: text.to_string(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,

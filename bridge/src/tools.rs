@@ -29,7 +29,8 @@ pub fn reply_tool_schema() -> serde_json::Value {
             "properties": {
                 "target": {
                     "type": "object",
-                    "description": "Message target",
+                    "description": "Message target (flat 3-field form — all keys required, unused keys filled with empty strings).",
+                    "additionalProperties": false,
                     "properties": {
                         "kind": {
                             "type": "string",
@@ -38,16 +39,16 @@ pub fn reply_tool_schema() -> serde_json::Value {
                         },
                         "role": {
                             "type": "string",
-                            "description": "Required when kind is role"
+                            "description": "Role name when kind='role'; empty string otherwise"
                         },
                         "agentId": {
                             "type": "string",
-                            "description": "Required when kind is agent"
+                            "description": "Agent id when kind='agent'; empty string otherwise"
                         }
                     },
-                    "required": ["kind"]
+                    "required": ["kind", "role", "agentId"]
                 },
-                "text": {
+                "message": {
                     "type": "string",
                     "description": "Message content"
                 },
@@ -57,7 +58,7 @@ pub fn reply_tool_schema() -> serde_json::Value {
                     "description": "Message lifecycle status"
                 }
             },
-            "required": ["target", "text", "status"]
+            "required": ["target", "message", "status"]
         }
     })
 }
@@ -91,7 +92,7 @@ pub fn handle_tool_call(
         return Ok(None);
     };
     let target = parse_target(args)?;
-    let Some(text) = args.get("text").and_then(|v| v.as_str()) else {
+    let Some(text) = args.get("message").and_then(|v| v.as_str()) else {
         return Ok(None);
     };
     if text.trim().is_empty() {
@@ -112,12 +113,20 @@ pub fn handle_tool_call(
     };
     Ok(Some(ParsedReply {
         target,
-        content: text.to_string(),
+        message: text.to_string(),
         status,
     }))
 }
 
 fn parse_target(args: &serde_json::Value) -> Result<MessageTarget, ToolCallError> {
+    // Legacy `{to: ..., text: ...}` → help the model self-correct with a
+    // precise error rather than a generic "missing target.kind".
+    if args.get("to").is_some() && args.get("target").is_none() {
+        return Err(ToolCallError::InvalidTarget(
+            "legacy 'to' field detected; reply tool now requires structured \
+             `target: {kind, role, agentId}` object (see tool schema)".into(),
+        ));
+    }
     let obj = args
         .get("target")
         .ok_or_else(|| ToolCallError::InvalidTarget("missing target".into()))?;

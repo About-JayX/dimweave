@@ -659,3 +659,41 @@ Claude role: lead, Codex role: coder, Online agents: [codex]
 - app 异常退出时 codex app-server 残留进程不会被自动清理
 - `item/completed(agentMessage)` 构造的 BridgeMessage 硬编码 `to: "user"`，不反映实际路由目标
 - `dynamicTools` 未按角色过滤（所有角色收到相同 3 个工具），可做 L1 硬约束但尚未实现
+
+---
+
+## 2026-04-17 — Transmission layer unification (agent_id-aware routing)
+
+**问题场景**：同 task 下多 lead / 多 coder 场景（shared-role），worker 诊断消息按 role 字符串匹配会送错 lead；`build_completed_output_message` 在 schema 启用但 `target` 缺失时默认 `User`，worker 结果绕过 lead 直达用户（fail-open）；三条表面（Claude MCP reply input / Codex output_schema / BridgeMessage 存储）envelope 字段名分裂为 `text` / `message` / `content`，target 形态分裂为 oneOf / flat / discriminated-union。
+
+**根因**：
+1. `TaskAgent` 才是路由权威实体，role 字符串不唯一，但路由/诊断代码在多处按 role 字符串回链。
+2. `parsed.target.unwrap_or(MessageTarget::User)` 是 fail-open 路径，Codex 输出 target 缺失时不阻断而是静默走 user。
+3. Claude MCP tool schema + Codex strict output schema + daemon 存储 JSON 三份手工维护，字段名和形态自然漂移。
+
+**修复**（本次一次性落地，原子上线）：
+
+1. **`MessageTarget` 自定义 serde**（新增 [src-tauri/src/daemon/message_target.rs](../../src-tauri/src/daemon/message_target.rs) + [bridge/src/message_target.rs](../../bridge/src/message_target.rs)）：Rust 类型保留 `User | Role | Agent` 判别 enum，但 wire 形态统一为扁平 3 字段 `{kind, role, agentId}`，未用字段空串。Deserialize 同时接受老判别联合形态（持久化后向兼容）。
+
+2. **envelope `text`/`content` 统一为 `message`**：Claude MCP reply tool、BridgeMessage wire、daemon → frontend 事件、`daemon_send_user_input` Tauri 参数、前端 TS 类型全部对齐。`daemon_send_user_input` / `DaemonCmd::SendUserInput` Rust 参数名也跟随。
+
+3. **worker 诊断 helper 按 agent_id 回链**（[codex/session_event.rs::worker_diagnostic_target](../../src-tauri/src/daemon/codex/session_event.rs)）：P1 `routing::delegator_agent_id(sender_agent_id)` → P2 `agents_for_task(task).find(role=="lead")` → P3 `User`。第二级触发即发 WARN 日志。替换了原来 4 处硬写 `MessageTarget::User` 的诊断路径（error / parse error / dropped / silent turn）。
+
+4. **Codex 输出 fail-closed**（`build_completed_output_message` 改为返回 `CompletedOutput { Ready | Skip | MissingTarget }`）：schema 启用但 target 缺失时走 diagnostic 链路回 lead，不再默认 `User`。
+
+5. **Routing 层 sender-role soft guard**（[routing.rs:route_message_inner_with_meta](../../src-tauri/src/daemon/routing.rs)）：非 lead worker 直投 user 时 WARN 日志观测，暂不硬拒（LLM 偶尔合法）。
+
+6. **Bridge parser 对 legacy `to` 精确报错**（[bridge/src/tools.rs::parse_target](../../bridge/src/tools.rs)）：检测到 `args["to"]` 但无 `target` 时返回明确错误提示，让模型自修复。
+
+7. **`<channel>` 元数据双向透传**（[routing_format.rs](../../src-tauri/src/daemon/routing_format.rs) + [claude_sdk/protocol.rs::wrap_channel_content](../../src-tauri/src/daemon/claude_sdk/protocol.rs)）：Claude SDK 注入的 channel 标签带 `sender_agent_id` 和 `task_id` 属性；Codex 注入的文本也带 `[agent_id]` 和 `(task: tid)`。worker 因此能拿到 delegator agent_id 并用 `{kind:"agent", agentId}` 精确回链。
+
+8. **Prompt 教学 agent_id-first 目标**（[claude_prompt.rs](../../src-tauri/src/daemon/role_config/claude_prompt.rs) + [roles.rs](../../src-tauri/src/daemon/role_config/roles.rs)）：Claude 和 Codex 两侧都要求模型优先用 `{kind:"agent", agentId:<incoming sender_agent_id>}` 回复特定 delegator。
+
+9. **CI drift guard**（[scripts/check_contract_drift.sh](../../scripts/check_contract_drift.sh)）：防止 `.claude/agents/`、`.claude/rules/`、`docs/agents/` 漂回旧 `to=` kwarg 或 `text` envelope 字段签名（具体模式见脚本）。
+
+**测试覆盖**：
+- `cargo test -p dimweave-bridge` — 53/53 通过（含 11 个新 MessageTarget serde 测试）
+- `cargo test -p dimweave` — 691 通过（3 个失败全部 pre-existing：2 个 state_persistence 文件权限 + 1 个 `reply_target_map` 静态污染 flake，和本次改动无关）
+- 新增测试：`completed_output_builder_fails_closed_when_target_missing`、`silent_turn_fallback_uses_provided_target_verbatim`、`worker_diagnostic_target_*`（3 个分支覆盖）、`format_ndjson_user_message_includes_task_id_when_present`、`format_ndjson_user_message_omits_sender_agent_id_for_user_source`
+
+**运行时验证**：待手工端到端验证（两个 Codex coder shared role、reply_target_map 精确回链、silent turn 诊断发回 delegating lead）。

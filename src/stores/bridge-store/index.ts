@@ -57,9 +57,9 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
     setDraft: (text) => set({ draft: text }),
     clearClaudeAttention: () => set({ claudeNeedsAttention: false }),
 
-    sendToCodex: (content, target, attachments, taskId) => {
+    sendToCodex: (message, target, attachments, taskId) => {
       invoke("daemon_send_user_input", {
-        content,
+        message,
         target: target ?? "auto",
         attachments: attachments?.length ? attachments : null,
         taskId: taskId ?? null,

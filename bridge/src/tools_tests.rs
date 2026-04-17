@@ -11,12 +11,12 @@ fn call_params(args: serde_json::Value) -> serde_json::Value {
 fn reply_with_user_target() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "user" },
-        "text": "hello",
+        "message": "hello",
         "status": "done"
     }));
     let result = handle_tool_call(&params).unwrap().unwrap();
     assert_eq!(result.target, MessageTarget::User);
-    assert_eq!(result.content, "hello");
+    assert_eq!(result.message, "hello");
     assert_eq!(result.status, MessageStatus::Done);
 }
 
@@ -24,7 +24,7 @@ fn reply_with_user_target() {
 fn reply_with_role_target() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "role", "role": "coder" },
-        "text": "implement this",
+        "message": "implement this",
         "status": "in_progress"
     }));
     let result = handle_tool_call(&params).unwrap().unwrap();
@@ -36,7 +36,7 @@ fn reply_with_role_target() {
 fn reply_with_agent_target() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "agent", "agentId": "agent_coder_2" },
-        "text": "fix the bug",
+        "message": "fix the bug",
         "status": "done"
     }));
     let result = handle_tool_call(&params).unwrap().unwrap();
@@ -50,7 +50,7 @@ fn reply_with_agent_target() {
 fn reply_preserves_arbitrary_role() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "role", "role": "reviewer" },
-        "text": "check this",
+        "message": "check this",
         "status": "done"
     }));
     let result = handle_tool_call(&params).unwrap().unwrap();
@@ -61,7 +61,7 @@ fn reply_preserves_arbitrary_role() {
 fn reply_defaults_missing_status_to_done() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "user" },
-        "text": "hello"
+        "message": "hello"
     }));
     let result = handle_tool_call(&params).unwrap().unwrap();
     assert_eq!(result.status, MessageStatus::Done);
@@ -72,7 +72,7 @@ fn reply_defaults_missing_status_to_done() {
 #[test]
 fn reply_rejects_missing_target() {
     let params = call_params(serde_json::json!({
-        "text": "hello", "status": "done"
+        "message": "hello", "status": "done"
     }));
     assert!(matches!(
         handle_tool_call(&params).unwrap_err(),
@@ -84,7 +84,7 @@ fn reply_rejects_missing_target() {
 fn reply_rejects_unknown_kind() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "broadcast" },
-        "text": "hello", "status": "done"
+        "message": "hello", "status": "done"
     }));
     match handle_tool_call(&params).unwrap_err() {
         ToolCallError::InvalidTarget(msg) => assert!(msg.contains("broadcast")),
@@ -96,7 +96,7 @@ fn reply_rejects_unknown_kind() {
 fn reply_rejects_role_without_role_field() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "role" },
-        "text": "hello", "status": "done"
+        "message": "hello", "status": "done"
     }));
     assert!(matches!(
         handle_tool_call(&params).unwrap_err(),
@@ -108,7 +108,7 @@ fn reply_rejects_role_without_role_field() {
 fn reply_rejects_agent_without_agent_id() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "agent" },
-        "text": "hello", "status": "done"
+        "message": "hello", "status": "done"
     }));
     assert!(matches!(
         handle_tool_call(&params).unwrap_err(),
@@ -120,7 +120,7 @@ fn reply_rejects_agent_without_agent_id() {
 fn reply_rejects_empty_role() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "role", "role": "  " },
-        "text": "hello", "status": "done"
+        "message": "hello", "status": "done"
     }));
     assert!(matches!(
         handle_tool_call(&params).unwrap_err(),
@@ -132,7 +132,7 @@ fn reply_rejects_empty_role() {
 fn reply_rejects_old_to_field_without_target() {
     // Old `to` field without structured `target` must be rejected
     let params = call_params(serde_json::json!({
-        "to": "lead", "text": "hello", "status": "done"
+        "to": "lead", "message": "hello", "status": "done"
     }));
     assert!(matches!(
         handle_tool_call(&params).unwrap_err(),
@@ -144,7 +144,7 @@ fn reply_rejects_old_to_field_without_target() {
 fn reply_invalid_status_returns_error() {
     let params = call_params(serde_json::json!({
         "target": { "kind": "user" },
-        "text": "hello",
+        "message": "hello",
         "status": "waiting"
     }));
     let err = handle_tool_call(&params).unwrap_err();
@@ -162,7 +162,7 @@ fn unknown_tool_returns_none() {
 #[test]
 fn empty_reply_text_rejected() {
     let params = call_params(serde_json::json!({
-        "target": { "kind": "user" }, "text": "", "status": "done"
+        "target": { "kind": "user" }, "message": "", "status": "done"
     }));
     assert!(handle_tool_call(&params).unwrap().is_none());
 }
@@ -170,7 +170,7 @@ fn empty_reply_text_rejected() {
 #[test]
 fn whitespace_only_reply_text_rejected() {
     let params = call_params(serde_json::json!({
-        "target": { "kind": "user" }, "text": " \n\t ", "status": "done"
+        "target": { "kind": "user" }, "message": " \n\t ", "status": "done"
     }));
     assert!(handle_tool_call(&params).unwrap().is_none());
 }
@@ -188,9 +188,12 @@ fn reply_schema_uses_structured_target() {
     );
     // Old `to` field must be absent
     assert!(schema["inputSchema"]["properties"]["to"].is_null());
+    // Envelope uses `message`, not `text`, canonical with Codex output_schema.
+    assert!(schema["inputSchema"]["properties"]["message"].is_object());
+    assert!(schema["inputSchema"]["properties"]["text"].is_null());
     assert_eq!(
         schema["inputSchema"]["required"],
-        serde_json::json!(["target", "text", "status"])
+        serde_json::json!(["target", "message", "status"])
     );
 }
 

@@ -56,7 +56,7 @@ pub(super) async fn handle_update(
         source: crate::daemon::types::MessageSource::User,
         target: crate::daemon::types::MessageTarget::Role { role: "lead".into() },
         reply_target: None,
-        content: text.clone(),
+        message: text.clone(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reply_to: None,
         priority: None,
