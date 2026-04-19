@@ -158,4 +158,22 @@ pub fn upsert_provider_auth(&mut self, mut cfg: ProviderAuthConfig) {
 5. `fix(provider-auth): scrub credential fields when saving subscription mode`
 
 ## CM 回填区
-<!-- 实施完成后回填 -->
+
+- `981fc5f0` — `docs: plan auth/routing code-review followups (C1/C2/H2/M3/H1)` — 本 plan 文档
+- `56b50f0c` — `fix(routing): sender gate task-first so multi-task doesn't gate legit messages` — C1 修复 + `sender_gate_survives_codex_role_singleton_flip` 回归测试
+- `250a6998` — `fix(codex-auth): RAII temp CODEX_HOME + startup sweep for orphans` — C2 `TempCodexHome` RAII 包装 + daemon 启动时 PID-gated sweep `/tmp/dimweave-codex-apikey-*`
+- `c10493a4` — `fix(ui): TaskPanel edit allSettled + surface errors instead of swallowing` — H2 `handleDialogSubmit` 两段 try + stop phase `Promise.allSettled` + 每个 rejected stop 记 console.error
+- `1eaca85b` — `fix(messages): let source=system messages cross task boundaries` — M3 `filterMessagesByTaskId` 放行 `source.kind === "system"` + 文档注释说明语义
+- `6e4e8c68` — `fix(provider-auth): scrub credential fields when saving subscription mode` — H1 `upsert_provider_auth` 在 subscription 模式下强制清空 credential 字段 + `upsert_subscription_scrubs_credential_fields` 单测
+
+### 验证
+
+- `cargo test` — 741 passed（+2 新测试：C1 race + H1 scrub）
+- `bun x tsc --noEmit -p tsconfig.app.json` — 无新增错误
+- `bun run build` — OK
+
+### 明确不修（已评估）
+
+- **H3** — `SaveProviderAuth` / `Launch*` 都走同一个 `cmd_rx` 串行消费（`daemon/mod.rs:443`），实际无竞态窗口，`auth_version` 属于纵深防御
+- **H4** — 短 key (< 20 字符) 逻辑在 `process.rs::apply_provider_auth` 已经 chars().rev().take(20).rev() 正确兜底；只是单测没覆盖短 key 场景
+- **L1/L2/L3/L4** — 样式 / 日志补强 / 文档类建议，非 blocking
