@@ -385,7 +385,7 @@ export function ProviderAuthDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border/50 bg-card shadow-xl"
+        className="relative z-10 flex h-[90vh] max-h-160 w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border/50 bg-card shadow-xl"
       >
         <div className="shrink-0 border-b border-border/30 px-4 py-3">
           <h2 className="text-sm font-semibold">Provider Authentication</h2>
