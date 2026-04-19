@@ -125,6 +125,11 @@ fn collect_supported_efforts(caps: &RawCapabilities) -> Vec<String> {
     out
 }
 
+/// Public shim — lets sibling modules (e.g. `profile`) share the same auth path.
+pub(super) fn oauth_access_token_public() -> Option<String> {
+    oauth_access_token()
+}
+
 #[cfg(target_os = "macos")]
 fn oauth_access_token() -> Option<String> {
     let out = std::process::Command::new("security")

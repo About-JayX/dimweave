@@ -84,6 +84,11 @@ async fn list_claude_models() -> Result<Vec<claude::models::ClaudeModel>, String
 }
 
 #[tauri::command]
+async fn get_claude_profile() -> Result<claude::profile::ClaudeProfile, String> {
+    claude::profile::get_profile().await
+}
+
+#[tauri::command]
 async fn pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Option<String>>();
     app.dialog().file().pick_folder(move |path| {
@@ -138,6 +143,7 @@ fn main() {
             refresh_usage,
             list_codex_models,
             list_claude_models,
+            get_claude_profile,
             pick_directory,
             pick_files,
             mcp::register_mcp,
