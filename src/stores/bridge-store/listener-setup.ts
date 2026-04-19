@@ -111,6 +111,22 @@ export function createBridgeListeners(
         codexStream: resetCodexStream(s),
       }));
     }
+    // Task removal: sweep permission prompts tied to tasks that no
+    // longer exist. Without this, a deleted task's pending approvals
+    // would sit in the global queue forever, showing up on every task
+    // view's pending badge with no way to resolve (the underlying
+    // subprocess is already dead).
+    const prevIds = Object.keys(prev.tasks);
+    const nextIds = new Set(Object.keys(state.tasks));
+    const removedIds = prevIds.filter((id) => !nextIds.has(id));
+    if (removedIds.length > 0) {
+      const removed = new Set(removedIds);
+      set((s) => ({
+        permissionPrompts: s.permissionPrompts.filter(
+          (p) => !p.taskId || !removed.has(p.taskId),
+        ),
+      }));
+    }
   });
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   const cancelPendingFlush = () => {

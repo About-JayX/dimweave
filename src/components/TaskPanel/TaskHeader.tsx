@@ -1,4 +1,5 @@
-import { Settings2, Trash2 } from "lucide-react";
+import { Settings2, Trash2, ShieldAlert } from "lucide-react";
+import { useBridgeStore } from "@/stores/bridge-store";
 import { useTaskStore } from "@/stores/task-store";
 import type { TaskAgentInfo, TaskInfo } from "@/stores/task-store/types";
 
@@ -36,7 +37,10 @@ function SaveIndicator() {
 
   if (!lastSave.success) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-rose-400" title={lastSave.error ?? "Save failed"}>
+      <span
+        className="inline-flex items-center gap-1 text-[11px] text-rose-400"
+        title={lastSave.error ?? "Save failed"}
+      >
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400" />
         Save failed
       </span>
@@ -78,7 +82,16 @@ export function TaskHeader({
   onClick?: () => void;
 }) {
   const agents = useTaskStore((s) => s.taskAgents[task.taskId] ?? NO_AGENTS);
-  const agentStatuses = useTaskStore((s) => s.agentRuntimeStatuses[task.taskId]);
+  const agentStatuses = useTaskStore(
+    (s) => s.agentRuntimeStatuses[task.taskId],
+  );
+  const pendingPromptCount = useBridgeStore((s) => {
+    let n = 0;
+    for (const p of s.permissionPrompts) {
+      if (p.taskId === task.taskId) n += 1;
+    }
+    return n;
+  });
   const showDetail = !collapsed;
   return (
     <div
@@ -87,13 +100,30 @@ export function TaskHeader({
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") onClick();
+            }
+          : undefined
+      }
     >
       {/* Main row: task info left, edit icon (non-collapsed) or status (collapsed) right */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="truncate text-sm font-semibold text-foreground">
-            {task.title}
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-foreground">
+              {task.title}
+            </span>
+            {pendingPromptCount > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-1.5 py-px text-[10px] font-semibold text-amber-500"
+                title={`${pendingPromptCount} pending approval${pendingPromptCount > 1 ? "s" : ""} — open this task to resolve`}
+              >
+                <ShieldAlert className="size-3" />
+                {pendingPromptCount}
+              </span>
+            )}
           </div>
           {showDetail && (
             <div className="truncate text-xs text-muted-foreground/80">
@@ -111,13 +141,22 @@ export function TaskHeader({
           {showDetail && (
             <div className="flex flex-wrap items-center gap-1.5">
               {agents.map((agent) => {
-                const provStyle = agent.provider === "claude"
-                  ? "border-claude/30 bg-claude/8 text-claude/80"
-                  : "border-codex/30 bg-codex/8 text-codex/80";
-                const isOnline = agentStatuses?.find((s) => s.agentId === agent.agentId)?.online ?? false;
+                const provStyle =
+                  agent.provider === "claude"
+                    ? "border-claude/30 bg-claude/8 text-claude/80"
+                    : "border-codex/30 bg-codex/8 text-codex/80";
+                const isOnline =
+                  agentStatuses?.find((s) => s.agentId === agent.agentId)
+                    ?.online ?? false;
                 return (
-                  <span key={agent.agentId} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}>
-                    <span data-agent-online={isOnline ? "true" : "false"} className={`inline-block h-1.5 w-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-500"}`} />
+                  <span
+                    key={agent.agentId}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${provStyle}`}
+                  >
+                    <span
+                      data-agent-online={isOnline ? "true" : "false"}
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-500"}`}
+                    />
                     {agent.displayName ?? agent.role}: {agent.provider}
                   </span>
                 );
@@ -127,18 +166,38 @@ export function TaskHeader({
         </div>
         {/* Upper-right: icon-only edit button (non-collapsed) or compact status (collapsed) */}
         {showDetail ? (
-          (onEditTask || onDeleteTask) ? (
+          onEditTask || onDeleteTask ? (
             <div className="flex items-center gap-0.5 shrink-0">
-              {onDeleteTask && <button type="button" data-delete-icon="true"
-                onClick={(e) => { e.stopPropagation(); onDeleteTask(); }}
-                className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-rose-500/20 hover:text-rose-400 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                title="Delete task" aria-label="Delete task">
-                <Trash2 className="size-3.5" /></button>}
-              {onEditTask && <button type="button" data-edit-icon="true"
-                onClick={(e) => { e.stopPropagation(); onEditTask(); }}
-                className="shrink-0 rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                title="Edit task" aria-label="Edit task">
-                <Settings2 className="size-3.5" /></button>}
+              {onDeleteTask && (
+                <button
+                  type="button"
+                  data-delete-icon="true"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteTask();
+                  }}
+                  className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-rose-500/20 hover:text-rose-400 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title="Delete task"
+                  aria-label="Delete task"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
+              {onEditTask && (
+                <button
+                  type="button"
+                  data-edit-icon="true"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditTask();
+                  }}
+                  className="shrink-0 rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title="Edit task"
+                  aria-label="Edit task"
+                >
+                  <Settings2 className="size-3.5" />
+                </button>
+              )}
             </div>
           ) : null
         ) : (
@@ -149,7 +208,9 @@ export function TaskHeader({
       {showDetail && (
         <div className="mt-2 flex items-center justify-end gap-2">
           {reviewBadge && (
-            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${REVIEW_TONE_STYLES[reviewBadge.tone]}`}>
+            <span
+              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${REVIEW_TONE_STYLES[reviewBadge.tone]}`}
+            >
               {reviewBadge.label}
             </span>
           )}
