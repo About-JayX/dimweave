@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Users } from "lucide-react";
 import { TelegramPanel } from "@/components/AgentStatus/TelegramPanel";
 import { BugInboxPanel } from "@/components/BugInboxPanel";
 import { TelegramIcon, FeishuIcon } from "@/components/AgentStatus/BrandIcons";
 import { useFeishuProjectStore } from "@/stores/feishu-project-store";
 import { activeItemCount } from "@/components/BugInboxPanel/view-model";
 import { cn } from "@/lib/utils";
+import { AgentsInfoPanel } from "./AgentsInfoPanel";
 
 interface DisclosureSectionProps {
   title: string;
@@ -56,6 +57,13 @@ export function ToolsPanel() {
 
   return (
     <section className="flex h-full flex-col -mx-4 -my-4 overflow-y-auto">
+      <DisclosureSection
+        title="Agents"
+        icon={<Users className="size-3.5 shrink-0" />}
+        defaultOpen
+      >
+        <AgentsInfoPanel />
+      </DisclosureSection>
       <DisclosureSection
         title="Telegram"
         icon={<TelegramIcon className="size-3.5 shrink-0" />}
