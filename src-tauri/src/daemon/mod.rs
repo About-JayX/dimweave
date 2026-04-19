@@ -228,7 +228,7 @@ async fn launch_claude_sdk(
         .clone()
         .unwrap_or_else(|| session_id.clone());
     let launch_nonce = uuid::Uuid::new_v4().to_string();
-    let mcp_config = crate::mcp::build_dimweave_mcp_config(cwd, role_id)?;
+    let mcp_config = crate::mcp::build_dimweave_mcp_config(cwd, role_id, task_id, &agent_id)?;
     gui::emit_system_log(
         app,
         "info",

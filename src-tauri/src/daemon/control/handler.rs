@@ -38,6 +38,32 @@ fn validate_claimed_agent_id(
     ))
 }
 
+/// Resolve (role, agent_id, display_source) directly from the task identity
+/// the bridge declared in its AgentConnect handshake. This is the only
+/// multi-task-safe path — it never scans task_runtimes and never relies
+/// on HashMap iteration order.
+fn resolve_from_connection_task(
+    s: &crate::daemon::state::DaemonState,
+    runtime_id: &str,
+    task_id: &str,
+    task_agent_id: &str,
+) -> Option<(String, String, String)> {
+    let expected = match runtime_id {
+        "claude" => crate::daemon::task_graph::types::Provider::Claude,
+        "codex" => crate::daemon::task_graph::types::Provider::Codex,
+        _ => return None,
+    };
+    let agents = s.task_graph.agents_for_task(task_id);
+    let agent = agents
+        .iter()
+        .find(|a| a.agent_id == task_agent_id && a.provider == expected)?;
+    Some((
+        agent.role.clone(),
+        agent.agent_id.clone(),
+        runtime_id.to_string(),
+    ))
+}
+
 /// Resolve (role, agent_id, display_source) from the concrete online slot's
 /// agent_id, then task_agents, then global singletons.
 fn resolve_agent_identity(
@@ -130,6 +156,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
     let (mut sink, mut stream) = socket.split();
     let (tx, mut rx) = mpsc::channel::<ToAgent>(64);
     let mut agent_id: Option<String> = None;
+    // Task identity this WS instance reported during AgentConnect. When set,
+    // it is authoritative for stamping AgentReply / PermissionRequest events,
+    // so multi-task deployments don't fall back to the racy
+    // agent_owning_task_id(runtime_id) scan.
+    let mut connection_task: Option<(String, String)> = None;
     let mut my_gen: u64 = 0;
 
     // Forward outbound messages to WS sink
@@ -152,12 +183,38 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
         };
 
         match from_agent {
-            FromAgent::AgentConnect { agent_id: id } => {
+            FromAgent::AgentConnect {
+                agent_id: id,
+                task_id: reported_task_id,
+                task_agent_id: reported_task_agent_id,
+            } => {
                 if !is_allowed_agent(&id) {
                     gui::emit_system_log(&app, "warn", &format!("[Control] rejected agent {id}"));
                     break;
                 }
                 agent_id = Some(id.clone());
+                if let (Some(tid), Some(aid)) = (
+                    reported_task_id.as_deref(),
+                    reported_task_agent_id.as_deref(),
+                ) {
+                    connection_task = Some((tid.to_string(), aid.to_string()));
+                    gui::emit_system_log(
+                        &app,
+                        "info",
+                        &format!(
+                            "[Control] {id} handshake declared task_id={tid} task_agent_id={aid}"
+                        ),
+                    );
+                } else if reported_task_id.is_some() || reported_task_agent_id.is_some() {
+                    gui::emit_system_log(
+                        &app,
+                        "warn",
+                        &format!(
+                            "[Control] {id} handshake only partial: task_id={:?} task_agent_id={:?}",
+                            reported_task_id, reported_task_agent_id,
+                        ),
+                    );
+                }
                 let (buffered_messages, buffered_verdicts, runtime_role) = {
                     let mut daemon = state.write().await;
                     let role = match id.as_str() {
@@ -168,6 +225,17 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     let gen = daemon.next_agent_gen;
                     daemon.next_agent_gen += 1;
                     my_gen = gen;
+                    if daemon.attached_agents.contains_key(&id) {
+                        gui::emit_system_log(
+                            &app,
+                            "warn",
+                            &format!(
+                                "[Control] attached_agents['{id}'] overwritten by new \
+                                 bridge connection (multi-task scenario); previous \
+                                 slot loses singleton sender"
+                            ),
+                        );
+                    }
                     daemon.attached_agents.insert(
                         id.clone(),
                         crate::daemon::state::AgentSender::new(tx.clone(), gen),
@@ -209,9 +277,22 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     let claimed_agent_id = message.source_agent_id().map(|s| s.to_string());
                     let (role, real_agent_id, display_src) = {
                         let s = state.read().await;
-                        claimed_agent_id
-                            .as_deref()
-                            .and_then(|claimed| validate_claimed_agent_id(&s, id, claimed))
+                        // Priority 1: handshake-declared task identity
+                        // (multi-task correct; never falls back to racy scan).
+                        connection_task
+                            .as_ref()
+                            .and_then(|(tid, aid)| {
+                                resolve_from_connection_task(&s, id, tid, aid)
+                            })
+                            // Priority 2: inbound message claim validated against
+                            // the runtime-guessed task (legacy single-task path).
+                            .or_else(|| {
+                                claimed_agent_id
+                                    .as_deref()
+                                    .and_then(|claimed| validate_claimed_agent_id(&s, id, claimed))
+                            })
+                            // Priority 3: first-online scan (pre-handshake-fix fallback;
+                            // correct only when at most one task is online).
                             .unwrap_or_else(|| resolve_agent_identity(&s, id))
                     };
                     let provider = if id == "claude" {
@@ -229,7 +310,13 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     message.status = Some(status);
                     {
                         let s = state.read().await;
-                        if let Some(task_id) = s.agent_owning_task_id(id) {
+                        // Prefer handshake-declared task_id; fall back to legacy
+                        // scan only when the connection didn't report one.
+                        let stamp_task_id = connection_task
+                            .as_ref()
+                            .map(|(tid, _)| tid.clone())
+                            .or_else(|| s.agent_owning_task_id(id));
+                        if let Some(task_id) = stamp_task_id {
                             s.stamp_message_context_for_task(&task_id, &role, &mut message);
                         } else {
                             s.stamp_message_context(&role, &mut message);
@@ -288,15 +375,18 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     .write()
                     .await
                     .store_permission_request(id, request.clone(), created_at);
-                // Stamp task_id so the frontend can surface which task the
-                // prompt belongs to (the bridge agent_id is a singleton
-                // provider key, not the per-launch TaskAgent.agent_id).
-                let owning_task_id = state.read().await.agent_owning_task_id(id);
+                // Prefer the task identity this bridge declared at handshake
+                // over the legacy scan; scan races between concurrent tasks.
+                let owning_task_id = match connection_task.as_ref() {
+                    Some((tid, _)) => Some(tid.clone()),
+                    None => state.read().await.agent_owning_task_id(id),
+                };
+                let owning_agent_id = connection_task.as_ref().map(|(_, aid)| aid.clone());
                 gui::emit_permission_prompt(
                     &app,
                     id,
                     owning_task_id.as_deref(),
-                    None,
+                    owning_agent_id.as_deref(),
                     &request,
                     created_at,
                 );

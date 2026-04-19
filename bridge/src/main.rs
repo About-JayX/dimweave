@@ -24,12 +24,19 @@ async fn main() {
     let sdk_mode = std::env::var("AGENTBRIDGE_SDK_MODE")
         .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    // Per-task identity injected by daemon's Claude launcher via .mcp.json env.
+    // When absent, bridge still connects; daemon falls back to legacy scanning
+    // (only safe when at most one task is online).
+    let task_id = std::env::var("DIMWEAVE_TASK_ID").ok().filter(|s| !s.is_empty());
+    let task_agent_id = std::env::var("DIMWEAVE_AGENT_ID").ok().filter(|s| !s.is_empty());
 
     tracing::info!(
         agent_id = %agent_id,
         control_port,
         role = %role,
         sdk_mode,
+        task_id = ?task_id,
+        task_agent_id = ?task_agent_id,
         "bridge starting"
     );
 
@@ -41,6 +48,8 @@ async fn main() {
     let dc = tokio::spawn(daemon_client::run(
         control_port,
         agent_id.clone(),
+        task_id.clone(),
+        task_agent_id.clone(),
         push_tx,
         reply_rx,
     ));

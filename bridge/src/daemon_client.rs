@@ -11,12 +11,15 @@ const BACKOFF_BUF_CAP: usize = 64;
 pub async fn run(
     port: u16,
     agent_id: String,
+    task_id: Option<String>,
+    task_agent_id: Option<String>,
     push_tx: tokio::sync::mpsc::Sender<DaemonInbound>,
     mut reply_rx: tokio::sync::mpsc::Receiver<BridgeOutbound>,
 ) {
     let url = format!("ws://127.0.0.1:{port}/ws");
     let mut attempt = 0u32;
     let mut pending: Vec<BridgeOutbound> = Vec::new();
+    let wire_agent_id = task_agent_id.clone().unwrap_or_else(|| agent_id.clone());
 
     loop {
         match connect_async(&url).await {
@@ -27,6 +30,8 @@ pub async fn run(
 
                 let connect_msg = serde_json::to_string(&BridgeMsg::AgentConnect {
                     agent_id: &agent_id,
+                    task_id: task_id.as_deref(),
+                    task_agent_id: task_agent_id.as_deref(),
                 })
                 .unwrap_or_else(|e| {
                     error!(
@@ -50,7 +55,7 @@ pub async fn run(
                             remaining.push(m);
                             continue;
                         }
-                        if let Ok(s) = serialize_outbound(&agent_id, &m) {
+                        if let Ok(s) = serialize_outbound(&wire_agent_id, &m) {
                             if sink.send(Message::Text(s)).await.is_err() {
                                 remaining.push(m);
                                 replay_failed = true;
@@ -76,7 +81,7 @@ pub async fn run(
                             }
                         }
                         Some(outbound) = reply_rx.recv() => {
-                            if !send_outbound(&agent_id, &mut sink, &mut pending, outbound, &mut pending_query).await {
+                            if !send_outbound(&wire_agent_id, &mut sink, &mut pending, outbound, &mut pending_query).await {
                                 break;
                             }
                         }

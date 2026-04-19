@@ -73,11 +73,28 @@ pub(crate) fn build_project_mcp_config(
     serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 
-pub(crate) fn build_dimweave_mcp_config(project_dir: &str, role: &str) -> Result<String, String> {
+pub(crate) fn build_dimweave_mcp_config(
+    project_dir: &str,
+    role: &str,
+    task_id: &str,
+    task_agent_id: &str,
+) -> Result<String, String> {
     let command = resolve_dimweave_bridge_cmd()?;
     let base = read_mcp_config(project_dir)?;
-    let (config, _) =
-        upsert_mcp_server(base, &command, &[], role, &[("AGENTBRIDGE_SDK_MODE", "1")])?;
+    // DIMWEAVE_TASK_ID + DIMWEAVE_AGENT_ID let the spawned bridge declare
+    // its task identity in AgentConnect, so daemon can stamp AgentReply
+    // messages to the correct task even when multiple tasks are online.
+    let (config, _) = upsert_mcp_server(
+        base,
+        &command,
+        &[],
+        role,
+        &[
+            ("AGENTBRIDGE_SDK_MODE", "1"),
+            ("DIMWEAVE_TASK_ID", task_id),
+            ("DIMWEAVE_AGENT_ID", task_agent_id),
+        ],
+    )?;
     serde_json::to_string(&config).map_err(|e| format!("serialize error: {e}"))
 }
 

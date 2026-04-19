@@ -22,6 +22,7 @@ pub(super) fn build_direct_sdk_gui_message(
     status: MessageStatus,
     agent_id: &str,
     display_source: &str,
+    task_id: Option<&str>,
 ) -> Option<BridgeMessage> {
     // Direct SDK fallback only renders terminal text. UI already exposes a
     // single Claude thinking indicator, so surfacing partial assistant chunks
@@ -49,7 +50,7 @@ pub(super) fn build_direct_sdk_gui_message(
         reply_to: None,
         priority: None,
         status: Some(status),
-        task_id: None,
+        task_id: task_id.map(str::to_string),
         session_id: None,
         attachments: None,
     })

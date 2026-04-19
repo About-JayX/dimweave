@@ -227,6 +227,15 @@ pub enum FromAgent {
     AgentConnect {
         #[serde(rename = "agentId")]
         agent_id: String,
+        /// Task this bridge instance belongs to. Absent for legacy clients
+        /// that predate per-task handshake; daemon falls back to scanning
+        /// task_runtimes (racy with multi-task) in that case.
+        #[serde(rename = "taskId", default)]
+        task_id: Option<String>,
+        /// Concrete TaskAgent id. Used for AgentReply stamping so
+        /// multi-task deployments don't collapse to one window.
+        #[serde(rename = "taskAgentId", default)]
+        task_agent_id: Option<String>,
     },
     AgentReply {
         message: BridgeMessage,

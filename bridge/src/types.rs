@@ -174,6 +174,13 @@ pub enum BridgeMsg<'a> {
     AgentConnect {
         #[serde(rename = "agentId")]
         agent_id: &'a str,
+        #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
+        task_id: Option<&'a str>,
+        /// Concrete TaskAgent id for this bridge instance. Used by daemon
+        /// to stamp AgentReply messages with the correct task and to
+        /// validate `source.agent_id` claims.
+        #[serde(rename = "taskAgentId", skip_serializing_if = "Option::is_none")]
+        task_agent_id: Option<&'a str>,
     },
     AgentReply {
         message: &'a BridgeMessage,
