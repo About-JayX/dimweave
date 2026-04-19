@@ -7,6 +7,7 @@ import {
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import { MiniMeter } from "@/components/CodexAccountPanel/MiniMeter";
 import { windowLabel } from "@/components/CodexAccountPanel/helpers";
+import { AuthActions } from "@/components/AgentStatus/AuthActions";
 import { cn } from "@/lib/utils";
 
 function AccountCard({
@@ -151,13 +152,14 @@ function CodexCard() {
   const usage = useCodexAccountStore((s) => s.usage);
   const refreshing = useCodexAccountStore((s) => s.refreshing);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
-  if (!profile) {
+  if (!profile?.email) {
     return (
       <AccountCard
         icon={<CodexIcon className="size-3.5 shrink-0" />}
         title="Codex"
       >
         <p className="text-[10px] text-muted-foreground/60">Not signed in</p>
+        <AuthActions />
       </AccountCard>
     );
   }
@@ -213,6 +215,7 @@ function CodexCard() {
           />
         </div>
       )}
+      <AuthActions />
     </AccountCard>
   );
 }
