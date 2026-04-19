@@ -523,25 +523,49 @@ export function ProviderAuthDialog({
             <p className="text-[11px] text-destructive">{saveError}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/30 px-4 py-3">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-[11px] text-muted-foreground"
-            onClick={close}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            className={cn("text-[11px]", saving && "opacity-60")}
-            onClick={() => void handleSave()}
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save & Apply"}
-          </Button>
-        </div>
+        {(() => {
+          const claudeMissingKey =
+            claudeForm.activeMode === "api_key" && !claudeForm.apiKey.trim();
+          const codexMissingKey =
+            codexForm.activeMode === "api_key" && !codexForm.apiKey.trim();
+          const blocked = claudeMissingKey || codexMissingKey;
+          const blockReason = [
+            claudeMissingKey ? "Claude" : null,
+            codexMissingKey ? "Codex" : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          return (
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/30 px-4 py-3">
+              {blocked && (
+                <span className="mr-auto text-[10px] text-destructive/80">
+                  {blockReason} API key is empty — fill it in or switch to
+                  Subscription.
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-[11px] text-muted-foreground"
+                onClick={close}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className={cn(
+                  "text-[11px]",
+                  (saving || blocked) && "opacity-60",
+                )}
+                onClick={() => void handleSave()}
+                disabled={saving || blocked}
+              >
+                {saving ? "Saving…" : "Save & Apply"}
+              </Button>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

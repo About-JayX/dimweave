@@ -242,6 +242,22 @@ async fn launch_claude_sdk(
         .get_provider_auth("claude")
         .cloned();
 
+    // Hard guard: explicit API-key mode without a key silently falls back
+    // to keychain OAuth via `xk6()`, which defeats the user's choice.
+    if let Some(ref a) = provider_auth {
+        if matches!(a.active_mode.as_deref(), Some("api_key"))
+            && a.api_key
+                .as_deref()
+                .map_or(true, |k| k.trim().is_empty())
+        {
+            return Err(
+                "Claude provider_auth is in api_key mode but no api_key is set. \
+                 Open Tools → Accounts ⚙ and either enter a key or switch back to Subscription."
+                    .to_string(),
+            );
+        }
+    }
+
     let opts = claude_sdk::process::ClaudeLaunchOpts {
         claude_bin,
         role: Some(role_id.to_string()),

@@ -264,6 +264,23 @@ async fn launch(
         .get_provider_auth("codex")
         .cloned();
 
+    // Hard guard: explicit API-key mode without a key is a configuration
+    // error. Without this, apply_provider_auth silently short-circuits and
+    // Codex falls back to ~/.codex/auth.json (i.e. the subscription auth),
+    // which is the opposite of what the user asked for.
+    if let Some(ref a) = provider_auth {
+        if matches!(a.active_mode.as_deref(), Some("api_key"))
+            && a.api_key
+                .as_deref()
+                .map_or(true, |k| k.trim().is_empty())
+        {
+            return Err(anyhow::anyhow!(
+                "Codex provider_auth is in api_key mode but no api_key is set. \
+                 Open Tools → Accounts ⚙ and either enter a key or switch back to Subscription."
+            ));
+        }
+    }
+
     // In API-key mode we can't share the user's ~/.codex/auth.json (it's
     // locked to "chatgpt" auth_mode when they're logged in via ChatGPT).
     // Stand up a per-session temp CODEX_HOME that (a) owns an apikey-mode
