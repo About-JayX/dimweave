@@ -33,6 +33,7 @@
 - `C1` (routing sender gate task-first) — 后端 routing 层不再用 singleton codex_role gating
 - `M3` (filterMessagesByTaskId + source=system bypass) — message list 过滤
 - task-session-guard 加 `taskRuntimeStatuses` 参数 — 这是本次修复的第一步（已在 session 内做，待 commit）
+- Worktree cleanup on DeleteTask — session 内顺手修了（commit `b6a89a41`），确认独立 bug，不等本 plan 上线再一起测（详见 Step 7）
 
 ## 修复总路线
 
@@ -96,6 +97,24 @@
 
 已经在 session_event.rs 修过两条（commit `74e7bac9`），其他 call site 要系统性 review。
 
+### Step 6 — UX 加固
+
+针对 "per-task sharding" 带来的副作用补一遍：
+
+- `PermissionQueue` 不按 activeTask 隐藏其他 task 的 prompt，改成在每条 prompt 上显示 `taskId` 或 task 名，否则用户在 Task B 看不见 Task A 的审批 → 死锁等 daemon timeout
+- TaskHeader 加 pending count 徽章（permission + needs_attention 汇总），其他 task 有未处理事务时用户能看到
+- 删除 task 时，store 监听 `deleteTask` 事件，清理对应的 stream / attention / permission bucket（防止 map 长期增长）
+- 关键组件（MessageList、StreamIndicator）保持 mount，用 CSS 隐藏非 active；避免 CSS 动画和 typing effect 在切换时重置
+
+### Step 7 — Worktree cleanup on DeleteTask（已完成，本 plan 内统一验证）
+
+独立 bug。已在 `b6a89a41` 修：
+- `DeleteTask` handler 接了 `cleanup_task_worktree`
+- `cleanup_task_worktree` 增加 `git branch -D task/<task_id>`
+- 测试 `cleanup_also_deletes_task_branch` 断言分支被删
+
+等本 plan 全部上线后一起测：创建 → 删除 → 确认 `<repo>/.worktrees/tasks/<task_id>/` 和 `task/<task_id>` 分支都消失。
+
 ## 不做的事
 
 - `terminalLines` / `system_log` 保持全局 —— 日志流跨 task 对 debug 更有用
@@ -127,9 +146,12 @@
 1. `fix(ui): per-task reply-input guard using task_runtime_statuses`（已开工，本 session 内完成）
 2. `feat(stream): scope claude/codex stream events by taskId + agentId`
 3. `refactor(agent-status): shard agents map by agentId so multi-task doesn't collide`
-4. `fix(permission): scope permission queue by taskId`
+4. `fix(permission): scope permission queue by taskId, surface task context on prompt`
 5. `refactor(singleton): derive claudeRole/codexRole/attention from active task`
-6. `audit(emit): tighten task_id stamping at all per-task event emit sites`
+6. `fix(ui): TaskHeader pending badges + bucket cleanup on task delete`
+7. `audit(emit): tighten task_id stamping at all per-task event emit sites`
+8. (已做) `fix(task): clean up git worktree + branch on DeleteTask` — `b6a89a41`
 
 ## CM 回填区
-<!-- 实施完成后回填 -->
+
+- `b6a89a41` — `fix(task): clean up git worktree + branch on DeleteTask` — Step 7 独立 bug，已合入本 plan 统一测试
