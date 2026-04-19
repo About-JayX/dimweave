@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod claude;
 #[allow(dead_code)]
 mod claude_cli;
 mod codex;
@@ -78,6 +79,11 @@ fn list_codex_models() -> Result<Vec<CodexModel>, String> {
 }
 
 #[tauri::command]
+async fn list_claude_models() -> Result<Vec<claude::models::ClaudeModel>, String> {
+    claude::models::list_models().await
+}
+
+#[tauri::command]
 async fn pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Option<String>>();
     app.dialog().file().pick_folder(move |path| {
@@ -131,6 +137,7 @@ fn main() {
             get_codex_account,
             refresh_usage,
             list_codex_models,
+            list_claude_models,
             pick_directory,
             pick_files,
             mcp::register_mcp,
