@@ -216,23 +216,43 @@ export function TaskPanel() {
     (payload: TaskSetupSubmitPayload) => {
       if (dialogMode === "edit") {
         void (async () => {
+          let savedAgents: AgentDef[] = [];
           try {
-            const savedAgents = await handleEditSubmit(payload);
-            if (payload.requestLaunch && task && savedAgents.length > 0) {
-              // Existing agents may already be online with old config; stop
-              // each one first so launch re-spawns with the new model/effort
-              // (bypasses the daemon's "already online" short-circuit).
-              for (const a of savedAgents) {
-                if (a.agentId) await stopAgent(a.agentId);
-              }
-              await launchProviders(
-                task.taskId,
-                task.taskWorktreeRoot,
-                savedAgents,
+            savedAgents = await handleEditSubmit(payload);
+          } catch (err) {
+            console.error("[TaskPanel] edit submit failed:", err);
+            return;
+          }
+          if (!(payload.requestLaunch && task && savedAgents.length > 0)) {
+            return;
+          }
+          // Existing agents may already be online with old config; stop them
+          // in parallel so launch re-spawns with the new model/effort
+          // (bypasses the daemon's "already online" short-circuit). Use
+          // allSettled so one failed stop doesn't abort the whole restart —
+          // callers get partial progress instead of a half-dead task.
+          const stopAgentIds = savedAgents
+            .map((a) => a.agentId)
+            .filter((id): id is string => !!id);
+          const stopResults = await Promise.allSettled(
+            stopAgentIds.map((id) => stopAgent(id)),
+          );
+          stopResults.forEach((r, i) => {
+            if (r.status === "rejected") {
+              console.error(
+                `[TaskPanel] stopAgent(${stopAgentIds[i]}) failed:`,
+                r.reason,
               );
             }
-          } catch {
-            /* edit/launch error */
+          });
+          try {
+            await launchProviders(
+              task.taskId,
+              task.taskWorktreeRoot,
+              savedAgents,
+            );
+          } catch (err) {
+            console.error("[TaskPanel] launchProviders failed:", err);
           }
         })();
       } else {
