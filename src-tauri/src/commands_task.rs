@@ -179,6 +179,8 @@ pub async fn daemon_add_task_agent(
     provider: String,
     role: String,
     display_name: Option<String>,
+    model: Option<String>,
+    effort: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<TaskAgent, String> {
     let p = parse_provider(&provider)?;
@@ -190,6 +192,8 @@ pub async fn daemon_add_task_agent(
             provider: p,
             role,
             display_name,
+            model,
+            effort,
             reply: reply_tx,
         })
         .await
@@ -224,6 +228,8 @@ pub async fn daemon_update_task_agent(
     provider: String,
     role: String,
     display_name: Option<String>,
+    model: Option<String>,
+    effort: Option<String>,
     sender: State<'_, DaemonSender>,
 ) -> Result<(), String> {
     let p = parse_provider(&provider)?;
@@ -235,6 +241,8 @@ pub async fn daemon_update_task_agent(
             provider: p,
             role,
             display_name,
+            model,
+            effort,
             reply: reply_tx,
         })
         .await

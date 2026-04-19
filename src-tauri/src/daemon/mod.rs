@@ -1066,20 +1066,23 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(result.map(|_| ()));
             }
             // ── TaskAgent CRUD ──────────────────────────────────
-            DaemonCmd::AddTaskAgent { task_id, provider, role, display_name, reply } => {
+            DaemonCmd::AddTaskAgent { task_id, provider, role, display_name, model, effort, reply } => {
                 let mut s = state.write().await;
                 if s.task_graph.get_task(&task_id).is_none() {
                     let _ = reply.send(Err(format!("task {task_id} not found")));
                 } else {
-                    let mut agent = s.task_graph.add_task_agent(&task_id, provider, &role);
+                    let mut agent = s.task_graph.add_task_agent_with_config(
+                        &task_id, provider, &role, model.clone(), effort.clone(),
+                    );
                     if display_name.is_some() {
-                        agent.display_name = display_name;
-                        // Write back the display_name
-                        s.task_graph.update_task_agent(
+                        agent.display_name = display_name.clone();
+                        s.task_graph.update_task_agent_with_config(
                             &agent.agent_id,
                             agent.provider,
                             &agent.role,
                             agent.display_name.clone(),
+                            model,
+                            effort,
                         );
                     }
                     let _ = s.task_graph.save();
@@ -1102,12 +1105,14 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(format!("agent {agent_id} not found")));
                 }
             }
-            DaemonCmd::UpdateTaskAgent { agent_id, provider, role, display_name, reply } => {
+            DaemonCmd::UpdateTaskAgent { agent_id, provider, role, display_name, model, effort, reply } => {
                 let mut s = state.write().await;
                 let task_id = s.task_graph.get_task_agent(&agent_id)
                     .map(|a| a.task_id.clone());
                 if let Some(tid) = task_id {
-                    s.task_graph.update_task_agent(&agent_id, provider, &role, display_name);
+                    s.task_graph.update_task_agent_with_config(
+                        &agent_id, provider, &role, display_name, model, effort,
+                    );
                     let _ = s.task_graph.save();
                     drop(s);
                     emit_task_context_events(&state, &app, &tid).await;

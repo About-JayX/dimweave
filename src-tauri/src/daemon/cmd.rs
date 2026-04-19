@@ -119,6 +119,8 @@ pub enum DaemonCmd {
         provider: Provider,
         role: String,
         display_name: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
         reply: oneshot::Sender<Result<crate::daemon::task_graph::types::TaskAgent, String>>,
     },
     RemoveTaskAgent {
@@ -130,6 +132,8 @@ pub enum DaemonCmd {
         provider: Provider,
         role: String,
         display_name: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     ReorderTaskAgents {
