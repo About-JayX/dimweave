@@ -343,7 +343,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                             } else {
                                 suppress_message = true;
                                 state.write().await.finish_claude_sdk_direct_text_turn();
-                                gui::emit_claude_stream(&app, None, None, ClaudeStreamPayload::Done);
+                                let (ctid, caid) = connection_task
+                                    .as_ref()
+                                    .map(|(t, a)| (Some(t.as_str()), Some(a.as_str())))
+                                    .unwrap_or((None, None));
+                                gui::emit_claude_stream(&app, ctid, caid, ClaudeStreamPayload::Done);
                                 gui::emit_system_log(
                                     &app,
                                     "info",
@@ -354,7 +358,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                             // Non-user-targeted or empty terminal replies end the
                             // visible thinking state without claiming final-message
                             // ownership — SDK result can still deliver to the user.
-                            gui::emit_claude_stream(&app, None, None, ClaudeStreamPayload::Done);
+                            let (ctid, caid) = connection_task
+                                .as_ref()
+                                .map(|(t, a)| (Some(t.as_str()), Some(a.as_str())))
+                                .unwrap_or((None, None));
+                            gui::emit_claude_stream(&app, ctid, caid, ClaudeStreamPayload::Done);
                         }
                     }
                 }
@@ -363,7 +371,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                 }
                 routing::route_message(&state, &app, message).await;
                 if bridge_claimed_delivery {
-                    gui::emit_claude_stream(&app, None, None, ClaudeStreamPayload::Done);
+                    let (ctid, caid) = connection_task
+                        .as_ref()
+                        .map(|(t, a)| (Some(t.as_str()), Some(a.as_str())))
+                        .unwrap_or((None, None));
+                    gui::emit_claude_stream(&app, ctid, caid, ClaudeStreamPayload::Done);
                 }
             }
             FromAgent::PermissionRequest { request } => {
@@ -428,7 +440,11 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
             };
             drop(daemon);
             if id == "claude" && !claude_sdk_still_online {
-                gui::emit_claude_stream(&app, None, None, ClaudeStreamPayload::Reset);
+                let (ctid, caid) = connection_task
+                    .as_ref()
+                    .map(|(t, a)| (Some(t.as_str()), Some(a.as_str())))
+                    .unwrap_or((None, None));
+                gui::emit_claude_stream(&app, ctid, caid, ClaudeStreamPayload::Reset);
             }
             if claude_sdk_still_online {
                 gui::emit_system_log(

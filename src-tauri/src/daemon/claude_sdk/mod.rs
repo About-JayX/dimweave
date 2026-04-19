@@ -103,7 +103,12 @@ pub async fn launch(
                         format!("Claude runtime exited for role={monitor_role}"),
                     ).await;
                     gui::emit_agent_status(&monitor_app, "claude", false, None, None);
-                    gui::emit_claude_stream(&monitor_app, None, None, gui::ClaudeStreamPayload::Done);
+                    gui::emit_claude_stream(
+                        &monitor_app,
+                        Some(&monitor_task_id),
+                        Some(&monitor_agent_id),
+                        gui::ClaudeStreamPayload::Done,
+                    );
                     gui::emit_system_log(
                         &monitor_app,
                         "info",

@@ -37,7 +37,7 @@ pub(super) async fn handle_codex_event(
         "thread/unarchived" => sync_thread_unarchive(v, state, app).await,
         "item/started" => {
             stream_preview.mark_transient_content();
-            emit_activity_from_item(v, app);
+            emit_activity_from_item(v, task_id, agent_id, app);
         }
         "item/reasoning/summaryTextDelta" => {
             if let Some(delta) = v["params"]["delta"].as_str().filter(|s| !s.is_empty()) {
@@ -346,10 +346,15 @@ async fn handle_completed_agent_message(
     }
 }
 
-fn emit_activity_from_item(v: &Value, app: &AppHandle) {
+fn emit_activity_from_item(v: &Value, task_id: &str, agent_id: &str, app: &AppHandle) {
     let item = &v["params"]["item"];
     if let Some(label) = activity_label_from_item(item) {
-        gui::emit_codex_stream(app, None, None, CodexStreamPayload::Activity { label });
+        gui::emit_codex_stream(
+            app,
+            Some(task_id),
+            Some(agent_id),
+            CodexStreamPayload::Activity { label },
+        );
     }
 }
 

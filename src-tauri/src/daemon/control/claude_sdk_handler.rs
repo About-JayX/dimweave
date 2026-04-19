@@ -134,7 +134,12 @@ async fn handle_ws_connection(
         );
         return;
     }
-    gui::emit_claude_stream(&app, None, None, ClaudeStreamPayload::Reset);
+    gui::emit_claude_stream(
+        &app,
+        Some(&task_id),
+        agent_id.as_deref(),
+        ClaudeStreamPayload::Reset,
+    );
     gui::emit_agent_status(&app, "claude", false, None, None);
     gui::emit_system_log(&app, "info", "[ClaudeSDK] Claude disconnected");
     gui::emit_system_log(

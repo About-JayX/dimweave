@@ -763,7 +763,12 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         None
                     };
                     if agent_id == "claude" {
-                        gui::emit_claude_stream(&app, None, None, gui::ClaudeStreamPayload::Reset);
+                        gui::emit_claude_stream(
+                            &app,
+                            task_id.as_deref(),
+                            None,
+                            gui::ClaudeStreamPayload::Reset,
+                        );
                     }
                     gui::emit_agent_status(&app, &agent_id, false, None, None);
                     gui::emit_system_log(
