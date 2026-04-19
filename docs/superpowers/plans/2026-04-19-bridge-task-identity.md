@@ -123,3 +123,5 @@ daemon 按连接记录身份，用它 stamp AgentReply / PermissionRequest，
 4. `docs: record bridge task identity fix`
 
 ## CM 回填区
+
+- `814b36f7` — `fix(bridge): carry task identity in handshake so multi-task stamping is correct` — 一次提交完成 step 1–5，cargo test -p dimweave-bridge + dimweave bin 全绿
