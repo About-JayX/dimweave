@@ -13,22 +13,34 @@ export function selectMessages(state: BridgeState) {
 }
 
 /**
- * Filter messages to only those belonging to a specific task.
+ * Filter messages to the active task.
  *
- * Strict match: messages that lack a taskId are EXCLUDED when a task is
- * active. Untagged messages leaked across task views when we allowed
- * them through (daemon diagnostics, pre-task chatter, etc. would bleed
- * into every task's chat history).
+ * Rules:
+ * - `taskId === taskId` → kept (per-task agent/user message).
+ * - `source.kind === "system"` → kept regardless of taskId. The daemon
+ *   emits genuinely global notices (startup, agent-offline broadcasts,
+ *   permission-queue origins, pre-task chatter) with `source = System`
+ *   and no taskId on purpose; they must remain visible in every task
+ *   view. See `state_task_flow.rs::stamp_message_context` — it returns
+ *   early when there's no active task, which is correct for system
+ *   messages but caused the bleed we closed with strict match.
+ * - Everything else (per-task diagnostics that forgot to stamp) is
+ *   dropped; the backend callers must stamp — that invariant was
+ *   tightened in the Codex session_event.rs error paths.
  *
- * When no task is active (`taskId == null`), show everything — there
- * is no task scope to preserve.
+ * When no task is active (`taskId == null`), show everything.
  */
 export function filterMessagesByTaskId(
-  messages: readonly { taskId?: string }[],
+  messages: readonly {
+    taskId?: string;
+    source?: { kind?: string };
+  }[],
   taskId: string | null,
 ): typeof messages {
   if (!taskId) return messages;
-  return messages.filter((m) => m.taskId === taskId);
+  return messages.filter(
+    (m) => m.taskId === taskId || m.source?.kind === "system",
+  );
 }
 
 export function selectAnyAgentConnected(state: BridgeState) {
