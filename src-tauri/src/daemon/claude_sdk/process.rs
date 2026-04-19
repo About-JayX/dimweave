@@ -159,8 +159,17 @@ pub fn spawn_claude(opts: &ClaudeLaunchOpts) -> anyhow::Result<Child> {
     Ok(child)
 }
 
-/// Translate a `ProviderAuthConfig` into the Claude env vars.
-/// `active_mode == Some("subscription")` or `api_key` missing/empty → no-op
+/// Translate a `ProviderAuthConfig` into the Claude env vars plus a
+/// `--settings` JSON that pre-approves the API key.
+///
+/// Claude CLI's normal auth resolver (`Ww()` in cli.js) only trusts
+/// `ANTHROPIC_API_KEY` when its last-20-character tail is present in
+/// `customApiKeyResponses.approved`; otherwise it falls through to the
+/// keychain OAuth. In headless bridge mode we never see the "trust this
+/// new key?" prompt, so we pre-populate the approval list via inline
+/// `--settings` so our key is accepted on first launch.
+///
+/// `active_mode == Some("subscription")` or empty `api_key` → no-op
 /// (subscription/OAuth path unchanged).
 pub(crate) fn apply_provider_auth(
     cmd: &mut Command,
@@ -171,20 +180,38 @@ pub(crate) fn apply_provider_auth(
         return;
     }
     let Some(api_key) = a.api_key.as_deref() else { return };
-    if api_key.trim().is_empty() {
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
         return;
     }
-    let mode = a.auth_mode.as_deref().unwrap_or("bearer");
-    if mode == "api_key" {
-        cmd.env("ANTHROPIC_API_KEY", api_key);
+    // Default to "api_key" (x-api-key header). Bearer mode only makes sense
+    // for third-party endpoints that require `Authorization: Bearer <token>`
+    // — users must explicitly switch in the Advanced section.
+    let mode = a.auth_mode.as_deref().unwrap_or("api_key");
+    if mode == "bearer" {
+        cmd.env("ANTHROPIC_AUTH_TOKEN", trimmed);
     } else {
-        cmd.env("ANTHROPIC_AUTH_TOKEN", api_key);
+        cmd.env("ANTHROPIC_API_KEY", trimmed);
     }
     if let Some(base_url) = a.base_url.as_deref() {
         if !base_url.trim().is_empty() {
             cmd.env("ANTHROPIC_BASE_URL", base_url);
         }
     }
+
+    // Pre-approve the key so Claude CLI doesn't fall back to keychain OAuth.
+    // `NE(key)` in cli.js is `key.slice(-20)`, so we mirror that here.
+    let tail_20: String = trimmed.chars().rev().take(20).collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    let settings_json = serde_json::json!({
+        "customApiKeyResponses": {
+            "approved": [tail_20]
+        }
+    })
+    .to_string();
+    cmd.arg("--settings").arg(settings_json);
 }
 
 #[cfg(test)]

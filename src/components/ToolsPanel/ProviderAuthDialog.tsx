@@ -33,7 +33,7 @@ const EMPTY_FORM: FormState = {
   apiKey: "",
   baseUrl: "",
   wireApi: "chat",
-  authMode: "bearer",
+  authMode: "api_key",
   providerName: "",
   showAdvanced: false,
 };
@@ -50,7 +50,7 @@ function fromConfig(cfg: ProviderAuthConfig | undefined): FormState {
     apiKey: cfg.apiKey ?? "",
     baseUrl: cfg.baseUrl ?? "",
     wireApi: cfg.wireApi ?? "chat",
-    authMode: (cfg.authMode as "bearer" | "api_key") ?? "bearer",
+    authMode: (cfg.authMode as "bearer" | "api_key") ?? "api_key",
     providerName: cfg.providerName ?? "",
     showAdvanced: Boolean(cfg.baseUrl || cfg.providerName),
   };

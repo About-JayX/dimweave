@@ -284,7 +284,7 @@ fn apply_provider_auth_empty_api_key_is_noop() {
 }
 
 #[test]
-fn apply_provider_auth_defaults_to_bearer_token() {
+fn apply_provider_auth_defaults_to_api_key_env() {
     let mut cmd = TokioCommand::new("noop");
     let cfg = ProviderAuthConfig {
         provider: "claude".into(),
@@ -298,8 +298,39 @@ fn apply_provider_auth_defaults_to_bearer_token() {
     };
     apply_provider_auth(&mut cmd, Some(&cfg));
     let envs = env_map(&cmd);
-    assert_eq!(envs.get("ANTHROPIC_AUTH_TOKEN").map(String::as_str), Some("sk-ant-xyz"));
-    assert!(!envs.contains_key("ANTHROPIC_API_KEY"));
+    assert_eq!(envs.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-ant-xyz"));
+    assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+}
+
+#[test]
+fn apply_provider_auth_emits_settings_approval_for_api_key() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("sk-ant-full-key-longer-than-20-chars-abcdefghij".into()),
+        base_url: None,
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        active_mode: Some("api_key".into()),
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let args: Vec<String> = cmd
+        .as_std()
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    // Find --settings and its JSON value
+    let idx = args.iter().position(|a| a == "--settings").expect("missing --settings");
+    let json = &args[idx + 1];
+    // Last 20 chars of the key must be in the approved list.
+    let tail = "-20-chars-abcdefghij";
+    assert!(
+        json.contains(tail),
+        "expected --settings to approve key tail {tail}, got {json}"
+    );
+    assert!(json.contains("customApiKeyResponses"));
 }
 
 #[test]
