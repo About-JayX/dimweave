@@ -188,8 +188,24 @@ fn resolve_broadcast_targets(
     msg: &BridgeMessage,
 ) -> BroadcastResolution {
     use crate::daemon::state::MatchedTaskAgent;
+    // Task-scoped claude role check: if this message carries a task_id, only
+    // emit Claude thinking when that specific task actually has a Claude agent
+    // whose role matches the target. The global `claude_role` singleton races
+    // across tasks (Task B's claude@lead leaks into Task A's codex@lead flow).
+    let claude_role_for_thinking = msg
+        .task_id
+        .as_deref()
+        .map(|tid| {
+            s.task_graph
+                .agents_for_task(tid)
+                .iter()
+                .find(|a| matches!(a.provider, crate::daemon::task_graph::types::Provider::Claude))
+                .map(|a| a.role.clone())
+                .unwrap_or_default()
+        })
+        .unwrap_or_else(|| s.claude_role.clone());
     let emit_claude_thinking =
-        routing_display::should_emit_claude_thinking_pre(msg, &s.claude_role);
+        routing_display::should_emit_claude_thinking_pre(msg, &claude_role_for_thinking);
 
     // Resolution priority: agent_id → role → user (user handled before this call).
     // Task-first: when msg carries a task_id, use task_agents[] as sole truth.
