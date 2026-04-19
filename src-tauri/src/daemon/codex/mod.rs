@@ -17,6 +17,34 @@ use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 
+const API_KEY_HOME_PREFIX: &str = "dimweave-codex-apikey-";
+
+/// RAII wrapper for the temp CODEX_HOME we provision for API-key auth.
+/// The directory gets removed whenever this value is dropped, so every
+/// bail path (handshake failure, supersede, spawn error, normal stop)
+/// cleans up automatically — no manual cleanup call needed.
+pub(crate) struct TempCodexHome(PathBuf);
+
+impl TempCodexHome {
+    pub(crate) fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempCodexHome {
+    fn drop(&mut self) {
+        // Belt-and-suspenders: only delete paths we recognise as ours.
+        if self
+            .0
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map_or(false, |n| n.starts_with(API_KEY_HOME_PREFIX))
+        {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
 /// Provision a per-session temp CODEX_HOME configured for API-key auth.
 ///
 /// Codex reads `<CODEX_HOME>/auth.json` before looking at `OPENAI_API_KEY`
@@ -25,9 +53,12 @@ use tokio_util::sync::CancellationToken;
 /// hand Codex a fresh CODEX_HOME that owns an `auth_mode: "apikey"` file
 /// with our key. Thread history is preserved by symlinking `sessions/`
 /// back to the user's real codex home.
-fn build_api_key_codex_home(session_id: &str, api_key: &str) -> anyhow::Result<PathBuf> {
-    let base = std::env::temp_dir()
-        .join(format!("dimweave-codex-apikey-{}-{}", std::process::id(), session_id));
+fn build_api_key_codex_home(session_id: &str, api_key: &str) -> anyhow::Result<TempCodexHome> {
+    let base = std::env::temp_dir().join(format!(
+        "{API_KEY_HOME_PREFIX}{}-{}",
+        std::process::id(),
+        session_id
+    ));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&base)?;
 
@@ -50,22 +81,51 @@ fn build_api_key_codex_home(session_id: &str, api_key: &str) -> anyhow::Result<P
         if real_sessions.exists() {
             let temp_sessions = base.join("sessions");
             #[cfg(unix)]
-            let _ = std::os::unix::fs::symlink(&real_sessions, &temp_sessions);
+            {
+                if let Err(e) = std::os::unix::fs::symlink(&real_sessions, &temp_sessions) {
+                    eprintln!(
+                        "[Codex] sessions symlink failed ({e}); resume may not work for this session"
+                    );
+                }
+            }
         }
     }
 
-    Ok(base)
+    Ok(TempCodexHome(base))
 }
 
-/// Clean up a temp api-key CODEX_HOME once the child exits.
-fn cleanup_api_key_codex_home(path: &Path) {
-    if path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map_or(false, |n| n.starts_with("dimweave-codex-apikey-"))
-    {
-        let _ = std::fs::remove_dir_all(path);
+/// Remove orphaned api-key CODEX_HOMEs from crashed prior runs.
+/// Only deletes directories whose embedded PID is no longer alive.
+pub fn prune_orphan_api_key_codex_homes() {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    let current_pid = std::process::id();
+    for entry in entries.flatten() {
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else { continue };
+        let Some(tail) = name.strip_prefix(API_KEY_HOME_PREFIX) else { continue };
+        // Format: "<pid>-<sid>" — grab just the PID.
+        let Some((pid_str, _)) = tail.split_once('-') else { continue };
+        let Ok(pid) = pid_str.parse::<u32>() else { continue };
+        if pid == current_pid {
+            continue;
+        }
+        if is_pid_alive(pid) {
+            continue;
+        }
+        let _ = std::fs::remove_dir_all(entry.path());
     }
+}
+
+#[cfg(unix)]
+fn is_pid_alive(pid: u32) -> bool {
+    // signal 0 is the null signal: returns Ok if the process exists, Err(ESRCH)
+    // if it doesn't. We don't actually deliver anything.
+    unsafe { libc::kill(pid as i32, 0) == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) }
+}
+
+#[cfg(not(unix))]
+fn is_pid_alive(_pid: u32) -> bool {
+    // Conservative: assume alive so we don't nuke an active session.
+    true
 }
 
 /// Notification sent from session/runtime tasks when a Codex session
@@ -84,8 +144,8 @@ pub struct CodexHandle {
     session_mgr: Arc<Mutex<crate::daemon::session_manager::SessionManager>>,
     session_id: String,
     cancel: CancellationToken,
-    /// Temp CODEX_HOME created for api-key mode, removed on stop.
-    api_key_home: Option<PathBuf>,
+    /// Temp CODEX_HOME for api-key mode (RAII: dropped with this handle).
+    _api_key_home: Option<TempCodexHome>,
     pub port: u16,
     pub launch_id: u64,
     pub task_id: String,
@@ -128,9 +188,8 @@ impl CodexHandle {
             .lock()
             .await
             .cleanup_session(&self.session_id);
-        if let Some(ref home) = self.api_key_home {
-            cleanup_api_key_codex_home(home);
-        }
+        // Temp CODEX_HOME (_api_key_home) cleans itself up via Drop whenever
+        // this CodexHandle is dropped — no manual rm-rf call needed here.
     }
 }
 
@@ -286,13 +345,20 @@ async fn launch(
     // Stand up a per-session temp CODEX_HOME that (a) owns an apikey-mode
     // auth.json with our key and (b) symlinks `sessions/` back to the
     // user's real codex home so thread history stays resumable.
-    let api_key_home = provider_auth
+    //
+    // `api_key_home` is a `TempCodexHome` RAII handle: whenever it leaves
+    // this scope (early return from handshake failure, supersede, spawn
+    // error, etc.) its Drop wipes the temp dir — no manual cleanup needed.
+    let api_key_home: Option<TempCodexHome> = provider_auth
         .as_ref()
         .filter(|a| matches!(a.active_mode.as_deref(), Some("api_key")))
         .and_then(|a| a.api_key.as_deref().filter(|k| !k.trim().is_empty()))
         .map(|key| build_api_key_codex_home(&session_id, key.trim()))
         .transpose()?;
-    let effective_codex_home = api_key_home.as_deref().unwrap_or(&codex_home);
+    let effective_codex_home: &Path = api_key_home
+        .as_ref()
+        .map(TempCodexHome::path)
+        .unwrap_or(&codex_home);
 
     let child = lifecycle::start(
         codex_port,
@@ -469,7 +535,7 @@ async fn launch(
         session_mgr,
         session_id,
         cancel,
-        api_key_home,
+        _api_key_home: api_key_home,
         port: codex_port,
         launch_id: launch_epoch,
         task_id,

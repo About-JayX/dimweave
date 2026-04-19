@@ -430,6 +430,9 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     let daemon_port = ports.daemon;
     let codex_port = ports.codex;
     let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
+    // Remove orphaned api-key CODEX_HOMEs from prior crashes (PID no longer
+    // alive). Our own RAII cleans up normal-exit paths; this covers panics.
+    codex::prune_orphan_api_key_codex_homes();
     // WS control server — bridge processes connect here
     {
         let s = state.clone();
