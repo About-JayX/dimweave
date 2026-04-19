@@ -73,4 +73,12 @@ Edit Task 对话框在 edit 模式下回填 Model 和 Effort 两个下拉。
 3. `feat(ui): backfill model/effort in edit task dialog`
 
 ## CM 回填区
-<!-- 实施完成后回填 commit hash + 摘要 -->
+
+- `41e7c28f` — `refactor(task_graph): add model/effort columns to TaskAgent schema v2` — `TaskAgent` 增 `model/effort`，SQLite schema v1→v2 加 ALTER TABLE 迁移，store 新增 `add_task_agent_with_config` / `update_task_agent_with_config`，补单元 + 往返 + 迁移测试
+- `55f01d0c` — `feat(task_graph): thread agent model/effort through daemon CRUD` — DaemonCmd 两个变体新增字段，Tauri `daemon_add_task_agent` / `daemon_update_task_agent` 透传到 v2 写入器
+- `d739c26f` — `feat(ui): backfill model/effort in edit task dialog` — `TaskAgentInfo` 增 `model?/effort?`，store action 与 TaskPanel `handleSetupSubmit` / `handleEditSubmit` / `initialAgents` 全链路透传
+
+### 验证
+- `cargo test` — 704 passed
+- `bun x tsc --noEmit -p tsconfig.app.json` — 无新增错误（仅 pre-existing `bun:test` / `import.meta.hot` / `ClaudeLaunchRequest` 类）
+- `bun run build` — OK
