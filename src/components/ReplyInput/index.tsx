@@ -36,6 +36,9 @@ export function ReplyInput() {
   const { textareaRef, handleResizePointerDown } = useReplyInputResizer(draft);
   const activeTask = useTaskStore(selectActiveTask);
   const activeTaskSessions = useTaskStore(selectActiveTaskSessions);
+  const taskRuntimeStatuses = useTaskStore((s) =>
+    activeTask ? s.agentRuntimeStatuses[activeTask.taskId] : undefined,
+  );
   const { attachments, addFiles, removeAt, clear } = useAttachments();
   const taskSessionWarning = getTaskSessionWarning({
     target,
@@ -44,6 +47,7 @@ export function ReplyInput() {
     agents,
     claudeRole,
     codexRole,
+    taskRuntimeStatuses,
   });
   const canSend =
     !!activeTask &&

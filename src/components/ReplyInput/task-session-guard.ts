@@ -1,5 +1,9 @@
 import type { AgentInfo } from "@/types";
-import type { SessionInfo, TaskInfo } from "@/stores/task-store/types";
+import type {
+  AgentRuntimeStatus,
+  SessionInfo,
+  TaskInfo,
+} from "@/stores/task-store/types";
 import type { Target } from "./TargetPicker";
 
 const RECONNECT_WARNING = "Reconnect to this task";
@@ -34,12 +38,16 @@ function taskSessionForRole(
   }
 
   const expectedSessionId =
-    role === "lead" ? activeTask.leadSessionId : activeTask.currentCoderSessionId;
+    role === "lead"
+      ? activeTask.leadSessionId
+      : activeTask.currentCoderSessionId;
   if (!expectedSessionId) {
     return null;
   }
 
-  return sessions.find((session) => session.sessionId === expectedSessionId) ?? null;
+  return (
+    sessions.find((session) => session.sessionId === expectedSessionId) ?? null
+  );
 }
 
 function taskTargetMatchState({
@@ -88,6 +96,7 @@ export function getTaskSessionWarning({
   agents,
   claudeRole,
   codexRole,
+  taskRuntimeStatuses,
 }: {
   target: Target;
   activeTask: TaskInfo | null;
@@ -95,13 +104,29 @@ export function getTaskSessionWarning({
   agents: Record<string, AgentInfo>;
   claudeRole: string;
   codexRole: string;
+  /** Per-task agent runtime status, indexed by agentId.
+   *  Source of truth for "is this task's agent online", immune to the
+   *  singleton agents[] map that only reflects the last-launched provider. */
+  taskRuntimeStatuses?: AgentRuntimeStatus[];
 }) {
   if (!activeTask) {
     return null;
   }
 
+  // Per-task first: if any agent belonging to the active task is online,
+  // the ReplyInput can send. The singleton `agents.claude`/`agents.codex`
+  // providerSession may still be pinned to another task's last launch,
+  // but that's cosmetic — multi-task routing dispatches via
+  // (task_id, agent_id) per the daemon's task_graph resolution.
+  const perTaskOnline =
+    (taskRuntimeStatuses ?? []).some((s) => s.online) === true;
+  if (perTaskOnline) {
+    return null;
+  }
+
   const anyConnected =
-    agents.claude?.status === "connected" || agents.codex?.status === "connected";
+    agents.claude?.status === "connected" ||
+    agents.codex?.status === "connected";
   if (!anyConnected) {
     return null;
   }
