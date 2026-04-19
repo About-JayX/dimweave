@@ -41,26 +41,44 @@ pub fn create_task_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, 
         .map_err(|e| format!("worktree path error: {e}"))
 }
 
-/// Removes a git worktree for the given task.
+/// Remove the task's git worktree **and** its `task/<task_id>` branch.
+///
+/// - `git worktree remove --force <dir>` — kills the working dir even if
+///   dirty (the task's files belong to us, caller is `DeleteTask` and
+///   already warned).
+/// - `git branch -D task/<task_id>` — hard-delete the ref. We use `-D`
+///   (not `-d`) so orphan branches with unmerged commits still get swept;
+///   the user explicitly asked for a clean delete.
+///
+/// Best-effort: if either step fails we return an error from the worktree
+/// remove stage (that's the visible dir), but branch deletion is
+/// swallowed on failure so a missing/merged branch doesn't spoil the
+/// whole cleanup.
 pub fn cleanup_task_worktree(repo_root: &Path, task_id: &str) -> Result<(), String> {
     let worktree_dir = repo_root.join(".worktrees").join("tasks").join(task_id);
-    if !worktree_dir.exists() {
-        return Ok(());
+    let branch_name = format!("task/{task_id}");
+
+    if worktree_dir.exists() {
+        let output = std::process::Command::new("git")
+            .args(["worktree", "remove", "--force"])
+            .arg(&worktree_dir)
+            .current_dir(repo_root)
+            .output()
+            .map_err(|e| format!("git worktree remove failed: {e}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "git worktree remove failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
     }
 
-    let output = std::process::Command::new("git")
-        .args(["worktree", "remove", "--force"])
-        .arg(&worktree_dir)
+    // Branch cleanup is best-effort; an orphan branch won't pile up as
+    // much disk noise as dirs but we still want it swept when possible.
+    let _ = std::process::Command::new("git")
+        .args(["branch", "-D", &branch_name])
         .current_dir(repo_root)
-        .output()
-        .map_err(|e| format!("git worktree remove failed: {e}"))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "git worktree remove failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
+        .output();
     Ok(())
 }
 
@@ -147,5 +165,37 @@ mod tests {
     fn cleanup_nonexistent_worktree_is_noop() {
         let repo = TempRepo::new("noop_cleanup");
         assert!(cleanup_task_worktree(&repo.path, "nonexistent").is_ok());
+    }
+
+    #[test]
+    fn cleanup_also_deletes_task_branch() {
+        let repo = TempRepo::new("branch_cleanup");
+        let task_id = "branch_sweep_task";
+
+        create_task_worktree(&repo.path, task_id).expect("create worktree");
+        // Sanity: the branch should exist after worktree add -b.
+        let before = Command::new("git")
+            .args(["branch", "--list", &format!("task/{task_id}")])
+            .current_dir(&repo.path)
+            .output()
+            .unwrap();
+        let before_stdout = String::from_utf8_lossy(&before.stdout);
+        assert!(
+            before_stdout.contains(&format!("task/{task_id}")),
+            "task branch should exist before cleanup (got: {before_stdout:?})",
+        );
+
+        cleanup_task_worktree(&repo.path, task_id).expect("cleanup");
+
+        let after = Command::new("git")
+            .args(["branch", "--list", &format!("task/{task_id}")])
+            .current_dir(&repo.path)
+            .output()
+            .unwrap();
+        let after_stdout = String::from_utf8_lossy(&after.stdout);
+        assert!(
+            !after_stdout.contains(&format!("task/{task_id}")),
+            "task branch must be gone after cleanup (got: {after_stdout:?})",
+        );
     }
 }

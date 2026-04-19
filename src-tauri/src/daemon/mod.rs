@@ -932,7 +932,29 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     }
                 }
 
-                // 5. Persist and emit
+                // 5. Drop the git worktree + branch we created at task
+                //    creation time. Best-effort: a cleanup failure is surfaced
+                //    as a warn log but does NOT fail the delete — the task
+                //    row is already gone from the graph.
+                match task_workspace::cleanup_task_worktree(
+                    std::path::Path::new(&task_workspace),
+                    &task_id,
+                ) {
+                    Ok(()) => {
+                        gui::emit_system_log(
+                            &app, "info",
+                            &format!("[Task] cleaned up worktree for {task_id}"),
+                        );
+                    }
+                    Err(e) => {
+                        gui::emit_system_log(
+                            &app, "warn",
+                            &format!("[Task] worktree cleanup for {task_id} failed: {e}"),
+                        );
+                    }
+                }
+
+                // 6. Persist and emit
                 let s = state.read().await;
                 match s.save_task_graph() {
                     Ok(()) => gui::emit_task_save_status(&app, true, None, &task_id),
