@@ -11,10 +11,62 @@ mod ws_helpers;
 use crate::daemon::{gui, role_config, SharedState};
 use runtime::{ensure_port_available, spawn_health_monitor};
 use session::SessionOpts;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
+
+/// Provision a per-session temp CODEX_HOME configured for API-key auth.
+///
+/// Codex reads `<CODEX_HOME>/auth.json` before looking at `OPENAI_API_KEY`
+/// env; when the user is signed in via ChatGPT the real `~/.codex/auth.json`
+/// pins `auth_mode: "chatgpt"` and our env override is ignored. Instead we
+/// hand Codex a fresh CODEX_HOME that owns an `auth_mode: "apikey"` file
+/// with our key. Thread history is preserved by symlinking `sessions/`
+/// back to the user's real codex home.
+fn build_api_key_codex_home(session_id: &str, api_key: &str) -> anyhow::Result<PathBuf> {
+    let base = std::env::temp_dir()
+        .join(format!("dimweave-codex-apikey-{}-{}", std::process::id(), session_id));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base)?;
+
+    let auth = serde_json::json!({
+        "auth_mode": "apikey",
+        "OPENAI_API_KEY": api_key,
+    });
+    let auth_path = base.join("auth.json");
+    std::fs::write(&auth_path, serde_json::to_string_pretty(&auth)?)?;
+    // Tight perms — mirror Codex's own 0600 on auth.json.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    // Symlink sessions/ so thread history + resume still work.
+    if let Some(home) = dirs::home_dir() {
+        let real_sessions = home.join(".codex").join("sessions");
+        if real_sessions.exists() {
+            let temp_sessions = base.join("sessions");
+            #[cfg(unix)]
+            let _ = std::os::unix::fs::symlink(&real_sessions, &temp_sessions);
+        }
+    }
+
+    Ok(base)
+}
+
+/// Clean up a temp api-key CODEX_HOME once the child exits.
+fn cleanup_api_key_codex_home(path: &Path) {
+    if path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map_or(false, |n| n.starts_with("dimweave-codex-apikey-"))
+    {
+        let _ = std::fs::remove_dir_all(path);
+    }
+}
 
 /// Notification sent from session/runtime tasks when a Codex session
 /// exits naturally (process death or session loop end). The daemon loop
@@ -32,6 +84,8 @@ pub struct CodexHandle {
     session_mgr: Arc<Mutex<crate::daemon::session_manager::SessionManager>>,
     session_id: String,
     cancel: CancellationToken,
+    /// Temp CODEX_HOME created for api-key mode, removed on stop.
+    api_key_home: Option<PathBuf>,
     pub port: u16,
     pub launch_id: u64,
     pub task_id: String,
@@ -74,6 +128,9 @@ impl CodexHandle {
             .lock()
             .await
             .cleanup_session(&self.session_id);
+        if let Some(ref home) = self.api_key_home {
+            cleanup_api_key_codex_home(home);
+        }
     }
 }
 
@@ -207,9 +264,22 @@ async fn launch(
         .get_provider_auth("codex")
         .cloned();
 
+    // In API-key mode we can't share the user's ~/.codex/auth.json (it's
+    // locked to "chatgpt" auth_mode when they're logged in via ChatGPT).
+    // Stand up a per-session temp CODEX_HOME that (a) owns an apikey-mode
+    // auth.json with our key and (b) symlinks `sessions/` back to the
+    // user's real codex home so thread history stays resumable.
+    let api_key_home = provider_auth
+        .as_ref()
+        .filter(|a| matches!(a.active_mode.as_deref(), Some("api_key")))
+        .and_then(|a| a.api_key.as_deref().filter(|k| !k.trim().is_empty()))
+        .map(|key| build_api_key_codex_home(&session_id, key.trim()))
+        .transpose()?;
+    let effective_codex_home = api_key_home.as_deref().unwrap_or(&codex_home);
+
     let child = lifecycle::start(
         codex_port,
-        &codex_home,
+        effective_codex_home,
         &cwd,
         &sandbox_mode,
         &approval_policy,
@@ -382,6 +452,7 @@ async fn launch(
         session_mgr,
         session_id,
         cancel,
+        api_key_home,
         port: codex_port,
         launch_id: launch_epoch,
         task_id,
