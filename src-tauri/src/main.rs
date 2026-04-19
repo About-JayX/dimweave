@@ -158,6 +158,7 @@ fn main() {
             commands::oauth::codex_login,
             commands::oauth::codex_cancel_login,
             commands::oauth::codex_logout,
+            commands::oauth::codex_login_with_api_key,
             commands::daemon_send_user_input,
             commands::daemon_launch_codex,
             commands::daemon_stop_codex,

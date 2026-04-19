@@ -52,6 +52,8 @@ interface CodexAccountState {
   refreshing: boolean;
   loginPending: boolean;
   loginUri: string | null;
+  apiKeyLoginPending: boolean;
+  apiKeyLoginError: string | null;
 
   fetchProfile: () => Promise<void>;
   fetchUsage: () => Promise<void>;
@@ -59,6 +61,7 @@ interface CodexAccountState {
   fetchModels: () => Promise<void>;
   pickDirectory: () => Promise<string | null>;
   login: () => Promise<void>;
+  loginWithApiKey: (apiKey: string) => Promise<boolean>;
   cancelLogin: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -87,6 +90,8 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
   refreshing: false,
   loginPending: false,
   loginUri: null,
+  apiKeyLoginPending: false,
+  apiKeyLoginError: null,
 
   fetchProfile: async () => {
     try {
@@ -174,6 +179,28 @@ export const useCodexAccountStore = create<CodexAccountState>((set, get) => ({
     } catch (e) {
       console.error("[CodexAccount]", e);
       set({ loginPending: false, loginUri: null });
+    }
+  },
+
+  loginWithApiKey: async (apiKey) => {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      set({ apiKeyLoginError: "API key is empty" });
+      return false;
+    }
+    set({ apiKeyLoginPending: true, apiKeyLoginError: null });
+    try {
+      await invoke("codex_login_with_api_key", { apiKey: trimmed });
+      await get().fetchProfile();
+      set({ apiKeyLoginPending: false, apiKeyLoginError: null });
+      // Best-effort refresh for downstream UI
+      void get().fetchModels();
+      return true;
+    } catch (e) {
+      const msg = String(e);
+      console.error("[CodexAccount] loginWithApiKey", msg);
+      set({ apiKeyLoginPending: false, apiKeyLoginError: msg });
+      return false;
     }
   },
 

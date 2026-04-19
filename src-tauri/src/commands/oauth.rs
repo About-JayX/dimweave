@@ -17,3 +17,8 @@ pub fn codex_cancel_login(app: tauri::AppHandle) -> bool {
 pub async fn codex_logout() -> Result<(), String> {
     crate::codex::oauth::do_logout().await
 }
+
+#[tauri::command]
+pub async fn codex_login_with_api_key(api_key: String) -> Result<(), String> {
+    crate::codex::oauth::login_with_api_key(api_key).await
+}

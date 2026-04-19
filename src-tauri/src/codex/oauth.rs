@@ -112,6 +112,55 @@ pub async fn start_login(handle: Arc<OAuthHandle>) -> Result<OAuthLaunchInfo, St
     Ok(info)
 }
 
+/// Launch `codex login --with-api-key` and feed `api_key` via stdin.
+/// Returns once the child exits with success; errors otherwise.
+pub async fn login_with_api_key(api_key: String) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+
+    if api_key.trim().is_empty() {
+        return Err("API key is empty".into());
+    }
+    let bin = find_codex()?;
+    let mut child = Command::new(&bin)
+        .arg("login")
+        .arg("--with-api-key")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn codex login --with-api-key: {e}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(api_key.trim().as_bytes())
+            .await
+            .map_err(|e| format!("write api key to stdin: {e}"))?;
+        // Close stdin so codex login stops reading.
+        drop(stdin);
+    }
+
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|e| format!("waiting for codex login: {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(format!(
+            "codex login --with-api-key exited with code {}: {}{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim(),
+            if stdout.trim().is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", stdout.trim())
+            }
+        ))
+    }
+}
+
 /// Launch `codex logout`.
 pub async fn do_logout() -> Result<(), String> {
     let bin = find_codex()?;
