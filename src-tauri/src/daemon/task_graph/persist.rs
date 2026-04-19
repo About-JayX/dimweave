@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use super::store::TaskGraphStore;
 use super::types::*;
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -58,18 +58,57 @@ pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
             display_name TEXT,
             sort_order   INTEGER NOT NULL,
             created_at   INTEGER NOT NULL,
-            updated_at   INTEGER NOT NULL
+            updated_at   INTEGER NOT NULL,
+            model        TEXT,
+            effort       TEXT
         );
         CREATE TABLE IF NOT EXISTS buffered_messages (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             payload TEXT NOT NULL
         );",
     )?;
+    migrate_if_needed(conn)?;
     conn.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?1)",
         params![SCHEMA_VERSION.to_string()],
     )?;
     Ok(())
+}
+
+/// Apply schema upgrades needed for pre-existing databases. Safe to call on
+/// fresh installs (the CREATE TABLE above already has the new columns, so the
+/// ALTER calls will be no-ops after we detect them via the columns_exist check).
+fn migrate_if_needed(conn: &Connection) -> rusqlite::Result<()> {
+    let current: Option<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .ok();
+    let current_ver = current.and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+    if current_ver >= SCHEMA_VERSION {
+        return Ok(());
+    }
+    if current_ver < 2 && !task_agents_has_column(conn, "model")? {
+        conn.execute_batch(
+            "ALTER TABLE task_agents ADD COLUMN model TEXT;
+             ALTER TABLE task_agents ADD COLUMN effort TEXT;",
+        )?;
+    }
+    Ok(())
+}
+
+fn task_agents_has_column(conn: &Connection, col: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare("PRAGMA table_info(task_agents)")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == col {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn status_str(s: TaskStatus) -> &'static str {
@@ -216,10 +255,11 @@ impl TaskGraphStore {
         }
         for ag in self.task_agents.values() {
             tx.execute(
-                "INSERT INTO task_agents VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                "INSERT INTO task_agents VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
                 params![
                     ag.agent_id, ag.task_id, provider_str(ag.provider), ag.role,
                     ag.display_name, ag.order as i64, ag.created_at as i64, ag.updated_at as i64,
+                    ag.model, ag.effort,
                 ],
             )?;
         }
@@ -307,7 +347,7 @@ impl TaskGraphStore {
         // task_agents
         let mut stmt = conn.prepare(
             "SELECT agent_id, task_id, provider, role, display_name,
-                    sort_order, created_at, updated_at
+                    sort_order, created_at, updated_at, model, effort
              FROM task_agents"
         )?;
         let agents = stmt.query_map([], |row| {
@@ -320,6 +360,8 @@ impl TaskGraphStore {
                 order: row.get::<_, i64>(5)? as u32,
                 created_at: row.get::<_, i64>(6)? as u64,
                 updated_at: row.get::<_, i64>(7)? as u64,
+                model: row.get(8)?,
+                effort: row.get(9)?,
             })
         })?;
         for ag in agents { let ag = ag?; store.task_agents.insert(ag.agent_id.clone(), ag); }

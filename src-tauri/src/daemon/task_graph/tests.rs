@@ -661,6 +661,8 @@ fn task_agent_serialization_round_trip() {
         provider: Provider::Claude,
         role: "lead".into(),
         display_name: None,
+        model: None,
+        effort: None,
         order: 0,
         created_at: 100,
         updated_at: 200,
@@ -1044,4 +1046,161 @@ fn persist_migration_runs_on_old_format_load() {
         let lead = agents.iter().find(|a| a.role == "lead").unwrap();
         assert_eq!(lead.provider, Provider::Codex);
     }
+}
+
+// ── TaskAgent.model / .effort persistence ──────────────────
+
+#[test]
+fn add_task_agent_with_config_persists_model_and_effort() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let agent = store.add_task_agent_with_config(
+        &task.task_id,
+        Provider::Codex,
+        "lead",
+        Some("gpt-5-codex".into()),
+        Some("high".into()),
+    );
+    let fetched = store.get_task_agent(&agent.agent_id).unwrap();
+    assert_eq!(fetched.model.as_deref(), Some("gpt-5-codex"));
+    assert_eq!(fetched.effort.as_deref(), Some("high"));
+}
+
+#[test]
+fn add_task_agent_default_has_null_model_and_effort() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let agent = store.add_task_agent(&task.task_id, Provider::Claude, "lead");
+    let fetched = store.get_task_agent(&agent.agent_id).unwrap();
+    assert!(fetched.model.is_none());
+    assert!(fetched.effort.is_none());
+}
+
+#[test]
+fn update_task_agent_with_config_overwrites_model_and_effort() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let agent = store.add_task_agent_with_config(
+        &task.task_id,
+        Provider::Codex,
+        "lead",
+        Some("gpt-5".into()),
+        Some("low".into()),
+    );
+    assert!(store.update_task_agent_with_config(
+        &agent.agent_id,
+        Provider::Codex,
+        "lead",
+        None,
+        Some("gpt-5-codex".into()),
+        Some("high".into()),
+    ));
+    let fetched = store.get_task_agent(&agent.agent_id).unwrap();
+    assert_eq!(fetched.model.as_deref(), Some("gpt-5-codex"));
+    assert_eq!(fetched.effort.as_deref(), Some("high"));
+}
+
+#[test]
+fn update_task_agent_with_config_clears_model_and_effort() {
+    let mut store = TaskGraphStore::new();
+    let task = store.create_task("/ws", "T1");
+    let agent = store.add_task_agent_with_config(
+        &task.task_id,
+        Provider::Codex,
+        "lead",
+        Some("gpt-5".into()),
+        Some("low".into()),
+    );
+    assert!(store.update_task_agent_with_config(
+        &agent.agent_id,
+        Provider::Codex,
+        "lead",
+        None,
+        None,
+        None,
+    ));
+    let fetched = store.get_task_agent(&agent.agent_id).unwrap();
+    assert!(fetched.model.is_none());
+    assert!(fetched.effort.is_none());
+}
+
+#[test]
+fn persist_task_agent_model_effort_round_trip() {
+    let path = tmp_db_path("agent_model_effort_roundtrip");
+    let _cleanup = CleanupFile(path.clone());
+    let agent_id;
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        let task = store.create_task("/ws", "T1");
+        let agent = store.add_task_agent_with_config(
+            &task.task_id,
+            Provider::Codex,
+            "lead",
+            Some("gpt-5-codex".into()),
+            Some("medium".into()),
+        );
+        agent_id = agent.agent_id.clone();
+        store.save().unwrap();
+    }
+    {
+        let store = TaskGraphStore::open(&path).unwrap();
+        let fetched = store.get_task_agent(&agent_id).unwrap();
+        assert_eq!(fetched.model.as_deref(), Some("gpt-5-codex"));
+        assert_eq!(fetched.effort.as_deref(), Some("medium"));
+    }
+}
+
+#[test]
+fn migration_adds_model_and_effort_to_v1_schema() {
+    let path = tmp_db_path("migration_v1_to_v2");
+    let _cleanup = CleanupFile(path.clone());
+    // Create a legacy v1 schema by hand (no model / effort columns).
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE tasks (
+                task_id TEXT PRIMARY KEY, project_root TEXT NOT NULL,
+                task_worktree_root TEXT NOT NULL, title TEXT NOT NULL,
+                status TEXT NOT NULL, lead_session_id TEXT,
+                current_coder_session_id TEXT, lead_provider TEXT NOT NULL,
+                coder_provider TEXT NOT NULL, created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE sessions (
+                session_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                parent_session_id TEXT, provider TEXT NOT NULL, role TEXT NOT NULL,
+                external_session_id TEXT, transcript_path TEXT, agent_id TEXT,
+                status TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE artifacts (
+                artifact_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                session_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+                content_ref TEXT NOT NULL, created_at INTEGER NOT NULL
+             );
+             CREATE TABLE task_agents (
+                agent_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                provider TEXT NOT NULL, role TEXT NOT NULL,
+                display_name TEXT, sort_order INTEGER NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+             );
+             CREATE TABLE buffered_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL
+             );
+             INSERT INTO meta(key, value) VALUES ('schema_version', '1');
+             INSERT INTO task_agents
+                (agent_id, task_id, provider, role, display_name,
+                 sort_order, created_at, updated_at)
+             VALUES ('agent_legacy', 'task_legacy', 'claude', 'lead',
+                     NULL, 0, 1, 1);",
+        )
+        .unwrap();
+    }
+    // Open via TaskGraphStore — migrate_if_needed runs in init_schema.
+    let store = TaskGraphStore::open(&path).unwrap();
+    let fetched = store.get_task_agent("agent_legacy").unwrap();
+    assert_eq!(fetched.provider, Provider::Claude);
+    assert!(fetched.model.is_none());
+    assert!(fetched.effort.is_none());
 }

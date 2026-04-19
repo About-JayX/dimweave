@@ -95,6 +95,8 @@ fn task_snapshot_serializes_camel_case() {
             provider: Provider::Claude,
             role: "lead".into(),
             display_name: None,
+            model: None,
+            effort: None,
             order: 0,
             created_at: 1000,
             updated_at: 2000,

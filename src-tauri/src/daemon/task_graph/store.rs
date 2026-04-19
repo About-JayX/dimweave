@@ -306,6 +306,18 @@ impl TaskGraphStore {
 
     /// Add an agent to a task. Order auto-increments within the task.
     pub fn add_task_agent(&mut self, task_id: &str, provider: Provider, role: &str) -> TaskAgent {
+        self.add_task_agent_with_config(task_id, provider, role, None, None)
+    }
+
+    /// Add an agent to a task with optional launch config (model/effort).
+    pub fn add_task_agent_with_config(
+        &mut self,
+        task_id: &str,
+        provider: Provider,
+        role: &str,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> TaskAgent {
         let now = chrono::Utc::now().timestamp_millis() as u64;
         let order = self.agents_for_task(task_id).len() as u32;
         let agent = TaskAgent {
@@ -314,6 +326,8 @@ impl TaskGraphStore {
             provider,
             role: role.to_string(),
             display_name: None,
+            model,
+            effort,
             order,
             created_at: now,
             updated_at: now,
@@ -373,6 +387,29 @@ impl TaskGraphStore {
             agent.provider = provider;
             agent.role = role.to_string();
             agent.display_name = display_name;
+            agent.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Update an agent's full config (provider, role, display_name, model, effort).
+    pub fn update_task_agent_with_config(
+        &mut self,
+        agent_id: &str,
+        provider: Provider,
+        role: &str,
+        display_name: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> bool {
+        if let Some(agent) = self.task_agents.get_mut(agent_id) {
+            agent.provider = provider;
+            agent.role = role.to_string();
+            agent.display_name = display_name;
+            agent.model = model;
+            agent.effort = effort;
             agent.updated_at = chrono::Utc::now().timestamp_millis() as u64;
             true
         } else {

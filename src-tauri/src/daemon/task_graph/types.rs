@@ -115,6 +115,10 @@ pub struct TaskAgent {
     pub role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     pub order: u32,
     pub created_at: u64,
     pub updated_at: u64,
