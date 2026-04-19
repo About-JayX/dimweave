@@ -70,6 +70,13 @@ function SubscriptionRow({ kind }: { kind: Kind }) {
   const codexLoginUri = useCodexAccountStore((s) => s.loginUri);
   const codexCancelLogin = useCodexAccountStore((s) => s.cancelLogin);
   const claudeProfile = useClaudeAccountStore((s) => s.profile);
+  const claudeAuthStatus = useClaudeAccountStore((s) => s.authStatus);
+  const claudeLogin = useClaudeAccountStore((s) => s.login);
+  const claudeLogout = useClaudeAccountStore((s) => s.logout);
+  const claudeLoginPending = useClaudeAccountStore((s) => s.loginPending);
+  const claudeLoginUri = useClaudeAccountStore((s) => s.loginUri);
+  const claudeCancelLogin = useClaudeAccountStore((s) => s.cancelLogin);
+  const claudeLoginError = useClaudeAccountStore((s) => s.loginError);
 
   if (kind === "codex") {
     if (codexLoginPending) {
@@ -141,38 +148,83 @@ function SubscriptionRow({ kind }: { kind: Kind }) {
   }
 
   // Claude
-  if (claudeProfile?.email) {
+  if (claudeLoginPending) {
+    return (
+      <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 space-y-1.5">
+        <div className="flex items-center gap-2 text-[11px] text-primary">
+          <span className="size-3 border-2 border-primary/30 border-t-primary rounded-full radius-keep animate-spin shrink-0" />
+          Waiting for browser login...
+        </div>
+        {claudeLoginUri && (
+          <a
+            href={claudeLoginUri}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-[10px] text-primary/80 hover:text-primary hover:underline"
+            title={claudeLoginUri}
+          >
+            Open login page →
+          </a>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] text-muted-foreground hover:text-destructive"
+          onClick={() => void claudeCancelLogin()}
+        >
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+  const claudeEmail = claudeProfile?.email ?? claudeAuthStatus?.email ?? null;
+  const claudeTier =
+    claudeProfile?.subscriptionTier ??
+    claudeAuthStatus?.subscriptionType ??
+    null;
+  if (claudeEmail) {
     return (
       <div className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px]">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="size-1.5 shrink-0 rounded-full radius-keep bg-primary" />
-          <span
-            className="truncate text-foreground/80"
-            title={claudeProfile.email}
-          >
-            {claudeProfile.email}
+          <span className="truncate text-foreground/80" title={claudeEmail}>
+            {claudeEmail}
           </span>
-          {claudeProfile.subscriptionTier && (
+          {claudeTier && (
             <span className="shrink-0 rounded bg-primary/10 px-1 py-px text-[9px] font-semibold uppercase text-primary">
-              {claudeProfile.subscriptionTier}
+              {claudeTier}
             </span>
           )}
         </div>
-        <span
-          className="ml-2 text-[10px] text-muted-foreground"
-          title="Claude subscription is managed via the Claude CLI / keychain. Use `claude login` externally."
+        <button
+          type="button"
+          onClick={() => void claudeLogout()}
+          className="ml-2 text-[10px] text-muted-foreground hover:text-destructive"
         >
-          CLI-managed
-        </span>
+          Logout
+        </button>
       </div>
     );
   }
   return (
-    <p className="rounded-md bg-muted/30 px-2.5 py-1.5 text-[10px] text-muted-foreground">
-      Subscription is managed via Claude CLI. Run{" "}
-      <code className="rounded bg-muted px-1 py-px">claude login</code> in a
-      terminal to sign in.
-    </p>
+    <div className="space-y-1">
+      <Button
+        size="sm"
+        variant="outline"
+        className="w-full text-[11px] border-primary/30 text-primary hover:bg-primary/10"
+        onClick={() => void claudeLogin()}
+      >
+        Login with Claude Max
+      </Button>
+      {claudeLoginError && (
+        <p
+          className="truncate text-[10px] text-destructive"
+          title={claudeLoginError}
+        >
+          {claudeLoginError}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -341,9 +393,23 @@ export function ProviderAuthDialog({
   );
   const [saving, setSaving] = useState(false);
 
+  const fetchClaudeAuthStatus = useClaudeAccountStore((s) => s.fetchAuthStatus);
+  const fetchClaudeProfile = useClaudeAccountStore((s) => s.fetchProfile);
+  const fetchCodexProfile = useCodexAccountStore((s) => s.fetchProfile);
+
   useEffect(() => {
-    if (open) void fetchAll();
-  }, [open, fetchAll]);
+    if (!open) return;
+    void fetchAll();
+    void fetchClaudeAuthStatus();
+    void fetchClaudeProfile();
+    void fetchCodexProfile();
+  }, [
+    open,
+    fetchAll,
+    fetchClaudeAuthStatus,
+    fetchClaudeProfile,
+    fetchCodexProfile,
+  ]);
 
   useEffect(() => {
     if (open) {

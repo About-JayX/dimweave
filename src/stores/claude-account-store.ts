@@ -28,6 +28,16 @@ export interface ClaudeUsage {
   sevenDay: ClaudeUsageWindow | null;
 }
 
+export interface ClaudeAuthStatus {
+  loggedIn: boolean;
+  authMethod?: string | null;
+  apiProvider?: string | null;
+  email?: string | null;
+  orgId?: string | null;
+  orgName?: string | null;
+  subscriptionType?: string | null;
+}
+
 interface ClaudeAccountState {
   models: ClaudeModel[];
   profile: ClaudeProfile | null;
@@ -36,9 +46,31 @@ interface ClaudeAccountState {
   usageError: string | null;
   usageRefreshing: boolean;
   fetchFailed: boolean;
+  authStatus: ClaudeAuthStatus | null;
+  loginPending: boolean;
+  loginUri: string | null;
+  loginError: string | null;
   fetchModels: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   refreshUsage: () => Promise<void>;
+  fetchAuthStatus: () => Promise<void>;
+  login: () => Promise<void>;
+  cancelLogin: () => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+let _loginPollInterval: ReturnType<typeof setInterval> | null = null;
+let _loginPollTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function clearLoginPolling() {
+  if (_loginPollInterval) {
+    clearInterval(_loginPollInterval);
+    _loginPollInterval = null;
+  }
+  if (_loginPollTimeout) {
+    clearTimeout(_loginPollTimeout);
+    _loginPollTimeout = null;
+  }
 }
 
 export const useClaudeAccountStore = create<ClaudeAccountState>((set, get) => ({
@@ -49,6 +81,10 @@ export const useClaudeAccountStore = create<ClaudeAccountState>((set, get) => ({
   usageError: null,
   usageRefreshing: false,
   fetchFailed: false,
+  authStatus: null,
+  loginPending: false,
+  loginUri: null,
+  loginError: null,
   fetchModels: async () => {
     try {
       const models = await invoke<ClaudeModel[]>("list_claude_models");
@@ -76,6 +112,73 @@ export const useClaudeAccountStore = create<ClaudeAccountState>((set, get) => ({
     } catch (e) {
       console.error("[ClaudeAccount] usage", e);
       set({ usageError: String(e), usageRefreshing: false });
+    }
+  },
+
+  fetchAuthStatus: async () => {
+    try {
+      const status = await invoke<ClaudeAuthStatus>("claude_auth_status");
+      set({ authStatus: status });
+    } catch (e) {
+      console.error("[ClaudeAccount] auth status", e);
+      set({ authStatus: { loggedIn: false } });
+    }
+  },
+
+  login: async () => {
+    clearLoginPolling();
+    set({ loginPending: true, loginUri: null, loginError: null });
+    try {
+      const info = await invoke<{ verificationUri: string | null }>(
+        "claude_login",
+      );
+      set({ loginUri: info.verificationUri ?? null });
+      _loginPollInterval = setInterval(async () => {
+        try {
+          const status = await invoke<ClaudeAuthStatus>("claude_auth_status");
+          if (status.loggedIn && status.email) {
+            clearLoginPolling();
+            set({ authStatus: status, loginPending: false, loginUri: null });
+            // Refresh dependent data
+            void get().fetchProfile();
+            void get().fetchModels();
+          }
+        } catch (e) {
+          console.error("[ClaudeAccount] poll", e);
+        }
+      }, 2000);
+      _loginPollTimeout = setTimeout(() => {
+        clearLoginPolling();
+        if (get().loginPending) set({ loginPending: false, loginUri: null });
+      }, 180000);
+    } catch (e) {
+      const msg = String(e);
+      console.error("[ClaudeAccount] login", msg);
+      set({ loginPending: false, loginUri: null, loginError: msg });
+    }
+  },
+
+  cancelLogin: async () => {
+    clearLoginPolling();
+    try {
+      await invoke<boolean>("claude_cancel_login");
+    } catch (e) {
+      console.error("[ClaudeAccount] cancelLogin", e);
+    }
+    set({ loginPending: false, loginUri: null });
+  },
+
+  logout: async () => {
+    try {
+      await invoke("claude_logout");
+      set({
+        authStatus: { loggedIn: false },
+        profile: null,
+        usage: null,
+        models: [],
+      });
+    } catch (e) {
+      console.error("[ClaudeAccount] logout", e);
     }
   },
 }));

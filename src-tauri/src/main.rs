@@ -95,6 +95,27 @@ async fn get_claude_usage() -> Result<claude::usage::ClaudeUsage, String> {
 }
 
 #[tauri::command]
+async fn claude_login(app: tauri::AppHandle) -> Result<claude::auth::ClaudeLoginInfo, String> {
+    let handle = app.state::<Arc<claude::auth::ClaudeAuthHandle>>();
+    claude::auth::start_login(handle.inner().clone()).await
+}
+
+#[tauri::command]
+fn claude_cancel_login(app: tauri::AppHandle) -> bool {
+    app.state::<Arc<claude::auth::ClaudeAuthHandle>>().cancel()
+}
+
+#[tauri::command]
+async fn claude_logout() -> Result<(), String> {
+    claude::auth::do_logout().await
+}
+
+#[tauri::command]
+async fn claude_auth_status() -> Result<claude::auth::ClaudeAuthStatus, String> {
+    claude::auth::get_status().await
+}
+
+#[tauri::command]
 async fn pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Option<String>>();
     app.dialog().file().pick_folder(move |path| {
@@ -121,6 +142,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard::init())
         .manage(Arc::new(OAuthHandle::new()))
+        .manage(Arc::new(claude::auth::ClaudeAuthHandle::new()))
         .manage(ExitState::default())
         .setup(|app| {
             let (cmd_tx, cmd_rx) = daemon::channel();
@@ -151,6 +173,10 @@ fn main() {
             list_claude_models,
             get_claude_profile,
             get_claude_usage,
+            claude_login,
+            claude_cancel_login,
+            claude_logout,
+            claude_auth_status,
             pick_directory,
             pick_files,
             mcp::register_mcp,
