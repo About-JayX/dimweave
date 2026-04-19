@@ -10,6 +10,7 @@ pub struct TaskGraphStore {
     pub(super) sessions: HashMap<String, SessionHandle>,
     pub(super) artifacts: HashMap<String, Artifact>,
     pub(super) task_agents: HashMap<String, TaskAgent>,
+    pub(super) provider_auth: HashMap<String, ProviderAuthConfig>,
     pub(super) next_id: u64,
     pub(super) db_path: Option<PathBuf>,
     pub(super) db: Option<std::sync::Mutex<rusqlite::Connection>>,
@@ -22,6 +23,7 @@ impl TaskGraphStore {
             sessions: HashMap::new(),
             artifacts: HashMap::new(),
             task_agents: HashMap::new(),
+            provider_auth: HashMap::new(),
             next_id: 0,
             db_path: None,
             db: None,
@@ -446,6 +448,26 @@ impl TaskGraphStore {
         self.next_id += 1;
         let ts = chrono::Utc::now().timestamp_millis() as u64;
         format!("{prefix}_{ts}_{}", self.next_id)
+    }
+
+    // ── ProviderAuth ────────────────────────────────────────
+
+    /// Fetch the stored auth override for a given `provider` key
+    /// (e.g. `"claude"` / `"codex"`), if any.
+    pub fn get_provider_auth(&self, provider: &str) -> Option<&ProviderAuthConfig> {
+        self.provider_auth.get(provider)
+    }
+
+    /// Upsert a `ProviderAuthConfig`. `updated_at` is refreshed on the
+    /// stored copy; caller-supplied value is overwritten.
+    pub fn upsert_provider_auth(&mut self, mut cfg: ProviderAuthConfig) {
+        cfg.updated_at = chrono::Utc::now().timestamp_millis() as u64;
+        self.provider_auth.insert(cfg.provider.clone(), cfg);
+    }
+
+    /// Remove the auth override for `provider`, reverting to default behavior.
+    pub fn clear_provider_auth(&mut self, provider: &str) -> bool {
+        self.provider_auth.remove(provider).is_some()
     }
 }
 

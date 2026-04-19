@@ -143,6 +143,32 @@ fn default_coder_provider() -> Provider {
     Provider::Codex
 }
 
+/// User-supplied provider override used by the Authentication dialog.
+/// Stored in the global `provider_auth` table, one row per
+/// `provider ∈ {"claude", "codex"}`.
+///
+/// Absent rows mean "default behavior" (subscription via CLI/keychain).
+/// Setting `api_key` alone routes through the official endpoint with the
+/// key injected as an env var; `api_key` + `base_url` routes through a
+/// third-party endpoint via `--config model_providers.*` (Codex) or
+/// `ANTHROPIC_BASE_URL` (Claude).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderAuthConfig {
+    pub provider: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wire_api: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
+    pub updated_at: u64,
+}
+
 /// Parameters for creating a new artifact.
 pub struct CreateArtifactParams<'a> {
     pub task_id: &'a str,

@@ -1204,3 +1204,126 @@ fn migration_adds_model_and_effort_to_v1_schema() {
     assert!(fetched.model.is_none());
     assert!(fetched.effort.is_none());
 }
+
+// ── ProviderAuth CRUD + persistence ────────────────────────
+
+fn sample_codex_auth() -> ProviderAuthConfig {
+    ProviderAuthConfig {
+        provider: "codex".into(),
+        api_key: Some("sk-or-abc".into()),
+        base_url: Some("https://openrouter.ai/api/v1".into()),
+        wire_api: Some("chat".into()),
+        auth_mode: None,
+        provider_name: Some("dimweave-openrouter".into()),
+        updated_at: 0,
+    }
+}
+
+#[test]
+fn upsert_provider_auth_inserts_new_row() {
+    let mut store = TaskGraphStore::new();
+    store.upsert_provider_auth(sample_codex_auth());
+    let fetched = store.get_provider_auth("codex").unwrap();
+    assert_eq!(fetched.api_key.as_deref(), Some("sk-or-abc"));
+    assert_eq!(fetched.provider_name.as_deref(), Some("dimweave-openrouter"));
+    assert!(fetched.updated_at > 0);
+}
+
+#[test]
+fn upsert_provider_auth_replaces_existing_row() {
+    let mut store = TaskGraphStore::new();
+    store.upsert_provider_auth(sample_codex_auth());
+    store.upsert_provider_auth(ProviderAuthConfig {
+        provider: "codex".into(),
+        api_key: Some("sk-new".into()),
+        base_url: None,
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        updated_at: 0,
+    });
+    let fetched = store.get_provider_auth("codex").unwrap();
+    assert_eq!(fetched.api_key.as_deref(), Some("sk-new"));
+    assert!(fetched.base_url.is_none());
+}
+
+#[test]
+fn clear_provider_auth_removes_row() {
+    let mut store = TaskGraphStore::new();
+    store.upsert_provider_auth(sample_codex_auth());
+    assert!(store.clear_provider_auth("codex"));
+    assert!(store.get_provider_auth("codex").is_none());
+    assert!(!store.clear_provider_auth("codex"));
+}
+
+#[test]
+fn provider_auth_round_trip_survives_reopen() {
+    let path = tmp_db_path("provider_auth_roundtrip");
+    let _cleanup = CleanupFile(path.clone());
+    {
+        let mut store = TaskGraphStore::open(&path).unwrap();
+        store.upsert_provider_auth(sample_codex_auth());
+        store.upsert_provider_auth(ProviderAuthConfig {
+            provider: "claude".into(),
+            api_key: Some("sk-ant-xyz".into()),
+            base_url: None,
+            wire_api: None,
+            auth_mode: Some("bearer".into()),
+            provider_name: None,
+            updated_at: 0,
+        });
+        store.save().unwrap();
+    }
+    let store = TaskGraphStore::open(&path).unwrap();
+    let codex = store.get_provider_auth("codex").unwrap();
+    assert_eq!(codex.base_url.as_deref(), Some("https://openrouter.ai/api/v1"));
+    let claude = store.get_provider_auth("claude").unwrap();
+    assert_eq!(claude.auth_mode.as_deref(), Some("bearer"));
+    assert!(claude.base_url.is_none());
+}
+
+#[test]
+fn migration_v2_to_v3_creates_provider_auth_table() {
+    let path = tmp_db_path("migration_v2_to_v3");
+    let _cleanup = CleanupFile(path.clone());
+    // Create a v2 schema by hand (task_agents has model/effort; no provider_auth).
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE tasks (task_id TEXT PRIMARY KEY, project_root TEXT NOT NULL,
+                task_worktree_root TEXT NOT NULL, title TEXT NOT NULL,
+                status TEXT NOT NULL, lead_session_id TEXT,
+                current_coder_session_id TEXT, lead_provider TEXT NOT NULL,
+                coder_provider TEXT NOT NULL, created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL);
+             CREATE TABLE sessions (session_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                parent_session_id TEXT, provider TEXT NOT NULL, role TEXT NOT NULL,
+                external_session_id TEXT, transcript_path TEXT, agent_id TEXT,
+                status TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+             CREATE TABLE artifacts (artifact_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                session_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+                content_ref TEXT NOT NULL, created_at INTEGER NOT NULL);
+             CREATE TABLE task_agents (agent_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                provider TEXT NOT NULL, role TEXT NOT NULL, display_name TEXT,
+                sort_order INTEGER NOT NULL, created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL, model TEXT, effort TEXT);
+             CREATE TABLE buffered_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL);
+             INSERT INTO meta(key, value) VALUES ('schema_version', '2');",
+        )
+        .unwrap();
+    }
+    // Open triggers v2→v3 migration.
+    let store = TaskGraphStore::open(&path).unwrap();
+    assert!(store.get_provider_auth("codex").is_none());
+    // Confirm the table now exists by upserting via the store.
+    let mut store = store;
+    store.upsert_provider_auth(sample_codex_auth());
+    store.save().unwrap();
+    let reopened = TaskGraphStore::open(&path).unwrap();
+    assert_eq!(
+        reopened.get_provider_auth("codex").unwrap().api_key.as_deref(),
+        Some("sk-or-abc")
+    );
+}

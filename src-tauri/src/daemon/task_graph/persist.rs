@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use super::store::TaskGraphStore;
 use super::types::*;
 
-const SCHEMA_VERSION: u32 = 2;
+const SCHEMA_VERSION: u32 = 3;
 
 pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -65,6 +65,15 @@ pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
         CREATE TABLE IF NOT EXISTS buffered_messages (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             payload TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS provider_auth (
+            provider      TEXT PRIMARY KEY,
+            api_key       TEXT,
+            base_url      TEXT,
+            wire_api      TEXT,
+            auth_mode     TEXT,
+            provider_name TEXT,
+            updated_at    INTEGER NOT NULL
         );",
     )?;
     migrate_if_needed(conn)?;
@@ -94,6 +103,19 @@ fn migrate_if_needed(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch(
             "ALTER TABLE task_agents ADD COLUMN model TEXT;
              ALTER TABLE task_agents ADD COLUMN effort TEXT;",
+        )?;
+    }
+    if current_ver < 3 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS provider_auth (
+                provider      TEXT PRIMARY KEY,
+                api_key       TEXT,
+                base_url      TEXT,
+                wire_api      TEXT,
+                auth_mode     TEXT,
+                provider_name TEXT,
+                updated_at    INTEGER NOT NULL
+             );",
         )?;
     }
     Ok(())
@@ -221,7 +243,7 @@ impl TaskGraphStore {
 
     fn save_to_db(&self, conn: &Connection) -> anyhow::Result<()> {
         let tx = conn.unchecked_transaction()?;
-        tx.execute_batch("DELETE FROM tasks; DELETE FROM sessions; DELETE FROM artifacts; DELETE FROM task_agents;")?;
+        tx.execute_batch("DELETE FROM tasks; DELETE FROM sessions; DELETE FROM artifacts; DELETE FROM task_agents; DELETE FROM provider_auth;")?;
         for t in self.tasks.values() {
             tx.execute(
                 "INSERT INTO tasks VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
@@ -260,6 +282,15 @@ impl TaskGraphStore {
                     ag.agent_id, ag.task_id, provider_str(ag.provider), ag.role,
                     ag.display_name, ag.order as i64, ag.created_at as i64, ag.updated_at as i64,
                     ag.model, ag.effort,
+                ],
+            )?;
+        }
+        for pa in self.provider_auth.values() {
+            tx.execute(
+                "INSERT INTO provider_auth VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                params![
+                    pa.provider, pa.api_key, pa.base_url, pa.wire_api,
+                    pa.auth_mode, pa.provider_name, pa.updated_at as i64,
                 ],
             )?;
         }
@@ -365,6 +396,27 @@ impl TaskGraphStore {
             })
         })?;
         for ag in agents { let ag = ag?; store.task_agents.insert(ag.agent_id.clone(), ag); }
+        // provider_auth
+        let mut stmt = conn.prepare(
+            "SELECT provider, api_key, base_url, wire_api, auth_mode,
+                    provider_name, updated_at
+             FROM provider_auth"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ProviderAuthConfig {
+                provider: row.get(0)?,
+                api_key: row.get(1)?,
+                base_url: row.get(2)?,
+                wire_api: row.get(3)?,
+                auth_mode: row.get(4)?,
+                provider_name: row.get(5)?,
+                updated_at: row.get::<_, i64>(6)? as u64,
+            })
+        })?;
+        for row in rows {
+            let cfg = row?;
+            store.provider_auth.insert(cfg.provider.clone(), cfg);
+        }
         Ok(store)
     }
 }
