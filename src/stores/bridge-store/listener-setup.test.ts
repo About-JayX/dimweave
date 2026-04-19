@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { BridgeState } from "./types";
 import { reduceAgentStatus, reducePermissionPrompt } from "./listener-setup";
-import { handleClaudeStreamEvent, handleCodexStreamEvent } from "./stream-reducers";
+import {
+  handleClaudeStreamEvent,
+  handleCodexStreamEvent,
+} from "./stream-reducers";
 import {
   createPendingStreamUpdates,
   flushClaudePreviewIfPending,
@@ -43,6 +46,8 @@ function baseState(): BridgeState {
       reasoning: "",
       commandOutput: "",
     },
+    claudeStreamsByTask: {},
+    codexStreamsByTask: {},
     draft: "",
     setDraft: () => {},
     clearClaudeAttention: () => {},
@@ -75,7 +80,10 @@ function applyCodexEvent(
 // These two tests lock that ordering using the narrow helper from stream-batching.
 test("flushes queued Claude preview before terminal done clears the draft", () => {
   const pending = createPendingStreamUpdates();
-  queueClaudePreviewUpdate(pending, { kind: "preview", text: "final streamed sentence" } as ClaudeStreamPayload);
+  queueClaudePreviewUpdate(pending, {
+    kind: "preview",
+    text: "final streamed sentence",
+  } as ClaudeStreamPayload);
 
   const state = baseState();
 
@@ -88,11 +96,15 @@ test("flushes queued Claude preview before terminal done clears the draft", () =
   };
 
   // Preview was materialized into state before the pending was cleared.
-  expect(stateAfterFlush.claudeStream.previewText).toBe("final streamed sentence");
+  expect(stateAfterFlush.claudeStream.previewText).toBe(
+    "final streamed sentence",
+  );
   expect(pending.claudePreviewText).toBe(""); // flush clears pending
 
   // done/reset can now clear the draft cleanly — the preview was already seen.
-  const donePartial = handleClaudeStreamEvent(stateAfterFlush, { kind: "done" });
+  const donePartial = handleClaudeStreamEvent(stateAfterFlush, {
+    kind: "done",
+  });
   expect(donePartial.claudeStream?.previewText).toBe("");
 });
 
@@ -232,7 +244,13 @@ describe("uiErrors queue", () => {
     const withTerminal = {
       ...state,
       terminalLines: [
-        { id: 1, agent: "system", kind: "error" as const, line: "runtime err", timestamp: 1 },
+        {
+          id: 1,
+          agent: "system",
+          kind: "error" as const,
+          line: "runtime err",
+          timestamp: 1,
+        },
       ],
     };
     expect(withTerminal.uiErrors).toEqual([]);
@@ -255,7 +273,13 @@ describe("uiErrors queue", () => {
     const state = {
       ...baseState(),
       terminalLines: [
-        { id: 1, agent: "system", kind: "text" as const, line: "log", timestamp: 1 },
+        {
+          id: 1,
+          agent: "system",
+          kind: "text" as const,
+          line: "log",
+          timestamp: 1,
+        },
       ],
     };
     expect(selectTerminalLineCount(state)).toBe(1);

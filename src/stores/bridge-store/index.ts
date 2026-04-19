@@ -52,6 +52,8 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       reasoning: "",
       commandOutput: "",
     },
+    claudeStreamsByTask: {},
+    codexStreamsByTask: {},
     draft: "",
 
     setDraft: (text) => set({ draft: text }),

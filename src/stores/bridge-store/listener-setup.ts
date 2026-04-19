@@ -11,21 +11,6 @@ import {
   type SystemLogPayload,
 } from "./listener-payloads";
 
-/// Decide whether a stream event should mutate the singleton stream state.
-///
-/// - If the daemon stamped a taskId and it matches the currently active
-///   task, apply the event.
-/// - If the daemon did not stamp a taskId (legacy / truly global), apply
-///   it as before — no filtering regression on pre-migration emit sites.
-/// - If the stamped taskId belongs to a different task, drop the event:
-///   the other task's Reasoning indicator must not paint over ours. When
-///   the user switches back, the next stream event for that task will
-///   re-seed the singleton state.
-function shouldApplyStreamEventToActiveTask(taskId?: string): boolean {
-  if (!taskId) return true;
-  const activeId = useTaskStore.getState().activeTaskId;
-  return !activeId || activeId === taskId;
-}
 import {
   clearPendingClaudePreview,
   clearPendingCodexStream,
@@ -36,11 +21,69 @@ import {
   queueCodexBufferedUpdate,
 } from "./stream-batching";
 import {
+  defaultClaudeStreamState,
+  defaultCodexStreamState,
   handleClaudeStreamEvent,
   handleCodexStreamEvent,
+  reduceClaudeStreamSlice,
+  reduceCodexStreamSlice,
   resetClaudeStream,
-  resetCodexStream,
 } from "./stream-reducers";
+import type {
+  ClaudeStreamPayload,
+  CodexStreamPayload,
+} from "./listener-payloads";
+
+/// Apply a Claude stream event to the per-task bucket. If the event belongs
+/// to the currently active task, also mirror into the singleton so the UI
+/// sees the update immediately.
+function applyClaudeStreamToBucket(
+  state: BridgeState,
+  taskId: string | null,
+  payload: ClaudeStreamPayload,
+): Partial<BridgeState> {
+  if (!taskId) return handleClaudeStreamEvent(state, payload);
+  const prevBucket =
+    state.claudeStreamsByTask[taskId] ?? defaultClaudeStreamState();
+  const nextBucket = reduceClaudeStreamSlice(prevBucket, payload);
+  const activeId = useTaskStore.getState().activeTaskId;
+  return {
+    claudeStreamsByTask: {
+      ...state.claudeStreamsByTask,
+      [taskId]: nextBucket,
+    },
+    ...(activeId === taskId ? { claudeStream: nextBucket } : {}),
+  };
+}
+
+function applyCodexStreamToBucket(
+  state: BridgeState,
+  taskId: string | null,
+  payload: CodexStreamPayload,
+): Partial<BridgeState> {
+  if (!taskId) return handleCodexStreamEvent(state, payload);
+  const prevBucket =
+    state.codexStreamsByTask[taskId] ?? defaultCodexStreamState();
+  const nextBucket = reduceCodexStreamSlice(prevBucket, payload);
+  const activeId = useTaskStore.getState().activeTaskId;
+  return {
+    codexStreamsByTask: {
+      ...state.codexStreamsByTask,
+      [taskId]: nextBucket,
+    },
+    ...(activeId === taskId ? { codexStream: nextBucket } : {}),
+  };
+}
+
+/// Resolve the task id a stream event should be routed into.
+///
+/// - Explicit taskId from daemon envelope (post Step-2) wins.
+/// - For legacy emit sites with no taskId, fall back to the currently
+///   active task — the user-visible bucket.
+function resolveStreamBucketId(taskId?: string): string | null {
+  if (taskId) return taskId;
+  return useTaskStore.getState().activeTaskId ?? null;
+}
 
 type BridgeSetter = (fn: (state: BridgeState) => Partial<BridgeState>) => void;
 
@@ -98,34 +141,48 @@ export function createBridgeListeners(
 ): Promise<UnlistenFn[]> {
   const pendingStreamUpdates = createPendingStreamUpdates();
 
-  // Reset singleton stream state when the user switches tasks. Without this,
-  // Task A's Thinking indicator keeps showing on Task B until Task B emits
-  // its first stream event — a stale-state glitch. Resubscribe returns an
-  // unsubscribe fn that cleans up with the other listeners.
+  // On task switch, swap the singleton mirrors (claudeStream/codexStream) to
+  // point at the new task's bucket. Keeps in-progress state around — events
+  // that arrive while the user is on another task keep updating their task's
+  // bucket, and we restore that state when the user returns.
   const unsubscribeTaskSwitch = useTaskStore.subscribe((state, prev) => {
     if (state.activeTaskId !== prev.activeTaskId) {
       clearPendingClaudePreview(pendingStreamUpdates);
       clearPendingCodexStream(pendingStreamUpdates);
-      set((s) => ({
-        claudeStream: resetClaudeStream(s),
-        codexStream: resetCodexStream(s),
-      }));
+      set((s) => {
+        const nextId = state.activeTaskId;
+        return {
+          claudeStream: nextId
+            ? (s.claudeStreamsByTask[nextId] ?? defaultClaudeStreamState())
+            : defaultClaudeStreamState(),
+          codexStream: nextId
+            ? (s.codexStreamsByTask[nextId] ?? defaultCodexStreamState())
+            : defaultCodexStreamState(),
+        };
+      });
     }
-    // Task removal: sweep permission prompts tied to tasks that no
-    // longer exist. Without this, a deleted task's pending approvals
-    // would sit in the global queue forever, showing up on every task
-    // view's pending badge with no way to resolve (the underlying
-    // subprocess is already dead).
+    // Task removal: sweep permission prompts and stream buckets tied to
+    // tasks that no longer exist. Without this, deleted tasks leak state.
     const prevIds = Object.keys(prev.tasks);
     const nextIds = new Set(Object.keys(state.tasks));
     const removedIds = prevIds.filter((id) => !nextIds.has(id));
     if (removedIds.length > 0) {
       const removed = new Set(removedIds);
-      set((s) => ({
-        permissionPrompts: s.permissionPrompts.filter(
-          (p) => !p.taskId || !removed.has(p.taskId),
-        ),
-      }));
+      set((s) => {
+        const nextClaudeBuckets = { ...s.claudeStreamsByTask };
+        const nextCodexBuckets = { ...s.codexStreamsByTask };
+        for (const id of removed) {
+          delete nextClaudeBuckets[id];
+          delete nextCodexBuckets[id];
+        }
+        return {
+          permissionPrompts: s.permissionPrompts.filter(
+            (p) => !p.taskId || !removed.has(p.taskId),
+          ),
+          claudeStreamsByTask: nextClaudeBuckets,
+          codexStreamsByTask: nextCodexBuckets,
+        };
+      });
     }
   });
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -186,37 +243,48 @@ export function createBridgeListeners(
       set((s) => reduceAgentStatus(s, e.payload));
     }),
     listen<ClaudeStreamEvent>("claude_stream", (e) => {
-      if (!shouldApplyStreamEventToActiveTask(e.payload.taskId)) return;
+      const taskId = resolveStreamBucketId(e.payload.taskId);
       const payload = e.payload.payload;
-      if (queueClaudePreviewUpdate(pendingStreamUpdates, payload)) {
+      // Batching is only safe for the active task's bucket — the pending
+      // preview buffer is singleton. Inactive-task previews bypass the
+      // 32ms coalescer so their bucket stays accurate.
+      const activeId = useTaskStore.getState().activeTaskId;
+      const isActive = taskId !== null && taskId === activeId;
+      if (isActive && queueClaudePreviewUpdate(pendingStreamUpdates, payload)) {
         schedulePendingFlush();
         return;
       }
       // Flush any queued preview into state BEFORE clearing pending,
       // so the last preview chunk is visible before done/reset clears the draft.
-      flushPendingStreams();
-      clearPendingClaudePreview(pendingStreamUpdates);
-      if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
-        cancelPendingFlush();
-      }
-      set((s) => handleClaudeStreamEvent(s, payload));
-    }),
-    listen<CodexStreamEvent>("codex_stream", (e) => {
-      if (!shouldApplyStreamEventToActiveTask(e.payload.taskId)) return;
-      const payload = e.payload.payload;
-      if (queueCodexBufferedUpdate(pendingStreamUpdates, payload)) {
-        schedulePendingFlush();
-        return;
-      }
-      if (payload.kind === "thinking") {
-        clearPendingCodexStream(pendingStreamUpdates);
+      if (isActive) {
+        flushPendingStreams();
+        clearPendingClaudePreview(pendingStreamUpdates);
         if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
           cancelPendingFlush();
         }
-      } else {
-        flushPendingStreams();
       }
-      set((s) => handleCodexStreamEvent(s, payload));
+      set((s) => applyClaudeStreamToBucket(s, taskId, payload));
+    }),
+    listen<CodexStreamEvent>("codex_stream", (e) => {
+      const taskId = resolveStreamBucketId(e.payload.taskId);
+      const payload = e.payload.payload;
+      const activeId = useTaskStore.getState().activeTaskId;
+      const isActive = taskId !== null && taskId === activeId;
+      if (isActive && queueCodexBufferedUpdate(pendingStreamUpdates, payload)) {
+        schedulePendingFlush();
+        return;
+      }
+      if (isActive) {
+        if (payload.kind === "thinking") {
+          clearPendingCodexStream(pendingStreamUpdates);
+          if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
+            cancelPendingFlush();
+          }
+        } else {
+          flushPendingStreams();
+        }
+      }
+      set((s) => applyCodexStreamToBucket(s, taskId, payload));
     }),
     listen<PermissionPromptPayload>("permission_prompt", (e) => {
       set((s) => reducePermissionPrompt(s, e.payload));

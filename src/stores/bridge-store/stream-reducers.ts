@@ -7,6 +7,29 @@ import type {
 const MAX_CLAUDE_PREVIEW_CHARS = 5_000;
 const MAX_CODEX_PREVIEW_CHARS = 100_000;
 
+export function defaultClaudeStreamState(): BridgeState["claudeStream"] {
+  return {
+    thinking: false,
+    previewText: "",
+    thinkingText: "",
+    blockType: "idle",
+    toolName: "",
+    lastUpdatedAt: 0,
+  };
+}
+
+export function defaultCodexStreamState(): BridgeState["codexStream"] {
+  return {
+    thinking: false,
+    currentDelta: "",
+    lastMessage: "",
+    turnStatus: "",
+    activity: "",
+    reasoning: "",
+    commandOutput: "",
+  };
+}
+
 export function resetClaudeStream(
   state: BridgeState,
 ): BridgeState["claudeStream"] {
@@ -36,95 +59,150 @@ export function resetCodexStream(
   };
 }
 
-export function handleClaudeStreamEvent(
-  state: BridgeState,
+/// Pure reducer: given a Claude stream slice and an event, return the next slice.
+/// No dependencies on other BridgeState fields — callers decide which bucket to
+/// apply it to (per-task bucket plus optional active-task mirror).
+export function reduceClaudeStreamSlice(
+  prev: BridgeState["claudeStream"],
   payload: ClaudeStreamPayload,
-): Partial<BridgeState> {
+): BridgeState["claudeStream"] {
   const now = Date.now();
   switch (payload.kind) {
     case "thinkingStarted":
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          thinkingText: "",
-          blockType: "thinking",
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        thinkingText: "",
+        blockType: "thinking",
+        lastUpdatedAt: now,
       };
     case "thinkingDelta":
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          thinkingText: (
-            state.claudeStream.thinkingText + (payload.text ?? "")
-          ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
-          blockType: "thinking",
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        thinkingText: (prev.thinkingText + (payload.text ?? "")).slice(
+          -MAX_CLAUDE_PREVIEW_CHARS,
+        ),
+        blockType: "thinking",
+        lastUpdatedAt: now,
       };
     case "textStarted":
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          previewText: "",
-          blockType: "text",
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        previewText: "",
+        blockType: "text",
+        lastUpdatedAt: now,
       };
     case "textDelta":
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          previewText: (
-            state.claudeStream.previewText + (payload.text ?? "")
-          ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
-          blockType: "text",
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        previewText: (prev.previewText + (payload.text ?? "")).slice(
+          -MAX_CLAUDE_PREVIEW_CHARS,
+        ),
+        blockType: "text",
+        lastUpdatedAt: now,
       };
     case "toolStarted":
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          toolName: payload.name ?? "",
-          blockType: "tool",
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        toolName: payload.name ?? "",
+        blockType: "tool",
+        lastUpdatedAt: now,
       };
     case "preview":
-      // Legacy batched preview — still used by batching layer
-      if (
-        state.claudeStream.blockType === "text" &&
-        state.claudeStream.previewText.length > 0
-      ) {
-        return {
-          claudeStream: {
-            ...state.claudeStream,
-            thinking: true,
-            lastUpdatedAt: now,
-          },
-        };
+      if (prev.blockType === "text" && prev.previewText.length > 0) {
+        return { ...prev, thinking: true, lastUpdatedAt: now };
       }
       return {
-        claudeStream: {
-          ...state.claudeStream,
-          thinking: true,
-          previewText: (
-            state.claudeStream.previewText + (payload.text ?? "")
-          ).slice(-MAX_CLAUDE_PREVIEW_CHARS),
-          lastUpdatedAt: now,
-        },
+        ...prev,
+        thinking: true,
+        previewText: (prev.previewText + (payload.text ?? "")).slice(
+          -MAX_CLAUDE_PREVIEW_CHARS,
+        ),
+        lastUpdatedAt: now,
       };
     case "done":
     case "reset":
-      return { claudeStream: resetClaudeStream(state) };
+      return {
+        ...prev,
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle",
+        toolName: "",
+        lastUpdatedAt: now,
+      };
     default:
-      return {};
+      return prev;
+  }
+}
+
+export function handleClaudeStreamEvent(
+  state: BridgeState,
+  payload: ClaudeStreamPayload,
+): Partial<BridgeState> {
+  return { claudeStream: reduceClaudeStreamSlice(state.claudeStream, payload) };
+}
+
+/// Pure reducer mirroring reduceClaudeStreamSlice — operates on a single
+/// codex stream slice without touching other BridgeState fields.
+export function reduceCodexStreamSlice(
+  prev: BridgeState["codexStream"],
+  payload: CodexStreamPayload,
+): BridgeState["codexStream"] {
+  switch (payload.kind) {
+    case "thinking":
+      return {
+        ...prev,
+        thinking: true,
+        currentDelta: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
+      };
+    case "activity":
+      return {
+        ...prev,
+        activity: payload.label ?? "",
+        commandOutput: "",
+      };
+    case "reasoning":
+      return {
+        ...prev,
+        reasoning: (payload.text ?? "").slice(-MAX_CODEX_PREVIEW_CHARS),
+      };
+    case "commandOutput":
+      return {
+        ...prev,
+        commandOutput: prev.commandOutput + (payload.text ?? ""),
+      };
+    case "delta":
+      return {
+        ...prev,
+        currentDelta: (payload.text ?? "").slice(-MAX_CODEX_PREVIEW_CHARS),
+      };
+    case "message":
+      return {
+        ...prev,
+        lastMessage: payload.text ?? "",
+        currentDelta: "",
+      };
+    case "turnDone":
+      return {
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: payload.status ?? "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
+      };
+    default:
+      return prev;
   }
 }
 
@@ -132,69 +210,5 @@ export function handleCodexStreamEvent(
   state: BridgeState,
   payload: CodexStreamPayload,
 ): Partial<BridgeState> {
-  switch (payload.kind) {
-    case "thinking":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          thinking: true,
-          currentDelta: "",
-          turnStatus: "",
-          activity: "",
-          reasoning: "",
-          commandOutput: "",
-        },
-      };
-    case "activity":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          activity: payload.label ?? "",
-          commandOutput: "",
-        },
-      };
-    case "reasoning":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          reasoning: (payload.text ?? "").slice(-MAX_CODEX_PREVIEW_CHARS),
-        },
-      };
-    case "commandOutput":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          commandOutput: state.codexStream.commandOutput + (payload.text ?? ""),
-        },
-      };
-    case "delta":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          currentDelta: (payload.text ?? "").slice(-MAX_CODEX_PREVIEW_CHARS),
-        },
-      };
-    case "message":
-      return {
-        codexStream: {
-          ...state.codexStream,
-          lastMessage: payload.text ?? "",
-          currentDelta: "",
-        },
-      };
-    case "turnDone":
-      return {
-        codexStream: {
-          thinking: false,
-          currentDelta: "",
-          lastMessage: "",
-          turnStatus: payload.status ?? "",
-          activity: "",
-          reasoning: "",
-          commandOutput: "",
-        },
-      };
-    default:
-      return {};
-  }
+  return { codexStream: reduceCodexStreamSlice(state.codexStream, payload) };
 }
