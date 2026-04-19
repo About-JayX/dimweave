@@ -81,6 +81,8 @@ export interface TaskAgentInfo {
   provider: Provider;
   role: string;
   displayName?: string | null;
+  model?: string | null;
+  effort?: string | null;
   order: number;
   createdAt: number;
 }
@@ -169,7 +171,11 @@ export interface TaskStoreState extends TaskStoreData {
   setSelectedWorkspace: (workspace: string | null) => void;
   loadWorkspaceTasks: (workspace: string) => Promise<void>;
   createTask: (workspace: string, title: string) => Promise<TaskInfo>;
-  createConfiguredTask: (workspace: string, title: string, config: TaskConfig) => Promise<TaskInfo>;
+  createConfiguredTask: (
+    workspace: string,
+    title: string,
+    config: TaskConfig,
+  ) => Promise<TaskInfo>;
   updateTaskConfig: (taskId: string, config: TaskConfig) => Promise<TaskInfo>;
   startWorkspaceTask: (workspace: string) => Promise<TaskInfo>;
   selectTask: (taskId: string) => Promise<void>;
@@ -188,6 +194,8 @@ export interface TaskStoreState extends TaskStoreData {
     provider: Provider,
     role: string,
     displayName?: string | null,
+    model?: string | null,
+    effort?: string | null,
   ) => Promise<TaskAgentInfo>;
   removeTaskAgent: (agentId: string) => Promise<void>;
   updateTaskAgent: (
@@ -195,6 +203,8 @@ export interface TaskStoreState extends TaskStoreData {
     provider: Provider,
     role: string,
     displayName?: string | null,
+    model?: string | null,
+    effort?: string | null,
   ) => Promise<void>;
   reorderTaskAgents: (taskId: string, agentIds: string[]) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;

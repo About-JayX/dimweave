@@ -115,6 +115,8 @@ export function TaskPanel() {
             def.provider,
             def.role,
             def.displayName,
+            def.model,
+            def.effort,
           );
           savedAgents.push({ ...def, agentId: added.agentId });
         }
@@ -146,6 +148,8 @@ export function TaskPanel() {
               def.provider,
               def.role,
               def.displayName,
+              def.model,
+              def.effort,
             );
             finalOrder.push(def.agentId);
             savedAgents.push(def);
@@ -155,6 +159,8 @@ export function TaskPanel() {
               def.provider,
               def.role,
               def.displayName,
+              def.model,
+              def.effort,
             );
             finalOrder.push(added.agentId);
             savedAgents.push({ ...def, agentId: added.agentId });
@@ -279,6 +285,8 @@ export function TaskPanel() {
                   role: a.role,
                   agentId: a.agentId,
                   displayName: a.displayName,
+                  model: a.model ?? undefined,
+                  effort: a.effort ?? undefined,
                 }))
               : undefined
           }

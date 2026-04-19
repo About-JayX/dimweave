@@ -61,8 +61,9 @@ type TaskSetter = (
 ) => void;
 
 export function snapshotToPatch(snap: TaskSnapshot) {
-  const summaryPatch: Record<string, TaskProviderSummary> =
-    snap.providerSummary ? { [snap.task.taskId]: snap.providerSummary } : {};
+  const summaryPatch: Record<string, TaskProviderSummary> = snap.providerSummary
+    ? { [snap.task.taskId]: snap.providerSummary }
+    : {};
   return {
     activeTaskId: snap.task.taskId,
     selectedWorkspace: snap.task.projectRoot,
@@ -79,7 +80,10 @@ export function snapshotToPatch(snap: TaskSnapshot) {
 
 export async function bootstrapTaskStore(
   set: TaskSetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
   listenImpl: typeof createTaskListeners = createTaskListeners,
   onActiveTaskChanged?: () => void,
 ) {
@@ -87,7 +91,9 @@ export async function bootstrapTaskStore(
 
   try {
     await invokeImpl("daemon_clear_active_task");
-    const snap = await invokeImpl<TaskSnapshot | null>("daemon_get_task_snapshot");
+    const snap = await invokeImpl<TaskSnapshot | null>(
+      "daemon_get_task_snapshot",
+    );
     if (snap) {
       set(() => snapshotToPatch(snap));
     }
@@ -111,10 +117,15 @@ export function deriveWorkspaceTaskTitle(workspace: string) {
 
 export function createLoadWorkspaceTasksAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
   return async (workspace: string): Promise<void> => {
-    const tasks = await invokeImpl<TaskInfo[]>("daemon_list_tasks", { workspace });
+    const tasks = await invokeImpl<TaskInfo[]>("daemon_list_tasks", {
+      workspace,
+    });
     set((s) => {
       const merged = { ...s.tasks };
       for (const t of tasks) merged[t.taskId] = t;
@@ -125,9 +136,16 @@ export function createLoadWorkspaceTasksAction(
 
 export function createConfiguredTaskAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
-  return async (workspace: string, title: string, config: TaskConfig): Promise<TaskInfo> => {
+  return async (
+    workspace: string,
+    title: string,
+    config: TaskConfig,
+  ): Promise<TaskInfo> => {
     const task = await invokeImpl<TaskInfo>("daemon_create_task", {
       workspace,
       title,
@@ -144,7 +162,10 @@ export function createConfiguredTaskAction(
 
 export function createUpdateTaskConfigAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
   return async (taskId: string, config: TaskConfig): Promise<TaskInfo> => {
     const task = await invokeImpl<TaskInfo>("daemon_update_task_config", {
@@ -159,7 +180,10 @@ export function createUpdateTaskConfigAction(
 
 export function createStartWorkspaceTaskAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
   return async (workspace: string): Promise<TaskInfo> => {
     const task = await invokeImpl<TaskInfo>("daemon_create_task", {
@@ -190,7 +214,10 @@ export function setReplyTargetPatch(
 
 export function createDeleteTaskAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
   return async (taskId: string): Promise<void> => {
     await invokeImpl("daemon_delete_task", { taskId });
@@ -231,7 +258,10 @@ export function createDeleteTaskAction(
 
 export function createFetchProviderHistoryAction(
   set: ProviderHistorySetter,
-  invokeImpl: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = invoke,
+  invokeImpl: <T>(
+    cmd: string,
+    args?: Record<string, unknown>,
+  ) => Promise<T> = invoke,
 ) {
   const inFlight = new Map<string, Promise<ProviderHistoryInfo[]>>();
 
@@ -243,7 +273,10 @@ export function createFetchProviderHistoryAction(
     }
 
     set((s) => ({
-      providerHistoryLoading: { ...s.providerHistoryLoading, [workspace]: true },
+      providerHistoryLoading: {
+        ...s.providerHistoryLoading,
+        [workspace]: true,
+      },
       providerHistoryError: { ...s.providerHistoryError, [workspace]: null },
     }));
 
@@ -260,7 +293,10 @@ export function createFetchProviderHistoryAction(
             ...s.providerHistoryLoading,
             [workspace]: false,
           },
-          providerHistoryError: { ...s.providerHistoryError, [workspace]: null },
+          providerHistoryError: {
+            ...s.providerHistoryError,
+            [workspace]: null,
+          },
         }));
         return entries;
       })
@@ -353,7 +389,9 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       set((s) => setReplyTargetPatch(s, s.activeTaskId, target)),
 
     fetchSnapshot: async () => {
-      const snap = await invoke<TaskSnapshot | null>("daemon_get_task_snapshot");
+      const snap = await invoke<TaskSnapshot | null>(
+        "daemon_get_task_snapshot",
+      );
       if (!snap) return;
       const patch = snapshotToPatch(snap);
       set((s) => ({
@@ -362,8 +400,14 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
         taskAgents: { ...s.taskAgents, ...patch.taskAgents },
         sessions: { ...s.sessions, [snap.task.taskId]: snap.sessions },
         artifacts: { ...s.artifacts, [snap.task.taskId]: snap.artifacts },
-        providerSummaries: { ...s.providerSummaries, ...patch.providerSummaries },
-        agentRuntimeStatuses: { ...s.agentRuntimeStatuses, ...patch.agentRuntimeStatuses },
+        providerSummaries: {
+          ...s.providerSummaries,
+          ...patch.providerSummaries,
+        },
+        agentRuntimeStatuses: {
+          ...s.agentRuntimeStatuses,
+          ...patch.agentRuntimeStatuses,
+        },
       }));
     },
 
@@ -393,12 +437,21 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       }
     },
 
-    addTaskAgent: async (taskId, provider, role, displayName) => {
+    addTaskAgent: async (
+      taskId,
+      provider,
+      role,
+      displayName,
+      model,
+      effort,
+    ) => {
       const agent = await invoke<TaskAgentInfo>("daemon_add_task_agent", {
         taskId,
         provider,
         role,
         displayName: displayName ?? null,
+        model: model ?? null,
+        effort: effort ?? null,
       });
       return agent;
     },
@@ -407,12 +460,21 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       await invoke("daemon_remove_task_agent", { agentId });
     },
 
-    updateTaskAgent: async (agentId, provider, role, displayName) => {
+    updateTaskAgent: async (
+      agentId,
+      provider,
+      role,
+      displayName,
+      model,
+      effort,
+    ) => {
       await invoke("daemon_update_task_agent", {
         agentId,
         provider,
         role,
         displayName: displayName ?? null,
+        model: model ?? null,
+        effort: effort ?? null,
       });
     },
 
