@@ -13,6 +13,7 @@ fn build_claude_command_sets_sdk_args_and_env() {
         resume: None,
         daemon_port: 4502,
         mcp_config: Some("{\"mcpServers\":{}}".into()),
+        provider_auth: None,
     };
 
     let cmd = build_claude_command(&opts);
@@ -74,6 +75,7 @@ fn build_claude_command_uses_resume_without_new_session_id() {
         resume: Some("resume-456".into()),
         daemon_port: 4502,
         mcp_config: None,
+        provider_auth: None,
     };
 
     let cmd = build_claude_command(&opts);
@@ -101,6 +103,7 @@ fn build_claude_command_includes_stream_and_permission_flags() {
         resume: None,
         daemon_port: 4502,
         mcp_config: None,
+        provider_auth: None,
     };
     let cmd = build_claude_command(&opts);
     let args: Vec<String> = cmd
@@ -146,6 +149,7 @@ fn build_claude_command_sets_all_required_env_vars() {
         resume: None,
         daemon_port: 4502,
         mcp_config: None,
+        provider_auth: None,
     };
     let cmd = build_claude_command(&opts);
     let envs: Vec<(String, Option<String>)> = cmd
@@ -196,6 +200,7 @@ fn build_claude_command_no_role_omits_system_prompt() {
         resume: None,
         daemon_port: 4502,
         mcp_config: None,
+        provider_auth: None,
     };
     let cmd = build_claude_command(&opts);
     let args: Vec<String> = cmd
@@ -219,6 +224,7 @@ fn launch_trace_describes_sdk_transport_chain() {
         resume: None,
         daemon_port: 4502,
         mcp_config: Some("{\"mcpServers\":{}}".into()),
+        provider_auth: None,
     };
     let trace = format_launch_trace(&opts);
     assert!(trace.contains("chain=launch"));
@@ -229,4 +235,105 @@ fn launch_trace_describes_sdk_transport_chain() {
     assert!(trace.contains("role=lead"));
     assert!(trace.contains("model=claude-sonnet-4-6"));
     assert!(trace.contains("effort=high"));
+}
+
+// ── apply_provider_auth ───────────────────────────────────
+
+use super::apply_provider_auth;
+use crate::daemon::task_graph::types::ProviderAuthConfig;
+use tokio::process::Command as TokioCommand;
+
+fn env_map(cmd: &TokioCommand) -> std::collections::HashMap<String, String> {
+    cmd.as_std()
+        .get_envs()
+        .filter_map(|(k, v)| {
+            Some((
+                k.to_string_lossy().into_owned(),
+                v?.to_string_lossy().into_owned(),
+            ))
+        })
+        .collect()
+}
+
+#[test]
+fn apply_provider_auth_does_nothing_when_config_absent() {
+    let mut cmd = TokioCommand::new("noop");
+    apply_provider_auth(&mut cmd, None);
+    let envs = env_map(&cmd);
+    assert!(!envs.contains_key("ANTHROPIC_API_KEY"));
+    assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+    assert!(!envs.contains_key("ANTHROPIC_BASE_URL"));
+}
+
+#[test]
+fn apply_provider_auth_empty_api_key_is_noop() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("   ".into()),
+        base_url: None,
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let envs = env_map(&cmd);
+    assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+}
+
+#[test]
+fn apply_provider_auth_defaults_to_bearer_token() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("sk-ant-xyz".into()),
+        base_url: None,
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let envs = env_map(&cmd);
+    assert_eq!(envs.get("ANTHROPIC_AUTH_TOKEN").map(String::as_str), Some("sk-ant-xyz"));
+    assert!(!envs.contains_key("ANTHROPIC_API_KEY"));
+}
+
+#[test]
+fn apply_provider_auth_api_key_mode_uses_x_api_key_env() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("sk-abc".into()),
+        base_url: None,
+        wire_api: None,
+        auth_mode: Some("api_key".into()),
+        provider_name: None,
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let envs = env_map(&cmd);
+    assert_eq!(envs.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-abc"));
+    assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+}
+
+#[test]
+fn apply_provider_auth_injects_base_url_when_set() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("sk-ant-xyz".into()),
+        base_url: Some("https://api.example.com".into()),
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let envs = env_map(&cmd);
+    assert_eq!(
+        envs.get("ANTHROPIC_BASE_URL").map(String::as_str),
+        Some("https://api.example.com")
+    );
 }

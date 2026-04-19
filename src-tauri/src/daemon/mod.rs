@@ -185,6 +185,13 @@ async fn launch_claude_sdk(
         &format!("[Claude SDK] strict-mcp-config: {mcp_config}"),
     );
 
+    let provider_auth = state
+        .read()
+        .await
+        .task_graph
+        .get_provider_auth("claude")
+        .cloned();
+
     let opts = claude_sdk::process::ClaudeLaunchOpts {
         claude_bin,
         role: Some(role_id.to_string()),
@@ -196,6 +203,7 @@ async fn launch_claude_sdk(
         resume: resume_session_id,
         daemon_port: ports::PortConfig::from_env().daemon,
         mcp_config: Some(mcp_config),
+        provider_auth,
     };
 
     let returned_agent_id = agent_id.clone();

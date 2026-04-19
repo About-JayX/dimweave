@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 use tokio::process::{Child, Command};
 
+use crate::daemon::task_graph::types::ProviderAuthConfig;
+
 /// Options for launching a Claude subprocess.
 #[derive(Clone)]
 pub struct ClaudeLaunchOpts {
@@ -26,6 +28,11 @@ pub struct ClaudeLaunchOpts {
     pub daemon_port: u16,
     /// MCP config JSON string passed via `--strict-mcp-config`.
     pub mcp_config: Option<String>,
+    /// Optional third-party endpoint override. When `api_key` is set we
+    /// inject `ANTHROPIC_API_KEY` (x-api-key mode) or `ANTHROPIC_AUTH_TOKEN`
+    /// (Bearer mode, default); when `base_url` is also set we inject
+    /// `ANTHROPIC_BASE_URL` on top.
+    pub provider_auth: Option<ProviderAuthConfig>,
 }
 
 /// Spawn the Claude subprocess.
@@ -84,6 +91,8 @@ fn build_claude_command(opts: &ClaudeLaunchOpts) -> Command {
     cmd.env("CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2", "1");
     cmd.env("CLAUDE_CODE_OAUTH_TOKEN", ""); // clear OAuth
     cmd.env("PATH", crate::claude_cli::enriched_path());
+
+    apply_provider_auth(&mut cmd, opts.provider_auth.as_ref());
 
     // CLI arguments
     cmd.arg("--print");
@@ -148,6 +157,30 @@ pub fn spawn_claude(opts: &ClaudeLaunchOpts) -> anyhow::Result<Child> {
         )
     })?;
     Ok(child)
+}
+
+/// Translate a `ProviderAuthConfig` into the Claude env vars.
+/// `api_key` missing or empty → no-op (subscription/OAuth path unchanged).
+pub(crate) fn apply_provider_auth(
+    cmd: &mut Command,
+    auth: Option<&ProviderAuthConfig>,
+) {
+    let Some(a) = auth else { return };
+    let Some(api_key) = a.api_key.as_deref() else { return };
+    if api_key.trim().is_empty() {
+        return;
+    }
+    let mode = a.auth_mode.as_deref().unwrap_or("bearer");
+    if mode == "api_key" {
+        cmd.env("ANTHROPIC_API_KEY", api_key);
+    } else {
+        cmd.env("ANTHROPIC_AUTH_TOKEN", api_key);
+    }
+    if let Some(base_url) = a.base_url.as_deref() {
+        if !base_url.trim().is_empty() {
+            cmd.env("ANTHROPIC_BASE_URL", base_url);
+        }
+    }
 }
 
 #[cfg(test)]

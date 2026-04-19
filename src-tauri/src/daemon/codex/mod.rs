@@ -200,12 +200,20 @@ async fn launch(
     })
     .await?;
 
+    let provider_auth = state
+        .read()
+        .await
+        .task_graph
+        .get_provider_auth("codex")
+        .cloned();
+
     let child = lifecycle::start(
         codex_port,
         &codex_home,
         &cwd,
         &sandbox_mode,
         &approval_policy,
+        provider_auth.as_ref(),
     )
     .await?;
     let child_arc = Arc::new(Mutex::new(Some(child)));

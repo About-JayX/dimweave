@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use tokio::process::{Child, Command};
 
+use crate::daemon::task_graph::types::ProviderAuthConfig;
+
 /// Resolve `codex` binary.
 /// Priority: bundled sidecar > PATH > common install paths.
 fn resolve_codex_bin() -> PathBuf {
@@ -46,19 +48,26 @@ fn resolve_codex_bin() -> PathBuf {
 }
 
 /// Spawn a `codex app-server --listen ws://127.0.0.1:{port}` process.
+///
+/// `auth` is the optional third-party endpoint override from the
+/// `provider_auth` table. When `api_key + base_url` are set, we append
+/// `--config model_providers.<name>.*` entries and inject the matching
+/// env var so Codex routes through the custom endpoint. When only
+/// `api_key` is set, we inject `OPENAI_API_KEY` as a fallback override.
 pub async fn start(
     port: u16,
     codex_home: &Path,
     cwd: &str,
     sandbox_mode: &str,
     approval_policy: &str,
+    auth: Option<&ProviderAuthConfig>,
 ) -> anyhow::Result<Child> {
     let codex_bin = resolve_codex_bin();
     let path = crate::claude_cli::enriched_path();
     eprintln!("[Codex] using binary: {}", codex_bin.display());
 
-    let child = Command::new(&codex_bin)
-        .arg("app-server")
+    let mut cmd = Command::new(&codex_bin);
+    cmd.arg("app-server")
         .arg("--listen")
         .arg(format!("ws://127.0.0.1:{port}"))
         .arg("--config")
@@ -70,11 +79,52 @@ pub async fn start(
         .env("CODEX_HOME", codex_home)
         .env("PATH", &path)
         .current_dir(cwd)
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+
+    apply_provider_auth(&mut cmd, auth);
+
+    let child = cmd
         .spawn()
         .map_err(|e| anyhow::anyhow!("failed to spawn codex: {e}"))?;
 
     Ok(child)
+}
+
+/// Translate a `ProviderAuthConfig` into the `--config` flags and env
+/// variables Codex needs. Extracted so we can unit-test the shape.
+pub(crate) fn apply_provider_auth(cmd: &mut Command, auth: Option<&ProviderAuthConfig>) {
+    let Some(a) = auth else { return };
+    let Some(api_key) = a.api_key.as_deref() else { return };
+    if api_key.trim().is_empty() {
+        return;
+    }
+    match a.base_url.as_deref() {
+        Some(base_url) if !base_url.trim().is_empty() => {
+            let name = a
+                .provider_name
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("dimweave-custom");
+            let env_key = format!(
+                "DIMWEAVE_{}_KEY",
+                name.to_uppercase().replace(['-', '.', ' '], "_")
+            );
+            let wire = a.wire_api.as_deref().unwrap_or("chat");
+            cmd.arg("--config")
+                .arg(format!("model_provider=\"{name}\""))
+                .arg("--config")
+                .arg(format!("model_providers.{name}.base_url=\"{base_url}\""))
+                .arg("--config")
+                .arg(format!("model_providers.{name}.env_key=\"{env_key}\""))
+                .arg("--config")
+                .arg(format!("model_providers.{name}.wire_api=\"{wire}\""));
+            cmd.env(env_key, api_key);
+        }
+        _ => {
+            // Official endpoint with overridden API key.
+            cmd.env("OPENAI_API_KEY", api_key);
+        }
+    }
 }
 
 /// Kill the Codex process and wait for it to fully exit.
@@ -119,4 +169,122 @@ pub(super) async fn kill_port_holder(port: u16) {
         }
     }
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+}
+
+#[cfg(test)]
+mod apply_auth_tests {
+    use super::*;
+    use tokio::process::Command as TokioCommand;
+
+    fn args(cmd: &TokioCommand) -> Vec<String> {
+        cmd.as_std()
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    fn envs(cmd: &TokioCommand) -> std::collections::HashMap<String, String> {
+        cmd.as_std()
+            .get_envs()
+            .filter_map(|(k, v)| {
+                Some((
+                    k.to_string_lossy().into_owned(),
+                    v?.to_string_lossy().into_owned(),
+                ))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn apply_auth_noop_when_absent() {
+        let mut cmd = TokioCommand::new("noop");
+        apply_provider_auth(&mut cmd, None);
+        assert!(args(&cmd).is_empty());
+        assert!(envs(&cmd).is_empty());
+    }
+
+    #[test]
+    fn apply_auth_noop_when_api_key_empty() {
+        let mut cmd = TokioCommand::new("noop");
+        let cfg = ProviderAuthConfig {
+            provider: "codex".into(),
+            api_key: Some("   ".into()),
+            base_url: None,
+            wire_api: None,
+            auth_mode: None,
+            provider_name: None,
+            updated_at: 0,
+        };
+        apply_provider_auth(&mut cmd, Some(&cfg));
+        assert!(args(&cmd).is_empty());
+    }
+
+    #[test]
+    fn apply_auth_key_only_sets_openai_api_key_env() {
+        let mut cmd = TokioCommand::new("noop");
+        let cfg = ProviderAuthConfig {
+            provider: "codex".into(),
+            api_key: Some("sk-test".into()),
+            base_url: None,
+            wire_api: None,
+            auth_mode: None,
+            provider_name: None,
+            updated_at: 0,
+        };
+        apply_provider_auth(&mut cmd, Some(&cfg));
+        assert_eq!(envs(&cmd).get("OPENAI_API_KEY").map(String::as_str), Some("sk-test"));
+        assert!(args(&cmd).is_empty());
+    }
+
+    #[test]
+    fn apply_auth_with_base_url_emits_model_provider_configs() {
+        let mut cmd = TokioCommand::new("noop");
+        let cfg = ProviderAuthConfig {
+            provider: "codex".into(),
+            api_key: Some("sk-or-abc".into()),
+            base_url: Some("https://openrouter.ai/api/v1".into()),
+            wire_api: Some("chat".into()),
+            auth_mode: None,
+            provider_name: Some("dimweave-openrouter".into()),
+            updated_at: 0,
+        };
+        apply_provider_auth(&mut cmd, Some(&cfg));
+        let args = args(&cmd);
+        assert!(args.iter().any(|a| a == "model_provider=\"dimweave-openrouter\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-openrouter.base_url=\"https://openrouter.ai/api/v1\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-openrouter.env_key=\"DIMWEAVE_DIMWEAVE_OPENROUTER_KEY\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-openrouter.wire_api=\"chat\""));
+        let envs = envs(&cmd);
+        assert_eq!(
+            envs.get("DIMWEAVE_DIMWEAVE_OPENROUTER_KEY").map(String::as_str),
+            Some("sk-or-abc")
+        );
+        assert!(!envs.contains_key("OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn apply_auth_with_base_url_defaults_to_dimweave_custom_when_name_missing() {
+        let mut cmd = TokioCommand::new("noop");
+        let cfg = ProviderAuthConfig {
+            provider: "codex".into(),
+            api_key: Some("sk-x".into()),
+            base_url: Some("https://example.com/v1".into()),
+            wire_api: None,
+            auth_mode: None,
+            provider_name: None,
+            updated_at: 0,
+        };
+        apply_provider_auth(&mut cmd, Some(&cfg));
+        let args = args(&cmd);
+        assert!(args.iter().any(|a| a == "model_provider=\"dimweave-custom\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-custom.wire_api=\"chat\""));
+    }
 }
