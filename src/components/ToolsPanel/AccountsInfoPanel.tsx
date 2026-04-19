@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Settings2 } from "lucide-react";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import {
   useClaudeAccountStore,
   type ClaudeProfile,
 } from "@/stores/claude-account-store";
+import { useProviderAuthStore } from "@/stores/provider-auth-store";
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import { MiniMeter } from "@/components/CodexAccountPanel/MiniMeter";
 import { windowLabel } from "@/components/CodexAccountPanel/helpers";
-import { AuthActions } from "@/components/AgentStatus/AuthActions";
+import { ProviderAuthDialog } from "./ProviderAuthDialog";
 import { cn } from "@/lib/utils";
 
 function AccountCard({
@@ -158,8 +160,9 @@ function CodexCard() {
         icon={<CodexIcon className="size-3.5 shrink-0" />}
         title="Codex"
       >
-        <p className="text-[10px] text-muted-foreground/60">Not signed in</p>
-        <AuthActions />
+        <p className="text-[10px] text-muted-foreground/60">
+          Not signed in — open settings to configure.
+        </p>
       </AccountCard>
     );
   }
@@ -215,7 +218,6 @@ function CodexCard() {
           />
         </div>
       )}
-      <AuthActions />
     </AccountCard>
   );
 }
@@ -226,23 +228,39 @@ export function AccountsInfoPanel() {
   const codexProfile = useCodexAccountStore((s) => s.profile);
   const fetchCodexProfile = useCodexAccountStore((s) => s.fetchProfile);
   const fetchCodexUsage = useCodexAccountStore((s) => s.fetchUsage);
+  const fetchProviderAuth = useProviderAuthStore((s) => s.fetchAll);
+  const [authOpen, setAuthOpen] = useState(false);
 
   useEffect(() => {
     if (!claudeProfile) fetchClaudeProfile();
     if (!codexProfile) fetchCodexProfile();
     fetchCodexUsage();
+    fetchProviderAuth();
   }, [
     claudeProfile,
     codexProfile,
     fetchClaudeProfile,
     fetchCodexProfile,
     fetchCodexUsage,
+    fetchProviderAuth,
   ]);
 
   return (
     <div className="space-y-2">
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setAuthOpen(true)}
+          className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title="Provider Authentication"
+          aria-label="Provider Authentication"
+        >
+          <Settings2 className="size-3.5" />
+        </button>
+      </div>
       <ClaudeCard profile={claudeProfile} />
       <CodexCard />
+      <ProviderAuthDialog open={authOpen} onOpenChange={setAuthOpen} />
     </div>
   );
 }
