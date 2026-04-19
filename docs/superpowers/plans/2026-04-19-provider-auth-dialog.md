@@ -193,4 +193,13 @@ if let Some(a) = auth {
 4. `feat(ui): Provider Authentication dialog unifies subscription + API key paths`
 
 ## CM 回填区
-<!-- 实施完成后回填 commit hash -->
+
+- `1d9428ef` — `refactor(task_graph): add provider_auth table with v2→v3 migration` — 新 `provider_auth` 表 + `ProviderAuthConfig` 类型 + store `get/upsert/clear` + round-trip 和 v2→v3 迁移测试
+- `d7091abd` — `feat(provider-auth): Tauri CRUD commands for third-party endpoint config` — 3 个 DaemonCmd 变体 + `commands_provider_auth` 包装，save 前校验 provider ∈ {claude, codex}
+- `551e93ac` — `feat(launch): inject provider auth env/--config at Codex + Claude spawn` — `apply_provider_auth` helpers（Codex: `--config model_providers.*` + `DIMWEAVE_<NAME>_KEY` env / 或 `OPENAI_API_KEY`；Claude: `ANTHROPIC_AUTH_TOKEN|API_KEY` + 可选 `ANTHROPIC_BASE_URL`）+ 16 条单测
+- `c7b585cb` — `feat(ui): Provider Authentication dialog unifies subscription + API key paths` — `useProviderAuthStore` + `ProviderAuthDialog`；`AccountsInfoPanel` 头部加齿轮入口，卡片移除旧 `AuthActions`
+
+### 验证
+- `cargo test` — 735 passed（+16 新 Codex/Claude apply 单测、+4 provider_auth CRUD/migration、+1 v2→v3 migration）
+- `bun x tsc --noEmit -p tsconfig.app.json` — 无新增错误
+- `bun run build` — OK
