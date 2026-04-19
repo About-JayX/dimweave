@@ -12,9 +12,17 @@ const CLAUDE_PREVIEW_BATCH_WINDOW_MS: u64 = 50;
 /// - content_block_start {content_block: {type: "thinking"|"text"|"tool_use"}}
 /// - content_block_delta {delta: {type: "thinking_delta"|"text_delta"|"input_json_delta"}}
 /// - content_block_stop, message_start, message_delta, message_stop
-pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app: &AppHandle) {
+pub(super) async fn handle_stream_event(
+    event: &Value,
+    task_id: &str,
+    agent_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
     let inner = &event["event"];
     let event_type = inner["type"].as_str().unwrap_or("");
+    let tid = Some(task_id);
+    let aid = Some(agent_id);
 
     match event_type {
         "content_block_start" => {
@@ -22,19 +30,19 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
             match block_type {
                 "thinking" => {
                     state.write().await.clear_claude_preview_batch();
-                    gui::emit_claude_stream(app, ClaudeStreamPayload::ThinkingStarted);
+                    gui::emit_claude_stream(app, tid, aid, ClaudeStreamPayload::ThinkingStarted);
                 }
                 "text" => {
-                    flush_pending_preview_batch(state, app).await;
-                    gui::emit_claude_stream(app, ClaudeStreamPayload::TextStarted);
+                    flush_pending_preview_batch(task_id, agent_id, state, app).await;
+                    gui::emit_claude_stream(app, tid, aid, ClaudeStreamPayload::TextStarted);
                 }
                 "tool_use" => {
-                    flush_pending_preview_batch(state, app).await;
+                    flush_pending_preview_batch(task_id, agent_id, state, app).await;
                     let name = inner["content_block"]["name"]
                         .as_str()
                         .unwrap_or("tool")
                         .to_string();
-                    gui::emit_claude_stream(app, ClaudeStreamPayload::ToolStarted { name });
+                    gui::emit_claude_stream(app, tid, aid, ClaudeStreamPayload::ToolStarted { name });
                 }
                 _ => {}
             }
@@ -46,6 +54,8 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
                     if let Some(text) = inner["delta"]["thinking"].as_str() {
                         gui::emit_claude_stream(
                             app,
+                            tid,
+                            aid,
                             ClaudeStreamPayload::ThinkingDelta {
                                 text: text.to_string(),
                             },
@@ -59,6 +69,8 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
                             state.write().await.append_claude_preview_delta(text);
                         gui::emit_claude_stream(
                             app,
+                            tid,
+                            aid,
                             ClaudeStreamPayload::TextDelta {
                                 text: text.to_string(),
                             },
@@ -66,12 +78,14 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
                         if should_schedule {
                             let state = state.clone();
                             let app = app.clone();
+                            let task_id = task_id.to_string();
+                            let agent_id = agent_id.to_string();
                             tokio::spawn(async move {
                                 tokio::time::sleep(Duration::from_millis(
                                     CLAUDE_PREVIEW_BATCH_WINDOW_MS,
                                 ))
                                 .await;
-                                flush_pending_preview_batch(&state, &app).await;
+                                flush_pending_preview_batch(&task_id, &agent_id, &state, &app).await;
                             });
                         }
                     }
@@ -84,12 +98,17 @@ pub(super) async fn handle_stream_event(event: &Value, state: &SharedState, app:
     }
 }
 
-pub(super) async fn flush_pending_preview_batch(state: &SharedState, app: &AppHandle) {
+pub(super) async fn flush_pending_preview_batch(
+    task_id: &str,
+    agent_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
     let Some(text) = state.write().await.take_claude_preview_batch() else {
         return;
     };
 
-    gui::emit_claude_stream(app, ClaudeStreamPayload::Preview { text });
+    gui::emit_claude_stream(app, Some(task_id), Some(agent_id), ClaudeStreamPayload::Preview { text });
 }
 
 pub(super) fn extract_assistant_text(event: &Value) -> String {

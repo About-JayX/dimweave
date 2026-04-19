@@ -14,7 +14,12 @@ pub(crate) fn emit_route_side_effects(
     display_in_gui: bool,
 ) {
     if emit_claude_thinking {
-        gui::emit_claude_stream(app, ClaudeStreamPayload::ThinkingStarted);
+        gui::emit_claude_stream(
+            app,
+            msg.task_id.as_deref(),
+            None,
+            ClaudeStreamPayload::ThinkingStarted,
+        );
     }
     if display_in_gui && !matches!(result, RouteResult::Dropped) && is_renderable_message(msg) {
         gui::emit_agent_message(app, msg);

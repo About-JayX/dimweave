@@ -21,6 +21,21 @@ export function resetClaudeStream(
   };
 }
 
+export function resetCodexStream(
+  state: BridgeState,
+): BridgeState["codexStream"] {
+  return {
+    ...state.codexStream,
+    thinking: false,
+    currentDelta: "",
+    lastMessage: "",
+    turnStatus: "",
+    activity: "",
+    reasoning: "",
+    commandOutput: "",
+  };
+}
+
 export function handleClaudeStreamEvent(
   state: BridgeState,
   payload: ClaudeStreamPayload,

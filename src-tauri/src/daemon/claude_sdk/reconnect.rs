@@ -96,7 +96,7 @@ pub async fn recover_ws_connection(
     };
     if is_current {
         gui::emit_agent_status(app, "claude", false, None, None);
-        gui::emit_claude_stream(app, gui::ClaudeStreamPayload::Reset);
+        gui::emit_claude_stream(app, None, None, gui::ClaudeStreamPayload::Reset);
     }
     if let Some(tid) = affected_task_id {
         crate::daemon::gui_task::emit_task_context_events(state, app, &tid).await;

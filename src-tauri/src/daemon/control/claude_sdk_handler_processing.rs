@@ -56,6 +56,7 @@ async fn process_sdk_event(
     );
     crate::daemon::claude_sdk::event_handler::handle_events(
         vec![event],
+        task_id,
         &role,
         agent_id,
         display_source,

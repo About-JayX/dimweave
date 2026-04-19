@@ -27,6 +27,7 @@ mod tests;
 /// Dispatch a batch of events from Claude's HTTP POST.
 pub async fn handle_events(
     events: Vec<Value>,
+    task_id: &str,
     role: &str,
     agent_id: &str,
     display_source: &str,
@@ -41,10 +42,10 @@ pub async fn handle_events(
             "assistant" => handle_assistant(&event, role, agent_id, display_source, &state, &app).await,
             "control_request" => handle_control_request(&event, &state, &app).await,
             "system" => handle_system(&event, &app),
-            "result" => handle_result(&event, role, agent_id, display_source, &state, &app).await,
+            "result" => handle_result(&event, task_id, role, agent_id, display_source, &state, &app).await,
             "user" | "keep_alive" | "control_cancel_request" => { /* echo / heartbeat / cancel — ignore */
             }
-            "stream_event" => handle_stream_event(&event, &state, &app).await,
+            "stream_event" => handle_stream_event(&event, task_id, agent_id, &state, &app).await,
             "rate_limit_event" => {
                 let status = event["rate_limit_info"]["status"].as_str().unwrap_or("?");
                 gui::emit_system_log(&app, "info", &format!("[Claude SDK] rate_limit: {status}"));
@@ -169,13 +170,16 @@ fn handle_system(event: &Value, app: &AppHandle) {
 
 async fn handle_result(
     event: &Value,
+    task_id: &str,
     role: &str,
     agent_id: &str,
     display_source: &str,
     state: &SharedState,
     app: &AppHandle,
 ) {
-    flush_pending_preview_batch(state, app).await;
+    flush_pending_preview_batch(task_id, agent_id, state, app).await;
+    let tid = Some(task_id);
+    let aid = Some(agent_id);
     // Extract final text if present in result
     let text = event["result"]
         .as_str()
@@ -197,7 +201,7 @@ async fn handle_result(
                 ),
             );
             finish_sdk_direct_text_turn(state).await;
-            gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
+            gui::emit_claude_stream(app, tid, aid, ClaudeStreamPayload::Done);
             gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
             return;
         }
@@ -216,6 +220,6 @@ async fn handle_result(
     }
     // Done is emitted after route_message so the durable bubble arrives
     // before the frontend draft clears.
-    gui::emit_claude_stream(app, ClaudeStreamPayload::Done);
+    gui::emit_claude_stream(app, tid, aid, ClaudeStreamPayload::Done);
     gui::emit_system_log(app, "info", "[Claude SDK] turn completed");
 }

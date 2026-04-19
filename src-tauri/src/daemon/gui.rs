@@ -98,8 +98,36 @@ pub enum CodexStreamPayload {
     },
 }
 
-pub fn emit_codex_stream(app: &AppHandle, payload: CodexStreamPayload) {
-    let _ = app.emit("codex_stream", payload);
+/// Wrapper envelope for codex_stream event.
+///
+/// Multi-task routing: the frontend needs to know which task's stream
+/// state to mutate, otherwise every task's view lights up the same
+/// Reasoning indicator. `task_id` is optional for legacy / truly global
+/// events; per-task emits must fill it in.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexStreamEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    pub payload: CodexStreamPayload,
+}
+
+pub fn emit_codex_stream(
+    app: &AppHandle,
+    task_id: Option<&str>,
+    agent_id: Option<&str>,
+    payload: CodexStreamPayload,
+) {
+    let _ = app.emit(
+        "codex_stream",
+        CodexStreamEvent {
+            task_id: task_id.map(str::to_string),
+            agent_id: agent_id.map(str::to_string),
+            payload,
+        },
+    );
 }
 
 #[derive(Serialize, Clone)]
@@ -125,8 +153,30 @@ fn should_auto_finish_idle_claude_thinking(_payload: &ClaudeStreamPayload) -> bo
     false
 }
 
-pub fn emit_claude_stream(app: &AppHandle, payload: ClaudeStreamPayload) {
-    let _ = app.emit("claude_stream", payload);
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeStreamEvent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    pub payload: ClaudeStreamPayload,
+}
+
+pub fn emit_claude_stream(
+    app: &AppHandle,
+    task_id: Option<&str>,
+    agent_id: Option<&str>,
+    payload: ClaudeStreamPayload,
+) {
+    let _ = app.emit(
+        "claude_stream",
+        ClaudeStreamEvent {
+            task_id: task_id.map(str::to_string),
+            agent_id: agent_id.map(str::to_string),
+            payload,
+        },
+    );
 }
 
 pub fn emit_agent_status(

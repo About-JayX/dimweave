@@ -56,3 +56,18 @@ export interface ClaudeStreamPayload {
   text?: string;
   name?: string;
 }
+
+/// Envelope the daemon wraps around stream payloads. When `taskId` is set
+/// the frontend filters the event to the active task — per-task sharding
+/// without needing full state-map shards. Unset taskId = legacy/global.
+export interface ClaudeStreamEvent {
+  taskId?: string;
+  agentId?: string;
+  payload: ClaudeStreamPayload;
+}
+
+export interface CodexStreamEvent {
+  taskId?: string;
+  agentId?: string;
+  payload: CodexStreamPayload;
+}

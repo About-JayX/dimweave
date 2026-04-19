@@ -30,7 +30,7 @@ pub(super) async fn handle_codex_event(
         "item/tool/call" => handle_tool_call(v, role_id, task_id, agent_id, state, app, ws_tx, stream_preview).await,
         "turn/started" => {
             stream_preview.reset();
-            gui::emit_codex_stream(app, CodexStreamPayload::Thinking);
+            gui::emit_codex_stream(app, Some(task_id), Some(agent_id), CodexStreamPayload::Thinking);
         }
         "thread/status/changed" => sync_thread_status_change(v, state, app).await,
         "thread/archived" => sync_thread_archive(v, state, app).await,
@@ -44,6 +44,8 @@ pub(super) async fn handle_codex_event(
                 stream_preview.append_reasoning(delta);
                 gui::emit_codex_stream(
                     app,
+                    Some(task_id),
+                    Some(agent_id),
                     CodexStreamPayload::Reasoning {
                         text: stream_preview.reasoning_text().to_string(),
                     },
@@ -55,6 +57,8 @@ pub(super) async fn handle_codex_event(
             if !stream_preview.reasoning_text().is_empty() {
                 gui::emit_codex_stream(
                     app,
+                    Some(task_id),
+                    Some(agent_id),
                     CodexStreamPayload::Reasoning {
                         text: stream_preview.reasoning_text().to_string(),
                     },
@@ -66,6 +70,8 @@ pub(super) async fn handle_codex_event(
                 stream_preview.mark_transient_content();
                 gui::emit_codex_stream(
                     app,
+                    Some(task_id),
+                    Some(agent_id),
                     CodexStreamPayload::CommandOutput {
                         text: delta.to_string(),
                     },
@@ -79,7 +85,7 @@ pub(super) async fn handle_codex_event(
             {
                 stream_preview.mark_transient_content();
                 if let Some(preview) = stream_preview.ingest_delta(text) {
-                    gui::emit_codex_stream(app, CodexStreamPayload::Delta { text: preview });
+                    gui::emit_codex_stream(app, Some(task_id), Some(agent_id), CodexStreamPayload::Delta { text: preview });
                 }
             }
         }
@@ -117,6 +123,8 @@ pub(super) async fn handle_codex_event(
             let status = v["params"]["turn"]["status"].as_str().unwrap_or("unknown");
             gui::emit_codex_stream(
                 app,
+                Some(task_id),
+                Some(agent_id),
                 CodexStreamPayload::TurnDone {
                     status: status.into(),
                 },
@@ -327,6 +335,8 @@ async fn handle_completed_agent_message(
         _ => {
             gui::emit_codex_stream(
                 app,
+                Some(task_id),
+                Some(agent_id),
                 CodexStreamPayload::Message {
                     text: parsed.message.clone(),
                 },
@@ -339,7 +349,7 @@ async fn handle_completed_agent_message(
 fn emit_activity_from_item(v: &Value, app: &AppHandle) {
     let item = &v["params"]["item"];
     if let Some(label) = activity_label_from_item(item) {
-        gui::emit_codex_stream(app, CodexStreamPayload::Activity { label });
+        gui::emit_codex_stream(app, None, None, CodexStreamPayload::Activity { label });
     }
 }
 
