@@ -53,8 +53,43 @@ function Row({
   );
 }
 
+function ClaudeUsageMeters({
+  usage,
+}: {
+  usage: NonNullable<
+    ReturnType<typeof useClaudeAccountStore.getState>["usage"]
+  >;
+}) {
+  const windows: Array<
+    [string, { utilization: number; resetsAt: number | null } | null]
+  > = [
+    ["5h", usage.fiveHour],
+    ["7d", usage.sevenDay],
+  ];
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-2">
+      {windows.map(([label, w]) => {
+        const used = w ? Math.round(w.utilization * 100) : 0;
+        const remaining = w ? Math.max(0, 100 - used) : 100;
+        return (
+          <MiniMeter
+            key={label}
+            label={label}
+            used={used}
+            remaining={remaining}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function ClaudeCard({ profile }: { profile: ClaudeProfile | null }) {
   const profileError = useClaudeAccountStore((s) => s.profileError);
+  const usage = useClaudeAccountStore((s) => s.usage);
+  const usageError = useClaudeAccountStore((s) => s.usageError);
+  const usageRefreshing = useClaudeAccountStore((s) => s.usageRefreshing);
+  const refreshUsage = useClaudeAccountStore((s) => s.refreshUsage);
   if (!profile) {
     return (
       <AccountCard
@@ -87,10 +122,26 @@ function ClaudeCard({ profile }: { profile: ClaudeProfile | null }) {
         <span className="text-[10px] text-muted-foreground/70">
           {profile.subscriptionStatus}
         </span>
+        <button
+          type="button"
+          disabled={usageRefreshing}
+          onClick={() => void refreshUsage()}
+          className={cn(
+            "ml-auto text-[10px] text-muted-foreground hover:text-foreground transition-colors",
+            usageRefreshing && "opacity-50",
+          )}
+          title="Sends a tiny ping (max_tokens=1) to read rate-limit headers"
+        >
+          {usageRefreshing ? "…" : usage ? "Refresh" : "Check usage"}
+        </button>
       </div>
       <Row label="Email" value={profile.email || "—"} />
       <Row label="Name" value={profile.displayName || "—"} />
       <Row label="Rate limit" value={profile.rateLimitTier || "—"} mono />
+      {usage && <ClaudeUsageMeters usage={usage} />}
+      {usageError && (
+        <p className="mt-1 text-[10px] text-destructive/80">{usageError}</p>
+      )}
     </AccountCard>
   );
 }

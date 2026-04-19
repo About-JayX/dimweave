@@ -16,19 +16,38 @@ export interface ClaudeProfile {
   subscriptionStatus: string;
 }
 
+export interface ClaudeUsageWindow {
+  utilization: number;
+  resetsAt: number | null;
+  status: string;
+}
+
+export interface ClaudeUsage {
+  overallStatus: string;
+  fiveHour: ClaudeUsageWindow | null;
+  sevenDay: ClaudeUsageWindow | null;
+}
+
 interface ClaudeAccountState {
   models: ClaudeModel[];
   profile: ClaudeProfile | null;
   profileError: string | null;
+  usage: ClaudeUsage | null;
+  usageError: string | null;
+  usageRefreshing: boolean;
   fetchFailed: boolean;
   fetchModels: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  refreshUsage: () => Promise<void>;
 }
 
-export const useClaudeAccountStore = create<ClaudeAccountState>((set) => ({
+export const useClaudeAccountStore = create<ClaudeAccountState>((set, get) => ({
   models: [],
   profile: null,
   profileError: null,
+  usage: null,
+  usageError: null,
+  usageRefreshing: false,
   fetchFailed: false,
   fetchModels: async () => {
     try {
@@ -46,6 +65,17 @@ export const useClaudeAccountStore = create<ClaudeAccountState>((set) => ({
     } catch (e) {
       console.error("[ClaudeAccount] profile", e);
       set({ profileError: String(e) });
+    }
+  },
+  refreshUsage: async () => {
+    if (get().usageRefreshing) return;
+    set({ usageRefreshing: true });
+    try {
+      const usage = await invoke<ClaudeUsage>("get_claude_usage");
+      set({ usage, usageError: null, usageRefreshing: false });
+    } catch (e) {
+      console.error("[ClaudeAccount] usage", e);
+      set({ usageError: String(e), usageRefreshing: false });
     }
   },
 }));
