@@ -15,10 +15,12 @@ import { cn } from "@/lib/utils";
 function AccountCard({
   icon,
   title,
+  mode,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
+  mode?: "subscription" | "api_key" | null;
   children: React.ReactNode;
 }) {
   return (
@@ -26,6 +28,23 @@ function AccountCard({
       <div className="mb-1.5 flex items-center gap-1.5 text-foreground">
         {icon}
         <span className="font-semibold">{title}</span>
+        {mode && (
+          <span
+            className={cn(
+              "ml-auto rounded-full px-1.5 py-px text-[9px] font-semibold uppercase",
+              mode === "api_key"
+                ? "bg-amber-500/10 text-amber-500"
+                : "bg-emerald-500/10 text-emerald-500",
+            )}
+            title={
+              mode === "api_key"
+                ? "Next launch uses the stored API key + endpoint."
+                : "Next launch uses the provider's subscription credentials."
+            }
+          >
+            {mode === "api_key" ? "API Key" : "Subscription"}
+          </span>
+        )}
       </div>
       {children}
     </div>
@@ -93,11 +112,38 @@ function ClaudeCard({ profile }: { profile: ClaudeProfile | null }) {
   const usageError = useClaudeAccountStore((s) => s.usageError);
   const usageRefreshing = useClaudeAccountStore((s) => s.usageRefreshing);
   const refreshUsage = useClaudeAccountStore((s) => s.refreshUsage);
+  const auth = useProviderAuthStore((s) => s.configs.claude);
+  const activeMode =
+    auth?.activeMode ?? (auth?.apiKey ? "api_key" : "subscription");
+
+  if (activeMode === "api_key") {
+    return (
+      <AccountCard
+        icon={<ClaudeIcon className="size-3.5 shrink-0" />}
+        title="Claude"
+        mode="api_key"
+      >
+        <Row
+          label="Endpoint"
+          value={auth?.baseUrl || "api.anthropic.com"}
+          mono
+        />
+        <Row
+          label="Auth"
+          value={auth?.authMode === "api_key" ? "x-api-key" : "Bearer"}
+        />
+        {auth?.apiKey && (
+          <Row label="Key" value={`…${auth.apiKey.slice(-4)}`} mono />
+        )}
+      </AccountCard>
+    );
+  }
   if (!profile) {
     return (
       <AccountCard
         icon={<ClaudeIcon className="size-3.5 shrink-0" />}
         title="Claude"
+        mode="subscription"
       >
         <p className="text-[10px] text-muted-foreground/60">
           {profileError ? `Error: ${profileError}` : "Loading…"}
@@ -110,6 +156,7 @@ function ClaudeCard({ profile }: { profile: ClaudeProfile | null }) {
     <AccountCard
       icon={<ClaudeIcon className="size-3.5 shrink-0" />}
       title="Claude"
+      mode="subscription"
     >
       <div className="flex items-center gap-1.5 mb-1">
         <span
@@ -154,11 +201,38 @@ function CodexCard() {
   const usage = useCodexAccountStore((s) => s.usage);
   const refreshing = useCodexAccountStore((s) => s.refreshing);
   const refreshUsage = useCodexAccountStore((s) => s.refreshUsage);
+  const auth = useProviderAuthStore((s) => s.configs.codex);
+  const activeMode =
+    auth?.activeMode ?? (auth?.apiKey ? "api_key" : "subscription");
+
+  if (activeMode === "api_key") {
+    return (
+      <AccountCard
+        icon={<CodexIcon className="size-3.5 shrink-0" />}
+        title="Codex"
+        mode="api_key"
+      >
+        <Row
+          label="Endpoint"
+          value={auth?.baseUrl || "api.openai.com/v1"}
+          mono
+        />
+        <Row label="Wire API" value={auth?.wireApi ?? "chat"} />
+        {auth?.providerName && (
+          <Row label="Provider" value={auth.providerName} mono />
+        )}
+        {auth?.apiKey && (
+          <Row label="Key" value={`…${auth.apiKey.slice(-4)}`} mono />
+        )}
+      </AccountCard>
+    );
+  }
   if (!profile?.email) {
     return (
       <AccountCard
         icon={<CodexIcon className="size-3.5 shrink-0" />}
         title="Codex"
+        mode="subscription"
       >
         <p className="text-[10px] text-muted-foreground/60">
           Not signed in — open settings to configure.
@@ -171,6 +245,7 @@ function CodexCard() {
     <AccountCard
       icon={<CodexIcon className="size-3.5 shrink-0" />}
       title="Codex"
+      mode="subscription"
     >
       <div className="mb-1 flex items-center gap-1.5">
         {profile.planType && (
