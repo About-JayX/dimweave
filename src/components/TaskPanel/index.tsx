@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildDraftConfigFromDef } from "@/components/AgentStatus/provider-session-view-model";
 import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
+import { useClaudeAccountStore } from "@/stores/claude-account-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
   selectActiveTask,
@@ -48,13 +49,16 @@ export function TaskPanel() {
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const codexModels = useCodexAccountStore((s) => s.models);
   const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
+  const claudeModels = useClaudeAccountStore((s) => s.models);
+  const fetchClaudeModels = useClaudeAccountStore((s) => s.fetchModels);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetchCodexModels();
-  }, [fetchCodexModels]);
+    fetchClaudeModels();
+  }, [fetchCodexModels, fetchClaudeModels]);
 
   const launchProviders = useCallback(
     async (taskId: string, cwd: string, agents: AgentDef[]) => {
@@ -291,6 +295,7 @@ export function TaskPanel() {
               : undefined
           }
           codexModels={codexModels}
+          claudeModels={claudeModels}
         />
       )}
       <ConfirmDialog

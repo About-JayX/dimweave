@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { CyberSelect } from "@/components/ui/cyber-select";
+import { useClaudeAccountStore } from "@/stores/claude-account-store";
 
+/** Fallback used only when /v1/models fetch fails (offline, no auth, etc.). */
 export const CLAUDE_MODEL_OPTIONS = [
   { value: "", label: "Default" },
   { value: "sonnet", label: "Sonnet (latest)" },
@@ -32,13 +35,31 @@ export function ClaudeConfigRows({
   onModelChange,
   onEffortChange,
 }: ClaudeConfigRowsProps) {
+  const models = useClaudeAccountStore((s) => s.models);
+  const fetchModels = useClaudeAccountStore((s) => s.fetchModels);
+  useEffect(() => {
+    if (models.length === 0) fetchModels();
+  }, [models.length, fetchModels]);
+  const modelOptions = models.length
+    ? [
+        { value: "", label: "Default" },
+        ...models.map((m) => ({ value: m.slug, label: m.displayName })),
+      ]
+    : CLAUDE_MODEL_OPTIONS;
+  const selected = models.find((m) => m.slug === model);
+  const effortOptions = selected
+    ? [
+        { value: "", label: "Default" },
+        ...selected.supportedEfforts.map((e) => ({ value: e, label: e })),
+      ]
+    : CLAUDE_EFFORT_OPTIONS;
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground">Model</span>
         <CyberSelect
           value={model}
-          options={CLAUDE_MODEL_OPTIONS}
+          options={modelOptions}
           onChange={onModelChange}
           disabled={disabled}
         />
@@ -48,7 +69,7 @@ export function ClaudeConfigRows({
         <span className="text-[10px] text-muted-foreground">Effort</span>
         <CyberSelect
           value={effort}
-          options={CLAUDE_EFFORT_OPTIONS}
+          options={effortOptions}
           onChange={onEffortChange}
           disabled={disabled}
         />
