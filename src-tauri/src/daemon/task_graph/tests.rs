@@ -1250,6 +1250,31 @@ fn upsert_provider_auth_replaces_existing_row() {
 }
 
 #[test]
+fn upsert_subscription_scrubs_credential_fields() {
+    let mut store = TaskGraphStore::new();
+    // Stale state: caller (bug / manual SQL / out-of-date UI) supplies
+    // subscription mode alongside credential fields that shouldn't be
+    // persisted. The scrub should wipe them.
+    store.upsert_provider_auth(ProviderAuthConfig {
+        provider: "codex".into(),
+        api_key: Some("sk-leftover".into()),
+        base_url: Some("https://leftover.example/v1".into()),
+        wire_api: Some("chat".into()),
+        auth_mode: Some("api_key".into()),
+        provider_name: Some("dimweave-leftover".into()),
+        active_mode: Some("subscription".into()),
+        updated_at: 0,
+    });
+    let fetched = store.get_provider_auth("codex").unwrap();
+    assert_eq!(fetched.active_mode.as_deref(), Some("subscription"));
+    assert!(fetched.api_key.is_none(), "stale api_key must be wiped");
+    assert!(fetched.base_url.is_none());
+    assert!(fetched.wire_api.is_none());
+    assert!(fetched.auth_mode.is_none());
+    assert!(fetched.provider_name.is_none());
+}
+
+#[test]
 fn clear_provider_auth_removes_row() {
     let mut store = TaskGraphStore::new();
     store.upsert_provider_auth(sample_codex_auth());

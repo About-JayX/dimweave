@@ -460,7 +460,21 @@ impl TaskGraphStore {
 
     /// Upsert a `ProviderAuthConfig`. `updated_at` is refreshed on the
     /// stored copy; caller-supplied value is overwritten.
+    ///
+    /// When the active mode is `"subscription"` we defensively wipe every
+    /// credential field before persisting, regardless of what the caller
+    /// passed. The UI already does this during normal saves, but a stale
+    /// api_key lingering at rest next to `active_mode = "subscription"` is
+    /// a silent secret-leak waiting for the next code-path bug to expose
+    /// it. Easier to make the invariant enforced than to audit callers.
     pub fn upsert_provider_auth(&mut self, mut cfg: ProviderAuthConfig) {
+        if cfg.active_mode.as_deref() == Some("subscription") {
+            cfg.api_key = None;
+            cfg.base_url = None;
+            cfg.wire_api = None;
+            cfg.auth_mode = None;
+            cfg.provider_name = None;
+        }
         cfg.updated_at = chrono::Utc::now().timestamp_millis() as u64;
         self.provider_auth.insert(cfg.provider.clone(), cfg);
     }
