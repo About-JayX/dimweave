@@ -1215,6 +1215,7 @@ fn sample_codex_auth() -> ProviderAuthConfig {
         wire_api: Some("chat".into()),
         auth_mode: None,
         provider_name: Some("dimweave-openrouter".into()),
+        active_mode: None,
         updated_at: 0,
     }
 }
@@ -1240,6 +1241,7 @@ fn upsert_provider_auth_replaces_existing_row() {
         wire_api: None,
         auth_mode: None,
         provider_name: None,
+        active_mode: None,
         updated_at: 0,
     });
     let fetched = store.get_provider_auth("codex").unwrap();
@@ -1270,6 +1272,7 @@ fn provider_auth_round_trip_survives_reopen() {
             wire_api: None,
             auth_mode: Some("bearer".into()),
             provider_name: None,
+            active_mode: None,
             updated_at: 0,
         });
         store.save().unwrap();
@@ -1326,4 +1329,51 @@ fn migration_v2_to_v3_creates_provider_auth_table() {
         reopened.get_provider_auth("codex").unwrap().api_key.as_deref(),
         Some("sk-or-abc")
     );
+}
+
+#[test]
+fn migration_v3_to_v4_adds_active_mode_column() {
+    let path = tmp_db_path("migration_v3_to_v4");
+    let _cleanup = CleanupFile(path.clone());
+    // Build a v3 provider_auth table by hand (no active_mode column).
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE tasks (task_id TEXT PRIMARY KEY, project_root TEXT NOT NULL,
+                task_worktree_root TEXT NOT NULL, title TEXT NOT NULL,
+                status TEXT NOT NULL, lead_session_id TEXT,
+                current_coder_session_id TEXT, lead_provider TEXT NOT NULL,
+                coder_provider TEXT NOT NULL, created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL);
+             CREATE TABLE sessions (session_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                parent_session_id TEXT, provider TEXT NOT NULL, role TEXT NOT NULL,
+                external_session_id TEXT, transcript_path TEXT, agent_id TEXT,
+                status TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+             CREATE TABLE artifacts (artifact_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                session_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+                content_ref TEXT NOT NULL, created_at INTEGER NOT NULL);
+             CREATE TABLE task_agents (agent_id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+                provider TEXT NOT NULL, role TEXT NOT NULL, display_name TEXT,
+                sort_order INTEGER NOT NULL, created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL, model TEXT, effort TEXT);
+             CREATE TABLE buffered_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL);
+             CREATE TABLE provider_auth (
+                provider TEXT PRIMARY KEY, api_key TEXT, base_url TEXT,
+                wire_api TEXT, auth_mode TEXT, provider_name TEXT,
+                updated_at INTEGER NOT NULL
+             );
+             INSERT INTO meta(key, value) VALUES ('schema_version', '3');
+             INSERT INTO provider_auth
+                (provider, api_key, base_url, wire_api, auth_mode, provider_name, updated_at)
+             VALUES ('codex', 'sk-legacy', NULL, NULL, NULL, NULL, 1);",
+        )
+        .unwrap();
+    }
+    // Open triggers v3→v4 migration (ALTER TABLE ADD COLUMN active_mode).
+    let store = TaskGraphStore::open(&path).unwrap();
+    let row = store.get_provider_auth("codex").unwrap();
+    assert_eq!(row.api_key.as_deref(), Some("sk-legacy"));
+    assert!(row.active_mode.is_none());
 }

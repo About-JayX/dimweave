@@ -160,12 +160,16 @@ pub fn spawn_claude(opts: &ClaudeLaunchOpts) -> anyhow::Result<Child> {
 }
 
 /// Translate a `ProviderAuthConfig` into the Claude env vars.
-/// `api_key` missing or empty → no-op (subscription/OAuth path unchanged).
+/// `active_mode == Some("subscription")` or `api_key` missing/empty → no-op
+/// (subscription/OAuth path unchanged).
 pub(crate) fn apply_provider_auth(
     cmd: &mut Command,
     auth: Option<&ProviderAuthConfig>,
 ) {
     let Some(a) = auth else { return };
+    if matches!(a.active_mode.as_deref(), Some("subscription")) {
+        return;
+    }
     let Some(api_key) = a.api_key.as_deref() else { return };
     if api_key.trim().is_empty() {
         return;

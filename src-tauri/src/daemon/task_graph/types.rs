@@ -166,6 +166,12 @@ pub struct ProviderAuthConfig {
     pub auth_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_name: Option<String>,
+    /// Which credential path the launch layer should use on the next spawn.
+    /// `Some("subscription")` — ignore api_key/base_url, fall back to CLI/keychain auth.
+    /// `Some("api_key")` — inject api_key/base_url env/--config.
+    /// `None` — legacy fallback: derive from `api_key` presence (pre-v4 rows).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_mode: Option<String>,
     pub updated_at: u64,
 }
 

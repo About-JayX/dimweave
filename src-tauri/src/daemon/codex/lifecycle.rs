@@ -92,8 +92,16 @@ pub async fn start(
 
 /// Translate a `ProviderAuthConfig` into the `--config` flags and env
 /// variables Codex needs. Extracted so we can unit-test the shape.
+///
+/// The caller is expected to pass `None` when `active_mode == "subscription"`
+/// so this function just has to handle the API-key branch. We defensively
+/// short-circuit here too — if the legacy pre-v4 row has `active_mode=None`
+/// we still apply based on key presence (backward compat).
 pub(crate) fn apply_provider_auth(cmd: &mut Command, auth: Option<&ProviderAuthConfig>) {
     let Some(a) = auth else { return };
+    if matches!(a.active_mode.as_deref(), Some("subscription")) {
+        return;
+    }
     let Some(api_key) = a.api_key.as_deref() else { return };
     if api_key.trim().is_empty() {
         return;
@@ -213,6 +221,7 @@ mod apply_auth_tests {
             wire_api: None,
             auth_mode: None,
             provider_name: None,
+            active_mode: None,
             updated_at: 0,
         };
         apply_provider_auth(&mut cmd, Some(&cfg));
@@ -229,6 +238,7 @@ mod apply_auth_tests {
             wire_api: None,
             auth_mode: None,
             provider_name: None,
+            active_mode: None,
             updated_at: 0,
         };
         apply_provider_auth(&mut cmd, Some(&cfg));
@@ -246,6 +256,7 @@ mod apply_auth_tests {
             wire_api: Some("chat".into()),
             auth_mode: None,
             provider_name: Some("dimweave-openrouter".into()),
+            active_mode: None,
             updated_at: 0,
         };
         apply_provider_auth(&mut cmd, Some(&cfg));
@@ -269,6 +280,25 @@ mod apply_auth_tests {
     }
 
     #[test]
+    fn apply_auth_subscription_mode_short_circuits_even_with_key_set() {
+        let mut cmd = TokioCommand::new("noop");
+        let cfg = ProviderAuthConfig {
+            provider: "codex".into(),
+            api_key: Some("sk-x".into()),
+            base_url: Some("https://example.com/v1".into()),
+            wire_api: None,
+            auth_mode: None,
+            provider_name: None,
+            active_mode: Some("subscription".into()),
+            updated_at: 0,
+        };
+        apply_provider_auth(&mut cmd, Some(&cfg));
+        assert!(args(&cmd).is_empty());
+        let envs = envs(&cmd);
+        assert!(!envs.contains_key("OPENAI_API_KEY"));
+    }
+
+    #[test]
     fn apply_auth_with_base_url_defaults_to_dimweave_custom_when_name_missing() {
         let mut cmd = TokioCommand::new("noop");
         let cfg = ProviderAuthConfig {
@@ -278,6 +308,7 @@ mod apply_auth_tests {
             wire_api: None,
             auth_mode: None,
             provider_name: None,
+            active_mode: None,
             updated_at: 0,
         };
         apply_provider_auth(&mut cmd, Some(&cfg));

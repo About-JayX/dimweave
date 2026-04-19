@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 
+export type ActiveMode = "subscription" | "api_key";
+
 export interface ProviderAuthConfig {
   provider: "claude" | "codex";
   apiKey?: string | null;
@@ -8,6 +10,7 @@ export interface ProviderAuthConfig {
   wireApi?: string | null;
   authMode?: string | null;
   providerName?: string | null;
+  activeMode?: ActiveMode | null;
   updatedAt: number;
 }
 

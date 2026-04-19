@@ -275,6 +275,7 @@ fn apply_provider_auth_empty_api_key_is_noop() {
         wire_api: None,
         auth_mode: None,
         provider_name: None,
+        active_mode: None,
         updated_at: 0,
     };
     apply_provider_auth(&mut cmd, Some(&cfg));
@@ -292,6 +293,7 @@ fn apply_provider_auth_defaults_to_bearer_token() {
         wire_api: None,
         auth_mode: None,
         provider_name: None,
+        active_mode: None,
         updated_at: 0,
     };
     apply_provider_auth(&mut cmd, Some(&cfg));
@@ -310,12 +312,33 @@ fn apply_provider_auth_api_key_mode_uses_x_api_key_env() {
         wire_api: None,
         auth_mode: Some("api_key".into()),
         provider_name: None,
+        active_mode: None,
         updated_at: 0,
     };
     apply_provider_auth(&mut cmd, Some(&cfg));
     let envs = env_map(&cmd);
     assert_eq!(envs.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-abc"));
     assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+}
+
+#[test]
+fn apply_provider_auth_subscription_mode_skips_env_injection() {
+    let mut cmd = TokioCommand::new("noop");
+    let cfg = ProviderAuthConfig {
+        provider: "claude".into(),
+        api_key: Some("sk-ant-xyz".into()),
+        base_url: Some("https://custom.example.com".into()),
+        wire_api: None,
+        auth_mode: None,
+        provider_name: None,
+        active_mode: Some("subscription".into()),
+        updated_at: 0,
+    };
+    apply_provider_auth(&mut cmd, Some(&cfg));
+    let envs = env_map(&cmd);
+    assert!(!envs.contains_key("ANTHROPIC_AUTH_TOKEN"));
+    assert!(!envs.contains_key("ANTHROPIC_API_KEY"));
+    assert!(!envs.contains_key("ANTHROPIC_BASE_URL"));
 }
 
 #[test]
@@ -328,6 +351,7 @@ fn apply_provider_auth_injects_base_url_when_set() {
         wire_api: None,
         auth_mode: None,
         provider_name: None,
+        active_mode: None,
         updated_at: 0,
     };
     apply_provider_auth(&mut cmd, Some(&cfg));

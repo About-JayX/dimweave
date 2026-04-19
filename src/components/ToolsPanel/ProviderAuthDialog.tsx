@@ -16,7 +16,10 @@ interface ProviderAuthDialogProps {
 
 type Kind = "claude" | "codex";
 
+type ActiveMode = "subscription" | "api_key";
+
 interface FormState {
+  activeMode: ActiveMode;
   apiKey: string;
   baseUrl: string;
   wireApi: string; // codex only
@@ -26,6 +29,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
+  activeMode: "subscription",
   apiKey: "",
   baseUrl: "",
   wireApi: "chat",
@@ -36,21 +40,41 @@ const EMPTY_FORM: FormState = {
 
 function fromConfig(cfg: ProviderAuthConfig | undefined): FormState {
   if (!cfg) return { ...EMPTY_FORM };
+  const derived: ActiveMode = cfg.activeMode
+    ? cfg.activeMode
+    : cfg.apiKey
+      ? "api_key"
+      : "subscription";
   return {
+    activeMode: derived,
     apiKey: cfg.apiKey ?? "",
     baseUrl: cfg.baseUrl ?? "",
     wireApi: cfg.wireApi ?? "chat",
     authMode: (cfg.authMode as "bearer" | "api_key") ?? "bearer",
     providerName: cfg.providerName ?? "",
-    showAdvanced: Boolean(
-      cfg.baseUrl || cfg.wireApi || cfg.providerName || cfg.authMode,
-    ),
+    showAdvanced: Boolean(cfg.baseUrl || cfg.providerName),
   };
 }
 
+/// Build a config from form state. When the active mode is subscription
+/// we persist only the mode and drop the API-key side entirely so a
+/// previous stale key can't get injected at launch.
 function toConfig(kind: Kind, f: FormState): ProviderAuthConfig {
-  const base: ProviderAuthConfig = {
+  if (f.activeMode === "subscription") {
+    return {
+      provider: kind,
+      activeMode: "subscription",
+      apiKey: null,
+      baseUrl: null,
+      wireApi: null,
+      authMode: null,
+      providerName: null,
+      updatedAt: 0,
+    };
+  }
+  return {
     provider: kind,
+    activeMode: "api_key",
     apiKey: f.apiKey.trim() || null,
     baseUrl: f.baseUrl.trim() || null,
     wireApi: kind === "codex" && f.baseUrl.trim() ? f.wireApi : null,
@@ -59,7 +83,6 @@ function toConfig(kind: Kind, f: FormState): ProviderAuthConfig {
       kind === "codex" && f.providerName.trim() ? f.providerName.trim() : null,
     updatedAt: 0,
   };
-  return base;
 }
 
 function SubscriptionRow({ kind }: { kind: Kind }) {
@@ -228,19 +251,44 @@ function SubscriptionRow({ kind }: { kind: Kind }) {
   );
 }
 
+function ModeRadio({
+  value,
+  label,
+  active,
+  onSelect,
+}: {
+  value: ActiveMode;
+  label: string;
+  active: boolean;
+  onSelect: (v: ActiveMode) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(value)}
+      className={cn(
+        "flex-1 rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors",
+        active
+          ? "border-primary/60 bg-primary/10 text-primary"
+          : "border-border/40 bg-background/50 text-muted-foreground hover:bg-muted",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 function ProviderSection({
   kind,
   form,
   setForm,
-  onClear,
 }: {
   kind: Kind;
   form: FormState;
   setForm: (update: Partial<FormState>) => void;
-  onClear: () => void;
 }) {
   const Icon = kind === "claude" ? ClaudeIcon : CodexIcon;
-  const hasConfig = form.apiKey.trim().length > 0;
+  const isApiKey = form.activeMode === "api_key";
   return (
     <section className="space-y-2 rounded-lg border border-border/30 bg-card/30 px-3 py-3">
       <div className="flex items-center gap-1.5">
@@ -248,48 +296,55 @@ function ProviderSection({
         <h3 className="text-[12px] font-semibold capitalize">{kind}</h3>
       </div>
 
-      <div className="space-y-1">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-          Subscription
-        </span>
-        <SubscriptionRow kind={kind} />
-      </div>
-
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-            API Key
-          </span>
-          {hasConfig && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-[10px] text-muted-foreground/80 hover:text-destructive"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-        <input
-          type="password"
-          spellCheck={false}
-          autoComplete="off"
-          placeholder={kind === "claude" ? "sk-ant-..." : "sk-..."}
-          value={form.apiKey}
-          onChange={(e) => setForm({ apiKey: e.target.value })}
-          className="w-full rounded-md border border-border/40 bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary/50"
+      <div className="flex gap-1.5">
+        <ModeRadio
+          value="subscription"
+          label="Subscription"
+          active={!isApiKey}
+          onSelect={(v) => setForm({ activeMode: v })}
+        />
+        <ModeRadio
+          value="api_key"
+          label="API Key"
+          active={isApiKey}
+          onSelect={(v) => setForm({ activeMode: v })}
         />
       </div>
 
-      <button
-        type="button"
-        onClick={() => setForm({ showAdvanced: !form.showAdvanced })}
-        className="text-[10px] text-muted-foreground/70 hover:text-foreground"
-      >
-        {form.showAdvanced ? "▼" : "▶"} Advanced (third-party endpoint)
-      </button>
+      {!isApiKey && (
+        <div>
+          <SubscriptionRow kind={kind} />
+        </div>
+      )}
 
-      {form.showAdvanced && (
+      {isApiKey && (
+        <div className="space-y-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            API Key
+          </span>
+          <input
+            type="password"
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={kind === "claude" ? "sk-ant-..." : "sk-..."}
+            value={form.apiKey}
+            onChange={(e) => setForm({ apiKey: e.target.value })}
+            className="w-full rounded-md border border-border/40 bg-background px-2 py-1.5 font-mono text-[11px] outline-none focus:border-primary/50"
+          />
+        </div>
+      )}
+
+      {isApiKey && (
+        <button
+          type="button"
+          onClick={() => setForm({ showAdvanced: !form.showAdvanced })}
+          className="text-[10px] text-muted-foreground/70 hover:text-foreground"
+        >
+          {form.showAdvanced ? "▼" : "▶"} Advanced (third-party endpoint)
+        </button>
+      )}
+
+      {isApiKey && form.showAdvanced && (
         <div className="space-y-2 rounded-md border border-dashed border-border/40 px-3 py-2">
           <div>
             <label className="mb-0.5 block text-[10px] text-muted-foreground/70">
@@ -365,12 +420,6 @@ function ProviderSection({
           )}
         </div>
       )}
-
-      {!hasConfig && (
-        <p className="text-[10px] text-muted-foreground/60">
-          Leave API key empty to keep the subscription path unchanged.
-        </p>
-      )}
     </section>
   );
 }
@@ -382,7 +431,6 @@ export function ProviderAuthDialog({
   const configs = useProviderAuthStore((s) => s.configs);
   const fetchAll = useProviderAuthStore((s) => s.fetchAll);
   const save = useProviderAuthStore((s) => s.save);
-  const clear = useProviderAuthStore((s) => s.clear);
   const saveError = useProviderAuthStore((s) => s.saveError);
 
   const [claudeForm, setClaudeForm] = useState<FormState>(() =>
@@ -456,8 +504,8 @@ export function ProviderAuthDialog({
         <div className="shrink-0 border-b border-border/30 px-4 py-3">
           <h2 className="text-sm font-semibold">Provider Authentication</h2>
           <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-            Subscription + optional API key per provider. API key takes priority
-            at next launch; leaving key empty falls back to subscription.
+            Pick one mode per provider. Save applies on the next launch;
+            already-running agents keep their current credentials.
           </p>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -465,19 +513,11 @@ export function ProviderAuthDialog({
             kind="claude"
             form={claudeForm}
             setForm={updateClaude}
-            onClear={() => {
-              setClaudeForm({ ...EMPTY_FORM });
-              void clear("claude");
-            }}
           />
           <ProviderSection
             kind="codex"
             form={codexForm}
             setForm={updateCodex}
-            onClear={() => {
-              setCodexForm({ ...EMPTY_FORM });
-              void clear("codex");
-            }}
           />
           {saveError && (
             <p className="text-[11px] text-destructive">{saveError}</p>

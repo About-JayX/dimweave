@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use super::store::TaskGraphStore;
 use super::types::*;
 
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 
 pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -73,6 +73,7 @@ pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
             wire_api      TEXT,
             auth_mode     TEXT,
             provider_name TEXT,
+            active_mode   TEXT,
             updated_at    INTEGER NOT NULL
         );",
     )?;
@@ -118,7 +119,24 @@ fn migrate_if_needed(conn: &Connection) -> rusqlite::Result<()> {
              );",
         )?;
     }
+    if current_ver < 4 && !provider_auth_has_column(conn, "active_mode")? {
+        conn.execute_batch(
+            "ALTER TABLE provider_auth ADD COLUMN active_mode TEXT;",
+        )?;
+    }
     Ok(())
+}
+
+fn provider_auth_has_column(conn: &Connection, col: &str) -> rusqlite::Result<bool> {
+    let mut stmt = conn.prepare("PRAGMA table_info(provider_auth)")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == col {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn task_agents_has_column(conn: &Connection, col: &str) -> rusqlite::Result<bool> {
@@ -287,10 +305,10 @@ impl TaskGraphStore {
         }
         for pa in self.provider_auth.values() {
             tx.execute(
-                "INSERT INTO provider_auth VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                "INSERT INTO provider_auth VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
                 params![
                     pa.provider, pa.api_key, pa.base_url, pa.wire_api,
-                    pa.auth_mode, pa.provider_name, pa.updated_at as i64,
+                    pa.auth_mode, pa.provider_name, pa.active_mode, pa.updated_at as i64,
                 ],
             )?;
         }
@@ -399,7 +417,7 @@ impl TaskGraphStore {
         // provider_auth
         let mut stmt = conn.prepare(
             "SELECT provider, api_key, base_url, wire_api, auth_mode,
-                    provider_name, updated_at
+                    provider_name, active_mode, updated_at
              FROM provider_auth"
         )?;
         let rows = stmt.query_map([], |row| {
@@ -410,7 +428,8 @@ impl TaskGraphStore {
                 wire_api: row.get(3)?,
                 auth_mode: row.get(4)?,
                 provider_name: row.get(5)?,
-                updated_at: row.get::<_, i64>(6)? as u64,
+                active_mode: row.get(6)?,
+                updated_at: row.get::<_, i64>(7)? as u64,
             })
         })?;
         for row in rows {
