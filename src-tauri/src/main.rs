@@ -7,6 +7,7 @@ mod codex;
 mod commands_artifact;
 mod commands_history;
 mod commands;
+mod commands_provider_auth;
 mod commands_task;
 // TODO(audit-wave-2): pay down the pre-existing daemon lint debt and remove
 // these daemon-scoped allow attributes once the legacy warnings are fixed.
@@ -178,6 +179,9 @@ fn main() {
             commands_task::daemon_remove_task_agent,
             commands_task::daemon_update_task_agent,
             commands_task::daemon_reorder_task_agents,
+            commands_provider_auth::daemon_get_provider_auth,
+            commands_provider_auth::daemon_save_provider_auth,
+            commands_provider_auth::daemon_clear_provider_auth,
             commands_history::daemon_list_history,
             commands_history::daemon_list_provider_history,
             commands_history::daemon_resume_session,

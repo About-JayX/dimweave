@@ -1121,6 +1121,23 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                     let _ = reply.send(Err(format!("agent {agent_id} not found")));
                 }
             }
+            DaemonCmd::GetProviderAuth { provider, reply } => {
+                let s = state.read().await;
+                let cfg = s.task_graph.get_provider_auth(&provider).cloned();
+                let _ = reply.send(cfg);
+            }
+            DaemonCmd::SaveProviderAuth { config, reply } => {
+                let mut s = state.write().await;
+                s.task_graph.upsert_provider_auth(config);
+                let result = s.task_graph.save().map_err(|e| e.to_string());
+                let _ = reply.send(result);
+            }
+            DaemonCmd::ClearProviderAuth { provider, reply } => {
+                let mut s = state.write().await;
+                s.task_graph.clear_provider_auth(&provider);
+                let result = s.task_graph.save().map_err(|e| e.to_string());
+                let _ = reply.send(result);
+            }
             DaemonCmd::ReorderTaskAgents { task_id, agent_ids, reply } => {
                 let mut s = state.write().await;
                 if s.task_graph.reorder_task_agents(&task_id, &agent_ids) {

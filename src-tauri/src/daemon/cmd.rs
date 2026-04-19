@@ -141,6 +141,21 @@ pub enum DaemonCmd {
         agent_ids: Vec<String>,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    // ── ProviderAuth CRUD ────────────────────────────────────
+    GetProviderAuth {
+        provider: String,
+        reply: oneshot::Sender<
+            Option<crate::daemon::task_graph::types::ProviderAuthConfig>,
+        >,
+    },
+    SaveProviderAuth {
+        config: crate::daemon::task_graph::types::ProviderAuthConfig,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    ClearProviderAuth {
+        provider: String,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     // ── Feishu Project ────────────────────────────────────────
     GetFeishuProjectState {
         reply: oneshot::Sender<crate::feishu_project::types::FeishuProjectRuntimeState>,
