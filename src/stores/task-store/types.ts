@@ -198,6 +198,7 @@ export interface TaskStoreState extends TaskStoreData {
     effort?: string | null,
   ) => Promise<TaskAgentInfo>;
   removeTaskAgent: (agentId: string) => Promise<void>;
+  stopAgent: (agentId: string) => Promise<void>;
   updateTaskAgent: (
     agentId: string,
     provider: Provider,

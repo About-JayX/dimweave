@@ -74,6 +74,56 @@ async fn apply_role(
     }
 }
 
+/// Stop whichever provider subprocess is tied to `agent_id` (if any),
+/// release its port, and reset the matching task_runtime slot so that
+/// the next `LaunchClaudeSdk` / `LaunchCodex` command for this agent
+/// actually spawns a fresh child (instead of short-circuiting on the
+/// "already online" guard). Safe to call when no subprocess is running.
+async fn stop_agent_by_id(
+    codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
+    claude_handles: &mut std::collections::HashMap<String, claude_sdk::ClaudeSdkHandle>,
+    codex_port_pool: &mut codex::port_pool::CodexPortPool,
+    agent_id: &str,
+    state: &SharedState,
+    app: &AppHandle,
+) {
+    // Resolve the owning task from task_graph (so we can invalidate the slot).
+    let task_id = state
+        .read()
+        .await
+        .task_graph
+        .get_task_agent(agent_id)
+        .map(|a| a.task_id.clone());
+
+    if let Some(h) = codex_handles.remove(agent_id) {
+        codex_port_pool.release(h.port, &h.task_id, h.launch_id);
+        h.stop().await;
+        if let Some(tid) = task_id.as_deref() {
+            let _ = state
+                .write()
+                .await
+                .invalidate_codex_agent_session(tid, agent_id);
+        }
+        if !state.read().await.is_codex_online() {
+            gui::emit_agent_status(app, "codex", false, None, None);
+        }
+    }
+
+    if let Some(h) = claude_handles.remove(agent_id) {
+        h.stop().await;
+        if let Some(tid) = task_id.as_deref() {
+            let _ = state
+                .write()
+                .await
+                .invalidate_claude_agent_session(tid, agent_id);
+        }
+    }
+
+    if let Some(tid) = task_id {
+        emit_task_context_events(state, app, &tid).await;
+    }
+}
+
 async fn stop_codex_for_task(
     codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
     port_pool: &mut codex::port_pool::CodexPortPool,
@@ -1100,10 +1150,21 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 }
             }
             DaemonCmd::RemoveTaskAgent { agent_id, reply } => {
-                let mut s = state.write().await;
-                let task_id = s.task_graph.get_task_agent(&agent_id)
+                let task_id = state.read().await.task_graph
+                    .get_task_agent(&agent_id)
                     .map(|a| a.task_id.clone());
                 if let Some(tid) = task_id {
+                    // Kill any running subprocess first so the agent stops
+                    // responding to routing BEFORE its task_graph row goes away.
+                    stop_agent_by_id(
+                        &mut codex_handles,
+                        &mut claude_sdk_handles,
+                        &mut codex_port_pool,
+                        &agent_id,
+                        &state,
+                        &app,
+                    ).await;
+                    let mut s = state.write().await;
                     s.task_graph.remove_task_agent(&agent_id);
                     let _ = s.task_graph.save();
                     drop(s);
@@ -1112,6 +1173,17 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 } else {
                     let _ = reply.send(Err(format!("agent {agent_id} not found")));
                 }
+            }
+            DaemonCmd::StopAgent { agent_id, reply } => {
+                stop_agent_by_id(
+                    &mut codex_handles,
+                    &mut claude_sdk_handles,
+                    &mut codex_port_pool,
+                    &agent_id,
+                    &state,
+                    &app,
+                ).await;
+                let _ = reply.send(Ok(()));
             }
             DaemonCmd::UpdateTaskAgent { agent_id, provider, role, display_name, model, effort, reply } => {
                 let mut s = state.write().await;

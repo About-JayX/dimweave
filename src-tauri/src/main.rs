@@ -205,6 +205,7 @@ fn main() {
             commands_task::daemon_remove_task_agent,
             commands_task::daemon_update_task_agent,
             commands_task::daemon_reorder_task_agents,
+            commands_task::daemon_stop_agent,
             commands_provider_auth::daemon_get_provider_auth,
             commands_provider_auth::daemon_save_provider_auth,
             commands_provider_auth::daemon_clear_provider_auth,

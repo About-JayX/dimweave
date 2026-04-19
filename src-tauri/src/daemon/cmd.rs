@@ -127,6 +127,13 @@ pub enum DaemonCmd {
         agent_id: String,
         reply: oneshot::Sender<Result<(), String>>,
     },
+    /// Stop whichever provider subprocess is tied to `agent_id`. Used by
+    /// TaskPanel's edit flow before re-launching with new config so the
+    /// "already online → skip" short-circuit doesn't suppress the restart.
+    StopAgent {
+        agent_id: String,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     UpdateTaskAgent {
         agent_id: String,
         provider: Provider,

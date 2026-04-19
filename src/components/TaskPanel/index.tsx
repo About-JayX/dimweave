@@ -45,6 +45,7 @@ export function TaskPanel() {
   const addTaskAgent = useTaskStore((s) => s.addTaskAgent);
   const removeTaskAgent = useTaskStore((s) => s.removeTaskAgent);
   const updateTaskAgent = useTaskStore((s) => s.updateTaskAgent);
+  const stopAgent = useTaskStore((s) => s.stopAgent);
   const reorderTaskAgents = useTaskStore((s) => s.reorderTaskAgents);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const codexModels = useCodexAccountStore((s) => s.models);
@@ -217,12 +218,19 @@ export function TaskPanel() {
         void (async () => {
           try {
             const savedAgents = await handleEditSubmit(payload);
-            if (payload.requestLaunch && task && savedAgents.length > 0)
+            if (payload.requestLaunch && task && savedAgents.length > 0) {
+              // Existing agents may already be online with old config; stop
+              // each one first so launch re-spawns with the new model/effort
+              // (bypasses the daemon's "already online" short-circuit).
+              for (const a of savedAgents) {
+                if (a.agentId) await stopAgent(a.agentId);
+              }
               await launchProviders(
                 task.taskId,
                 task.taskWorktreeRoot,
                 savedAgents,
               );
+            }
           } catch {
             /* edit/launch error */
           }
@@ -232,7 +240,14 @@ export function TaskPanel() {
       }
       setDialogOpen(false);
     },
-    [dialogMode, handleEditSubmit, handleSetupSubmit, launchProviders, task],
+    [
+      dialogMode,
+      handleEditSubmit,
+      handleSetupSubmit,
+      launchProviders,
+      stopAgent,
+      task,
+    ],
   );
 
   const reviewBadge: ReviewBadge | null =

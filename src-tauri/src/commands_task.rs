@@ -223,6 +223,25 @@ pub async fn daemon_remove_task_agent(
 }
 
 #[tauri::command]
+pub async fn daemon_stop_agent(
+    agent_id: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<(), String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::StopAgent {
+            agent_id,
+            reply: reply_tx,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped stop_agent reply".to_string())?
+}
+
+#[tauri::command]
 pub async fn daemon_update_task_agent(
     agent_id: String,
     provider: String,

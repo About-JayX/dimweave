@@ -460,6 +460,10 @@ export const useTaskStore = create<TaskStoreState>((set, get) => {
       await invoke("daemon_remove_task_agent", { agentId });
     },
 
+    stopAgent: async (agentId) => {
+      await invoke("daemon_stop_agent", { agentId });
+    },
+
     updateTaskAgent: async (
       agentId,
       provider,
