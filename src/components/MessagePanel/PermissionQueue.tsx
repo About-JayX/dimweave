@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
 import type {
   PermissionBehavior,
   PermissionPrompt,
@@ -33,6 +34,14 @@ export function PermissionQueueView({
   onResolve,
 }: PermissionQueueViewProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const tasks = useTaskStore((s) => s.tasks);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+
+  const taskLabel = (taskId: string | undefined): string | null => {
+    if (!taskId) return null;
+    const task = tasks[taskId];
+    return task?.title?.trim() || task?.taskId || taskId;
+  };
 
   const handleResolve = async (
     requestId: string,
@@ -59,11 +68,18 @@ export function PermissionQueueView({
       {error ? (
         <div className="rounded-xl border border-destructive/35 bg-destructive/8 px-3 py-2 text-[12px] text-destructive">
           <div className="font-medium">Last action failed</div>
-          <div className="mt-1 text-[11px] text-destructive/85">{error.message}</div>
+          <div className="mt-1 text-[11px] text-destructive/85">
+            {error.message}
+          </div>
         </div>
       ) : null}
       {prompts.map((prompt) => {
         const busy = busyId === prompt.requestId;
+        const label = taskLabel(prompt.taskId);
+        const isOtherTask =
+          !!prompt.taskId &&
+          activeTaskId !== null &&
+          prompt.taskId !== activeTaskId;
         return (
           <div
             key={prompt.requestId}
@@ -71,8 +87,26 @@ export function PermissionQueueView({
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[13px] font-medium text-foreground">
-                  {prompt.toolName}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-medium text-foreground">
+                    {prompt.toolName}
+                  </span>
+                  {label && (
+                    <span
+                      className={
+                        isOtherTask
+                          ? "rounded-full bg-amber-500/20 px-1.5 py-px text-[9px] font-semibold uppercase text-amber-600"
+                          : "rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase text-primary"
+                      }
+                      title={
+                        isOtherTask
+                          ? `Pending on another task: ${label}`
+                          : undefined
+                      }
+                    >
+                      {label}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
                   {prompt.agent} •{" "}

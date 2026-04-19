@@ -288,7 +288,18 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
                     .write()
                     .await
                     .store_permission_request(id, request.clone(), created_at);
-                gui::emit_permission_prompt(&app, id, &request, created_at);
+                // Stamp task_id so the frontend can surface which task the
+                // prompt belongs to (the bridge agent_id is a singleton
+                // provider key, not the per-launch TaskAgent.agent_id).
+                let owning_task_id = state.read().await.agent_owning_task_id(id);
+                gui::emit_permission_prompt(
+                    &app,
+                    id,
+                    owning_task_id.as_deref(),
+                    None,
+                    &request,
+                    created_at,
+                );
                 gui::emit_system_log(
                     &app,
                     "info",

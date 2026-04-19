@@ -55,6 +55,35 @@ export function selectPermissionPromptCount(state: BridgeState) {
   return state.permissionPrompts.length;
 }
 
+/// Active-task-scoped permission prompt count. Legacy prompts (no taskId)
+/// are always counted so operators don't miss a stuck daemon request.
+export function makeActiveTaskPermissionPromptCountSelector(
+  taskId: string | null,
+) {
+  return (state: BridgeState) => {
+    if (!taskId) return state.permissionPrompts.length;
+    let count = 0;
+    for (const p of state.permissionPrompts) {
+      if (!p.taskId || p.taskId === taskId) count += 1;
+    }
+    return count;
+  };
+}
+
+/// Count of prompts for OTHER tasks (not the active one). Used by
+/// TaskHeader to show a pending-elsewhere badge so users aren't
+/// unaware of a stuck approval when they're viewing a different task.
+export function selectOtherTaskPermissionPromptCounts(
+  state: BridgeState,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const p of state.permissionPrompts) {
+    if (!p.taskId) continue;
+    counts[p.taskId] = (counts[p.taskId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export function selectTerminalErrorCount(state: BridgeState) {
   let count = 0;
   for (const line of state.terminalLines) {

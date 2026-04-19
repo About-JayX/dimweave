@@ -67,6 +67,10 @@ export type PermissionBehavior = "allow" | "deny";
 
 export interface PermissionPrompt {
   agent: string;
+  /** Task the prompt belongs to. Absent for legacy / non-task prompts. */
+  taskId?: string;
+  /** TaskAgent id if resolvable. Prefer `taskId` for routing. */
+  agentId?: string;
   requestId: string;
   toolName: string;
   description: string;

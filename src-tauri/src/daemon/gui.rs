@@ -42,6 +42,10 @@ pub struct RuntimeHealthEvent {
 #[serde(rename_all = "camelCase")]
 pub struct PermissionPromptEvent {
     pub agent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     pub request_id: String,
     pub tool_name: String,
     pub description: String,
@@ -223,6 +227,8 @@ pub fn emit_runtime_health(app: &AppHandle, health: Option<RuntimeHealthStatus>)
 pub fn emit_permission_prompt(
     app: &AppHandle,
     agent: &str,
+    task_id: Option<&str>,
+    agent_id: Option<&str>,
     request: &PermissionRequest,
     created_at: u64,
 ) {
@@ -230,6 +236,8 @@ pub fn emit_permission_prompt(
         "permission_prompt",
         PermissionPromptEvent {
             agent: agent.into(),
+            task_id: task_id.map(str::to_string),
+            agent_id: agent_id.map(str::to_string),
             request_id: request.request_id.clone(),
             tool_name: request.tool_name.clone(),
             description: request.description.clone(),

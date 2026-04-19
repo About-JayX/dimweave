@@ -58,21 +58,14 @@
 
 ### Step 2 — agent_status per-(task, agent_id)
 
-**Rust**:
-- `emit_agent_status` / `emit_agent_status_online` 加 `task_id`, `agent_id` 参数
-- 23 处 call site 补全
-- 绑定 agent_id 与 task_id 的映射通过 `task_graph::types::TaskAgent`（launch / stop 都已经按 agent_id 操作）
+**降级为 optional / 暂不做**。Step 1（per-task reply-input guard 改用 `taskRuntimeStatuses`）已经覆盖了用户报告的 Reconnect 误报。剩下 `agents` map 消费者（`selectAnyAgentConnected`、`AccountsInfoPanel`）本身是 **provider-level** 语义（订阅状态 / 用量 / profile），不需要 per-task sharding。
 
-**前端**:
-- `agents` map 改成 `Record<string /* agentId */, AgentInfo>` 或更精细 `Record<string /* taskId */, Record<string, AgentInfo>>`
-  - 倾向前者：agentId 已经全局唯一，单层 map 足够
-- `AgentInfo` 保留 `providerSession` + 加 `taskId`
-- Listener 按 agentId 写入
-- Selector `selectActiveTaskAgentInfos(activeTaskId)` 返回属于 active task 的 agents
-- 消费者：
-  - `ReplyInput::canSend` + `task-session-guard` 改用 per-task agent 列表 + `taskRuntimeStatuses` 组合（Step 0 已经先做了 runtime statuses 补丁）
-  - `selectAnyAgentConnected` 改成 `selectActiveTaskHasConnectedAgent`
-  - `AccountsInfoPanel` 还是按 provider 展示订阅状态，但这个是 provider-level 信息，不算 task-scope；保持独立 store (`claude-account-store` / `codex-account-store`) 不动
+**已移交给**：
+- 连通性判断 → `taskRuntimeStatuses[taskId]`（已做）
+- 订阅 / profile / usage → `claude-account-store` / `codex-account-store`（已在 Accounts plan 做）
+- 角色标签 → Step 4 改成从 task_agents 派生
+
+除非后续发现具体消费点被 singleton 坑到，否则保持现状。
 
 ### Step 3 — permission_prompt 带 taskId + 前端过滤
 
