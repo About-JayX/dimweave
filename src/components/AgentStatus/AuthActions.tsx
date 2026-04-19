@@ -107,10 +107,11 @@ export function AuthActions() {
     );
   }
 
+  if (apiKeyMode) {
+    return <ApiKeyForm onDone={() => setApiKeyMode(false)} />;
+  }
+
   if (!profile?.email) {
-    if (apiKeyMode) {
-      return <ApiKeyForm onDone={() => setApiKeyMode(false)} />;
-    }
     return (
       <div className="mt-2 space-y-1.5">
         <Button
@@ -133,27 +134,37 @@ export function AuthActions() {
   }
 
   return (
-    <div className="mt-1.5 flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="size-1.5 rounded-full radius-keep bg-codex shrink-0" />
-        <span
-          className="text-[10px] text-foreground/80 truncate"
-          title={profile.email}
-        >
-          {profile.email}
-        </span>
-        {profile.planType && (
-          <span className="capitalize rounded bg-codex/10 px-1 py-px text-[9px] font-semibold text-codex shrink-0">
-            {profile.planType}
+    <div className="mt-1.5 space-y-1">
+      <div className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="size-1.5 rounded-full radius-keep bg-codex shrink-0" />
+          <span
+            className="text-[10px] text-foreground/80 truncate"
+            title={profile.email}
+          >
+            {profile.email}
           </span>
-        )}
+          {profile.planType && (
+            <span className="capitalize rounded bg-codex/10 px-1 py-px text-[9px] font-semibold text-codex shrink-0">
+              {profile.planType}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-2"
+        >
+          Logout
+        </button>
       </div>
       <button
         type="button"
-        onClick={logout}
-        className="text-[10px] text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-2"
+        onClick={() => setApiKeyMode(true)}
+        className="w-full text-[10px] text-muted-foreground/70 hover:text-foreground transition-colors"
+        title="Replace current credentials with an API key (sk-...)"
       >
-        Logout
+        Switch to API key
       </button>
     </div>
   );
