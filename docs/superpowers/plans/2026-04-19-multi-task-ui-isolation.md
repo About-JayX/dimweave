@@ -147,4 +147,12 @@
 
 ## CM 回填区
 
-- `b6a89a41` — `fix(task): clean up git worktree + branch on DeleteTask` — Step 7 独立 bug，已合入本 plan 统一测试
+- `4b8f1357` — `docs: plan multi-task UI isolation` — plan 初稿
+- `b6a89a41` — `fix(task): clean up git worktree + branch on DeleteTask` — Step 8（原 Step 7 worktree）独立 bug，先修先合
+- `b7e47288` — `docs: fold worktree cleanup + UX hardening into multi-task UI plan` — plan 更新
+- `3b511905` — `fix(ui): per-task reply-input guard using task_runtime_statuses` — Step 1
+- `4acf53ea` — `feat(stream): scope claude/codex stream events by taskId + agentId` — Step 2（envelope + listener filter + task-switch reset）
+- `ba3a6d36` — `fix(permission): surface task label on permission prompts` — Step 4（task_id 字段 + PermissionQueue 徽章）
+- `2cfb640f` — `fix(ui): TaskHeader pending-approval badge + task-delete prompt sweep` — Step 6（含 task-delete 时 permissionPrompts 扫除）
+- Step 3（agent_status 分片）与 Step 5（singleton 派生）— 经评估范围超出当前用户可见问题，未实施；Step 1 已覆盖 reply-input 误报，stream 指示器由 Step 2 envelope 过滤直接修复
+- Step 7（emit-site 审计）— 仅 audit，无代码变更：`codex/session_event.rs` 全部 emit_agent_message 前都已调用 `stamp_message_context_for_task`，`routing_user_input.rs:45` 走 `stamp_user_message`，`control/handler.rs:235` 走 task-scoped 优先链路；现状已满足不变量，不需要补丁
