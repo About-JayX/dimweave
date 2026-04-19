@@ -1088,3 +1088,48 @@ async fn mixed_provider_guard_unknown_role_dropped() {
         "unknown role with task_agents must drop, not buffer"
     );
 }
+
+/// C1 regression: when a second task launches a Codex "lead" agent the
+/// process-wide singleton `s.codex_role` flips from "coder" to "lead".
+/// Before the fix, Task A's legitimate coder→claude_lead message was
+/// sender-gated because `source_role() == s.codex_role` evaluated false,
+/// and the delivery returned Dropped. The fix sources the gate from
+/// `task_agents[task_id]` so Task A's routing is unaffected by Task B's
+/// singleton write.
+#[tokio::test]
+async fn sender_gate_survives_codex_role_singleton_flip() {
+    clear_reply_targets();
+
+    let (state, task_id, mut claude_rx, _codex_rx) =
+        seeded_task_claude_lead_codex_coder().await;
+
+    // Simulate Task B launching a Codex lead: this is the race that used
+    // to poison Task A's delivery.
+    state.write().await.codex_role = "lead".into();
+
+    let msg = BridgeMessage {
+        id: "mp-coder-lead-race".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role { role: "lead".into() },
+        reply_target: None,
+        message: "task done".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+    let result = route_message_inner(&state, msg).await;
+    assert!(
+        matches!(result, RouteResult::Delivered),
+        "coder→lead must deliver even when singleton codex_role was overwritten by another task",
+    );
+    assert!(claude_rx.try_recv().is_ok());
+}

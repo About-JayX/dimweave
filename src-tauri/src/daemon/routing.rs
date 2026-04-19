@@ -262,8 +262,24 @@ fn resolve_broadcast_targets(
 
     let task_id = msg.task_id.as_deref();
     let ta_resolved = task_agents_authoritative;
-    let claude_sender_ok =
-        msg.is_from_user() || msg.is_from_system() || msg.source_role() == s.codex_role;
+    // Sender gate: a Claude recipient only accepts worker-role messages from
+    // user/system or from a Codex agent that is actually registered in the
+    // same task. The legacy fallback (singleton `codex_role`) is only used
+    // when the message carries no task_id — otherwise the singleton races
+    // with multi-task launches and legitimate coder→lead messages get dropped.
+    let claude_sender_ok = msg.is_from_user()
+        || msg.is_from_system()
+        || match task_id {
+            Some(tid) => s
+                .task_graph
+                .agents_for_task(tid)
+                .iter()
+                .any(|a| {
+                    matches!(a.provider, crate::daemon::task_graph::types::Provider::Codex)
+                        && a.role == msg.source_role()
+                }),
+            None => msg.source_role() == s.codex_role,
+        };
 
     // Iterate per-agent and collect deliveries keyed by agent_id (AC1/AC2).
     // Each agent gets its own channel lookup; no provider-level dedup.
