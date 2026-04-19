@@ -14,14 +14,21 @@ export function selectMessages(state: BridgeState) {
 
 /**
  * Filter messages to only those belonging to a specific task.
- * Messages without a taskId are included (user-sent before task stamping).
+ *
+ * Strict match: messages that lack a taskId are EXCLUDED when a task is
+ * active. Untagged messages leaked across task views when we allowed
+ * them through (daemon diagnostics, pre-task chatter, etc. would bleed
+ * into every task's chat history).
+ *
+ * When no task is active (`taskId == null`), show everything — there
+ * is no task scope to preserve.
  */
 export function filterMessagesByTaskId(
   messages: readonly { taskId?: string }[],
   taskId: string | null,
 ): typeof messages {
   if (!taskId) return messages;
-  return messages.filter((m) => !m.taskId || m.taskId === taskId);
+  return messages.filter((m) => m.taskId === taskId);
 }
 
 export function selectAnyAgentConnected(state: BridgeState) {

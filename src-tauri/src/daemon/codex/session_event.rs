@@ -151,9 +151,13 @@ pub(super) async fn handle_codex_event(
             eprintln!("{detail}");
             gui::emit_system_log(app, "error", &detail);
             let target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
-            let error_msg = build_msg_with_status(
+            let mut error_msg = build_msg_with_status(
                 role_id, target, &detail, MessageStatus::Error, agent_id, "codex",
             );
+            {
+                let s = state.read().await;
+                s.stamp_message_context_for_task(task_id, role_id, &mut error_msg);
+            }
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
         }
@@ -252,9 +256,13 @@ async fn handle_completed_agent_message(
             let hint = err.to_string();
             gui::emit_system_log(app, "error", &format!("[Codex] {hint}"));
             let target = worker_diagnostic_target(state, role_id, agent_id, task_id).await;
-            let error_msg = build_msg_with_status(
+            let mut error_msg = build_msg_with_status(
                 role_id, target, &hint, MessageStatus::Error, agent_id, "codex",
             );
+            {
+                let s = state.read().await;
+                s.stamp_message_context_for_task(task_id, role_id, &mut error_msg);
+            }
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
             return;
