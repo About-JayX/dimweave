@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, UserCircle2 } from "lucide-react";
+import { Bot, ChevronDown } from "lucide-react";
 import { TelegramPanel } from "@/components/AgentStatus/TelegramPanel";
 import { BugInboxPanel } from "@/components/BugInboxPanel";
 import { TelegramIcon, FeishuIcon } from "@/components/AgentStatus/BrandIcons";
@@ -59,7 +59,7 @@ export function ToolsPanel() {
     <section className="flex h-full flex-col -mx-4 -my-4 overflow-y-auto">
       <DisclosureSection
         title="Accounts"
-        icon={<UserCircle2 className="size-3.5 shrink-0" />}
+        icon={<Bot className="size-3.5 shrink-0" />}
         defaultOpen
       >
         <AccountsInfoPanel />
