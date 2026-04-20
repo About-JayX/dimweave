@@ -149,7 +149,7 @@ describe("MessageList", () => {
           kind: "agent" as const,
           agentId: "claude",
           role: "lead",
-          provider: "claude",
+          provider: "claude" as const,
         },
         target: { kind: "user" as const },
         message: "payload",
