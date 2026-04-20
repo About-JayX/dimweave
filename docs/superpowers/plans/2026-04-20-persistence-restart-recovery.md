@@ -235,8 +235,8 @@ schema 破坏，迫使一轮横向整理。串起来的链路问题：
 ## CM (Configuration Management)
 
 ### Commit
-- **Hash**: `(will be filled after commit)`
-- **Subject**: `feat(daemon,ui): persistence + restart recovery + codex config compatibility`
+- **Hash**: `ef3d2da0`
+- **Subject**: `feat(daemon,ui): persistence + restart recovery + codex config compat`
 - **Scope**: 跨多个子系统的原子修复。内容对应 plan Step 1-13。
   - Rust daemon / task_graph / codex lifecycle / routing dispatch
   - 前端 bridge-store / task-store / TaskPanel / ClaudePanel / CodexPanel /
