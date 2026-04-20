@@ -184,23 +184,75 @@ messages[] append → selectMessages 引用变化 → filterMessagesByTaskId
 ## CM (Configuration Management)
 
 ### Commit 1 — SQLite save debounce
-- **Hash**: `(TBD)`
+- **Hash**: `947a373`
 - **Subject**: `perf(daemon): debounce task_graph.save_to_db to coalesce bursts`
-- **Files**: state_persistence.rs, state.rs, mod.rs, new tests
+- **Files**: `state.rs` (+ `save_tx: Option<mpsc::UnboundedSender<()>>`),
+  `state_persistence.rs` (channel-first, sync fallback), `mod.rs`
+  (200 ms debounced saver task + Shutdown flush),
+  `state_persistence_tests.rs` (channel-prefer + closed-fallback tests)
 
 ### Commit 2 — transcript alignment integration test
-- **Hash**: `(TBD)`
-- **Subject**: `test(codex): lock task_messages/transcript alignment across resume`
-- **Files**: new `src-tauri/tests/codex_resume_alignment.rs` (or harness equivalent)
+- **Hash**: `c701f5e`
+- **Subject**: `test(task-graph): lock task_messages alignment contract`
+- **Files**: new `src-tauri/src/daemon/task_graph/message_log_tests.rs`
+  (7 contract tests: chronological order, per-task scoping, idempotent
+  persist, surgical delete, restart-recovery round-trip), registered in
+  `task_graph/mod.rs`
+- **Note**: scoped to `task_messages` store alignment rather than a live
+  Codex reconnect harness because Option A in the plan discussion (pure
+  contract test) was chosen over a full app-server spin-up. Reconnect
+  path is covered manually in the E2E checklist.
 
 ### Commit 3 — Permission cleanup on subprocess death
-- **Hash**: `(TBD)`
+- **Hash**: `1967cd6`
 - **Subject**: `fix(permission): purge pending prompts when agent subprocess dies`
-- **Files**: claude_sdk/mod.rs, codex/session.rs (exit path), state/permission*,
-  gui.rs, bridge-store listener + types
+- **Files**: `state_permission.rs` (`purge_pending_permissions_for_agent`),
+  `gui.rs` (`emit_permission_cancelled` + event struct), `claude_sdk/mod.rs`
+  (poll-child-exit purge), `control/handler.rs` (symmetric purge on
+  AgentDisconnect with claude-SDK-alive guard), `state_tests.rs`
+  (two new purge tests), `bridge-store/listener-payloads.ts` +
+  `listener-setup.ts` (permission_cancelled listener + prompt removal)
 
 ### Commit 4 — MessageList production-load perf
-- **Hash**: `(TBD)`
-- **Subject**: `perf(message-panel): per-task message buckets + stable query identity`
-- **Files**: bridge-store/{types,listener-setup,selectors}.ts,
-  MessagePanel/{index,view-model}.tsx, MessageBubble.tsx, tests
+Split into four commits because 4a is the main refactor, 4b/4c are
+focused regression-locks, and 73a7fa0 is a TS-narrowing follow-up.
+
+- **4a — per-task buckets**: `b87baaa` —
+  `perf(message-panel): per-task message buckets for O(1) active-task lookup`
+  - `bridge-store/types.ts` (`messagesByTask: Record<string,
+    BridgeMessage[]>` + `GLOBAL_MESSAGE_BUCKET` + `MAX_MESSAGES_PER_BUCKET`
+    constants), `index.ts` (initial state + clearMessages),
+    `listener-setup.ts` (3 write sites: agent_message appender routes by
+    taskId, `hydrateMessagesForTask` writes bucket + null-guard, task
+    removal sweeps messagesByTask), `selectors.ts`
+    (`makeActiveTaskMessagesSelector` merges task + global buckets by
+    timestamp with stable EMPTY_MESSAGES; `selectTotalMessageCount`
+    replaces flat-array scans), `MessagePanel/index.tsx` (consumer swap),
+    `App.tsx` (top-bar count uses selectTotalMessageCount)
+- **4b — empty-query identity**: `34f050b` —
+  `test(message-panel): lock identity-return for empty filterMessagesByQuery`
+  - Already-correct code path at `text-tools.ts:43-45`; added regression
+    test so downstream `useMemo` stability can't regress silently.
+- **4c — memo comparator**: `48b9379` —
+  `test(message-bubble): fix stale field name and lock memo comparator scope`
+  - Fixes pre-existing stale `content`→`message` field name in the memo
+    test, adds attachments-length forces-rerender test, and adds a
+    status-only memo-safe test locking the "non-rendered fields do not
+    invalidate memo" contract.
+- **4c follow-up — TS literal narrowing**: `73a7fa0` —
+  `test(message-panel): fix provider literal type in identity-return test`
+  - `provider: "claude"` → `provider: "claude" as const` to satisfy
+    BridgeMessage's provider union under `tsconfig.app.json`.
+
+## Post-Implementation Verification
+
+- `cargo test` (src-tauri): **753 pass / 0 fail**
+- `bun test`: **480 pass / 5 fail** — all 5 failures are pre-existing
+  (verified via `git stash` baseline), none in files touched by this plan
+- `bun x tsc --noEmit -p tsconfig.app.json`: no new errors in files
+  touched by this plan (import.meta.hot + bun:test resolution errors are
+  pre-existing tooling concerns)
+- Step 4c unblocked a previously-failing test
+  (`areMessageBubblePropsEqual > forces rerender when the visible
+  message payload changes`), bringing the baseline failure count from 6
+  to 5.
