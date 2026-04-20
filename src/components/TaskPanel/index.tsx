@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { buildDraftConfigFromDef } from "@/components/AgentStatus/provider-session-view-model";
 import { buildClaudeLaunchRequest } from "@/components/ClaudePanel/launch-request";
@@ -7,6 +7,7 @@ import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useClaudeAccountStore } from "@/stores/claude-account-store";
 import { useTaskStore } from "@/stores/task-store";
 import {
+  makeProviderHistorySelector,
   selectActiveTask,
   selectActiveTaskAgents,
   selectWorkspaceTasks,
@@ -19,6 +20,7 @@ import {
   type TaskSetupMode,
   type TaskSetupSubmitPayload,
 } from "./TaskSetupDialog";
+import { TaskSetupDialogSkeleton } from "./TaskSetupDialogSkeleton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getTaskPanelEmptyStateMessage } from "./view-model";
 
@@ -52,6 +54,7 @@ export function TaskPanel() {
   const fetchCodexModels = useCodexAccountStore((s) => s.fetchModels);
   const claudeModels = useClaudeAccountStore((s) => s.models);
   const fetchClaudeModels = useClaudeAccountStore((s) => s.fetchModels);
+  const fetchProviderHistory = useTaskStore((s) => s.fetchProviderHistory);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -274,6 +277,47 @@ export function TaskPanel() {
     task?.status === "reviewing" ? { label: "Review", tone: "warning" } : null;
   const dialogWorkspace =
     dialogMode === "edit" ? task?.projectRoot : selectedWorkspace;
+  const selectDialogHistory = useMemo(
+    () => makeProviderHistorySelector(dialogWorkspace ?? null),
+    [dialogWorkspace],
+  );
+  const dialogProviderHistory = useTaskStore(selectDialogHistory);
+  // Cache keys: once a workspace's history (or the global model lists) have
+  // been successfully fetched we skip the blocking wait and show the dialog
+  // immediately. A background refresh still fires, so stale data heals
+  // silently on the second open. The provider-history/models fetchers
+  // themselves dedupe in-flight calls, so re-entering doesn't thrash the
+  // daemon.
+  const [dialogReady, setDialogReady] = useState(false);
+  useEffect(() => {
+    if (!dialogOpen || !dialogWorkspace) {
+      setDialogReady(false);
+      return;
+    }
+    const state = useTaskStore.getState();
+    const hasHistoryCache = dialogWorkspace in state.providerHistory;
+    const hasCodexModels = useCodexAccountStore.getState().models.length > 0;
+    const hasClaudeModels = useClaudeAccountStore.getState().models.length > 0;
+    const cached = hasHistoryCache && hasCodexModels && hasClaudeModels;
+    setDialogReady(cached);
+    let cancelled = false;
+    void Promise.allSettled([
+      fetchProviderHistory(dialogWorkspace),
+      hasCodexModels ? Promise.resolve() : fetchCodexModels(),
+      hasClaudeModels ? Promise.resolve() : fetchClaudeModels(),
+    ]).then(() => {
+      if (!cancelled) setDialogReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dialogOpen,
+    dialogWorkspace,
+    fetchProviderHistory,
+    fetchCodexModels,
+    fetchClaudeModels,
+  ]);
 
   return (
     <div className="space-y-2">
@@ -309,7 +353,13 @@ export function TaskPanel() {
           <Plus className="size-3.5" /> New Task
         </button>
       )}
-      {dialogOpen && dialogWorkspace && (
+      {dialogOpen && dialogWorkspace && !dialogReady && (
+        <TaskSetupDialogSkeleton
+          mode={dialogMode}
+          onClose={() => setDialogOpen(false)}
+        />
+      )}
+      {dialogOpen && dialogWorkspace && dialogReady && (
         <TaskSetupDialog
           mode={dialogMode}
           workspace={dialogWorkspace}
@@ -331,6 +381,7 @@ export function TaskPanel() {
           }
           codexModels={codexModels}
           claudeModels={claudeModels}
+          providerHistory={dialogProviderHistory}
         />
       )}
       <ConfirmDialog

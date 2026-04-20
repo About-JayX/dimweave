@@ -32,7 +32,7 @@ const EMPTY_FORM: FormState = {
   activeMode: "subscription",
   apiKey: "",
   baseUrl: "",
-  wireApi: "chat",
+  wireApi: "responses",
   authMode: "api_key",
   providerName: "",
   showAdvanced: false,
@@ -49,7 +49,9 @@ function fromConfig(cfg: ProviderAuthConfig | undefined): FormState {
     activeMode: derived,
     apiKey: cfg.apiKey ?? "",
     baseUrl: cfg.baseUrl ?? "",
-    wireApi: cfg.wireApi ?? "chat",
+    // Codex 已弃用 "chat" wire_api；把持久化的旧值映射到 "responses" 让
+    // 下拉显示的默认就是新值，用户保存时一并把旧的 "chat" 覆盖掉。
+    wireApi: cfg.wireApi && cfg.wireApi !== "chat" ? cfg.wireApi : "responses",
     authMode: (cfg.authMode as "bearer" | "api_key") ?? "api_key",
     providerName: cfg.providerName ?? "",
     showAdvanced: Boolean(cfg.baseUrl || cfg.providerName),
@@ -375,7 +377,6 @@ function ProviderSection({
                   onChange={(e) => setForm({ wireApi: e.target.value })}
                   className="w-full rounded-md border border-border/40 bg-background px-2 py-1.5 text-[11px] outline-none focus:border-primary/50"
                 >
-                  <option value="chat">chat</option>
                   <option value="responses">responses</option>
                 </select>
               </div>

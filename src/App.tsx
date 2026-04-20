@@ -8,14 +8,17 @@ import { AppBootstrapGate } from "./components/AppBootstrapGate";
 import { WorkspaceEntryOverlay } from "./components/WorkspaceEntryOverlay";
 import {
   closeShellSidebar,
-  createShellLayoutState,
+  loadShellLayoutState,
   resolveShellWorkspaceLabel,
+  saveShellLayoutState,
   toggleShellNavItem,
 } from "./components/shell-layout-state";
 import { useBridgeStore } from "./stores/bridge-store";
 import {
-  selectMessages, selectPermissionPromptCount,
-  selectTerminalLineCount, selectUiErrorCount,
+  selectMessages,
+  selectPermissionPromptCount,
+  selectTerminalLineCount,
+  selectUiErrorCount,
 } from "./stores/bridge-store/selectors";
 import { ErrorLogDialog } from "./components/ErrorLogDialog";
 import { useFeishuProjectStore } from "./stores/feishu-project-store";
@@ -38,7 +41,10 @@ const RECENT_WORKSPACES_STORAGE_KEY = "dimweave:recent-workspaces";
 export default function App() {
   const theme = useTheme();
   const radius = useBorderRadius();
-  const [shellLayout, setShellLayout] = useState(createShellLayoutState);
+  const [shellLayout, setShellLayout] = useState(loadShellLayoutState);
+  useEffect(() => {
+    saveShellLayoutState(shellLayout);
+  }, [shellLayout]);
   const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>([]);
   const [recentWorkspacesLoaded, setRecentWorkspacesLoaded] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] =
@@ -54,7 +60,7 @@ export default function App() {
   const bootstrapError = useTaskStore((s) => s.bootstrapError);
   const pickDirectory = useCodexAccountStore((s) => s.pickDirectory);
   const workspaceLabel = resolveShellWorkspaceLabel(
-    activeTask?.workspaceRoot ?? storeSelectedWorkspace,
+    activeTask?.projectRoot ?? storeSelectedWorkspace,
   );
 
   const messages = useBridgeStore(selectMessages);
@@ -67,7 +73,10 @@ export default function App() {
   const clearUiErrors = useBridgeStore((s) => s.clearUiErrors);
   const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
-  const chatMessages = useMemo(() => filterRenderableChatMessages(messages), [messages]);
+  const chatMessages = useMemo(
+    () => filterRenderableChatMessages(messages),
+    [messages],
+  );
   const [errorLogOpen, setErrorLogOpen] = useState(false);
 
   useEffect(() => {
@@ -161,7 +170,7 @@ export default function App() {
         <main className="flex min-w-0 flex-1 flex-col animate-in fade-in duration-500">
           <ShellTopBar
             workspaceLabel={workspaceLabel}
-            currentWorkspace={activeTask?.workspaceRoot ?? storeSelectedWorkspace}
+            currentWorkspace={activeTask?.projectRoot ?? storeSelectedWorkspace}
             selectedWorkspace={selectedWorkspace}
             recentWorkspaces={recentWorkspaces}
             workspaceActionError={workspaceActionError}
@@ -183,7 +192,12 @@ export default function App() {
           {shellLayout.mainSurface === "chat" && <ReplyInput />}
         </main>
       </div>
-      <ErrorLogDialog open={errorLogOpen} errors={uiErrors} onClose={() => setErrorLogOpen(false)} onClear={clearUiErrors} />
+      <ErrorLogDialog
+        open={errorLogOpen}
+        errors={uiErrors}
+        onClose={() => setErrorLogOpen(false)}
+        onClear={clearUiErrors}
+      />
       {!storeSelectedWorkspace && (
         <WorkspaceEntryOverlay
           selected={selectedWorkspace}

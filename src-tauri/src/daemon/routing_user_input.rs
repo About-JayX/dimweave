@@ -41,6 +41,7 @@ pub async fn route_user_input(
     {
         let s = state.read().await;
         stamp_user_message(&s, explicit_task_id.as_deref(), &mut display_msg);
+        s.task_graph.persist_task_message(&display_msg);
     }
     gui::emit_agent_message(app, &display_msg);
     for t in targets {

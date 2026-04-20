@@ -117,6 +117,7 @@ pub(super) async fn handle_codex_event(
                 {
                     let s = state.read().await;
                     s.stamp_message_context_for_task(task_id, role_id, &mut fb);
+                    s.task_graph.persist_task_message(&fb);
                 }
                 gui::emit_agent_message(app, &fb);
             }
@@ -165,6 +166,7 @@ pub(super) async fn handle_codex_event(
             {
                 let s = state.read().await;
                 s.stamp_message_context_for_task(task_id, role_id, &mut error_msg);
+                s.task_graph.persist_task_message(&error_msg);
             }
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
@@ -270,6 +272,7 @@ async fn handle_completed_agent_message(
             {
                 let s = state.read().await;
                 s.stamp_message_context_for_task(task_id, role_id, &mut error_msg);
+                s.task_graph.persist_task_message(&error_msg);
             }
             gui::emit_agent_message(app, &error_msg);
             stream_preview.mark_durable_output();
@@ -281,7 +284,16 @@ async fn handle_completed_agent_message(
         role_id, &parsed, schema_route_enabled, agent_id, display_source,
     ) {
         CompletedOutput::Ready(msg) => msg,
-        CompletedOutput::Skip => return,
+        CompletedOutput::Skip => {
+            // Empty-message structured output is the prompt's designed
+            // "stay-silent" signal (see role_config/roles.rs "When to Respond"
+            // — `{"message":"", target:user, status:done}`). The turn
+            // DID produce a well-formed structured output; treat it as
+            // durable so turn/completed doesn't fire the silent-turn
+            // diagnostic fallback against it.
+            stream_preview.mark_durable_output();
+            return;
+        }
         CompletedOutput::MissingTarget => {
             // Fail-closed: the structured output parsed OK but omitted `target`.
             // Route a diagnostic back to the delegating lead (or first lead in
@@ -304,6 +316,7 @@ async fn handle_completed_agent_message(
             {
                 let s = state.read().await;
                 s.stamp_message_context_for_task(task_id, role_id, &mut diag_msg);
+                s.task_graph.persist_task_message(&diag_msg);
             }
             gui::emit_agent_message(app, &diag_msg);
             stream_preview.mark_durable_output();
@@ -328,6 +341,7 @@ async fn handle_completed_agent_message(
             {
                 let s = state.read().await;
                 s.stamp_message_context_for_task(task_id, role_id, &mut diag_msg);
+                s.task_graph.persist_task_message(&diag_msg);
             }
             gui::emit_agent_message(app, &diag_msg);
             stream_preview.mark_durable_output();

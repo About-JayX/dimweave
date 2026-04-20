@@ -81,9 +81,9 @@ export function CodexPanel({
   const effectiveCwd = useMemo(
     () =>
       resolveProviderHistoryWorkspace(
-        workspace ?? activeTask?.workspaceRoot ?? selectedWorkspace,
+        workspace ?? activeTask?.projectRoot ?? selectedWorkspace,
       ),
-    [workspace, activeTask?.workspaceRoot, selectedWorkspace],
+    [workspace, activeTask?.projectRoot, selectedWorkspace],
   );
 
   const [connecting, setConnecting] = useState(false);

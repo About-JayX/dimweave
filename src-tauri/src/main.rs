@@ -211,6 +211,7 @@ fn main() {
             commands_provider_auth::daemon_clear_provider_auth,
             commands_history::daemon_list_history,
             commands_history::daemon_list_provider_history,
+            commands_history::daemon_list_task_messages,
             commands_history::daemon_resume_session,
             commands_history::daemon_attach_provider_history,
             commands::stop_claude,

@@ -152,6 +152,50 @@ async fn stop_codex_for_task(
     }
 }
 
+/// Drop every live runtime for a provider after its auth changed. Live
+/// subprocesses snapshotted the old api_key / base_url / OAuth tokens at
+/// spawn time, so leaving them running would keep talking to the previous
+/// endpoint. Caller's next Connect click relaunches with the fresh config.
+async fn tear_down_provider_runtime(
+    provider: &str,
+    codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
+    codex_port_pool: &mut codex::port_pool::CodexPortPool,
+    claude_sdk_handles: &mut std::collections::HashMap<
+        String,
+        claude_sdk::ClaudeSdkHandle,
+    >,
+    state: &SharedState,
+    app: &AppHandle,
+) {
+    match provider {
+        "codex" => {
+            if codex_handles.is_empty() {
+                return;
+            }
+            gui::emit_system_log(
+                app,
+                "info",
+                "[Daemon] Codex auth changed — stopping active sessions; \
+                 reconnect to pick up new config",
+            );
+            stop_all_codex_sessions(codex_handles, codex_port_pool, state, app).await;
+        }
+        "claude" => {
+            if claude_sdk_handles.is_empty() {
+                return;
+            }
+            gui::emit_system_log(
+                app,
+                "info",
+                "[Daemon] Claude auth changed — stopping active sessions; \
+                 reconnect to pick up new config",
+            );
+            stop_all_claude_sdk_sessions(claude_sdk_handles, state, app).await;
+        }
+        _ => {}
+    }
+}
+
 async fn stop_all_codex_sessions(
     codex_handles: &mut std::collections::HashMap<String, codex::CodexHandle>,
     port_pool: &mut codex::port_pool::CodexPortPool,
@@ -425,11 +469,66 @@ async fn emit_task_context_events(state: &SharedState, app: &AppHandle, task_id:
     gui_task::emit_task_context_events(state, app, task_id).await;
 }
 
+/// Resolve the shared app-data `task_graph.db` path. Matches the same
+/// `com.dimweave.app` dir as `feishu_project::config` and `telegram::config`
+/// so all persistent stores live together.
+fn default_task_graph_db_path() -> Option<std::path::PathBuf> {
+    dirs::config_dir().map(|base| base.join("com.dimweave.app").join("task_graph.db"))
+}
+
+/// Build the initial daemon state, attaching the on-disk task graph when a
+/// config dir is available. Falls back to in-memory-only state (with a log
+/// line) if path resolution or schema init fails — task data won't persist
+/// across restarts in that case, but the daemon still boots.
+fn build_initial_state() -> DaemonState {
+    let Some(path) = default_task_graph_db_path() else {
+        eprintln!(
+            "[Daemon] no config dir available; task graph will not persist \
+             across restarts"
+        );
+        return DaemonState::new();
+    };
+    match DaemonState::with_task_graph_path(path.clone()) {
+        Ok(mut state) => {
+            eprintln!("[Daemon] task graph persisted at {}", path.display());
+            hydrate_task_runtimes(&mut state);
+            state
+        }
+        Err(e) => {
+            eprintln!(
+                "[Daemon] failed to open task graph at {}: {e}; running \
+                 in-memory only",
+                path.display()
+            );
+            DaemonState::new()
+        }
+    }
+}
+
+/// Create an in-memory `TaskRuntime` entry for each persisted task at
+/// startup. Runtime slots themselves remain empty (no live WS / subprocess
+/// handles), but the entries must exist so the first launch can attach
+/// agent slots via `begin_codex_task_launch_for_agent` / equivalent —
+/// otherwise the slot lookup fails and handshake is cancelled with
+/// `[Codex-WS] pump: in_tx closed`.
+fn hydrate_task_runtimes(state: &mut DaemonState) {
+    let tasks: Vec<(String, String)> = state
+        .task_graph
+        .list_tasks()
+        .into_iter()
+        .map(|t| (t.task_id.clone(), t.task_worktree_root.clone()))
+        .collect();
+    for (task_id, worktree_root) in tasks {
+        let path = std::path::PathBuf::from(worktree_root);
+        state.init_task_runtime(&task_id, path);
+    }
+}
+
 pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     let ports = ports::PortConfig::from_env();
     let daemon_port = ports.daemon;
     let codex_port = ports.codex;
-    let state: SharedState = Arc::new(RwLock::new(DaemonState::new()));
+    let state: SharedState = Arc::new(RwLock::new(build_initial_state()));
     // Remove orphaned api-key CODEX_HOMEs from prior crashes (PID no longer
     // alive). Our own RAII cleans up normal-exit paths; this covers panics.
     codex::prune_orphan_api_key_codex_homes();
@@ -925,6 +1024,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 {
                     let mut s = state.write().await;
                     let was_active = s.active_task_id.as_deref() == Some(&task_id);
+                    s.task_graph.delete_task_messages(&task_id);
                     s.task_graph.remove_task_cascade(&task_id);
                     s.task_runtimes.remove(&task_id);
 
@@ -981,6 +1081,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             }
             DaemonCmd::ListHistory { workspace, reply } => {
                 let _ = reply.send(state.read().await.task_history(workspace.as_deref()));
+            }
+            DaemonCmd::ListTaskMessages { task_id, reply } => {
+                let msgs = state.read().await.task_graph.list_task_messages(&task_id);
+                let _ = reply.send(msgs);
             }
             DaemonCmd::ListProviderHistory { workspace, reply } => {
                 let workspace = match workspace {
@@ -1253,15 +1357,42 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let _ = reply.send(cfg);
             }
             DaemonCmd::SaveProviderAuth { config, reply } => {
-                let mut s = state.write().await;
-                s.task_graph.upsert_provider_auth(config);
-                let result = s.task_graph.save().map_err(|e| e.to_string());
+                let provider = config.provider.clone();
+                let result = {
+                    let mut s = state.write().await;
+                    s.task_graph.upsert_provider_auth(config);
+                    s.task_graph.save().map_err(|e| e.to_string())
+                };
+                // Running subprocesses snapshot the api_key/base_url/env_key
+                // at spawn time; swapping auth mid-session means the live
+                // connection is still on the old provider. Tear them down
+                // so the user's next Connect click picks up the new config.
+                tear_down_provider_runtime(
+                    &provider,
+                    &mut codex_handles,
+                    &mut codex_port_pool,
+                    &mut claude_sdk_handles,
+                    &state,
+                    &app,
+                )
+                .await;
                 let _ = reply.send(result);
             }
             DaemonCmd::ClearProviderAuth { provider, reply } => {
-                let mut s = state.write().await;
-                s.task_graph.clear_provider_auth(&provider);
-                let result = s.task_graph.save().map_err(|e| e.to_string());
+                let result = {
+                    let mut s = state.write().await;
+                    s.task_graph.clear_provider_auth(&provider);
+                    s.task_graph.save().map_err(|e| e.to_string())
+                };
+                tear_down_provider_runtime(
+                    &provider,
+                    &mut codex_handles,
+                    &mut codex_port_pool,
+                    &mut claude_sdk_handles,
+                    &state,
+                    &app,
+                )
+                .await;
                 let _ = reply.send(result);
             }
             DaemonCmd::ReorderTaskAgents { task_id, agent_ids, reply } => {

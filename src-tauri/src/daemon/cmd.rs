@@ -98,6 +98,10 @@ pub enum DaemonCmd {
         workspace: Option<String>,
         reply: oneshot::Sender<Vec<HistoryEntry>>,
     },
+    ListTaskMessages {
+        task_id: String,
+        reply: oneshot::Sender<Vec<crate::daemon::types::BridgeMessage>>,
+    },
     ListProviderHistory {
         workspace: Option<String>,
         reply: oneshot::Sender<Vec<ProviderHistoryEntry>>,

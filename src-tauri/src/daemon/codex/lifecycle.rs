@@ -78,6 +78,19 @@ pub async fn start(
         .arg("features.apply_patch_freeform=false")
         .env("CODEX_HOME", codex_home)
         .env("PATH", &path)
+        // DIMWEAVE_CODEX_DEBUG=1 → turn on Codex's own reqwest/hyper tracing
+        // so we see outbound HTTP requests + response status/body hints in the
+        // dev log. Narrowed to reqwest/hyper/codex to avoid flooding.
+        .env(
+            "RUST_LOG",
+            std::env::var("RUST_LOG").unwrap_or_else(|_| {
+                if std::env::var("DIMWEAVE_CODEX_DEBUG").is_ok() {
+                    "codex=debug,reqwest=debug,hyper=info".into()
+                } else {
+                    "".into()
+                }
+            }),
+        )
         .current_dir(cwd)
         .kill_on_drop(true);
 
@@ -117,9 +130,28 @@ pub(crate) fn apply_provider_auth(cmd: &mut Command, auth: Option<&ProviderAuthC
                 "DIMWEAVE_{}_KEY",
                 name.to_uppercase().replace(['-', '.', ' '], "_")
             );
-            let wire = a.wire_api.as_deref().unwrap_or("chat");
+            // Codex app-server 弃用 `wire_api = "chat"`，只接受 `responses`。
+            // 空值 / "chat" 均升级到 "responses"；其它值（极少见）透传。
+            let raw_wire = a.wire_api.as_deref().unwrap_or("").trim();
+            let wire = if raw_wire.is_empty() {
+                "responses"
+            } else if raw_wire == "chat" {
+                eprintln!(
+                    "[Codex][auth] wire_api=\"chat\" is deprecated by Codex; \
+                     auto-upgrading to \"responses\" (update provider auth \
+                     settings to silence this)"
+                );
+                "responses"
+            } else {
+                raw_wire
+            };
             cmd.arg("--config")
                 .arg(format!("model_provider=\"{name}\""))
+                .arg("--config")
+                // Codex schema requires `model_providers.<name>.name` as a
+                // human-readable label; omitting it trips `missing field 'name'`
+                // at startup. Reuse the TOML key as the display name.
+                .arg(format!("model_providers.{name}.name=\"{name}\""))
                 .arg("--config")
                 .arg(format!("model_providers.{name}.base_url=\"{base_url}\""))
                 .arg("--config")
@@ -268,9 +300,14 @@ mod apply_auth_tests {
         assert!(args
             .iter()
             .any(|a| a == "model_providers.dimweave-openrouter.env_key=\"DIMWEAVE_DIMWEAVE_OPENROUTER_KEY\""));
+        // Legacy "chat" wire_api is auto-upgraded to "responses" (Codex
+        // app-server removed support for "chat").
         assert!(args
             .iter()
-            .any(|a| a == "model_providers.dimweave-openrouter.wire_api=\"chat\""));
+            .any(|a| a == "model_providers.dimweave-openrouter.wire_api=\"responses\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-openrouter.name=\"dimweave-openrouter\""));
         let envs = envs(&cmd);
         assert_eq!(
             envs.get("DIMWEAVE_DIMWEAVE_OPENROUTER_KEY").map(String::as_str),
@@ -314,8 +351,12 @@ mod apply_auth_tests {
         apply_provider_auth(&mut cmd, Some(&cfg));
         let args = args(&cmd);
         assert!(args.iter().any(|a| a == "model_provider=\"dimweave-custom\""));
+        // Empty wire_api defaults to "responses" (Codex app-server rejects "chat").
         assert!(args
             .iter()
-            .any(|a| a == "model_providers.dimweave-custom.wire_api=\"chat\""));
+            .any(|a| a == "model_providers.dimweave-custom.wire_api=\"responses\""));
+        assert!(args
+            .iter()
+            .any(|a| a == "model_providers.dimweave-custom.name=\"dimweave-custom\""));
     }
 }

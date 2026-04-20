@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use super::store::TaskGraphStore;
 use super::types::*;
 
-const SCHEMA_VERSION: u32 = 4;
+const SCHEMA_VERSION: u32 = 5;
 
 pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -75,7 +75,15 @@ pub(crate) fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
             provider_name TEXT,
             active_mode   TEXT,
             updated_at    INTEGER NOT NULL
-        );",
+        );
+        CREATE TABLE IF NOT EXISTS task_messages (
+            id         TEXT PRIMARY KEY,
+            task_id    TEXT NOT NULL,
+            payload    TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_messages_task_id
+            ON task_messages(task_id, created_at);",
     )?;
     migrate_if_needed(conn)?;
     conn.execute(
@@ -122,6 +130,18 @@ fn migrate_if_needed(conn: &Connection) -> rusqlite::Result<()> {
     if current_ver < 4 && !provider_auth_has_column(conn, "active_mode")? {
         conn.execute_batch(
             "ALTER TABLE provider_auth ADD COLUMN active_mode TEXT;",
+        )?;
+    }
+    if current_ver < 5 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS task_messages (
+                id         TEXT PRIMARY KEY,
+                task_id    TEXT NOT NULL,
+                payload    TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_task_messages_task_id
+                ON task_messages(task_id, created_at);",
         )?;
     }
     Ok(())

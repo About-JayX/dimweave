@@ -127,7 +127,7 @@ export function TaskHeader({
           </div>
           {showDetail && (
             <div className="truncate text-xs text-muted-foreground/80">
-              {task.workspaceRoot}
+              {task.projectRoot}
             </div>
           )}
           {showDetail && (

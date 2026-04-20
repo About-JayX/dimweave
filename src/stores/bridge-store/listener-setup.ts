@@ -1,5 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { useTaskStore } from "@/stores/task-store";
+import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
 import {
   type AgentMessagePayload,
@@ -87,6 +89,35 @@ function resolveStreamBucketId(taskId?: string): string | null {
 
 type BridgeSetter = (fn: (state: BridgeState) => Partial<BridgeState>) => void;
 
+/// Replace `messages` with the persisted transcript for `taskId` so chat
+/// survives app restarts. Live agent_message events append on top; we
+/// dedupe by id in case the stream races with the DB read.
+export async function hydrateMessagesForTask(
+  taskId: string | null,
+  set: BridgeSetter,
+): Promise<void> {
+  if (!taskId) {
+    set(() => ({ messages: [] }));
+    return;
+  }
+  try {
+    const persisted = await invoke<BridgeMessage[]>(
+      "daemon_list_task_messages",
+      { taskId },
+    );
+    set((s) => {
+      const seen = new Set(persisted.map((m) => m.id));
+      const liveForTask = s.messages.filter(
+        (m) => m.taskId === taskId && !seen.has(m.id),
+      );
+      return { messages: [...persisted, ...liveForTask] };
+    });
+  } catch (e) {
+    // Best-effort — hydration failure keeps the in-memory timeline intact.
+    console.error("[bridge-store] hydrate messages failed", e);
+  }
+}
+
 type NextLogId = () => number;
 
 export function reduceAgentStatus(
@@ -160,6 +191,7 @@ export function createBridgeListeners(
             : defaultCodexStreamState(),
         };
       });
+      void hydrateMessagesForTask(state.activeTaskId, set);
     }
     // Task removal: sweep permission prompts and stream buckets tied to
     // tasks that no longer exist. Without this, deleted tasks leak state.
@@ -176,6 +208,12 @@ export function createBridgeListeners(
           delete nextCodexBuckets[id];
         }
         return {
+          // Drop chat messages tied to deleted tasks so the timeline
+          // doesn't keep stale history around for a task that no longer
+          // exists. Messages without a taskId are kept (system diagnostics).
+          messages: s.messages.filter(
+            (m) => !m.taskId || !removed.has(m.taskId),
+          ),
           permissionPrompts: s.permissionPrompts.filter(
             (p) => !p.taskId || !removed.has(p.taskId),
           ),

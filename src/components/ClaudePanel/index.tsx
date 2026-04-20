@@ -66,9 +66,9 @@ export function ClaudePanel({
   const effectiveCwd = useMemo(
     () =>
       resolveProviderHistoryWorkspace(
-        workspace ?? activeTask?.workspaceRoot ?? selectedWorkspace,
+        workspace ?? activeTask?.projectRoot ?? selectedWorkspace,
       ),
-    [workspace, activeTask?.workspaceRoot, selectedWorkspace],
+    [workspace, activeTask?.projectRoot, selectedWorkspace],
   );
   const selectWorkspaceHistory = useMemo(
     () => makeProviderHistorySelector(effectiveCwd),

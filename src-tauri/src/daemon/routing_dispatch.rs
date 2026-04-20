@@ -15,6 +15,17 @@ async fn route_message_with_display(
     display_in_gui: bool,
 ) -> RouteResult {
     let outcome = route_message_inner_with_meta(state, msg.clone()).await;
+    // Persist only messages that reach the GUI timeline, matching the emit
+    // condition below. `route_message_silent` is used for per-target
+    // duplicates of a single user input (display_msg was already persisted
+    // in routing_user_input); gating on display_in_gui prevents N+1
+    // duplicates in task_messages for a single user turn.
+    if display_in_gui
+        && matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui)
+        && routing_display::is_renderable_message(&msg)
+    {
+        state.read().await.task_graph.persist_task_message(&msg);
+    }
     routing_display::emit_route_side_effects(
         app,
         &msg,

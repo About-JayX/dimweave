@@ -1,10 +1,26 @@
 use crate::daemon::{
     provider::shared::ProviderHistoryEntry,
-    types::HistoryEntry,
+    types::{BridgeMessage, HistoryEntry},
     DaemonCmd,
 };
 use crate::DaemonSender;
 use tauri::State;
+
+#[tauri::command]
+pub async fn daemon_list_task_messages(
+    task_id: String,
+    sender: State<'_, DaemonSender>,
+) -> Result<Vec<BridgeMessage>, String> {
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    sender
+        .0
+        .send(DaemonCmd::ListTaskMessages { task_id, reply: reply_tx })
+        .await
+        .map_err(|e| e.to_string())?;
+    reply_rx
+        .await
+        .map_err(|_| "daemon dropped list_task_messages reply".to_string())
+}
 
 #[tauri::command]
 pub async fn daemon_list_history(

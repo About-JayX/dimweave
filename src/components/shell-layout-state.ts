@@ -10,12 +10,65 @@ export interface ShellLayoutState {
   mainSurface: ShellMainSurface;
 }
 
+export const SHELL_LAYOUT_STORAGE_KEY = "dimweave:shell-layout";
+
+const SHELL_NAV_ITEMS: readonly ShellNavItem[] = [
+  "task",
+  "agents",
+  "approvals",
+  "bugs",
+  "logs",
+];
+const SHELL_MAIN_SURFACES: readonly ShellMainSurface[] = ["chat", "logs"];
+
 export function createShellLayoutState(): ShellLayoutState {
   return {
     activeItem: null,
     sidebarPane: null,
     mainSurface: "chat",
   };
+}
+
+/// Load persisted shell layout from localStorage. Unknown fields fall back
+/// to defaults rather than throwing — keeps the app booting even after a
+/// schema change removed one of the valid enum values.
+export function loadShellLayoutState(): ShellLayoutState {
+  if (typeof window === "undefined") return createShellLayoutState();
+  try {
+    const raw = window.localStorage.getItem(SHELL_LAYOUT_STORAGE_KEY);
+    if (!raw) return createShellLayoutState();
+    const parsed = JSON.parse(raw) as Partial<ShellLayoutState>;
+    const activeItem =
+      parsed.activeItem && SHELL_NAV_ITEMS.includes(parsed.activeItem)
+        ? parsed.activeItem
+        : null;
+    const sidebarPane: ShellSidebarPane | null =
+      parsed.sidebarPane &&
+      (["task", "agents", "approvals", "bugs"] as const).includes(
+        parsed.sidebarPane,
+      )
+        ? parsed.sidebarPane
+        : null;
+    const mainSurface =
+      parsed.mainSurface && SHELL_MAIN_SURFACES.includes(parsed.mainSurface)
+        ? parsed.mainSurface
+        : "chat";
+    return { activeItem, sidebarPane, mainSurface };
+  } catch {
+    return createShellLayoutState();
+  }
+}
+
+export function saveShellLayoutState(state: ShellLayoutState): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      SHELL_LAYOUT_STORAGE_KEY,
+      JSON.stringify(state),
+    );
+  } catch {
+    // Ignore quota / private-mode errors — persistence is best-effort.
+  }
 }
 
 export function toggleShellNavItem(

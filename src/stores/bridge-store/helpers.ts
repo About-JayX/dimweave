@@ -1,6 +1,10 @@
 import { type UnlistenFn } from "@tauri-apps/api/event";
+import { useTaskStore } from "@/stores/task-store";
 import type { BridgeState } from "./types";
-import { createBridgeListeners } from "./listener-setup";
+import {
+  createBridgeListeners,
+  hydrateMessagesForTask,
+} from "./listener-setup";
 
 export let _unlisteners: UnlistenFn[] = [];
 export let _logId = 0;
@@ -21,6 +25,13 @@ export function initListeners(
 ) {
   createBridgeListeners(set, nextLogId).then((fns) => {
     setUnlisteners(fns);
+    // Cover the case where task-store bootstrap already set activeTaskId
+    // before our subscribe callback was attached — otherwise initial
+    // hydration is missed and the chat timeline boots empty.
+    const currentTaskId = useTaskStore.getState().activeTaskId;
+    if (currentTaskId) {
+      void hydrateMessagesForTask(currentTaskId, set);
+    }
   });
 }
 

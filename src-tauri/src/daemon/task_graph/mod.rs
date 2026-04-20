@@ -1,4 +1,5 @@
 mod artifact_index;
+mod message_log;
 mod persist;
 mod session_index;
 pub mod store;
