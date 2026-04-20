@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTaskStore } from "@/stores/task-store";
 import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
+import { GLOBAL_MESSAGE_BUCKET, MAX_MESSAGES_PER_BUCKET } from "./types";
 import {
   type AgentMessagePayload,
   type AgentStatusPayload,
@@ -97,21 +98,25 @@ export async function hydrateMessagesForTask(
   taskId: string | null,
   set: BridgeSetter,
 ): Promise<void> {
-  if (!taskId) {
-    set(() => ({ messages: [] }));
-    return;
-  }
+  if (!taskId) return;
   try {
-    const persisted = await invoke<BridgeMessage[]>(
+    const persisted = await invoke<BridgeMessage[] | null>(
       "daemon_list_task_messages",
       { taskId },
     );
+    // Tauri commands typed as Option<Vec<_>> deserialize to null when empty;
+    // guard here so the dedupe/merge below doesn't crash the reducer.
+    const list = Array.isArray(persisted) ? persisted : [];
     set((s) => {
-      const seen = new Set(persisted.map((m) => m.id));
-      const liveForTask = s.messages.filter(
-        (m) => m.taskId === taskId && !seen.has(m.id),
-      );
-      return { messages: [...persisted, ...liveForTask] };
+      const seen = new Set(list.map((m) => m.id));
+      const liveBucket = s.messagesByTask[taskId] ?? [];
+      const liveForTask = liveBucket.filter((m) => !seen.has(m.id));
+      return {
+        messagesByTask: {
+          ...s.messagesByTask,
+          [taskId]: [...list, ...liveForTask],
+        },
+      };
     });
   } catch (e) {
     // Best-effort — hydration failure keeps the in-memory timeline intact.
@@ -204,17 +209,17 @@ export function createBridgeListeners(
       set((s) => {
         const nextClaudeBuckets = { ...s.claudeStreamsByTask };
         const nextCodexBuckets = { ...s.codexStreamsByTask };
+        const nextMessagesByTask = { ...s.messagesByTask };
         for (const id of removed) {
           delete nextClaudeBuckets[id];
           delete nextCodexBuckets[id];
+          delete nextMessagesByTask[id];
         }
         return {
           // Drop chat messages tied to deleted tasks so the timeline
           // doesn't keep stale history around for a task that no longer
-          // exists. Messages without a taskId are kept (system diagnostics).
-          messages: s.messages.filter(
-            (m) => !m.taskId || !removed.has(m.taskId),
-          ),
+          // exists. GLOBAL_MESSAGE_BUCKET survives (system diagnostics).
+          messagesByTask: nextMessagesByTask,
           permissionPrompts: s.permissionPrompts.filter(
             (p) => !p.taskId || !removed.has(p.taskId),
           ),
@@ -246,9 +251,20 @@ export function createBridgeListeners(
 
   return Promise.all([
     listen<AgentMessagePayload>("agent_message", (e) => {
-      set((s) => ({
-        messages: [...s.messages.slice(-999), e.payload.payload],
-      }));
+      // Route by msg.taskId into per-task bucket. Keeps other tasks'
+      // bucket references stable — MessageList in a different task
+      // does not re-render when this one appends.
+      set((s) => {
+        const msg = e.payload.payload;
+        const tid = msg.taskId ?? GLOBAL_MESSAGE_BUCKET;
+        const existing = s.messagesByTask[tid] ?? [];
+        return {
+          messagesByTask: {
+            ...s.messagesByTask,
+            [tid]: [...existing.slice(-(MAX_MESSAGES_PER_BUCKET - 1)), msg],
+          },
+        };
+      });
     }),
     listen<SystemLogPayload>("system_log", (e) => {
       const { level, message } = e.payload;

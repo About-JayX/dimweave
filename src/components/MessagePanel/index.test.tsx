@@ -50,7 +50,7 @@ describe("MessagePanel", () => {
 
     useBridgeStore.setState((state) => ({
       ...state,
-      messages: [],
+      messagesByTask: {},
       terminalLines: [],
       permissionPrompts: [],
     }));

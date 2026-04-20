@@ -8,6 +8,15 @@ import type {
   RuntimeHealthInfo,
 } from "@/types";
 
+/// Bucket key used when a message has no `task_id` (e.g. legacy system
+/// diagnostic). Exported so listener-setup + selectors agree.
+export const GLOBAL_MESSAGE_BUCKET = "__global__";
+
+/// Max retained messages per task bucket in memory. Matches prior flat
+/// `messages.slice(-999)` budget; Virtuoso virtualizes viewport so this
+/// only caps long-session growth, not render cost.
+export const MAX_MESSAGES_PER_BUCKET = 1000;
+
 export interface TerminalLine {
   id: number;
   agent: string;
@@ -46,7 +55,16 @@ export interface ClaudeStreamState {
 
 export interface BridgeState {
   connected: boolean;
-  messages: BridgeMessage[];
+  /**
+   * Chat messages bucketed by task_id. Primary storage; no flat aggregate
+   * array is kept. Per-task lookup is O(1) and keeps sibling tasks'
+   * references stable when one bucket mutates — so MessageList only
+   * re-renders for its own task, and useMemo filter chains don't
+   * invalidate every time any task receives a new message.
+   * Messages without a task_id (system diagnostics that pre-date task
+   * scoping) land in the `GLOBAL_MESSAGE_BUCKET` key.
+   */
+  messagesByTask: Record<string, BridgeMessage[]>;
   agents: Record<string, AgentInfo>;
   terminalLines: TerminalLine[];
   uiErrors: UiError[];

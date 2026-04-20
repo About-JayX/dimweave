@@ -18,7 +18,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
   return {
     // Daemon is always available (embedded in Tauri process)
     connected: true,
-    messages: [],
+    messagesByTask: {},
     agents: {
       claude: {
         name: "claude",
@@ -68,7 +68,7 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
       }).catch(logError(set));
     },
 
-    clearMessages: () => set({ messages: [] }),
+    clearMessages: () => set({ messagesByTask: {} }),
 
     stopCodexTui: () => invoke("daemon_stop_codex").catch(logError(set)),
 

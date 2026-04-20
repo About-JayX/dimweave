@@ -15,9 +15,9 @@ import {
 } from "./components/shell-layout-state";
 import { useBridgeStore } from "./stores/bridge-store";
 import {
-  selectMessages,
   selectPermissionPromptCount,
   selectTerminalLineCount,
+  selectTotalMessageCount,
   selectUiErrorCount,
 } from "./stores/bridge-store/selectors";
 import { ErrorLogDialog } from "./components/ErrorLogDialog";
@@ -25,7 +25,6 @@ import { useFeishuProjectStore } from "./stores/feishu-project-store";
 import { activeItemCount } from "./components/BugInboxPanel/view-model";
 import { useTaskStore } from "./stores/task-store";
 import { selectActiveTask } from "./stores/task-store/selectors";
-import { filterRenderableChatMessages } from "./components/MessagePanel/view-model";
 import { useTheme } from "./components/use-theme";
 import { useBorderRadius } from "./components/use-border-radius";
 import { useCodexAccountStore } from "./stores/codex-account-store";
@@ -63,7 +62,6 @@ export default function App() {
     activeTask?.projectRoot ?? storeSelectedWorkspace,
   );
 
-  const messages = useBridgeStore(selectMessages);
   const approvalCount = useBridgeStore(selectPermissionPromptCount);
   const bugItems = useFeishuProjectStore((s) => s.items);
   const bugCount = useMemo(() => activeItemCount(bugItems), [bugItems]);
@@ -73,10 +71,10 @@ export default function App() {
   const clearUiErrors = useBridgeStore((s) => s.clearUiErrors);
   const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
-  const chatMessages = useMemo(
-    () => filterRenderableChatMessages(messages),
-    [messages],
-  );
+  // Top-bar indicator only needs a count, not the full list — count is
+  // O(bucket-count) via sum of bucket sizes. Prior chatMessages filter
+  // over the flat array was O(total-message-count) each render.
+  const messageCount = useBridgeStore(selectTotalMessageCount);
   const [errorLogOpen, setErrorLogOpen] = useState(false);
 
   useEffect(() => {
@@ -150,7 +148,7 @@ export default function App() {
           activeItem={shellLayout.activeItem}
           approvalCount={approvalCount}
           bugCount={bugCount}
-          messageCount={chatMessages.length}
+          messageCount={messageCount}
           runtimeHealth={runtimeHealth}
           themeMode={theme.mode}
           radiusMode={radius.mode}

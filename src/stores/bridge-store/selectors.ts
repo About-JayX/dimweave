@@ -1,4 +1,6 @@
+import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
+import { GLOBAL_MESSAGE_BUCKET } from "./types";
 
 export function selectConnected(state: BridgeState) {
   return state.connected;
@@ -8,39 +10,49 @@ export function selectAgents(state: BridgeState) {
   return state.agents;
 }
 
-export function selectMessages(state: BridgeState) {
-  return state.messages;
+/// Stable empty array so selectors for tasks with no messages return
+/// referentially stable data — consumers' `useMemo` chains don't
+/// invalidate when an unrelated task receives a new message.
+const EMPTY_MESSAGES: BridgeMessage[] = [];
+
+/// Build a selector that reads the messages bucket for `taskId` plus the
+/// global (system-diagnostic) bucket merged in chronological order. When
+/// `taskId` is null, return global-only. The factory returns a stable
+/// function per taskId so React can rely on reference equality.
+///
+/// Merging is O(n_task + n_global); for typical sessions the global
+/// bucket stays short (diagnostics), so total cost remains well below
+/// the previous `filterMessagesByTaskId` over the full flat array.
+export function makeActiveTaskMessagesSelector(
+  taskId: string | null,
+): (state: BridgeState) => BridgeMessage[] {
+  return (state: BridgeState) => {
+    const global =
+      state.messagesByTask[GLOBAL_MESSAGE_BUCKET] ?? EMPTY_MESSAGES;
+    if (!taskId) return global;
+    const task = state.messagesByTask[taskId] ?? EMPTY_MESSAGES;
+    if (global.length === 0) return task;
+    if (task.length === 0) return global;
+    // Merge two already-chronologically-sorted arrays by timestamp.
+    const merged: BridgeMessage[] = [];
+    let i = 0;
+    let j = 0;
+    while (i < task.length && j < global.length) {
+      if (task[i].timestamp <= global[j].timestamp) merged.push(task[i++]);
+      else merged.push(global[j++]);
+    }
+    while (i < task.length) merged.push(task[i++]);
+    while (j < global.length) merged.push(global[j++]);
+    return merged;
+  };
 }
 
-/**
- * Filter messages to the active task.
- *
- * Rules:
- * - `taskId === taskId` → kept (per-task agent/user message).
- * - `source.kind === "system"` → kept regardless of taskId. The daemon
- *   emits genuinely global notices (startup, agent-offline broadcasts,
- *   permission-queue origins, pre-task chatter) with `source = System`
- *   and no taskId on purpose; they must remain visible in every task
- *   view. See `state_task_flow.rs::stamp_message_context` — it returns
- *   early when there's no active task, which is correct for system
- *   messages but caused the bleed we closed with strict match.
- * - Everything else (per-task diagnostics that forgot to stamp) is
- *   dropped; the backend callers must stamp — that invariant was
- *   tightened in the Codex session_event.rs error paths.
- *
- * When no task is active (`taskId == null`), show everything.
- */
-export function filterMessagesByTaskId(
-  messages: readonly {
-    taskId?: string;
-    source?: { kind?: string };
-  }[],
-  taskId: string | null,
-): typeof messages {
-  if (!taskId) return messages;
-  return messages.filter(
-    (m) => m.taskId === taskId || m.source?.kind === "system",
-  );
+/// Total message count across all task buckets. Used by top-bar
+/// indicators; does not care about per-task scoping.
+export function selectTotalMessageCount(state: BridgeState): number {
+  let n = 0;
+  for (const b of Object.values(state.messagesByTask)) n += b.length;
+  return n;
 }
 
 export function selectAnyAgentConnected(state: BridgeState) {

@@ -19,7 +19,7 @@ import type {
 function baseState(): BridgeState {
   return {
     connected: true,
-    messages: [],
+    messagesByTask: {},
     agents: {},
     terminalLines: [],
     uiErrors: [],

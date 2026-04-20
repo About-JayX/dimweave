@@ -9,10 +9,7 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
-import {
-  selectMessages,
-  filterMessagesByTaskId,
-} from "@/stores/bridge-store/selectors";
+import { makeActiveTaskMessagesSelector } from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
 import { MessageList } from "./MessageList";
 import { MessageImageLightbox } from "./MessageBubble";
@@ -49,12 +46,16 @@ export function MessagePanel({
     searchQuery,
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const allMessages = useBridgeStore(selectMessages);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
-  const messages = useMemo(
-    () => filterMessagesByTaskId(allMessages, activeTaskId),
-    [allMessages, activeTaskId],
+  // Per-task bucket selector: stable function per taskId, O(1) bucket
+  // lookup + short global-bucket merge. Replaces the old
+  // `filterMessagesByTaskId(allMessages, id)` which was O(N) over the
+  // flat messages array on every render.
+  const selectTaskMessages = useMemo(
+    () => makeActiveTaskMessagesSelector(activeTaskId),
+    [activeTaskId],
   );
+  const messages = useBridgeStore(selectTaskMessages);
   const allTerminalLines = useBridgeStore((s) => s.terminalLines);
   const claudeNeedsAttention = useBridgeStore((s) => s.claudeNeedsAttention);
   const clearClaudeAttention = useBridgeStore((s) => s.clearClaudeAttention);
