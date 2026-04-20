@@ -9,7 +9,10 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Attachment } from "@/types";
 import { useBridgeStore } from "@/stores/bridge-store";
-import { selectMessages, filterMessagesByTaskId } from "@/stores/bridge-store/selectors";
+import {
+  selectMessages,
+  filterMessagesByTaskId,
+} from "@/stores/bridge-store/selectors";
 import { useTaskStore } from "@/stores/task-store";
 import { MessageList } from "./MessageList";
 import { MessageImageLightbox } from "./MessageBubble";
@@ -33,11 +36,18 @@ interface MessagePanelProps {
   onSearchClose: () => void;
 }
 
-export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: MessagePanelProps) {
+export function MessagePanel({
+  surfaceMode,
+  searchOpen,
+  onSearchClose,
+}: MessagePanelProps) {
   const [lightboxAttachment, setLightboxAttachment] =
     useState<Attachment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const effectiveSearchQuery = getSearchQueryForDisclosure(searchOpen, searchQuery);
+  const effectiveSearchQuery = getSearchQueryForDisclosure(
+    searchOpen,
+    searchQuery,
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const allMessages = useBridgeStore(selectMessages);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
@@ -109,24 +119,28 @@ export function MessagePanel({ surfaceMode, searchOpen, onSearchClose }: Message
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      {surfaceMode === "chat" && (
-        <>
-          <MessageSearchChrome
-            searchOpen={searchOpen}
-            searchQuery={searchQuery}
-            searchSummary={searchSummary}
-            inputRef={searchInputRef}
-            onQueryChange={setSearchQuery}
-            onClose={handleCloseSearch}
-          />
-          <MessageList
-            messages={filteredMessages}
-            searchActive={searchActive}
-            emptyStateMessage={searchSummary ?? undefined}
-            onOpenImage={setLightboxAttachment}
-          />
-        </>
-      )}
+      {/* Keep chat surface mounted across tab switches. Previous design
+          unmounted on surfaceMode="logs", which wiped scroll position,
+          userAway latch, and pending stream state; returning to chat
+          landed at the top. `display:none` preserves everything. */}
+      <div
+        className={`flex min-h-0 flex-1 flex-col ${surfaceMode === "chat" ? "" : "hidden"}`}
+      >
+        <MessageSearchChrome
+          searchOpen={searchOpen}
+          searchQuery={searchQuery}
+          searchSummary={searchSummary}
+          inputRef={searchInputRef}
+          onQueryChange={setSearchQuery}
+          onClose={handleCloseSearch}
+        />
+        <MessageList
+          messages={filteredMessages}
+          searchActive={searchActive}
+          emptyStateMessage={searchSummary ?? undefined}
+          onOpenImage={setLightboxAttachment}
+        />
+      </div>
 
       {surfaceMode === "logs" && (
         <div className="flex-1 min-h-0">

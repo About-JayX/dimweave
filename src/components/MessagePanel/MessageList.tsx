@@ -108,6 +108,11 @@ export function MessageList({
           ref={anchor.virtuosoRef}
           scrollerRef={anchor.scrollerRefCallback}
           totalCount={totalCount}
+          // Land at the last item on initial mount so remounts (e.g. tab
+          // switch away from chat and back) restore the bottom view.
+          // Virtuoso handles this before first paint, which our rAF-based
+          // initial-scroll effect can't match once heights are unmeasured.
+          initialTopMostItemIndex={totalCount > 0 ? totalCount - 1 : 0}
           atBottomStateChange={anchor.onAtBottomStateChange}
           atBottomThreshold={STICKY_BOTTOM_THRESHOLD}
           followOutput={anchor.followOutputMode}

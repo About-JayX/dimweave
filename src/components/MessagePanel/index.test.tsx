@@ -56,7 +56,11 @@ describe("MessagePanel", () => {
     }));
 
     const html = renderToStaticMarkup(
-      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+      <MessagePanel
+        surfaceMode="chat"
+        searchOpen={false}
+        onSearchClose={() => {}}
+      />,
     );
 
     expect(html).toContain(
@@ -74,7 +78,11 @@ describe("MessagePanel", () => {
     // Zustand v5 SSR uses getInitialState() (messages=[]).
     // Either way, search input must not appear by default (searchOpen starts false).
     const html = renderToStaticMarkup(
-      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+      <MessagePanel
+        surfaceMode="chat"
+        searchOpen={false}
+        onSearchClose={() => {}}
+      />,
     );
 
     expect(html).not.toContain('type="search"');
@@ -116,14 +124,22 @@ describe("MessagePanel", () => {
 
     // Resting state: MessagePanel does not own the search icon — that lives in ShellTopBar.
     const closedHtml = renderToStaticMarkup(
-      <MessagePanel surfaceMode="chat" searchOpen={false} onSearchClose={() => {}} />,
+      <MessagePanel
+        surfaceMode="chat"
+        searchOpen={false}
+        onSearchClose={() => {}}
+      />,
     );
     expect(closedHtml).not.toContain('aria-label="Search messages"');
     expect(closedHtml).not.toContain('type="search"');
 
     // Disclosed state: the search input row appears.
     const openHtml = renderToStaticMarkup(
-      <MessagePanel surfaceMode="chat" searchOpen={true} onSearchClose={() => {}} />,
+      <MessagePanel
+        surfaceMode="chat"
+        searchOpen={true}
+        onSearchClose={() => {}}
+      />,
     );
     expect(openHtml).toContain('type="search"');
   });
@@ -132,12 +148,20 @@ describe("MessagePanel", () => {
     installTauriStub();
     const { MessagePanel } = await import("./index");
 
-    const html = renderToStaticMarkup(<MessagePanel surfaceMode="logs" />);
-
-    expect(html).toContain("No logs.");
-    expect(html).not.toContain(
-      "No messages yet. Connect Claude and Codex to start bridging.",
+    const html = renderToStaticMarkup(
+      <MessagePanel
+        surfaceMode="logs"
+        searchOpen={false}
+        onSearchClose={() => {}}
+      />,
     );
+
+    // Chat surface stays mounted (hidden via CSS) so scroll position +
+    // stream state survive logs-tab trips; verify via class rather than
+    // content, since the chat empty-state markup is also present but
+    // not visible.
+    expect(html).toContain("No logs.");
+    expect(html).toContain("hidden");
     expect(html).not.toContain("Runtime logs");
     expect(html).not.toContain(">Clear<");
   });
