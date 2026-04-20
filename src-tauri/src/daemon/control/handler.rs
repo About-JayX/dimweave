@@ -433,12 +433,34 @@ pub async fn handle_connection(socket: WebSocket, state: SharedState, app: AppHa
         if is_ours {
             let claude_sdk_still_online = id == "claude" && daemon.is_claude_sdk_online();
             daemon.attached_agents.remove(id);
+            // Purge any permission requests originated by this bridge —
+            // the subprocess just disconnected and can't consume a verdict.
+            // If SDK session is still online (bridge reconnect in flight),
+            // skip; new bridge will re-register pending asks.
+            let purged_requests = if claude_sdk_still_online {
+                Vec::new()
+            } else {
+                daemon.purge_pending_permissions_for_agent(id)
+            };
             let task_id = if !claude_sdk_still_online {
                 daemon.clear_provider_connection(id)
             } else {
                 None
             };
             drop(daemon);
+            for request_id in &purged_requests {
+                gui::emit_permission_cancelled(&app, request_id, "bridge_disconnected");
+            }
+            if !purged_requests.is_empty() {
+                gui::emit_system_log(
+                    &app,
+                    "warn",
+                    &format!(
+                        "[Control] cancelled {} pending permission(s) after {id} bridge disconnect",
+                        purged_requests.len()
+                    ),
+                );
+            }
             if id == "claude" && !claude_sdk_still_online {
                 let (ctid, caid) = connection_task
                     .as_ref()

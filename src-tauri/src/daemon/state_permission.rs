@@ -56,4 +56,25 @@ impl DaemonState {
         self.pending_permissions
             .retain(|_, pending| now_ms.saturating_sub(pending.created_at) <= PERMISSION_TTL_MS);
     }
+
+    /// Drop every pending permission request that was originated by
+    /// `agent_id`. Returns the purged request_ids so the caller can
+    /// notify the GUI per-request. Used when an agent subprocess dies
+    /// mid-tool-call — the request can no longer complete, and the GUI
+    /// prompt must be cleared instead of sitting forever.
+    pub fn purge_pending_permissions_for_agent(
+        &mut self,
+        agent_id: &str,
+    ) -> Vec<String> {
+        let mut purged = Vec::new();
+        self.pending_permissions.retain(|request_id, pending| {
+            if pending.agent_id == agent_id {
+                purged.push(request_id.clone());
+                false
+            } else {
+                true
+            }
+        });
+        purged
+    }
 }

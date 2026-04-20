@@ -8,6 +8,7 @@ import {
   type AgentStatusPayload,
   type ClaudeStreamEvent,
   type CodexStreamEvent,
+  type PermissionCancelledPayload,
   type PermissionPromptPayload,
   type RuntimeHealthPayload,
   type SystemLogPayload,
@@ -326,6 +327,20 @@ export function createBridgeListeners(
     }),
     listen<PermissionPromptPayload>("permission_prompt", (e) => {
       set((s) => reducePermissionPrompt(s, e.payload));
+    }),
+    listen<PermissionCancelledPayload>("permission_cancelled", (e) => {
+      // The originating agent died (subprocess exit / bridge disconnect)
+      // before the user could resolve the prompt. Yank it from the queue
+      // so the banner disappears; the user would see a stuck "awaiting
+      // approval" UI otherwise.
+      const { requestId } = e.payload;
+      set((s) => ({
+        permissionPrompts: s.permissionPrompts.filter(
+          (prompt) => prompt.requestId !== requestId,
+        ),
+        permissionError:
+          s.permissionError?.requestId === requestId ? null : s.permissionError,
+      }));
     }),
     listen<RuntimeHealthPayload>("runtime_health", (e) => {
       set(() => ({

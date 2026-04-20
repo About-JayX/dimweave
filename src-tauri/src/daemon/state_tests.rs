@@ -103,6 +103,80 @@ fn expired_permissions_are_rejected() {
     assert!(result.is_none());
 }
 
+/// Subprocess-death recovery: when an agent's subprocess exits with
+/// pending permission requests in flight, the monitor must purge those
+/// requests so the GUI prompt can be dismissed. Otherwise the prompt
+/// sits forever and the user thinks the agent is still waiting.
+#[test]
+fn purge_pending_permissions_removes_only_target_agent_requests() {
+    let mut s = DaemonState::new();
+    s.store_permission_request(
+        "claude",
+        PermissionRequest {
+            request_id: "claude-req-1".into(),
+            tool_name: "Bash".into(),
+            description: "ls".into(),
+            input_preview: None,
+        },
+        100,
+    );
+    s.store_permission_request(
+        "claude",
+        PermissionRequest {
+            request_id: "claude-req-2".into(),
+            tool_name: "Edit".into(),
+            description: "patch".into(),
+            input_preview: None,
+        },
+        200,
+    );
+    s.store_permission_request(
+        "codex",
+        PermissionRequest {
+            request_id: "codex-req-1".into(),
+            tool_name: "shell".into(),
+            description: "grep".into(),
+            input_preview: None,
+        },
+        300,
+    );
+
+    // Purge claude's two pending requests; codex's must survive.
+    let purged = s.purge_pending_permissions_for_agent("claude");
+    let mut ids = purged;
+    ids.sort(); // HashMap iteration order is unspecified
+    assert_eq!(ids, vec!["claude-req-1".to_string(), "claude-req-2".into()]);
+
+    // The codex request still resolves normally.
+    let resolved = s.resolve_permission("codex-req-1", PermissionBehavior::Allow, 400);
+    assert!(resolved.is_some(), "codex pending must survive claude purge");
+
+    // Purged claude requests must no longer resolve.
+    let dead = s.resolve_permission("claude-req-1", PermissionBehavior::Allow, 500);
+    assert!(dead.is_none(), "purged request must not resolve");
+}
+
+#[test]
+fn purge_pending_permissions_is_noop_when_no_matching_agent() {
+    let mut s = DaemonState::new();
+    s.store_permission_request(
+        "claude",
+        PermissionRequest {
+            request_id: "req".into(),
+            tool_name: "t".into(),
+            description: "d".into(),
+            input_preview: None,
+        },
+        100,
+    );
+    let purged = s.purge_pending_permissions_for_agent("nonexistent");
+    assert!(purged.is_empty());
+    // Existing request still resolvable.
+    assert!(s
+        .resolve_permission("req", PermissionBehavior::Allow, 200)
+        .is_some());
+}
+
 #[test]
 fn status_snapshot_reports_current_online_agents() {
     let mut s = DaemonState::new();

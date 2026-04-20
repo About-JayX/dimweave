@@ -29,6 +29,11 @@ export interface RuntimeHealthPayload {
 
 export interface PermissionPromptPayload extends PermissionPrompt {}
 
+export interface PermissionCancelledPayload {
+  requestId: string;
+  reason: string;
+}
+
 export interface CodexStreamPayload {
   kind:
     | "thinking"

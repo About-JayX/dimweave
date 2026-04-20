@@ -84,17 +84,43 @@ pub async fn launch(
                     }
                 }
                 _ = poll_child_exit(&current_child, true) => {
-                    let (is_current, affected_task_id) = {
+                    // Invalidate the slot AND purge any pending permission
+                    // requests originated by this agent. Without the purge
+                    // the GUI prompt would sit forever: Claude is dead, no
+                    // one will consume the verdict. This atomic write-lock
+                    // block ensures the two state mutations happen together.
+                    let (is_current, affected_task_id, purged_requests) = {
                         let mut s = monitor_state.write().await;
                         let is_current = s.claude_task_epoch_for_agent(&monitor_task_id, &monitor_agent_id)
                             == Some(current_epoch);
                         let tid = s.invalidate_claude_agent_session_if_current(
                             &monitor_task_id, &monitor_agent_id, current_epoch,
                         );
-                        (is_current, tid)
+                        let purged = if is_current {
+                            s.purge_pending_permissions_for_agent(&monitor_agent_id)
+                        } else {
+                            Vec::new()
+                        };
+                        (is_current, tid, purged)
                     };
                     if !is_current {
                         return;
+                    }
+                    for request_id in &purged_requests {
+                        gui::emit_permission_cancelled(
+                            &monitor_app, request_id, "agent_died",
+                        );
+                    }
+                    if !purged_requests.is_empty() {
+                        gui::emit_system_log(
+                            &monitor_app,
+                            "warn",
+                            &format!(
+                                "[Claude SDK] cancelled {} pending permission(s) \
+                                 — agent subprocess died before resolution",
+                                purged_requests.len()
+                            ),
+                        );
                     }
                     emit_runtime_health(
                         &monitor_state,

@@ -247,6 +247,28 @@ pub fn emit_permission_prompt(
     );
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionCancelledEvent {
+    pub request_id: String,
+    pub reason: String,
+}
+
+/// Notify the GUI that a pending permission prompt can no longer be
+/// resolved — typically because the originating agent subprocess died
+/// mid-tool-call. The frontend removes the prompt from its queue and
+/// shows a transient hint so the user knows the prompt is stale rather
+/// than still awaiting their click.
+pub fn emit_permission_cancelled(app: &AppHandle, request_id: &str, reason: &str) {
+    let _ = app.emit(
+        "permission_cancelled",
+        PermissionCancelledEvent {
+            request_id: request_id.into(),
+            reason: reason.into(),
+        },
+    );
+}
+
 pub fn emit_telegram_state(app: &AppHandle, state: &crate::telegram::types::TelegramRuntimeState) {
     let _ = app.emit("telegram_state", state.clone());
 }
