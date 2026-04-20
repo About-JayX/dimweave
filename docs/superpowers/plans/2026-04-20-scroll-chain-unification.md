@@ -147,7 +147,7 @@ dialog 统一行为（动画、ESC 行为、键盘焦点管理）在一处动。
 ## CM (Configuration Management)
 
 ### Commit
-- **Hash**: `(will be filled after commit)`
+- **Hash**: `e643c75`
 - **Subject**: `refactor(ui): unify scroll anchor + dialog chrome`
 - **Scope**: 10 files (2 new, 8 modified). 消除 36 个 scroll 相关 commit
   的根因：三层决策 → 单 latch；两个 Dialog 重复 chrome → 统一组件。
