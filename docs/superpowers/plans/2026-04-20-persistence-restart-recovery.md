@@ -239,7 +239,7 @@ schema 破坏，迫使一轮横向整理。串起来的链路问题：
 - **Subject**: `feat(daemon,ui): persistence + restart recovery + codex config compat`
 
 ### Commit 2 — per-agent slot invalidation on auth teardown
-- **Hash**: `(will be filled after commit)`
+- **Hash**: `09949633`
 - **Subject**: `fix(daemon): clear per-task agent slots when auth changes; stale online flag blocked relaunch`
 - **Scope**: Follow-up to Step 13. After `tear_down_provider_runtime` the UI
   panel still showed "connected" and clicking Save & Connect was a no-op.
