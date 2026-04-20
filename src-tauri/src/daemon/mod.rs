@@ -639,6 +639,16 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         }
                     }
                 }
+                // Preflight: cwd must exist. Otherwise `Command::spawn` fails
+                // opaquely with ENOENT — usually because the task's worktree
+                // was deleted out-of-band. Surface a typed error the frontend
+                // can catch and prompt the user to delete the stale task.
+                if !std::path::Path::new(&cwd).is_dir() {
+                    let _ = reply.send(Err(format!(
+                        "WORKTREE_MISSING:{resolved_task_id}:{cwd}"
+                    )));
+                    continue;
+                }
                 let (launch_epoch, codex_agent_id) = {
                     let mut s = state.write().await;
                     let aid = match agent_id.filter(|id| !id.is_empty()) {
@@ -796,6 +806,15 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                             }
                         }
                     }
+                }
+                // Preflight: cwd must exist. Mirrors LaunchCodex above —
+                // returns a typed error so the frontend can offer to delete
+                // the stale task whose worktree was removed out-of-band.
+                if !std::path::Path::new(&cwd).is_dir() {
+                    let _ = reply.send(Err(format!(
+                        "WORKTREE_MISSING:{resolved_task_id}:{cwd}"
+                    )));
+                    continue;
                 }
                 let result = launch_claude_sdk(
                     &resolved_task_id,

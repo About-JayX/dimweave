@@ -194,24 +194,24 @@ function AgentConfigForm({
           </button>
         )}
       </div>
-      <div className="space-y-2.5 px-4 py-3">
-        <div
-          className="flex items-center justify-between"
-          data-provider-select="true"
-        >
-          <span className="text-[10px] text-muted-foreground">Provider</span>
+      <div className="space-y-2 px-4 py-3">
+        <div className="space-y-0.5" data-provider-select="true">
+          <label className="block text-[10px] text-muted-foreground/70">
+            Provider
+          </label>
           <CyberSelect
+            variant="form"
             value={def.provider}
             options={PROVIDERS}
             onChange={setP}
           />
         </div>
-        <div
-          className="flex items-center justify-between"
-          data-role-select="true"
-        >
-          <span className="text-[10px] text-muted-foreground">Role</span>
+        <div className="space-y-0.5" data-role-select="true">
+          <label className="block text-[10px] text-muted-foreground/70">
+            Role
+          </label>
           <CyberSelect
+            variant="form"
             value={def.role}
             options={AGENT_ROLE_OPTIONS}
             onChange={(v) => onChange({ ...def, role: v })}
@@ -219,12 +219,12 @@ function AgentConfigForm({
           />
         </div>
         {caps.supportsModel && (
-          <div
-            className="flex items-center justify-between"
-            data-model-select="true"
-          >
-            <span className="text-[10px] text-muted-foreground">Model</span>
+          <div className="space-y-0.5" data-model-select="true">
+            <label className="block text-[10px] text-muted-foreground/70">
+              Model
+            </label>
             <CyberSelect
+              variant="form"
               value={def.model ?? "\x00"}
               options={mOpts}
               onChange={(v) => onChange({ ...def, model: v })}
@@ -233,14 +233,12 @@ function AgentConfigForm({
           </div>
         )}
         {caps.supportsEffort && (
-          <div
-            className="flex items-center justify-between"
-            data-effort-select="true"
-          >
-            <span className="text-[10px] text-muted-foreground">
+          <div className="space-y-0.5" data-effort-select="true">
+            <label className="block text-[10px] text-muted-foreground/70">
               {caps.effortLabel}
-            </span>
+            </label>
             <CyberSelect
+              variant="form"
               value={def.effort ?? ""}
               options={effortOpts}
               onChange={(v) => onChange({ ...def, effort: v })}
@@ -249,14 +247,12 @@ function AgentConfigForm({
           </div>
         )}
         {caps.supportsSessionResume && (
-          <div
-            className="flex items-center justify-between"
-            data-history-select="true"
-          >
-            <span className="text-[10px] text-muted-foreground">Session</span>
+          <div className="space-y-0.5" data-history-select="true">
+            <label className="block text-[10px] text-muted-foreground/70">
+              Session
+            </label>
             <CyberSelect
-              compact
-              variant="history"
+              variant="form"
               value={histVal}
               options={histOpts}
               onChange={onHist}

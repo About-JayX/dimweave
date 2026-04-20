@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCodexAccountStore } from "@/stores/codex-account-store";
 import { useClaudeAccountStore } from "@/stores/claude-account-store";
+import { CyberSelect } from "@/components/ui/cyber-select";
 import {
   useProviderAuthStore,
   type ProviderAuthConfig,
@@ -372,13 +373,12 @@ function ProviderSection({
                 <label className="mb-0.5 block text-[10px] text-muted-foreground/70">
                   Wire API
                 </label>
-                <select
+                <CyberSelect
+                  variant="form"
                   value={form.wireApi}
-                  onChange={(e) => setForm({ wireApi: e.target.value })}
-                  className="w-full rounded-md border border-border/40 bg-background px-2 py-1.5 text-[11px] outline-none focus:border-primary/50"
-                >
-                  <option value="responses">responses</option>
-                </select>
+                  options={[{ value: "responses", label: "responses" }]}
+                  onChange={(v) => setForm({ wireApi: v })}
+                />
               </div>
               <div>
                 <label className="mb-0.5 block text-[10px] text-muted-foreground/70">
@@ -405,18 +405,17 @@ function ProviderSection({
               <label className="mb-0.5 block text-[10px] text-muted-foreground/70">
                 Auth header
               </label>
-              <select
+              <CyberSelect
+                variant="form"
                 value={form.authMode}
-                onChange={(e) =>
-                  setForm({
-                    authMode: e.target.value as "bearer" | "api_key",
-                  })
+                options={[
+                  { value: "bearer", label: "ANTHROPIC_AUTH_TOKEN (Bearer)" },
+                  { value: "api_key", label: "ANTHROPIC_API_KEY (x-api-key)" },
+                ]}
+                onChange={(v) =>
+                  setForm({ authMode: v as "bearer" | "api_key" })
                 }
-                className="w-full rounded-md border border-border/40 bg-background px-2 py-1.5 text-[11px] outline-none focus:border-primary/50"
-              >
-                <option value="bearer">ANTHROPIC_AUTH_TOKEN (Bearer)</option>
-                <option value="api_key">ANTHROPIC_API_KEY (x-api-key)</option>
-              </select>
+              />
             </div>
           )}
         </div>

@@ -389,10 +389,16 @@ async fn launch(
         // Check if child process exited prematurely
         if let Some(ref mut child) = *child_arc.lock().await {
             if let Ok(Some(status)) = child.try_wait() {
+                eprintln!(
+                    "[Codex] FATAL: subprocess exited prematurely on port={codex_port} status={status}"
+                );
                 anyhow::bail!("Codex process exited prematurely with status: {status}");
             }
         }
         if tokio::time::Instant::now() >= deadline {
+            eprintln!(
+                "[Codex] FATAL: app-server did not bind port={codex_port} within 10s"
+            );
             anyhow::bail!("Codex app-server did not start within 10 s");
         }
         tokio::time::sleep(poll_delay).await;

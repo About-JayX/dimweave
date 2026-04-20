@@ -17,18 +17,26 @@ interface CyberSelectProps {
   value: string;
   options: CyberSelectOption[];
   onChange: (value: string) => void;
-  disabled?: boolean; placeholder?: string;
-  variant?: "default" | "history"; compact?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  variant?: "default" | "history" | "form";
+  compact?: boolean;
 }
 
 export function getCyberSelectMenuPanelClassName(
-  variant: "default" | "history", compact?: boolean,
+  variant: "default" | "history" | "form",
+  compact?: boolean,
 ): string {
   if (variant === "history" && compact)
     return "right-0 top-7 min-w-44 max-w-64 max-h-48 rounded-lg p-1";
-  return variant === "history"
-    ? "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1"
-    : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
+  if (variant === "history")
+    return "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1";
+  // `form` variant: full-width trigger → panel left-aligned, equal width,
+  // hangs below trigger. Matches the input/label form layout used in
+  // ProviderAuthDialog.
+  if (variant === "form")
+    return "left-0 top-full mt-1 w-full max-h-52 rounded-md p-1";
+  return "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
 }
 
 export function HistoryMenuOption({
@@ -65,12 +73,18 @@ export function HistoryMenuOption({
 }
 
 export function CyberSelect({
-  value, options, onChange, disabled = false,
-  placeholder, variant = "default", compact = false,
+  value,
+  options,
+  onChange,
+  disabled = false,
+  placeholder,
+  variant = "default",
+  compact = false,
 }: CyberSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const isHistory = variant === "history";
+  const isForm = variant === "form";
 
   useEffect(() => {
     if (!open) return;
@@ -90,7 +104,11 @@ export function CyberSelect({
       ref={ref}
       className={cn(
         "relative",
-        isHistory && !compact ? "flex min-w-0 flex-1" : "inline-flex",
+        isHistory && !compact
+          ? "flex min-w-0 flex-1"
+          : isForm
+            ? "block w-full"
+            : "inline-flex",
       )}
     >
       <button
@@ -100,12 +118,16 @@ export function CyberSelect({
           "inline-flex items-center gap-1 border outline-none transition-colors duration-200 font-medium",
           isHistory && !compact
             ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-1.5 text-[10px]"
-            : "rounded px-1.5 py-0.5 text-[10px]",
+            : isForm
+              ? "w-full justify-between rounded-md px-2 py-1.5 text-[11px]"
+              : "rounded px-1.5 py-0.5 text-[10px]",
           disabled
             ? "opacity-50 cursor-not-allowed border-input bg-muted text-foreground/60"
             : open
               ? "border-primary/50 bg-muted/80 text-foreground ring-1 ring-primary/15"
-              : "border-input bg-muted text-foreground hover:border-primary/40 hover:bg-muted/80 cursor-pointer",
+              : isForm
+                ? "border-border/40 bg-background text-foreground hover:border-primary/50 cursor-pointer"
+                : "border-input bg-muted text-foreground hover:border-primary/40 hover:bg-muted/80 cursor-pointer",
         )}
       >
         {!isHistory && selected?.description ? (
@@ -121,7 +143,7 @@ export function CyberSelect({
           <span
             className={cn(
               "min-w-0 truncate text-left",
-              isHistory && !compact ? "flex-1" : "max-w-28",
+              isHistory && !compact ? "flex-1" : isForm ? "flex-1" : "max-w-28",
             )}
           >
             {isHistory && selected

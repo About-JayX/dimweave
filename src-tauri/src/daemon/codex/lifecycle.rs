@@ -78,21 +78,18 @@ pub async fn start(
         .arg("features.apply_patch_freeform=false")
         .env("CODEX_HOME", codex_home)
         .env("PATH", &path)
-        // DIMWEAVE_CODEX_DEBUG=1 → turn on Codex's own reqwest/hyper tracing
-        // so we see outbound HTTP requests + response status/body hints in the
-        // dev log. Narrowed to reqwest/hyper/codex to avoid flooding.
-        .env(
-            "RUST_LOG",
-            std::env::var("RUST_LOG").unwrap_or_else(|_| {
-                if std::env::var("DIMWEAVE_CODEX_DEBUG").is_ok() {
-                    "codex=debug,reqwest=debug,hyper=info".into()
-                } else {
-                    "".into()
-                }
-            }),
-        )
         .current_dir(cwd)
         .kill_on_drop(true);
+    // Only inject RUST_LOG when the user explicitly opted into debug tracing
+    // via DIMWEAVE_CODEX_DEBUG=1. An empty RUST_LOG string was breaking the
+    // Codex subprocess's own tracing init on some builds (banner never prints,
+    // no WS listener comes up). Leave inheritance to tokio's default so any
+    // RUST_LOG the user set on the parent shell still propagates.
+    if std::env::var("DIMWEAVE_CODEX_DEBUG").is_ok()
+        && std::env::var("RUST_LOG").is_err()
+    {
+        cmd.env("RUST_LOG", "codex=debug,reqwest=debug,hyper=info");
+    }
 
     apply_provider_auth(&mut cmd, auth);
 

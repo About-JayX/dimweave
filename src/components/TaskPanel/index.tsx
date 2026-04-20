@@ -58,6 +58,10 @@ export function TaskPanel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<TaskSetupMode>("create");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [worktreeMissing, setWorktreeMissing] = useState<{
+    taskId: string;
+    path: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchCodexModels();
@@ -256,6 +260,16 @@ export function TaskPanel() {
             );
           } catch (err) {
             console.error("[TaskPanel] launchProviders failed:", err);
+            // Daemon emits `WORKTREE_MISSING:<taskId>:<path>` when cwd
+            // resolved from task_graph doesn't exist (worktree deleted
+            // out-of-band via `git worktree remove` etc.). Prompt user
+            // to delete the stale task rather than keep re-attempting
+            // a spawn that will always ENOENT.
+            const msg = err instanceof Error ? err.message : String(err);
+            const match = msg.match(/WORKTREE_MISSING:([^:]+):(.+)$/);
+            if (match) {
+              setWorktreeMissing({ taskId: match[1], path: match[2] });
+            }
           }
         })();
       } else {
@@ -390,6 +404,29 @@ export function TaskPanel() {
         description={`Delete "${task?.title || task?.taskId || "this task"}"? This action cannot be undone.`}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+      />
+      <ConfirmDialog
+        open={!!worktreeMissing}
+        title="Task worktree missing"
+        description={
+          worktreeMissing
+            ? `The worktree at ${worktreeMissing.path} no longer exists. Delete this task and all its data?`
+            : ""
+        }
+        onConfirm={async () => {
+          const target = worktreeMissing;
+          setWorktreeMissing(null);
+          if (!target) return;
+          try {
+            await deleteTask(target.taskId);
+          } catch (e) {
+            console.error(
+              "[TaskPanel] deleteTask (worktree missing) failed",
+              e,
+            );
+          }
+        }}
+        onCancel={() => setWorktreeMissing(null)}
       />
     </div>
   );
