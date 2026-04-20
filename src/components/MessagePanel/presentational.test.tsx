@@ -4,24 +4,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BackToBottomButton, MessageSearchChrome } from "./search-chrome";
 
 describe("BackToBottomButton", () => {
-  test("back-to-bottom button uses transparent chrome", () => {
-    const html = renderToStaticMarkup(
-      createElement(BackToBottomButton, { onClick: () => {} }),
-    );
-    expect(html).toContain("Back to bottom");
-    expect(html).toContain("bg-transparent");
-  });
-
-  test("back-to-bottom button keeps the original chrome with a transparent background", () => {
+  test("renders label and pill chrome", () => {
     const html = renderToStaticMarkup(
       createElement(BackToBottomButton, { onClick: () => {} }),
     );
     expect(html).toContain("Back to bottom");
     expect(html).toContain("rounded-full");
-    expect(html).toContain("text-primary-foreground");
     expect(html).toContain("shadow-lg");
-    expect(html).toContain("bg-transparent");
-    expect(html).not.toContain("bg-primary/90");
+    expect(html).toContain("text-primary-foreground");
+  });
+
+  test("uses primary-tinted background (post-642ac2d polish)", () => {
+    // The chrome was deliberately switched to `bg-primary/90` in commit
+    // 642ac2d for better contrast against streaming content. If the design
+    // shifts back to transparent, update this assertion — don't flip it
+    // silently in search-chrome.tsx.
+    const html = renderToStaticMarkup(
+      createElement(BackToBottomButton, { onClick: () => {} }),
+    );
+    expect(html).toContain("bg-primary/90");
+    expect(html).toContain("hover:bg-primary");
   });
 });
 
