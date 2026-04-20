@@ -577,6 +577,46 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
             }
         });
     }
+    // Debouncing task_graph saver. `auto_save_task_graph` callers enqueue
+    // a zero-byte signal; this task coalesces signals within a 200ms
+    // window into one SQLite write. Previously every routing hop / turn
+    // completion / artifact mutation triggered a full-table DELETE+INSERT;
+    // under active streaming that was the dominant write-amp source.
+    // Shutdown drops the sender → `save_rx.recv()` returns None → loop
+    // exits → one final flush → task joins via `saver_handle`.
+    let (save_signal_tx, mut save_signal_rx) =
+        tokio::sync::mpsc::unbounded_channel::<()>();
+    state.write().await.save_tx = Some(save_signal_tx.clone());
+    let saver_state = state.clone();
+    let saver_handle = tokio::spawn(async move {
+        const DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(200);
+        loop {
+            match save_signal_rx.recv().await {
+                None => break, // sender dropped — Shutdown
+                Some(_) => {}
+            }
+            // Coalesce further signals that arrive within the debounce
+            // window. The select drops out on whichever fires first.
+            let deadline = tokio::time::Instant::now() + DEBOUNCE;
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep_until(deadline) => break,
+                    signal = save_signal_rx.recv() => {
+                        if signal.is_none() {
+                            // Shutdown mid-debounce — do one last save then exit.
+                            let _ = saver_state.read().await.save_task_graph();
+                            return;
+                        }
+                    }
+                }
+            }
+            if let Err(e) = saver_state.read().await.save_task_graph() {
+                eprintln!("[Daemon] debounced save failed: {e}");
+            }
+        }
+        // Final flush after channel close (no mid-debounce pending).
+        let _ = saver_state.read().await.save_task_graph();
+    });
     // Hydrate persisted Feishu Project inbox store and auto-start polling
     feishu_project_lifecycle::hydrate_store(&state).await;
     let mut feishu_project_handle: Option<crate::feishu_project::runtime::FeishuProjectHandle> =
@@ -877,6 +917,16 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                 let session_mgr = { state.read().await.session_mgr.clone() };
                 session_mgr.lock().await.cleanup_all();
                 state.write().await.teardown_runtime_handles_for_shutdown();
+                // Close the saver channel so the scheduler drains and
+                // persists any in-window signal before the daemon exits.
+                // Drop both clones (the one stored on DaemonState above was
+                // already cleared by teardown_runtime_handles_for_shutdown
+                // if it touches save_tx; drop our local copy explicitly).
+                drop(save_signal_tx);
+                state.write().await.save_tx = None;
+                if let Err(e) = saver_handle.await {
+                    eprintln!("[Daemon] saver task join error: {e}");
+                }
                 let _ = reply.send(());
                 break;
             }

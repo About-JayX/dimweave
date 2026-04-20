@@ -144,3 +144,62 @@ fn select_task_does_not_persist() {
     );
     let _ = std::fs::remove_file(&path);
 }
+
+/// Contract 5: `auto_save_task_graph` prefers the debounced channel when
+/// `save_tx` is wired. Mutation emits a signal on the channel and does NOT
+/// run a synchronous SQLite write (we assert row count stays at the
+/// pre-mutation value until someone drains the signal).
+#[test]
+fn auto_save_prefers_channel_when_wired() {
+    let path = temp_path("debounce_signal");
+    let _ = std::fs::remove_file(&path);
+
+    let (save_tx, mut save_rx) =
+        tokio::sync::mpsc::unbounded_channel::<()>();
+    let mut s = DaemonState::with_task_graph_path(path.clone()).unwrap();
+    s.save_tx = Some(save_tx);
+
+    // Baseline: explicit save writes one row.
+    let _task = s.create_and_select_task("/ws", "T1");
+    s.save_task_graph().unwrap();
+    let baseline = task_row_count(&path);
+    assert!(baseline >= 1, "baseline must include the created task");
+
+    // Create a second task; `auto_save_task_graph` should push a signal
+    // instead of writing. Row count on disk stays at baseline until the
+    // signal is drained and save runs.
+    let _t2 = s.create_and_select_task("/ws", "T2");
+    s.auto_save_task_graph();
+    assert_eq!(
+        task_row_count(&path),
+        baseline,
+        "channel-wired auto_save must not write synchronously"
+    );
+    // Signal is queued.
+    assert!(save_rx.try_recv().is_ok(), "signal must be enqueued");
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Contract 6: `auto_save_task_graph` falls back to synchronous save when
+/// the channel receiver has been dropped (saver task died / shutdown).
+/// Mutation must still land on disk — channel failure can't be silent data
+/// loss.
+#[test]
+fn auto_save_falls_back_to_sync_when_channel_closed() {
+    let path = temp_path("fallback_sync");
+    let _ = std::fs::remove_file(&path);
+
+    let (save_tx, save_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    drop(save_rx); // simulate saver task gone
+
+    let mut s = DaemonState::with_task_graph_path(path.clone()).unwrap();
+    s.save_tx = Some(save_tx);
+
+    let _ = s.create_and_select_task("/ws", "T1");
+    s.auto_save_task_graph();
+    assert!(
+        task_row_count(&path) >= 1,
+        "closed channel must trigger sync save fallback, row must land",
+    );
+    let _ = std::fs::remove_file(&path);
+}

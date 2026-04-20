@@ -94,6 +94,12 @@ pub struct DaemonState {
     pub feishu_issue_view: Vec<crate::feishu_project::types::FeishuProjectInboxItem>,
     pub feishu_project_runtime: Option<crate::feishu_project::types::FeishuProjectRuntimeState>,
     pub feishu_issue_cursor: Option<crate::feishu_project::issue_query::IssueQueryCursor>,
+    /// When set, `auto_save_task_graph` enqueues a debounced save via this
+    /// channel instead of running `save_to_db` synchronously. The daemon
+    /// main loop spawns a saver task that coalesces bursts into a single
+    /// SQLite write per ~200ms. None in tests (fallback: sync save), Some
+    /// in production after `daemon::run()` wiring.
+    pub save_tx: Option<mpsc::UnboundedSender<()>>,
 }
 
 impl Default for DaemonState {
@@ -132,6 +138,7 @@ impl Default for DaemonState {
             feishu_issue_view: Vec::new(),
             feishu_project_runtime: None,
             feishu_issue_cursor: None,
+            save_tx: None,
         }
     }
 }

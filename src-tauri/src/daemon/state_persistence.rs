@@ -21,7 +21,24 @@ impl DaemonState {
     }
 
     /// Best-effort auto-save after mutations.
+    ///
+    /// Production path (save_tx wired by `daemon::run`): signals a
+    /// debouncing saver task that coalesces bursts into a single SQLite
+    /// write per ~200ms. The channel is unbounded and the signal payload
+    /// is zero-sized, so this is near-free for callers under write lock.
+    ///
+    /// Test / standalone path (save_tx is None): fall back to synchronous
+    /// `save_to_db`. Unit tests exercise state mutations without spinning
+    /// up the saver task and still need disk writes to land immediately.
     pub(crate) fn auto_save_task_graph(&self) {
+        if let Some(tx) = &self.save_tx {
+            // send() on UnboundedSender only fails if receiver dropped,
+            // which means the saver task shut down. Fall through to sync
+            // save so the mutation still lands instead of being lost.
+            if tx.send(()).is_ok() {
+                return;
+            }
+        }
         if let Err(e) = self.save_task_graph() {
             eprintln!("[Daemon] task graph auto-save failed: {e}");
         }
