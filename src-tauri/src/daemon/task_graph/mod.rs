@@ -1,5 +1,8 @@
 mod artifact_index;
 mod message_log;
+#[cfg(test)]
+#[path = "message_log_tests.rs"]
+mod message_log_tests;
 mod persist;
 mod session_index;
 pub mod store;
