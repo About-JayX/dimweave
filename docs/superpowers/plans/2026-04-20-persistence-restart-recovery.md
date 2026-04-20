@@ -234,9 +234,29 @@ schema 破坏，迫使一轮横向整理。串起来的链路问题：
 
 ## CM (Configuration Management)
 
-### Commit
+### Commit 1
 - **Hash**: `ef3d2da0`
 - **Subject**: `feat(daemon,ui): persistence + restart recovery + codex config compat`
+
+### Commit 2 — per-agent slot invalidation on auth teardown
+- **Hash**: `(will be filled after commit)`
+- **Subject**: `fix(daemon): clear per-task agent slots when auth changes; stale online flag blocked relaunch`
+- **Scope**: Follow-up to Step 13. After `tear_down_provider_runtime` the UI
+  panel still showed "connected" and clicking Save & Connect was a no-op.
+  Root cause: `stop_all_codex_sessions` / `stop_all_claude_sdk_sessions`
+  only invalidated the **singleton** session (`invalidate_codex_session` /
+  `invalidate_claude_sdk_session`), leaving `task_runtimes[tid].*_slots[aid]`
+  with stale `inject_tx` / `ws_tx` so `is_online()` still returned true.
+  Next launch's "already online, skipping" short-circuit at
+  `daemon/mod.rs::LaunchCodex` / `LaunchClaudeSdk` early-returned.
+- **Files**: `src-tauri/src/daemon/mod.rs` (`stop_all_codex_sessions`,
+  `stop_all_claude_sdk_sessions`)
+- **Fix**: iterate every handle and call
+  `invalidate_codex_agent_session(tid, aid)` /
+  `invalidate_claude_agent_session(tid, aid)` which clears the slot
+  `inject_tx`/`ws_tx` + `connection` and bumps `session_epoch`. Emit
+  `emit_task_context_events` for **each** affected task so every TaskPanel
+  instance refreshes its `agent_runtime_statuses`.
 - **Scope**: 跨多个子系统的原子修复。内容对应 plan Step 1-13。
   - Rust daemon / task_graph / codex lifecycle / routing dispatch
   - 前端 bridge-store / task-store / TaskPanel / ClaudePanel / CodexPanel /

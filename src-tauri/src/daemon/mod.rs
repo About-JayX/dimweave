@@ -202,17 +202,33 @@ async fn stop_all_codex_sessions(
     state: &SharedState,
     app: &AppHandle,
 ) {
-    let agent_ids: Vec<String> = codex_handles.keys().cloned().collect();
-    for aid in agent_ids {
+    // Collect handle metadata up-front so we can iterate after moving handles
+    // out of the map. We need both agent_id and task_id to invalidate the
+    // per-task slot (invalidate_codex_session only touches the singleton,
+    // leaving slot.inject_tx stale — launch then short-circuits via
+    // is_online() and the UI keeps showing "connected").
+    let handles: Vec<(String, String, u16, u64)> = codex_handles
+        .iter()
+        .map(|(aid, h)| (aid.clone(), h.task_id.clone(), h.port, h.launch_id))
+        .collect();
+    let mut affected_tasks: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    for (aid, task_id, port, launch_id) in handles {
         if let Some(h) = codex_handles.remove(&aid) {
-            port_pool.release(h.port, &h.task_id, h.launch_id);
+            port_pool.release(port, &task_id, launch_id);
             h.stop().await;
+            let _ = state
+                .write()
+                .await
+                .invalidate_codex_agent_session(&task_id, &aid);
+            affected_tasks.insert(task_id);
         }
     }
-    let task_id = state.write().await.invalidate_codex_session();
+    // Singleton fallback (no-op if any per-agent invalidation already did it).
+    let _ = state.write().await.invalidate_codex_session();
     gui::emit_agent_status(app, "codex", false, None, None);
-    if let Some(task_id) = task_id {
-        emit_task_context_events(state, app, &task_id).await;
+    for tid in affected_tasks {
+        emit_task_context_events(state, app, &tid).await;
     }
 }
 
@@ -221,17 +237,36 @@ async fn stop_all_claude_sdk_sessions(
     state: &SharedState,
     app: &AppHandle,
 ) {
+    // Same per-agent invalidation story as stop_all_codex_sessions: we must
+    // clear task_runtimes[tid].claude_slots[aid] via invalidate_claude_agent_session,
+    // not just the singleton, or the next launch hits the "already online"
+    // short-circuit and the UI keeps showing "connected".
     let agent_ids: Vec<String> = handles.keys().cloned().collect();
+    let mut affected_tasks: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
     for aid in agent_ids {
         if let Some(h) = handles.remove(&aid) {
+            let task_id = state
+                .read()
+                .await
+                .task_graph
+                .get_task_agent(&aid)
+                .map(|a| a.task_id.clone());
             h.stop().await;
+            if let Some(tid) = task_id {
+                let _ = state
+                    .write()
+                    .await
+                    .invalidate_claude_agent_session(&tid, &aid);
+                affected_tasks.insert(tid);
+            }
         }
     }
-    let task_id = state.write().await.invalidate_claude_sdk_session();
+    let _ = state.write().await.invalidate_claude_sdk_session();
     gui::emit_agent_status(app, "claude", false, None, None);
     gui::emit_system_log(app, "info", "[Daemon] Claude SDK session stopped");
-    if let Some(task_id) = task_id {
-        emit_task_context_events(state, app, &task_id).await;
+    for tid in affected_tasks {
+        emit_task_context_events(state, app, &tid).await;
     }
 }
 
