@@ -7,18 +7,30 @@ describe("areMessageBubblePropsEqual", () => {
     const prev = {
       msg: {
         id: "1",
-        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const, displaySource: "claude" },
+        source: {
+          kind: "agent" as const,
+          agentId: "claude",
+          role: "lead",
+          provider: "claude" as const,
+          displaySource: "claude",
+        },
         target: { kind: "user" as const },
-        content: "same content",
+        message: "same content",
         timestamp: 123,
       },
     };
     const next = {
       msg: {
         id: "1",
-        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const, displaySource: "claude" },
+        source: {
+          kind: "agent" as const,
+          agentId: "claude",
+          role: "lead",
+          provider: "claude" as const,
+          displaySource: "claude",
+        },
         target: { kind: "user" as const },
-        content: "same content",
+        message: "same content",
         timestamp: 123,
       },
     };
@@ -30,23 +42,79 @@ describe("areMessageBubblePropsEqual", () => {
     const prev = {
       msg: {
         id: "1",
-        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+        source: {
+          kind: "agent" as const,
+          agentId: "claude",
+          role: "lead",
+          provider: "claude" as const,
+        },
         target: { kind: "user" as const },
-        content: "before",
+        message: "before",
         timestamp: 123,
       },
     };
     const next = {
       msg: {
         id: "1",
-        source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+        source: {
+          kind: "agent" as const,
+          agentId: "claude",
+          role: "lead",
+          provider: "claude" as const,
+        },
         target: { kind: "user" as const },
-        content: "after",
+        message: "after",
         timestamp: 123,
       },
     };
 
     expect(areMessageBubblePropsEqual(prev as any, next as any)).toBe(false);
+  });
+
+  test("forces rerender when attachments count changes", () => {
+    const base = {
+      id: "1",
+      source: {
+        kind: "agent" as const,
+        agentId: "claude",
+        role: "lead",
+        provider: "claude" as const,
+      },
+      target: { kind: "user" as const },
+      message: "See file",
+      timestamp: 1,
+    };
+    const prev = { msg: { ...base, attachments: [] } };
+    const next = {
+      msg: {
+        ...base,
+        attachments: [
+          { filePath: "/tmp/a.png", fileName: "a.png", isImage: true },
+        ],
+      },
+    };
+    expect(areMessageBubblePropsEqual(prev as any, next as any)).toBe(false);
+  });
+
+  test("treats unrelated non-rendered fields (status) as memo-safe", () => {
+    // status is part of BridgeMessage but not rendered by MessageBubbleView.
+    // Re-render on a status-only change wastes cycles on long transcripts;
+    // lock the current comparator semantics so that doesn't regress.
+    const base = {
+      id: "1",
+      source: {
+        kind: "agent" as const,
+        agentId: "claude",
+        role: "lead",
+        provider: "claude" as const,
+      },
+      target: { kind: "user" as const },
+      message: "hello",
+      timestamp: 1,
+    };
+    const prev = { msg: { ...base, status: "in_progress" as const } };
+    const next = { msg: { ...base, status: "done" as const } };
+    expect(areMessageBubblePropsEqual(prev as any, next as any)).toBe(true);
   });
 });
 
@@ -66,7 +134,9 @@ describe("prepareMessageContent", () => {
   });
 
   test("keeps inline strong markdown on the markdown path for Claude role intros", () => {
-    expect(prepareMessageContent("你好！我是 **lead**（协调者），目前在线。")).toEqual({
+    expect(
+      prepareMessageContent("你好！我是 **lead**（协调者），目前在线。"),
+    ).toEqual({
       cleaned: "你好！我是 **lead**（协调者），目前在线。",
       renderMode: "markdown",
     });
