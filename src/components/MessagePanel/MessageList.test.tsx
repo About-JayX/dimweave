@@ -137,6 +137,29 @@ describe("MessageList", () => {
     );
   });
 
+  test("returns the input reference when the query is empty (stable useMemo)", () => {
+    // MessagePanel's filter chain runs `filterMessagesByQuery(chatMessages,
+    // deferredSearchQuery)` inside useMemo. When search is closed the query
+    // is "", so this must be an identity-return so consumers' downstream
+    // useMemos don't invalidate every render.
+    const input = [
+      {
+        id: "msg_a",
+        source: {
+          kind: "agent" as const,
+          agentId: "claude",
+          role: "lead",
+          provider: "claude",
+        },
+        target: { kind: "user" as const },
+        message: "payload",
+        timestamp: 1,
+      },
+    ];
+    expect(filterMessagesByQuery(input, "")).toBe(input);
+    expect(filterMessagesByQuery(input, "   ")).toBe(input);
+  });
+
   test("stream indicators do not inflate timelineCount", () => {
     const state = getMessageListDisplayState({
       messageCount: 3,
