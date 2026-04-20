@@ -8,6 +8,7 @@ import {
 } from "@/stores/provider-auth-store";
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import { Button } from "@/components/ui/button";
+import { DialogLayout } from "@/components/ui/dialog-layout";
 import { cn } from "@/lib/utils";
 
 interface ProviderAuthDialogProps {
@@ -489,26 +490,33 @@ export function ProviderAuthDialog({
     [],
   );
 
-  if (!open) return null;
+  const claudeMissingKey =
+    claudeForm.activeMode === "api_key" && !claudeForm.apiKey.trim();
+  const codexMissingKey =
+    codexForm.activeMode === "api_key" && !codexForm.apiKey.trim();
+  const blocked = claudeMissingKey || codexMissingKey;
+  const blockReason = [
+    claudeMissingKey ? "Claude" : null,
+    codexMissingKey ? "Codex" : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={close}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 flex h-[90vh] max-h-160 w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border/50 bg-card shadow-xl"
-      >
-        <div className="shrink-0 border-b border-border/30 px-4 py-3">
+    <DialogLayout
+      open={open}
+      onClose={close}
+      width="md"
+      header={
+        <>
           <h2 className="text-sm font-semibold">Provider Authentication</h2>
           <p className="mt-0.5 text-[10px] text-muted-foreground/70">
             Pick one mode per provider. Save applies on the next launch;
             already-running agents keep their current credentials.
           </p>
-        </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        </>
+      }
+      body={
+        <div className="space-y-3 px-4 py-3">
           <ProviderSection
             kind="claude"
             form={claudeForm}
@@ -523,50 +531,34 @@ export function ProviderAuthDialog({
             <p className="text-[11px] text-destructive">{saveError}</p>
           )}
         </div>
-        {(() => {
-          const claudeMissingKey =
-            claudeForm.activeMode === "api_key" && !claudeForm.apiKey.trim();
-          const codexMissingKey =
-            codexForm.activeMode === "api_key" && !codexForm.apiKey.trim();
-          const blocked = claudeMissingKey || codexMissingKey;
-          const blockReason = [
-            claudeMissingKey ? "Claude" : null,
-            codexMissingKey ? "Codex" : null,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          return (
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/30 px-4 py-3">
-              {blocked && (
-                <span className="mr-auto text-[10px] text-destructive/80">
-                  {blockReason} API key is empty — fill it in or switch to
-                  Subscription.
-                </span>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-[11px] text-muted-foreground"
-                onClick={close}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className={cn(
-                  "text-[11px]",
-                  (saving || blocked) && "opacity-60",
-                )}
-                onClick={() => void handleSave()}
-                disabled={saving || blocked}
-              >
-                {saving ? "Saving…" : "Save & Apply"}
-              </Button>
-            </div>
-          );
-        })()}
-      </div>
-    </div>
+      }
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          {blocked && (
+            <span className="mr-auto text-[10px] text-destructive/80">
+              {blockReason} API key is empty — fill it in or switch to
+              Subscription.
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-[11px] text-muted-foreground"
+            onClick={close}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className={cn("text-[11px]", (saving || blocked) && "opacity-60")}
+            onClick={() => void handleSave()}
+            disabled={saving || blocked}
+          >
+            {saving ? "Saving…" : "Save & Apply"}
+          </Button>
+        </div>
+      }
+    />
   );
 }

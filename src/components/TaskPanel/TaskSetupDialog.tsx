@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import {
   DndContext,
@@ -28,6 +28,7 @@ import {
 import type { ProviderHistoryInfo } from "@/stores/task-store/types";
 import { ClaudeIcon, CodexIcon } from "@/components/AgentStatus/BrandIcons";
 import { CyberSelect } from "@/components/ui/cyber-select";
+import { DialogLayout } from "@/components/ui/dialog-layout";
 import { AGENT_ROLE_OPTIONS } from "@/components/AgentStatus/RoleSelect";
 import type { Provider } from "@/stores/task-store/types";
 
@@ -352,15 +353,6 @@ export function TaskSetupDialog({
   );
   const sensors = useSensors(useSensor(PointerSensor));
   const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, handleClose]);
-  if (!open) return null;
   const selectedIdx = sortIds.indexOf(selectedId ?? "");
   const updateDef = (i: number, u: AgentDef) =>
     setAgentDefs((p) => p.map((d, j) => (j === i ? u : d)));
@@ -398,22 +390,18 @@ export function TaskSetupDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={handleClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-10 flex flex-col w-full max-w-2xl max-h-[90vh] rounded-xl border border-border/50 bg-card shadow-xl"
-      >
-        <div className="shrink-0 px-4 pt-4 pb-2">
-          <h3 className="text-sm font-semibold text-foreground">
-            {mode === "edit" ? "Edit Task" : "New Task"}
-          </h3>
-        </div>
-        <div className="min-h-0 flex-1 flex overflow-hidden border-t border-border/30">
+    <DialogLayout
+      open={open}
+      onClose={handleClose}
+      width="lg"
+      bodyFlex
+      header={
+        <h3 className="text-sm font-semibold text-foreground">
+          {mode === "edit" ? "Edit Task" : "New Task"}
+        </h3>
+      }
+      body={
+        <div className="flex h-full w-full">
           <div
             data-left-pane="true"
             className="flex w-52 shrink-0 flex-col border-r border-border/30"
@@ -483,10 +471,9 @@ export function TaskSetupDialog({
             )}
           </div>
         </div>
-        <div
-          data-dialog-footer="true"
-          className="shrink-0 flex items-center gap-2 border-t border-border/30 px-4 py-3"
-        >
+      }
+      footer={
+        <div data-dialog-footer="true" className="flex items-center gap-2">
           {mode === "edit" && onDelete && (
             <button
               type="button"
@@ -542,7 +529,7 @@ export function TaskSetupDialog({
             </>
           )}
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 }

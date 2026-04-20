@@ -3,12 +3,7 @@ import {
   getSearchQueryForDisclosure,
   getMessageListDisplayState,
   isMessageSearchActive,
-  getMessageListFollowOutputMode,
-  shouldClearStickyOnScroll,
-  shouldResetMessageListInitialScroll,
-  shouldScrollOnDraftStart,
   shouldScrollOnStreamTail,
-  STICKY_BOTTOM_THRESHOLD,
 } from "./view-model";
 
 describe("getSearchQueryForDisclosure", () => {
@@ -59,111 +54,28 @@ describe("isMessageSearchActive", () => {
   });
 });
 
-describe("getMessageListFollowOutputMode", () => {
-  test("search active disables follow regardless of sticky state", () => {
-    expect(getMessageListFollowOutputMode(true, true)).toBe(false);
-    expect(getMessageListFollowOutputMode(true, false)).toBe(false);
-  });
-
-  test("sticky mode enables smooth follow", () => {
-    expect(getMessageListFollowOutputMode(false, true)).toBe("smooth");
-  });
-
-  test("user-scrolled-away (not sticky) disables follow", () => {
-    // With the Claude-style refactor, the second parameter is a ref-backed
-    // sticky flag set only by wheel events, not by Virtuoso atBottomStateChange.
-    // When the user explicitly scrolls away, follow must stop.
-    expect(getMessageListFollowOutputMode(false, false)).toBe(false);
-  });
-});
-
-describe("shouldClearStickyOnScroll", () => {
-  test("upward scroll beyond threshold with no immunity clears sticky", () => {
-    expect(
-      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD + 1, false),
-    ).toBe(true);
-  });
-
-  test("upward scroll beyond threshold during immunity window keeps sticky", () => {
-    expect(
-      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD + 1, true),
-    ).toBe(false);
-  });
-
-  test("downward or flat scroll never clears sticky regardless of immunity", () => {
-    expect(
-      shouldClearStickyOnScroll(false, STICKY_BOTTOM_THRESHOLD + 1, false),
-    ).toBe(false);
-    expect(
-      shouldClearStickyOnScroll(false, STICKY_BOTTOM_THRESHOLD + 1, true),
-    ).toBe(false);
-  });
-
-  test("upward scroll within threshold keeps sticky even without immunity", () => {
-    expect(
-      shouldClearStickyOnScroll(true, STICKY_BOTTOM_THRESHOLD - 1, false),
-    ).toBe(false);
-  });
-});
-
-describe("shouldScrollOnDraftStart", () => {
-  test("draft active + sticky + no search → should scroll to bottom", () => {
-    expect(shouldScrollOnDraftStart(true, false, true)).toBe(true);
-  });
-
-  test("draft not started → should not scroll", () => {
-    expect(shouldScrollOnDraftStart(false, false, true)).toBe(false);
-  });
-
-  test("search active during draft → should not scroll", () => {
-    expect(shouldScrollOnDraftStart(true, true, true)).toBe(false);
-  });
-
-  test("user scrolled away (not sticky) during draft → should not scroll", () => {
-    expect(shouldScrollOnDraftStart(true, false, false)).toBe(false);
-  });
-});
-
 describe("shouldScrollOnStreamTail", () => {
-  test("claude draft + sticky + no search → should scroll", () => {
+  test("claude draft + at-bottom + no search → nudge", () => {
     expect(shouldScrollOnStreamTail(true, false, false, true)).toBe(true);
   });
 
-  test("codex stream visible + sticky + no search → should scroll", () => {
+  test("codex stream visible + at-bottom + no search → nudge", () => {
     expect(shouldScrollOnStreamTail(false, true, false, true)).toBe(true);
   });
 
-  test("both claude and codex active → should scroll", () => {
+  test("both claude and codex active → nudge", () => {
     expect(shouldScrollOnStreamTail(true, true, false, true)).toBe(true);
   });
 
-  test("neither claude nor codex active → should not scroll", () => {
+  test("neither active → no nudge", () => {
     expect(shouldScrollOnStreamTail(false, false, false, true)).toBe(false);
   });
 
-  test("search active suppresses scroll regardless of stream state", () => {
+  test("search active suppresses nudge regardless of stream state", () => {
     expect(shouldScrollOnStreamTail(true, true, true, true)).toBe(false);
   });
 
-  test("user scrolled away (not sticky) suppresses scroll", () => {
+  test("user scrolled away suppresses nudge", () => {
     expect(shouldScrollOnStreamTail(true, true, false, false)).toBe(false);
-  });
-});
-
-describe("shouldResetMessageListInitialScroll", () => {
-  test("zero-result search does not reset initial scroll state", () => {
-    expect(shouldResetMessageListInitialScroll(true, 0)).toBe(false);
-  });
-
-  test("inactive search with zero results resets initial scroll", () => {
-    expect(shouldResetMessageListInitialScroll(false, 0)).toBe(true);
-  });
-
-  test("inactive search with messages does not reset", () => {
-    expect(shouldResetMessageListInitialScroll(false, 5)).toBe(false);
-  });
-
-  test("active search with messages does not reset", () => {
-    expect(shouldResetMessageListInitialScroll(true, 5)).toBe(false);
   });
 });

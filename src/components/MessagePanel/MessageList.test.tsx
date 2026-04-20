@@ -12,10 +12,22 @@ import {
 
 // 1. Minimal mutable bridge store (only fields MessageList + indicators read)
 let _bs = {
-  claudeStream: { thinking: false, previewText: "", thinkingText: "", blockType: "idle" as const, toolName: "", lastUpdatedAt: 0 },
+  claudeStream: {
+    thinking: false,
+    previewText: "",
+    thinkingText: "",
+    blockType: "idle" as const,
+    toolName: "",
+    lastUpdatedAt: 0,
+  },
   codexStream: {
-    thinking: false, currentDelta: "", lastMessage: "",
-    turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+    thinking: false,
+    currentDelta: "",
+    lastMessage: "",
+    turnStatus: "",
+    activity: "",
+    reasoning: "",
+    commandOutput: "",
   },
 };
 const _store = Object.assign((sel: (s: typeof _bs) => unknown) => sel(_bs), {
@@ -43,7 +55,8 @@ mock.module("react-virtuoso", () => ({
     const { totalCount, itemContent, components, context } = props;
     const Footer = components?.Footer;
     return createElement(
-      "div", null,
+      "div",
+      null,
       ...Array.from({ length: totalCount }, (_, i) =>
         createElement("div", { key: i }, itemContent(i) as React.ReactNode),
       ),
@@ -79,36 +92,30 @@ function installTauriStub() {
   });
 }
 
-describe("getDraftScrollStrategy", () => {
-  // Distinguishes the two scroll semantics used by the draft anchor effect:
-  //  "scroller-bottom" — scrollTo(scrollHeight) pins to absolute content bottom
-  //  "last-index"      — scrollToIndex("LAST") only ensures item is in viewport
-  test("when scroller element exists, strategy is scroller-bottom", async () => {
-    installTauriStub();
-    const { getDraftScrollStrategy } = await import("./MessageList");
-    expect(getDraftScrollStrategy(true)).toBe("scroller-bottom");
-  });
-
-  test("when scroller element is absent (SSR / unmounted), strategy is last-index", async () => {
-    const { getDraftScrollStrategy } = await import("./MessageList");
-    expect(getDraftScrollStrategy(false)).toBe("last-index");
-  });
-});
-
 describe("MessageList", () => {
   test("filters long sessions by message content and attachment names", () => {
     const filtered = filterMessagesByQuery(
       [
         {
           id: "msg_1",
-          source: { kind: "agent", agentId: "claude", role: "lead", provider: "claude" },
+          source: {
+            kind: "agent",
+            agentId: "claude",
+            role: "lead",
+            provider: "claude",
+          },
           target: { kind: "user" },
           message: "Created the rollout plan",
           timestamp: 1,
         },
         {
           id: "msg_2",
-          source: { kind: "agent", agentId: "codex", role: "coder", provider: "codex" },
+          source: {
+            kind: "agent",
+            agentId: "codex",
+            role: "coder",
+            provider: "codex",
+          },
           target: { kind: "user" },
           message: "Attached the latest screenshot",
           timestamp: 2,
@@ -220,12 +227,19 @@ describe("MessageList", () => {
     // Post-fix: route_message() ran before Done, so the final message is here.
     const finalMessage = {
       id: "msg_final",
-      source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const },
+      source: {
+        kind: "agent" as const,
+        agentId: "claude",
+        role: "lead",
+        provider: "claude" as const,
+      },
       target: { kind: "user" as const },
       message: "Final report delivered to the user.",
       timestamp: 2,
     };
-    const html = renderToStaticMarkup(<MessageList messages={[finalMessage]} />);
+    const html = renderToStaticMarkup(
+      <MessageList messages={[finalMessage]} />,
+    );
 
     expect(html).toContain("Final report delivered to the user.");
     expect(html).not.toContain("writing");
@@ -277,28 +291,49 @@ describe("MessageList", () => {
     useBridgeStore.setState((state) => ({
       ...state,
       claudeStream: {
-        thinking: false, previewText: "", thinkingText: "",
-        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
+        lastUpdatedAt: 0,
       },
       codexStream: {
-        thinking: false, currentDelta: "", lastMessage: "",
-        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
       },
     }));
 
     lastVirtuosoProps = null;
     renderToStaticMarkup(
       <MessageList
-        messages={[{
-          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          message: "Found the root cause", timestamp: 1,
-        }]}
+        messages={[
+          {
+            id: "msg_1",
+            source: {
+              kind: "agent" as const,
+              agentId: "claude",
+              role: "lead",
+              provider: "claude" as const,
+            },
+            target: { kind: "user" as const },
+            message: "Found the root cause",
+            timestamp: 1,
+          },
+        ]}
         searchActive={true}
       />,
     );
 
     expect(lastVirtuosoProps).not.toBeNull();
-    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    const followOutput = lastVirtuosoProps!.followOutput as () =>
+      | false
+      | "smooth";
     expect(typeof followOutput).toBe("function");
     expect(followOutput()).toBe(false);
   });
@@ -312,28 +347,49 @@ describe("MessageList", () => {
     useBridgeStore.setState((state) => ({
       ...state,
       claudeStream: {
-        thinking: false, previewText: "", thinkingText: "",
-        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
+        lastUpdatedAt: 0,
       },
       codexStream: {
-        thinking: false, currentDelta: "", lastMessage: "",
-        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
       },
     }));
 
     lastVirtuosoProps = null;
     renderToStaticMarkup(
       <MessageList
-        messages={[{
-          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          message: "Found the root cause", timestamp: 1,
-        }]}
+        messages={[
+          {
+            id: "msg_1",
+            source: {
+              kind: "agent" as const,
+              agentId: "claude",
+              role: "lead",
+              provider: "claude" as const,
+            },
+            target: { kind: "user" as const },
+            message: "Found the root cause",
+            timestamp: 1,
+          },
+        ]}
         searchActive={false}
       />,
     );
 
     expect(lastVirtuosoProps).not.toBeNull();
-    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    const followOutput = lastVirtuosoProps!.followOutput as () =>
+      | false
+      | "smooth";
     expect(typeof followOutput).toBe("function");
     expect(followOutput()).toBe("smooth");
   });
@@ -355,18 +411,28 @@ describe("MessageList", () => {
         lastUpdatedAt: 1,
       },
       codexStream: {
-        thinking: false, currentDelta: "", lastMessage: "",
-        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
       },
     }));
 
     lastVirtuosoProps = null;
     renderToStaticMarkup(
       <MessageList
-        messages={[{
-          id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
-          message: "Start streaming", timestamp: 1,
-        }]}
+        messages={[
+          {
+            id: "msg_1",
+            source: { kind: "user" as const },
+            target: { kind: "agent" as const, agentId: "claude" },
+            message: "Start streaming",
+            timestamp: 1,
+          },
+        ]}
         searchActive={false}
       />,
     );
@@ -375,22 +441,31 @@ describe("MessageList", () => {
     expect(lastVirtuosoProps).not.toBeNull();
     expect(lastVirtuosoProps!.totalCount).toBe(2);
     // followOutput must still return "smooth" — draft start must not lose sticky.
-    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    const followOutput = lastVirtuosoProps!.followOutput as () =>
+      | false
+      | "smooth";
     expect(followOutput()).toBe("smooth");
     // search frozen: draft active + search → no follow
     const { MessageList: ML2 } = await import("./MessageList");
     lastVirtuosoProps = null;
     renderToStaticMarkup(
       <ML2
-        messages={[{
-          id: "msg_1", source: { kind: "user" as const }, target: { kind: "agent" as const, agentId: "claude" },
-          message: "Start streaming", timestamp: 1,
-        }]}
+        messages={[
+          {
+            id: "msg_1",
+            source: { kind: "user" as const },
+            target: { kind: "agent" as const, agentId: "claude" },
+            message: "Start streaming",
+            timestamp: 1,
+          },
+        ]}
         searchActive={true}
       />,
     );
     expect(lastVirtuosoProps).not.toBeNull();
-    const followOutputSearch = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    const followOutputSearch = lastVirtuosoProps!.followOutput as () =>
+      | false
+      | "smooth";
     expect(followOutputSearch()).toBe(false);
   });
 
@@ -403,32 +478,55 @@ describe("MessageList", () => {
     useBridgeStore.setState((state) => ({
       ...state,
       claudeStream: {
-        thinking: false, previewText: "", thinkingText: "",
-        blockType: "idle" as const, toolName: "", lastUpdatedAt: 0,
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
+        lastUpdatedAt: 0,
       },
       codexStream: {
-        thinking: false, currentDelta: "", lastMessage: "",
-        turnStatus: "", activity: "", reasoning: "", commandOutput: "",
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
       },
     }));
 
     lastVirtuosoProps = null;
     renderToStaticMarkup(
       <MessageList
-        messages={[{
-          id: "msg_1", source: { kind: "agent" as const, agentId: "claude", role: "lead", provider: "claude" as const }, target: { kind: "user" as const },
-          message: "Streaming content", timestamp: 1,
-        }]}
+        messages={[
+          {
+            id: "msg_1",
+            source: {
+              kind: "agent" as const,
+              agentId: "claude",
+              role: "lead",
+              provider: "claude" as const,
+            },
+            target: { kind: "user" as const },
+            message: "Streaming content",
+            timestamp: 1,
+          },
+        ]}
         searchActive={false}
       />,
     );
 
     // Simulate Virtuoso reporting content-growth scroll-away (NOT user-initiated).
     // This must NOT clear sticky mode — only user interaction (wheel/pointer) should.
-    const atBottomStateChange = lastVirtuosoProps!.atBottomStateChange as (b: boolean) => void;
+    const atBottomStateChange = lastVirtuosoProps!.atBottomStateChange as (
+      b: boolean,
+    ) => void;
     atBottomStateChange(false);
 
-    const followOutput = lastVirtuosoProps!.followOutput as () => false | "smooth";
+    const followOutput = lastVirtuosoProps!.followOutput as () =>
+      | false
+      | "smooth";
     expect(followOutput()).toBe("smooth");
   });
 });

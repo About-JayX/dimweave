@@ -80,7 +80,7 @@ export function getTransientIndicators(
   claudeStream: ClaudeStreamState,
   codexStream: CodexStreamState,
 ): StreamIndicatorId[] {
-  const codexIndicator = getCodexStreamIndicatorViewModel(codexStream); 
+  const codexIndicator = getCodexStreamIndicatorViewModel(codexStream);
   return [
     ...(claudeStream.thinking ? (["claude"] as const) : []),
     ...(codexIndicator.visible ? (["codex"] as const) : []),
@@ -140,63 +140,23 @@ export function isMessageSearchActive(searchQuery: string): boolean {
   return searchQuery.trim().length > 0;
 }
 
+/// Passed straight through to `<Virtuoso atBottomThreshold>` — Virtuoso
+/// itself owns "am I at bottom?" detection. Do NOT add a second distance
+/// calculation anywhere; prior attempts racked up regressions by layering
+/// custom sticky logic on top of the library.
 export const STICKY_BOTTOM_THRESHOLD = 50;
-export const PROGRAMMATIC_SCROLL_IMMUNITY_MS = 300;
 
-/**
- * Returns true only when a scroll event should clear sticky mode.
- * Immunity window suppresses false positives from Virtuoso layout corrections
- * that briefly decrease scrollTop after a programmatic followOutput scroll.
- */
-export function shouldClearStickyOnScroll(
-  scrolledUp: boolean,
-  distFromBottom: number,
-  immunityActive: boolean,
-): boolean {
-  if (!scrolledUp) return false;
-  if (immunityActive) return false;
-  return distFromBottom > STICKY_BOTTOM_THRESHOLD;
-}
-
-/**
- * Returns true when the draft row just became active and the viewport should
- * immediately pin to the bottom. Also governs scroll-pinning during streaming
- * growth: as long as draft is active, sticky, and search is off, keep bottom.
- */
-export function shouldScrollOnDraftStart(
-  hasClaudeDraft: boolean,
-  searchActive: boolean,
-  isSticky: boolean,
-): boolean {
-  return hasClaudeDraft && !searchActive && isSticky;
-}
-
-/**
- * Returns true when any stream tail should pin the viewport to the absolute
- * scroller bottom. Covers Claude draft (inline row) and Codex thinking/activity
- * (StreamTailFooter). Either tail active with sticky on and search off triggers.
- */
+/// Returns true when any stream tail (Claude inline draft row or Codex
+/// thinking footer) should nudge the viewport to the scroller's absolute
+/// bottom. Guarded on `isAtBottom` and `!searchActive` so a user scrolled
+/// up mid-stream is never yanked back.
 export function shouldScrollOnStreamTail(
   hasClaudeDraft: boolean,
   codexStreamVisible: boolean,
   searchActive: boolean,
-  isSticky: boolean,
+  isAtBottom: boolean,
 ): boolean {
-  return (hasClaudeDraft || codexStreamVisible) && !searchActive && isSticky;
-}
-
-export function getMessageListFollowOutputMode(
-  searchActive: boolean,
-  isSticky: boolean,
-): false | "smooth" {
-  return searchActive ? false : isSticky ? "smooth" : false;
-}
-
-export function shouldResetMessageListInitialScroll(
-  searchActive: boolean,
-  totalCount: number,
-): boolean {
-  return !searchActive && totalCount === 0;
+  return (hasClaudeDraft || codexStreamVisible) && !searchActive && isAtBottom;
 }
 
 export function getClaudeAttentionResolution(

@@ -12,15 +12,26 @@ mock.module("@/components/ui/cyber-select", () => {
     const keep = Math.floor((maxLen - 1) / 2);
     return `${text.slice(0, keep)}\u2026${text.slice(-keep)}`;
   }
-  function getCyberSelectMenuPanelClassName(variant: string, compact?: boolean): string {
+  function getCyberSelectMenuPanelClassName(
+    variant: string,
+    compact?: boolean,
+  ): string {
     if (variant === "history" && compact)
       return "right-0 top-7 min-w-44 max-w-64 max-h-48 rounded-lg p-1";
     return variant === "history"
       ? "right-0 top-7 w-[150%] max-h-48 rounded-lg p-1"
       : "right-0 top-7 min-w-36 max-w-64 max-h-52 rounded-lg p-1";
   }
-  function HistoryMenuOption() { return null; }
-  function CyberSelect({ value, options, placeholder, variant = "default", compact = false }: any) {
+  function HistoryMenuOption() {
+    return null;
+  }
+  function CyberSelect({
+    value,
+    options,
+    placeholder,
+    variant = "default",
+    compact = false,
+  }: any) {
     const isHistory = variant === "history";
     const selected = options.find((o: any) => o.value === value);
     const displayLabel = selected?.label ?? placeholder ?? value;
@@ -30,17 +41,29 @@ mock.module("@/components/ui/cyber-select", () => {
         ? "min-w-0 flex-1 justify-between rounded-full px-2.5 py-1.5 text-[10px]"
         : "rounded px-1.5 py-0.5 text-[10px]"
     } border-input bg-muted text-foreground`;
-    const label = isHistory && selected ? middleEllipsis(displayLabel, 36) : displayLabel;
+    const label =
+      isHistory && selected ? middleEllipsis(displayLabel, 36) : displayLabel;
     return (
       <div className={containerCls}>
         <button type="button" className={btnCls}>
-          <span className={isHistory && !compact ? "flex-1" : "max-w-28"}>{label}</span>
+          <span className={isHistory && !compact ? "flex-1" : "max-w-28"}>
+            {label}
+          </span>
         </button>
-        <input type="hidden" data-cyber-options={JSON.stringify(options)} data-cyber-placeholder={placeholder ?? ""} />
+        <input
+          type="hidden"
+          data-cyber-options={JSON.stringify(options)}
+          data-cyber-placeholder={placeholder ?? ""}
+        />
       </div>
     );
   }
-  return { CyberSelect, middleEllipsis, getCyberSelectMenuPanelClassName, HistoryMenuOption };
+  return {
+    CyberSelect,
+    middleEllipsis,
+    getCyberSelectMenuPanelClassName,
+    HistoryMenuOption,
+  };
 });
 
 // Stub must exist before any component import triggers bridge-store init
@@ -71,8 +94,12 @@ Object.assign(globalThis, {
     removeEventListener: () => {},
   },
   localStorage: {
-    getItem: () => null, setItem: () => {}, removeItem: () => {},
-    clear: () => {}, key: () => null, length: 0,
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    key: () => null,
+    length: 0,
   },
 });
 
@@ -80,8 +107,12 @@ describe("TaskSetupDialog", () => {
   test("renders create-mode modal with agent defs and action buttons", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain("New Task");
     expect(html).toContain("Agents");
@@ -93,9 +124,16 @@ describe("TaskSetupDialog", () => {
   test("agent list shows rows matching provided initialAgents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead" }, { provider: "codex", role: "coder" }]} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          { provider: "claude", role: "lead" },
+          { provider: "codex", role: "coder" },
+        ]}
+      />,
     );
     expect(html).toContain("claude");
     expect(html).toContain("codex");
@@ -106,8 +144,12 @@ describe("TaskSetupDialog", () => {
   test("does not render content when closed", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={false}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={false}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).not.toContain("New Task");
     expect(html).not.toContain('role="dialog"');
@@ -116,7 +158,10 @@ describe("TaskSetupDialog", () => {
   test("create-mode agent defs are dialog-local, not global store", async () => {
     const roleCmds: string[] = [];
     const orig = (globalThis as any).window.__TAURI_INTERNALS__.invoke;
-    (globalThis as any).window.__TAURI_INTERNALS__.invoke = async (cmd: string, ...rest: any[]) => {
+    (globalThis as any).window.__TAURI_INTERNALS__.invoke = async (
+      cmd: string,
+      ...rest: any[]
+    ) => {
       if (cmd === "daemon_set_claude_role" || cmd === "daemon_set_codex_role")
         roleCmds.push(cmd);
       return orig(cmd, ...rest);
@@ -124,8 +169,12 @@ describe("TaskSetupDialog", () => {
     try {
       const { TaskSetupDialog } = await import("./TaskSetupDialog");
       renderToStaticMarkup(
-        <TaskSetupDialog workspace="/repo" open={true}
-          onOpenChange={() => {}} onSubmit={() => {}} />,
+        <TaskSetupDialog
+          workspace="/repo"
+          open={true}
+          onOpenChange={() => {}}
+          onSubmit={() => {}}
+        />,
       );
       expect(roleCmds).toEqual([]);
     } finally {
@@ -135,13 +184,40 @@ describe("TaskSetupDialog", () => {
 
   test("launch gate: agent array determines which providers are launched", () => {
     type AgentDef = { provider: string; role: string };
-    const cases: { agents: AgentDef[]; expectClaude: boolean; expectCodex: boolean }[] = [
-      { agents: [{ provider: "claude", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: true, expectCodex: true },
-      { agents: [{ provider: "claude", role: "lead" }, { provider: "claude", role: "coder" }], expectClaude: true, expectCodex: false },
-      { agents: [{ provider: "codex", role: "lead" }, { provider: "codex", role: "coder" }], expectClaude: false, expectCodex: true },
+    const cases: {
+      agents: AgentDef[];
+      expectClaude: boolean;
+      expectCodex: boolean;
+    }[] = [
+      {
+        agents: [
+          { provider: "claude", role: "lead" },
+          { provider: "codex", role: "coder" },
+        ],
+        expectClaude: true,
+        expectCodex: true,
+      },
+      {
+        agents: [
+          { provider: "claude", role: "lead" },
+          { provider: "claude", role: "coder" },
+        ],
+        expectClaude: true,
+        expectCodex: false,
+      },
+      {
+        agents: [
+          { provider: "codex", role: "lead" },
+          { provider: "codex", role: "coder" },
+        ],
+        expectClaude: false,
+        expectCodex: true,
+      },
     ];
     for (const c of cases) {
-      expect(c.agents.some((a) => a.provider === "claude")).toBe(c.expectClaude);
+      expect(c.agents.some((a) => a.provider === "claude")).toBe(
+        c.expectClaude,
+      );
       expect(c.agents.some((a) => a.provider === "codex")).toBe(c.expectCodex);
     }
   });
@@ -149,8 +225,13 @@ describe("TaskSetupDialog", () => {
   test("Create & Connect disabled with empty agents, Create enabled", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} initialAgents={[]} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[]}
+      />,
     );
     expect(html).toContain(">Create</button>");
     expect(html).toContain("disabled");
@@ -159,9 +240,14 @@ describe("TaskSetupDialog", () => {
   test("edit mode renders Save button and Edit Task heading", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead" }]}
+      />,
     );
     expect(html).toContain("Edit Task");
     expect(html).toContain(">Save</button>");
@@ -171,9 +257,21 @@ describe("TaskSetupDialog", () => {
   test("edit mode preserves agentId and displayName in initialAgents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "a1", displayName: "Rev" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          {
+            provider: "codex",
+            role: "coder",
+            agentId: "a1",
+            displayName: "Rev",
+          },
+        ]}
+      />,
     );
     // CyberSelect shows matched label; role "coder" renders as "Coder"
     expect(html).toContain("Coder");
@@ -191,8 +289,12 @@ describe("TaskSetupDialog", () => {
   test("dialog shell uses flex column layout without outer scroll", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain("flex flex-col");
     expect(html).not.toContain("overflow-y-auto max-h-[90vh]");
@@ -201,8 +303,12 @@ describe("TaskSetupDialog", () => {
   test("agent list section has a scrollable region", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain('data-scroll-region="true"');
     expect(html).toContain("overflow-y-auto");
@@ -211,8 +317,12 @@ describe("TaskSetupDialog", () => {
   test("action buttons are in a fixed footer section", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain('data-dialog-footer="true"');
   });
@@ -220,12 +330,17 @@ describe("TaskSetupDialog", () => {
   test("edit mode wraps agent rows with draggable row marker", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
         initialAgents={[
           { provider: "claude", role: "lead", agentId: "a1" },
           { provider: "codex", role: "coder", agentId: "a2" },
-        ]} />,
+        ]}
+      />,
     );
     expect(html).toContain('data-draggable-row="true"');
   });
@@ -233,12 +348,17 @@ describe("TaskSetupDialog", () => {
   test("edit mode exposes drag handle button on each sortable row", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
         initialAgents={[
           { provider: "claude", role: "lead", agentId: "a1" },
           { provider: "codex", role: "coder", agentId: "a2" },
-        ]} />,
+        ]}
+      />,
     );
     expect(html).toContain('data-drag-handle="true"');
   });
@@ -246,8 +366,12 @@ describe("TaskSetupDialog", () => {
   test("create mode default row has draggable marker", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain('data-draggable-row="true"');
   });
@@ -260,16 +384,16 @@ describe("TaskSetupDialog", () => {
       { provider: "claude", role: "lead" },
       { provider: "codex", role: "coder" },
     ];
-    const addResults = [
-      { agentId: "saved-a1" },
-      { agentId: "saved-a2" },
-    ];
-    const savedAgents = draftAgents.map((def, i) => ({ ...def, agentId: addResults[i].agentId }));
-    expect(savedAgents.every(a => !!a.agentId)).toBe(true);
+    const addResults = [{ agentId: "saved-a1" }, { agentId: "saved-a2" }];
+    const savedAgents = draftAgents.map((def, i) => ({
+      ...def,
+      agentId: addResults[i].agentId,
+    }));
+    expect(savedAgents.every((a) => !!a.agentId)).toBe(true);
     expect(savedAgents[0].agentId).toBe("saved-a1");
     expect(savedAgents[1].agentId).toBe("saved-a2");
     // Original draft must NOT have agentIds
-    expect(draftAgents.every(a => !a.agentId)).toBe(true);
+    expect(draftAgents.every((a) => !a.agentId)).toBe(true);
   });
 
   test("edit-mode save+connect: new agents get addTaskAgent agentId, existing keep theirs", () => {
@@ -289,7 +413,7 @@ describe("TaskSetupDialog", () => {
     expect(savedAgents.length).toBe(2);
     expect(savedAgents[0].agentId).toBe("existing-a1");
     expect(savedAgents[1].agentId).toBe("new-from-daemon-b1");
-    expect(savedAgents.every(a => !!a.agentId)).toBe(true);
+    expect(savedAgents.every((a) => !!a.agentId)).toBe(true);
   });
 
   test("multiple same-provider agents: saved list preserves all as independent connect targets", () => {
@@ -299,7 +423,10 @@ describe("TaskSetupDialog", () => {
       { provider: "codex", role: "coder" },
     ];
     const addResults = [{ agentId: "cx-1" }, { agentId: "cx-2" }];
-    const savedAgents = draftAgents.map((def, i) => ({ ...def, agentId: addResults[i].agentId }));
+    const savedAgents = draftAgents.map((def, i) => ({
+      ...def,
+      agentId: addResults[i].agentId,
+    }));
     expect(savedAgents.length).toBe(2);
     expect(savedAgents[0].agentId).toBe("cx-1");
     expect(savedAgents[1].agentId).toBe("cx-2");
@@ -310,7 +437,12 @@ describe("TaskSetupDialog", () => {
 
   test("edit-mode diff logic: update existing, add new, remove deleted", () => {
     // Mirrors the handleEditSubmit diff logic in index.tsx
-    type AgentDef = { provider: string; role: string; agentId?: string; displayName?: string | null };
+    type AgentDef = {
+      provider: string;
+      role: string;
+      agentId?: string;
+      displayName?: string | null;
+    };
     const existing = [
       { agentId: "a1", provider: "claude", role: "lead" },
       { agentId: "a2", provider: "codex", role: "coder" },
@@ -319,7 +451,9 @@ describe("TaskSetupDialog", () => {
       { provider: "claude", role: "reviewer", agentId: "a1" },
       { provider: "codex", role: "tester" },
     ];
-    const incomingIds = new Set(incoming.filter((d) => d.agentId).map((d) => d.agentId!));
+    const incomingIds = new Set(
+      incoming.filter((d) => d.agentId).map((d) => d.agentId!),
+    );
     const toRemove = existing.filter((a) => !incomingIds.has(a.agentId));
     const toUpdate = incoming.filter((d) => d.agentId);
     const toAdd = incoming.filter((d) => !d.agentId);
@@ -334,9 +468,14 @@ describe("TaskSetupDialog", () => {
   test("claude model CyberSelect shows Select model when unset", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-model-select="true"');
     // CyberSelect button shows "Select model" when value is ""
@@ -346,9 +485,14 @@ describe("TaskSetupDialog", () => {
   test("model select starts unselected for new agents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-model-select="true"');
     // First option should be the empty placeholder
@@ -358,9 +502,14 @@ describe("TaskSetupDialog", () => {
   test("session section uses a history dropdown with New session sentinel", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-history-select="true"');
     expect(html).toContain("New session");
@@ -371,9 +520,14 @@ describe("TaskSetupDialog", () => {
   test("history CyberSelect shows New session when no history is provided", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-history-select="true"');
     expect(html).toContain("New session");
@@ -382,9 +536,14 @@ describe("TaskSetupDialog", () => {
   test("claude effort CyberSelect shows Default when unset", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-effort-select="true"');
     expect(html).toContain("Default");
@@ -393,16 +552,26 @@ describe("TaskSetupDialog", () => {
   test("claude effort label differs from codex effort label", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const claudeHtml = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(claudeHtml).toContain("Effort");
     expect(claudeHtml).not.toContain("Reasoning effort");
     const codexHtml = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
+      />,
     );
     expect(codexHtml).toContain("Reasoning effort");
   });
@@ -410,9 +579,14 @@ describe("TaskSetupDialog", () => {
   test("codex effort select is disabled when model is empty", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
+      />,
     );
     expect(html).toContain('data-effort-select="true"');
     expect(html).toContain("disabled");
@@ -421,10 +595,23 @@ describe("TaskSetupDialog", () => {
   test("codex model CyberSelect shows selected model label from live codexModels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]}
-        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }] }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          { provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" },
+        ]}
+        codexModels={[
+          {
+            slug: "o3-pro",
+            displayName: "o3-pro",
+            reasoningLevels: [{ effort: "low" }],
+          },
+        ]}
+      />,
     );
     expect(html).toContain('data-model-select="true"');
     // CyberSelect button text should show the matched model label
@@ -434,10 +621,15 @@ describe("TaskSetupDialog", () => {
   test("codex shows loading placeholder when codexModels is empty", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
         initialAgents={[{ provider: "codex", role: "coder", agentId: "b1" }]}
-        codexModels={[]} />,
+        codexModels={[]}
+      />,
     );
     expect(html).toContain('data-model-select="true"');
     expect(html).toContain("Loading models");
@@ -446,10 +638,33 @@ describe("TaskSetupDialog", () => {
   test("codex effort derives from selected model reasoning levels", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro", effort: "medium" }]}
-        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }] }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          {
+            provider: "codex",
+            role: "coder",
+            agentId: "b1",
+            model: "o3-pro",
+            effort: "medium",
+          },
+        ]}
+        codexModels={[
+          {
+            slug: "o3-pro",
+            displayName: "o3-pro",
+            reasoningLevels: [
+              { effort: "low" },
+              { effort: "medium" },
+              { effort: "high" },
+            ],
+          },
+        ]}
+      />,
     );
     expect(html).toContain('data-effort-select="true"');
     // Effort button should show the selected reasoning level label
@@ -459,9 +674,14 @@ describe("TaskSetupDialog", () => {
   test("no free-form text input for model, effort, or role", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).not.toContain('placeholder="model"');
     expect(html).not.toContain('placeholder="effort"');
@@ -471,9 +691,14 @@ describe("TaskSetupDialog", () => {
   test("role is a CyberSelect dropdown showing selected role label", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-role-select="true"');
     // CyberSelect shows the matched label as button text
@@ -485,9 +710,14 @@ describe("TaskSetupDialog", () => {
   test("dialog uses CyberSelect instead of native select for main controls", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     // CyberSelect renders as <button> not <select>
     // The right-pane provider card should have no native <select> elements
@@ -499,9 +729,14 @@ describe("TaskSetupDialog", () => {
   test("dialog session trigger is compact — no flex-1 full-width expansion", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     const histBlock = html.split('data-history-select="true"')[1];
     expect(histBlock).toBeTruthy();
@@ -513,12 +748,19 @@ describe("TaskSetupDialog", () => {
   test("dialog session and role triggers share the same compact class family", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
-    const roleBlock = html.split('data-role-select="true"')[1]?.split('data-')[0] ?? "";
-    const histBlock = html.split('data-history-select="true"')[1]?.split('data-')[0] ?? "";
+    const roleBlock =
+      html.split('data-role-select="true"')[1]?.split("data-")[0] ?? "";
+    const histBlock =
+      html.split('data-history-select="true"')[1]?.split("data-")[0] ?? "";
     // Both triggers use the same compact trigger class (rounded, py-0.5)
     expect(roleBlock).toContain("py-0.5");
     expect(histBlock).toContain("py-0.5");
@@ -526,32 +768,39 @@ describe("TaskSetupDialog", () => {
     expect(histBlock).toContain("rounded");
   });
 
-  test("history trigger in dialog applies middle ellipsis to long selected label", async () => {
-    const { middleEllipsis } = await import("../ui/cyber-select");
-    const longTitle = "Implement the entire authentication middleware refactor for compliance";
-    const expected = middleEllipsis(longTitle, 36);
-    const { TaskSetupDialog } = await import("./TaskSetupDialog");
-    const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
-          historyAction: { kind: "resumeExternal", externalId: "sess-long" } }]}
-        providerHistory={[{ provider: "claude", externalId: "sess-long", title: longTitle,
-          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
-    );
-    expect(expected).not.toBe(longTitle);
-    expect(html).toContain(expected);
-  });
+  // (Session dropdown moved from `history` variant to `form` variant to
+  // unify with ProviderAuthDialog. CSS `truncate` handles overflow;
+  // middleEllipsis is a history-variant feature and not required here.)
 
   test("history dropdown pre-selects matching entry when historyAction is resumeExternal", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1",
-          historyAction: { kind: "resumeExternal", externalId: "sess-x" } }]}
-        providerHistory={[{ provider: "claude", externalId: "sess-x", title: "Old session",
-          archived: false, createdAt: 1, updatedAt: 2, status: "completed" as const }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          {
+            provider: "claude",
+            role: "lead",
+            agentId: "a1",
+            historyAction: { kind: "resumeExternal", externalId: "sess-x" },
+          },
+        ]}
+        providerHistory={[
+          {
+            provider: "claude",
+            externalId: "sess-x",
+            title: "Old session",
+            archived: false,
+            createdAt: 1,
+            updatedAt: 2,
+            status: "completed" as const,
+          },
+        ]}
+      />,
     );
     expect(html).toContain('data-history-select="true"');
     // CyberSelect shows the selected label as button text
@@ -560,39 +809,64 @@ describe("TaskSetupDialog", () => {
 
   // Option contract tests — inspect actual options arrays via mock's data-cyber-options
 
-  function parseOptionsFromBlock(html: string, dataAttr: string): { options: { value: string; label: string }[]; placeholder: string } {
+  function parseOptionsFromBlock(
+    html: string,
+    dataAttr: string,
+  ): { options: { value: string; label: string }[]; placeholder: string } {
     const block = html.split(`${dataAttr}="true"`)[1] ?? "";
     const optMatch = block.match(/data-cyber-options="([^"]*)"/);
     const phMatch = block.match(/data-cyber-placeholder="([^"]*)"/);
-    return { options: optMatch ? JSON.parse(optMatch[1].replace(/&quot;/g, '"')) : [], placeholder: phMatch?.[1] ?? "" };
+    return {
+      options: optMatch ? JSON.parse(optMatch[1].replace(/&quot;/g, '"')) : [],
+      placeholder: phMatch?.[1] ?? "",
+    };
   }
 
   test("claude model trigger shows 'Select model' when unset, options include real Default", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
-    const { options, placeholder } = parseOptionsFromBlock(html, 'data-model-select');
+    const { options, placeholder } = parseOptionsFromBlock(
+      html,
+      "data-model-select",
+    );
     // Visible trigger label is "Select model" (placeholder) when model is unset
-    const modelBlock = html.split('data-model-select="true"')[1]?.split('data-effort')[0] ?? "";
+    const modelBlock =
+      html.split('data-model-select="true"')[1]?.split("data-effort")[0] ?? "";
     expect(modelBlock).toContain(">Select model<");
     // Real provider "Default" option preserved in menu
-    expect(options.some(o => o.value === "" && o.label === "Default")).toBe(true);
+    expect(options.some((o) => o.value === "" && o.label === "Default")).toBe(
+      true,
+    );
     // "Select model" is NOT a real menu option
-    expect(options.every(o => o.label !== "Select model")).toBe(true);
+    expect(options.every((o) => o.label !== "Select model")).toBe(true);
     expect(placeholder).toBe("Select model");
   });
 
   test("claude model trigger shows 'Default' when model is explicitly empty string", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1", model: "" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          { provider: "claude", role: "lead", agentId: "a1", model: "" },
+        ]}
+      />,
     );
-    const modelBlock = html.split('data-model-select="true"')[1]?.split('data-effort')[0] ?? "";
+    const modelBlock =
+      html.split('data-model-select="true"')[1]?.split("data-effort")[0] ?? "";
     // When model is explicitly "" (user chose Default), trigger shows "Default"
     expect(modelBlock).toContain(">Default<");
     expect(modelBlock).not.toContain(">Select model<");
@@ -601,24 +875,44 @@ describe("TaskSetupDialog", () => {
   test("claude effort options contain exactly one Default entry", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
-    const { options } = parseOptionsFromBlock(html, 'data-effort-select');
-    const defaultEntries = options.filter(o => o.value === "" && o.label === "Default");
+    const { options } = parseOptionsFromBlock(html, "data-effort-select");
+    const defaultEntries = options.filter(
+      (o) => o.value === "" && o.label === "Default",
+    );
     expect(defaultEntries.length).toBe(1);
   });
 
   test("codex effort prepends Default when reasoning levels lack it", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" }]}
-        codexModels={[{ slug: "o3-pro", displayName: "o3-pro", reasoningLevels: [{ effort: "low" }, { effort: "high" }] }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[
+          { provider: "codex", role: "coder", agentId: "b1", model: "o3-pro" },
+        ]}
+        codexModels={[
+          {
+            slug: "o3-pro",
+            displayName: "o3-pro",
+            reasoningLevels: [{ effort: "low" }, { effort: "high" }],
+          },
+        ]}
+      />,
     );
-    const { options } = parseOptionsFromBlock(html, 'data-effort-select');
+    const { options } = parseOptionsFromBlock(html, "data-effort-select");
     expect(options[0]).toEqual({ value: "", label: "Default" });
     expect(options.length).toBe(3);
   });
@@ -628,8 +922,12 @@ describe("TaskSetupDialog", () => {
   test("dialog renders two-pane layout with left pane and right pane", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain('data-left-pane="true"');
     expect(html).toContain('data-right-pane="true"');
@@ -638,8 +936,12 @@ describe("TaskSetupDialog", () => {
   test("create mode starts with one default locked row", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     expect(html).toContain('data-draggable-row="true"');
     expect(html).toContain('data-locked-row="true"');
@@ -648,9 +950,14 @@ describe("TaskSetupDialog", () => {
   test("left pane rows include provider icon marker", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-provider-icon="true"');
   });
@@ -658,9 +965,14 @@ describe("TaskSetupDialog", () => {
   test("right pane uses provider-card visual grouping", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
-        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]} />,
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+        initialAgents={[{ provider: "claude", role: "lead", agentId: "a1" }]}
+      />,
     );
     expect(html).toContain('data-provider-card="true"');
   });
@@ -668,8 +980,12 @@ describe("TaskSetupDialog", () => {
   test("right pane shows provider card for the default selected agent", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}} />,
+      <TaskSetupDialog
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
+      />,
     );
     // Default row is auto-selected so right pane shows config, not placeholder
     expect(html).toContain('data-provider-card="true"');
@@ -679,12 +995,17 @@ describe("TaskSetupDialog", () => {
   test("edit-mode renders distinct rows for multiple same-provider agents", async () => {
     const { TaskSetupDialog } = await import("./TaskSetupDialog");
     const html = renderToStaticMarkup(
-      <TaskSetupDialog mode="edit" workspace="/repo" open={true}
-        onOpenChange={() => {}} onSubmit={() => {}}
+      <TaskSetupDialog
+        mode="edit"
+        workspace="/repo"
+        open={true}
+        onOpenChange={() => {}}
+        onSubmit={() => {}}
         initialAgents={[
           { provider: "codex", role: "lead", agentId: "cx-1" },
           { provider: "codex", role: "coder", agentId: "cx-2" },
-        ]} />,
+        ]}
+      />,
     );
     const rows = html.match(/data-draggable-row="true"/g);
     expect(rows).not.toBeNull();
