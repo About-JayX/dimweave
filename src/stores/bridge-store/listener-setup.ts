@@ -256,7 +256,11 @@ export function createBridgeListeners(
       // does not re-render when this one appends.
       set((s) => {
         const msg = e.payload.payload;
-        const tid = msg.taskId ?? GLOBAL_MESSAGE_BUCKET;
+        // Treat undefined AND empty-string taskId as "no task" → global bucket.
+        // Rust emits Option<String>, so None becomes undefined; but Some("")
+        // would slip through `??` and create an orphan "" bucket that's
+        // invisible to makeActiveTaskMessagesSelector.
+        const tid = msg.taskId || GLOBAL_MESSAGE_BUCKET;
         const existing = s.messagesByTask[tid] ?? [];
         return {
           messagesByTask: {
