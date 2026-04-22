@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
+import { makeActiveClaudeStreamSelector } from "@/stores/bridge-store/selectors";
 import { getExpandableTextState, getStreamTextTail } from "./view-model";
 import { SourceBadge } from "./SourceBadge";
 import { getStreamSurfacePresentation } from "./surface-styles";
@@ -19,11 +21,13 @@ function blockLabel(blockType: ClaudeBlockType, toolName: string): string {
 }
 
 export function ClaudeStreamIndicator() {
-  const thinking = useBridgeStore((s) => s.claudeStream.thinking);
-  const previewText = useBridgeStore((s) => s.claudeStream.previewText);
-  const thinkingText = useBridgeStore((s) => s.claudeStream.thinkingText);
-  const blockType = useBridgeStore((s) => s.claudeStream.blockType);
-  const toolName = useBridgeStore((s) => s.claudeStream.toolName);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const selectClaudeStream = useMemo(
+    () => makeActiveClaudeStreamSelector(activeTaskId),
+    [activeTaskId],
+  );
+  const stream = useBridgeStore(selectClaudeStream);
+  const { thinking, previewText, thinkingText, blockType, toolName } = stream;
   const surface = getStreamSurfacePresentation("claude");
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
 
