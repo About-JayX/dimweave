@@ -87,7 +87,11 @@ export function MessageList({
     [streamRailIndicators],
   );
 
-  const anchor = useScrollAnchor({ searchActive, totalCount });
+  const anchor = useScrollAnchor({
+    searchActive,
+    totalCount,
+    activeScopeKey: activeTaskId,
+  });
 
   // Stream-tail nudge: Claude draft row and Codex Footer grow vertically
   // between renders without triggering Virtuoso's followOutput. Nudge the
