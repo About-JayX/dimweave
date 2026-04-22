@@ -373,6 +373,13 @@ fn session_role_name(role: crate::daemon::task_graph::types::SessionRole) -> &'s
     }
 }
 
+fn resume_task_id_for_claude_session(
+    _active_task_id: Option<&str>,
+    sess: &crate::daemon::task_graph::types::SessionHandle,
+) -> String {
+    sess.task_id.clone()
+}
+
 async fn attach_provider_history(
     provider: crate::daemon::task_graph::types::Provider,
     external_id: String,
@@ -1307,8 +1314,10 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                     crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                     crate::daemon::task_graph::types::SessionRole::Coder => "coder",
                                 };
-                                let resume_task_id = state.read().await.active_task_id
-                                    .clone().unwrap_or_default();
+                                let resume_task_id = {
+                                    let active_task_id = state.read().await.active_task_id.clone();
+                                    resume_task_id_for_claude_session(active_task_id.as_deref(), &sess)
+                                };
                                 match launch_claude_sdk(
                                     &resume_task_id,
                                     role_id,
@@ -1599,3 +1608,7 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "resume_task_binding_tests.rs"]
+mod resume_task_binding_tests;
