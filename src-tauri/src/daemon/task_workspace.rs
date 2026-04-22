@@ -10,10 +10,62 @@ pub fn validate_git_root(path: &str) -> Result<PathBuf, String> {
         .map_err(|e| format!("invalid path {path}: {e}"))
 }
 
-/// Creates a git worktree for the given task under `<repo>/.worktrees/tasks/<task_id>`.
-/// Returns the absolute path to the new worktree.
-pub fn create_task_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, String> {
-    let worktree_dir = repo_root.join(".worktrees").join("tasks").join(task_id);
+fn git_rev_parse_path(workspace_root: &Path, arg: &str) -> Result<PathBuf, String> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", arg])
+        .current_dir(workspace_root)
+        .output()
+        .map_err(|e| format!("git rev-parse {arg} failed: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git rev-parse {arg} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let path = stdout.trim();
+    if path.is_empty() {
+        return Err(format!("git rev-parse {arg} returned an empty path"));
+    }
+    Ok(PathBuf::from(path))
+}
+
+/// Resolve the owner repository root for the selected workspace.
+///
+/// - When `workspace_root` is the main checkout, owner root is itself.
+/// - When `workspace_root` is an existing git worktree, owner root is the
+///   parent directory of the repository's common `.git` dir.
+fn resolve_owner_repo_root(workspace_root: &Path) -> Result<PathBuf, String> {
+    let worktree_root = git_rev_parse_path(workspace_root, "--show-toplevel")?;
+    let common_git_dir = git_rev_parse_path(workspace_root, "--git-common-dir")?;
+    let owner_root = if common_git_dir == worktree_root.join(".git") {
+        worktree_root
+    } else {
+        common_git_dir
+            .parent()
+            .ok_or_else(|| {
+                format!(
+                    "git common dir has no parent: {}",
+                    common_git_dir.display()
+                )
+            })?
+            .to_path_buf()
+    };
+    owner_root
+        .canonicalize()
+        .map_err(|e| format!("invalid owner repo root {}: {e}", owner_root.display()))
+}
+
+/// Creates a git worktree for the given task under the owner repository's
+/// `<repo>/.worktrees/tasks/<task_id>`.
+///
+/// `workspace_root` may be either the main repository checkout or an existing
+/// git worktree. The new task worktree is always created under the owner repo's
+/// shared `.worktrees/tasks` tree, while the new branch still forks from the
+/// selected workspace's current HEAD.
+pub fn create_task_worktree(workspace_root: &Path, task_id: &str) -> Result<PathBuf, String> {
+    let owner_repo_root = resolve_owner_repo_root(workspace_root)?;
+    let worktree_dir = owner_repo_root.join(".worktrees").join("tasks").join(task_id);
     if worktree_dir.exists() {
         return Err(format!(
             "worktree already exists: {}",
@@ -25,7 +77,7 @@ pub fn create_task_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, 
     let output = std::process::Command::new("git")
         .args(["worktree", "add", "-b", &branch_name])
         .arg(&worktree_dir)
-        .current_dir(repo_root)
+        .current_dir(workspace_root)
         .output()
         .map_err(|e| format!("git worktree add failed: {e}"))?;
 
@@ -54,15 +106,16 @@ pub fn create_task_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, 
 /// remove stage (that's the visible dir), but branch deletion is
 /// swallowed on failure so a missing/merged branch doesn't spoil the
 /// whole cleanup.
-pub fn cleanup_task_worktree(repo_root: &Path, task_id: &str) -> Result<(), String> {
-    let worktree_dir = repo_root.join(".worktrees").join("tasks").join(task_id);
+pub fn cleanup_task_worktree(workspace_root: &Path, task_id: &str) -> Result<(), String> {
+    let owner_repo_root = resolve_owner_repo_root(workspace_root)?;
+    let worktree_dir = owner_repo_root.join(".worktrees").join("tasks").join(task_id);
     let branch_name = format!("task/{task_id}");
 
     if worktree_dir.exists() {
         let output = std::process::Command::new("git")
             .args(["worktree", "remove", "--force"])
             .arg(&worktree_dir)
-            .current_dir(repo_root)
+            .current_dir(&owner_repo_root)
             .output()
             .map_err(|e| format!("git worktree remove failed: {e}"))?;
         if !output.status.success() {
@@ -77,7 +130,7 @@ pub fn cleanup_task_worktree(repo_root: &Path, task_id: &str) -> Result<(), Stri
     // much disk noise as dirs but we still want it swept when possible.
     let _ = std::process::Command::new("git")
         .args(["branch", "-D", &branch_name])
-        .current_dir(repo_root)
+        .current_dir(&owner_repo_root)
         .output();
     Ok(())
 }
@@ -108,6 +161,22 @@ mod tests {
                 .output()
                 .expect("git commit");
             Self { path }
+        }
+
+        fn add_worktree(&self, name: &str) -> PathBuf {
+            let path = self.path.join(".worktrees").join(name);
+            let output = Command::new("git")
+                .args(["worktree", "add", "-b", name])
+                .arg(&path)
+                .current_dir(&self.path)
+                .output()
+                .expect("git worktree add");
+            assert!(
+                output.status.success(),
+                "git worktree add failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            path.canonicalize().expect("canonicalize worktree path")
         }
     }
 
@@ -196,6 +265,57 @@ mod tests {
         assert!(
             !after_stdout.contains(&format!("task/{task_id}")),
             "task branch must be gone after cleanup (got: {after_stdout:?})",
+        );
+    }
+
+    #[test]
+    fn create_task_worktree_from_secondary_worktree_uses_owner_repo_directory() {
+        let repo = TempRepo::new("secondary_owner");
+        let seed_worktree = repo.add_worktree("seed");
+        let task_id = "secondary_task";
+
+        let wt_path = create_task_worktree(&seed_worktree, task_id).expect("create worktree");
+
+        assert_eq!(
+            wt_path,
+            repo.path
+                .join(".worktrees")
+                .join("tasks")
+                .join(task_id)
+                .canonicalize()
+                .expect("canonical worktree path")
+        );
+        assert!(
+            !seed_worktree.join(".worktrees").join("tasks").join(task_id).exists(),
+            "task worktree must not be nested inside the selected worktree"
+        );
+
+        cleanup_task_worktree(&seed_worktree, task_id).expect("cleanup worktree");
+    }
+
+    #[test]
+    fn cleanup_task_worktree_from_secondary_worktree_removes_owner_repo_directory() {
+        let repo = TempRepo::new("secondary_cleanup");
+        let seed_worktree = repo.add_worktree("seed");
+        let task_id = "secondary_cleanup_task";
+        let expected_path = repo.path.join(".worktrees").join("tasks").join(task_id);
+
+        let wt_path = create_task_worktree(&seed_worktree, task_id).expect("create worktree");
+        let expected_canonical = expected_path
+            .canonicalize()
+            .expect("canonical owner repo worktree path");
+        assert_eq!(wt_path, expected_canonical);
+        assert!(expected_canonical.exists());
+        assert!(
+            !seed_worktree.join(".worktrees").join("tasks").join(task_id).exists(),
+            "task worktree must not be nested inside the selected worktree"
+        );
+
+        cleanup_task_worktree(&seed_worktree, task_id).expect("cleanup worktree");
+
+        assert!(
+            !expected_path.exists(),
+            "owner repo task worktree directory must be removed"
         );
     }
 }
