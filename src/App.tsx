@@ -71,9 +71,8 @@ export default function App() {
   const clearUiErrors = useBridgeStore((s) => s.clearUiErrors);
   const runtimeHealth = useBridgeStore((s) => s.runtimeHealth);
   const clearMessages = useBridgeStore((s) => s.clearMessages);
-  // Top-bar indicator only needs a count, not the full list — count is
-  // O(bucket-count) via sum of bucket sizes. Prior chatMessages filter
-  // over the flat array was O(total-message-count) each render.
+  // Top-bar badge should reflect renderable chat traffic, not raw stored rows:
+  // system diagnostics and empty-payload messages do not count as chat items.
   const messageCount = useBridgeStore(selectTotalMessageCount);
   const [errorLogOpen, setErrorLogOpen] = useState(false);
 
