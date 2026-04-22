@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
 
+const TASK_SWITCH_SETTLE_FRAMES = 4;
+
 /// Single owner of "should the chat follow bottom?" for MessageList.
 ///
 /// **Design principles** (answers to why we iterated on this logic 36+
@@ -35,6 +37,8 @@ export interface UseScrollAnchorOptions {
   searchActive: boolean;
   /** Items count (excluding footer). Drives the one-shot initial scroll. */
   totalCount: number;
+  /** Active task/session scope. Changing it resets sticky scroll state. */
+  activeScopeKey?: string | null;
 }
 
 export interface UseScrollAnchorResult {
@@ -51,11 +55,14 @@ export interface UseScrollAnchorResult {
 export function useScrollAnchor(
   opts: UseScrollAnchorOptions,
 ): UseScrollAnchorResult {
-  const { searchActive, totalCount } = opts;
+  const { searchActive, totalCount, activeScopeKey = null } = opts;
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
+  const lastAutoBottomTopRef = useRef<number | null>(null);
+  const scrollbarDragIntentRef = useRef(false);
   const [scrollerNode, setScrollerNode] = useState<HTMLElement | null>(null);
   const didInitialScrollRef = useRef(false);
+  const previousScopeKeyRef = useRef<string | null>(activeScopeKey);
 
   // `userAway` is the canonical "should we stop following?" latch.
   // Set by user intent events, cleared by return-to-bottom.
@@ -81,6 +88,8 @@ export function useScrollAnchor(
   const scrollerRefCallback = useCallback((el: HTMLElement | Window | null) => {
     const node = el instanceof HTMLElement ? el : null;
     scrollerRef.current = node;
+    lastAutoBottomTopRef.current = null;
+    scrollbarDragIntentRef.current = false;
     setScrollerNode((prev) => (prev === node ? prev : node));
   }, []);
 
@@ -101,6 +110,7 @@ export function useScrollAnchor(
 
   const scrollToBottom = useCallback(() => {
     clearUserAway();
+    lastAutoBottomTopRef.current = null;
     virtuosoRef.current?.scrollToIndex({
       index: "LAST",
       behavior: "smooth",
@@ -111,21 +121,72 @@ export function useScrollAnchor(
     if (searchActive || userAwayRef.current) return;
     const el = scrollerRef.current;
     if (el) {
-      el.scrollTo({ top: el.scrollHeight });
+      const targetTop = el.scrollHeight;
+      if (lastAutoBottomTopRef.current === targetTop) return;
+      lastAutoBottomTopRef.current = targetTop;
+      el.scrollTo({ top: targetTop });
     } else {
       virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
     }
   }, [searchActive]);
 
+  // Task/session switches are a fresh navigation context. Clear any carried
+  // over "user scrolled away" latch from the previous task, then land on the
+  // new task's absolute bottom so long transcripts don't require repeated
+  // manual scrolling to reach the latest output.
+  useEffect(() => {
+    if (previousScopeKeyRef.current === activeScopeKey) return;
+    previousScopeKeyRef.current = activeScopeKey;
+    userAwayRef.current = false;
+    lastAutoBottomTopRef.current = null;
+    setShowBackToBottom(false);
+
+    if (searchActive || totalCount === 0) {
+      didInitialScrollRef.current = false;
+      return;
+    }
+
+    didInitialScrollRef.current = true;
+    let remainingFrames = TASK_SWITCH_SETTLE_FRAMES;
+    let settleRaf: number | null = null;
+    const settleToBottom = () => {
+      if (remainingFrames === TASK_SWITCH_SETTLE_FRAMES) {
+        virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+      }
+      nudgeToBottom();
+      remainingFrames -= 1;
+      if (remainingFrames > 0) {
+        settleRaf = window.requestAnimationFrame(settleToBottom);
+      }
+    };
+    settleRaf = window.requestAnimationFrame(settleToBottom);
+    return () => {
+      if (settleRaf !== null) window.cancelAnimationFrame(settleRaf);
+    };
+  }, [activeScopeKey, searchActive, totalCount, nudgeToBottom]);
+
   // User-intent listeners on the Virtuoso scroller. wheel/touchmove/keyboard
-  // only — scroll-event-based detection was the source of the immunity-window
-  // regressions.
+  // stay direct; scrollbar drag is the only scroll-event-based path, and it
+  // is gated behind a preceding pointer-down on the scroller element itself.
   useEffect(() => {
     if (!scrollerNode) return;
     const onWheel = (e: WheelEvent) => {
       if (e.deltaY < 0) markUserAway();
     };
     const onTouchMove = () => markUserAway();
+    const onScrollbarPointerDown = (e: MouseEvent | PointerEvent) => {
+      if (e.target === scrollerNode) {
+        scrollbarDragIntentRef.current = true;
+      }
+    };
+    const clearScrollbarDragIntent = () => {
+      scrollbarDragIntentRef.current = false;
+    };
+    const onScroll = () => {
+      if (!scrollbarDragIntentRef.current) return;
+      scrollbarDragIntentRef.current = false;
+      markUserAway();
+    };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home") {
         markUserAway();
@@ -133,11 +194,25 @@ export function useScrollAnchor(
     };
     scrollerNode.addEventListener("wheel", onWheel, { passive: true });
     scrollerNode.addEventListener("touchmove", onTouchMove, { passive: true });
+    scrollerNode.addEventListener("mousedown", onScrollbarPointerDown);
+    scrollerNode.addEventListener("pointerdown", onScrollbarPointerDown);
+    scrollerNode.addEventListener("scroll", onScroll, { passive: true });
     scrollerNode.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mouseup", clearScrollbarDragIntent);
+    window.addEventListener("pointerup", clearScrollbarDragIntent);
+    window.addEventListener("pointercancel", clearScrollbarDragIntent);
+    window.addEventListener("blur", clearScrollbarDragIntent);
     return () => {
       scrollerNode.removeEventListener("wheel", onWheel);
       scrollerNode.removeEventListener("touchmove", onTouchMove);
+      scrollerNode.removeEventListener("mousedown", onScrollbarPointerDown);
+      scrollerNode.removeEventListener("pointerdown", onScrollbarPointerDown);
+      scrollerNode.removeEventListener("scroll", onScroll);
       scrollerNode.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mouseup", clearScrollbarDragIntent);
+      window.removeEventListener("pointerup", clearScrollbarDragIntent);
+      window.removeEventListener("pointercancel", clearScrollbarDragIntent);
+      window.removeEventListener("blur", clearScrollbarDragIntent);
     };
   }, [scrollerNode, markUserAway]);
 
@@ -165,4 +240,15 @@ export function useScrollAnchor(
     scrollToBottom,
     nudgeToBottom,
   };
+}
+
+// Edits to this custom hook can change the internal hook queue layout.
+// Vite/React Fast Refresh occasionally preserves stale state across those
+// edits in dev, which surfaces React's "Should have a queue" invalid-hook-call
+// error even though runtime hook usage is valid. Force a full reload for this
+// module's hot updates instead of stateful refresh.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    window.location.reload();
+  });
 }
