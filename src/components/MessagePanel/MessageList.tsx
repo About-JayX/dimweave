@@ -1,6 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
+import {
+  makeActiveClaudeStreamSelector,
+  makeActiveCodexStreamSelector,
+} from "@/stores/bridge-store/selectors";
 import type { Attachment, BridgeMessage } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 import { CodexStreamIndicator } from "./CodexStreamIndicator";
@@ -41,16 +46,26 @@ export function MessageList({
   searchActive = false,
   onOpenImage,
 }: Props) {
-  const claudeThinking = useBridgeStore((s) => s.claudeStream.thinking);
-  const claudePreviewText = useBridgeStore((s) => s.claudeStream.previewText);
-  const hasClaudeDraft = claudeThinking || claudePreviewText.length > 0;
-  const codexVisible = useBridgeStore(
-    (s) => getCodexStreamIndicatorViewModel(s.codexStream).visible,
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const selectClaudeStream = useMemo(
+    () => makeActiveClaudeStreamSelector(activeTaskId),
+    [activeTaskId],
   );
-  const codexStreamTail = useBridgeStore((s) => {
-    const cs = s.codexStream;
-    return cs.currentDelta || cs.activity || cs.reasoning || cs.commandOutput;
-  });
+  const selectCodexStream = useMemo(
+    () => makeActiveCodexStreamSelector(activeTaskId),
+    [activeTaskId],
+  );
+  const claudeStream = useBridgeStore(selectClaudeStream);
+  const codexStream = useBridgeStore(selectCodexStream);
+  const { thinking: claudeThinking, previewText: claudePreviewText } =
+    claudeStream;
+  const hasClaudeDraft = claudeThinking || claudePreviewText.length > 0;
+  const codexVisible = getCodexStreamIndicatorViewModel(codexStream).visible;
+  const codexStreamTail =
+    codexStream.currentDelta ||
+    codexStream.activity ||
+    codexStream.reasoning ||
+    codexStream.commandOutput;
   const streamRailIndicators = useMemo(
     () => [...(codexVisible ? (["codex"] as const) : [])],
     [codexVisible],
