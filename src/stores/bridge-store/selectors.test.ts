@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  makeActiveTaskMessagesSelector,
   makeActiveClaudeStreamSelector,
   makeActiveCodexStreamSelector,
+  selectTotalMessageCount,
 } from "./selectors";
 import type { BridgeState } from "./types";
+import { GLOBAL_MESSAGE_BUCKET } from "./types";
 
 function baseState(): BridgeState {
   return {
@@ -51,6 +54,54 @@ function baseState(): BridgeState {
     cleanup: () => {},
   };
 }
+
+function makeAgentMessage(
+  id: string,
+  timestamp: number,
+  message: string,
+  attachments: BridgeState["messagesByTask"][string][number]["attachments"] = [],
+) {
+  return {
+    id,
+    source: {
+      kind: "agent" as const,
+      agentId: "claude",
+      role: "lead",
+      provider: "claude" as const,
+    },
+    target: { kind: "user" as const },
+    message,
+    attachments,
+    timestamp,
+  };
+}
+
+function makeSystemMessage(id: string, timestamp: number, message: string) {
+  return {
+    id,
+    source: { kind: "system" as const },
+    target: { kind: "user" as const },
+    message,
+    timestamp,
+  };
+}
+
+describe("makeActiveTaskMessagesSelector", () => {
+  test("returns a stable merged reference when task and global buckets are unchanged", () => {
+    const state = baseState();
+    state.messagesByTask = {
+      [GLOBAL_MESSAGE_BUCKET]: [makeSystemMessage("global", 1, "system note")],
+      task_a: [makeAgentMessage("agent", 2, "hello")],
+    };
+    const sel = makeActiveTaskMessagesSelector("task_a");
+
+    const first = sel(state);
+    const second = sel(state);
+
+    expect(first.map((msg) => msg.id)).toEqual(["global", "agent"]);
+    expect(first).toBe(second);
+  });
+});
 
 describe("makeActiveClaudeStreamSelector", () => {
   test("returns the per-task bucket for the given taskId", () => {
@@ -120,5 +171,27 @@ describe("makeActiveCodexStreamSelector", () => {
     const b = sel(state);
     expect(a.currentDelta).toBe("");
     expect(a).toBe(b);
+  });
+});
+
+describe("selectTotalMessageCount", () => {
+  test("counts only renderable chat messages across all buckets", () => {
+    const state = baseState();
+    state.messagesByTask = {
+      [GLOBAL_MESSAGE_BUCKET]: [makeSystemMessage("sys", 1, "daemon started")],
+      task_a: [makeAgentMessage("visible", 2, "hello world")],
+      task_b: [
+        makeAgentMessage("attachment-only", 3, "   ", [
+          {
+            filePath: "/tmp/report.png",
+            fileName: "report.png",
+            isImage: true,
+          },
+        ]),
+      ],
+      task_c: [makeAgentMessage("empty", 4, "   ")],
+    };
+
+    expect(selectTotalMessageCount(state)).toBe(2);
   });
 });

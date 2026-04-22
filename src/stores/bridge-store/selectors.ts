@@ -1,4 +1,5 @@
 import type { BridgeMessage } from "@/types";
+import { hasMessagePayload } from "@/lib/message-payload";
 import type { BridgeState } from "./types";
 import { GLOBAL_MESSAGE_BUCKET } from "./types";
 import {
@@ -30,6 +31,10 @@ const EMPTY_MESSAGES: BridgeMessage[] = [];
 export function makeActiveTaskMessagesSelector(
   taskId: string | null,
 ): (state: BridgeState) => BridgeMessage[] {
+  let lastTaskBucket: BridgeMessage[] | null = null;
+  let lastGlobalBucket: BridgeMessage[] | null = null;
+  let lastMerged: BridgeMessage[] | null = null;
+
   return (state: BridgeState) => {
     const global =
       state.messagesByTask[GLOBAL_MESSAGE_BUCKET] ?? EMPTY_MESSAGES;
@@ -37,6 +42,9 @@ export function makeActiveTaskMessagesSelector(
     const task = state.messagesByTask[taskId] ?? EMPTY_MESSAGES;
     if (global.length === 0) return task;
     if (task.length === 0) return global;
+    if (task === lastTaskBucket && global === lastGlobalBucket && lastMerged) {
+      return lastMerged;
+    }
     // Merge two already-chronologically-sorted arrays by timestamp.
     const merged: BridgeMessage[] = [];
     let i = 0;
@@ -47,15 +55,28 @@ export function makeActiveTaskMessagesSelector(
     }
     while (i < task.length) merged.push(task[i++]);
     while (j < global.length) merged.push(global[j++]);
+    lastTaskBucket = task;
+    lastGlobalBucket = global;
+    lastMerged = merged;
     return merged;
   };
 }
 
-/// Total message count across all task buckets. Used by top-bar
-/// indicators; does not care about per-task scoping.
+/// Total count of renderable chat messages across all task buckets. Excludes
+/// system diagnostics and empty-payload rows so the top-bar badge matches what
+/// the chat surface can actually render.
 export function selectTotalMessageCount(state: BridgeState): number {
   let n = 0;
-  for (const b of Object.values(state.messagesByTask)) n += b.length;
+  for (const bucket of Object.values(state.messagesByTask)) {
+    for (const message of bucket) {
+      if (
+        message.source.kind !== "system" &&
+        hasMessagePayload(message.message, message.attachments)
+      ) {
+        n += 1;
+      }
+    }
+  }
   return n;
 }
 
