@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBridgeStore } from "@/stores/bridge-store";
+import { useTaskStore } from "@/stores/task-store";
+import { makeActiveCodexStreamSelector } from "@/stores/bridge-store/selectors";
 import { SourceBadge } from "./SourceBadge";
 import {
   getExpandableTextState,
@@ -9,13 +11,15 @@ import {
 import { getStreamSurfacePresentation } from "./surface-styles";
 
 export function CodexStreamIndicator() {
-  const thinking = useBridgeStore((s) => s.codexStream.thinking);
-  const currentDelta = useBridgeStore((s) => s.codexStream.currentDelta);
-  const activity = useBridgeStore((s) => s.codexStream.activity);
-  const reasoning = useBridgeStore((s) => s.codexStream.reasoning);
-  const commandOutput = useBridgeStore((s) => s.codexStream.commandOutput);
+  const activeTaskId = useTaskStore((s) => s.activeTaskId);
+  const selectCodexStream = useMemo(
+    () => makeActiveCodexStreamSelector(activeTaskId),
+    [activeTaskId],
+  );
+  const stream = useBridgeStore(selectCodexStream);
+  const { currentDelta, activity, reasoning, commandOutput } = stream;
   const codexStream = {
-    thinking,
+    thinking: stream.thinking,
     currentDelta,
     lastMessage: "",
     turnStatus: "",

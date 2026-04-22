@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, mock } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -29,6 +29,29 @@ let _bs = {
     reasoning: "",
     commandOutput: "",
   },
+  claudeStreamsByTask: {} as Record<
+    string,
+    {
+      thinking: boolean;
+      previewText: string;
+      thinkingText: string;
+      blockType: "idle" | "thinking" | "text" | "tool";
+      toolName: string;
+      lastUpdatedAt: number;
+    }
+  >,
+  codexStreamsByTask: {} as Record<
+    string,
+    {
+      thinking: boolean;
+      currentDelta: string;
+      lastMessage: string;
+      turnStatus: string;
+      activity: string;
+      reasoning: string;
+      commandOutput: string;
+    }
+  >,
 };
 const _store = Object.assign((sel: (s: typeof _bs) => unknown) => sel(_bs), {
   getState: () => _bs,
@@ -38,6 +61,26 @@ const _store = Object.assign((sel: (s: typeof _bs) => unknown) => sel(_bs), {
   subscribe: () => () => {},
 });
 mock.module("@/stores/bridge-store", () => ({ useBridgeStore: _store }));
+
+let _taskState = {
+  activeTaskId: null as string | null,
+};
+const _taskStore = Object.assign(
+  (sel: (s: typeof _taskState) => unknown) => sel(_taskState),
+  {
+    getState: () => _taskState,
+    setState: (
+      up:
+        | typeof _taskState
+        | ((s: typeof _taskState) => typeof _taskState),
+    ) => {
+      _taskState =
+        typeof up === "function" ? { ..._taskState, ...up(_taskState) } : { ..._taskState, ...up };
+    },
+    subscribe: () => () => {},
+  },
+);
+mock.module("@/stores/task-store", () => ({ useTaskStore: _taskStore }));
 
 // 2. Fake Virtuoso: renders all items synchronously (bypasses SSR item-skip)
 //    Also captures the latest props so tests can assert on followOutput, etc.
@@ -92,7 +135,43 @@ function installTauriStub() {
   });
 }
 
+function resetStores() {
+  _bs = {
+    claudeStream: {
+      thinking: false,
+      previewText: "",
+      thinkingText: "",
+      blockType: "idle",
+      toolName: "",
+      lastUpdatedAt: 0,
+    },
+    codexStream: {
+      thinking: false,
+      currentDelta: "",
+      lastMessage: "",
+      turnStatus: "",
+      activity: "",
+      reasoning: "",
+      commandOutput: "",
+    },
+    claudeStreamsByTask: {},
+    codexStreamsByTask: {},
+  };
+  _taskState = {
+    activeTaskId: null,
+  };
+  lastVirtuosoProps = null;
+}
+
 describe("MessageList", () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(() => {
+    resetStores();
+  });
+
   test("filters long sessions by message content and attachment names", () => {
     const filtered = filterMessagesByQuery(
       [
@@ -217,6 +296,83 @@ describe("MessageList", () => {
 
     expect(html).toContain("Reviewing the daemon event path");
     expect(html).toContain("writing");
+  });
+
+  test("renders Claude working draft from the active task bucket when singleton mirror is empty", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }, { useTaskStore }] =
+      await Promise.all([
+        import("./MessageList"),
+        import("@/stores/bridge-store"),
+        import("@/stores/task-store"),
+      ]);
+
+    useTaskStore.setState({ activeTaskId: "task_a" });
+    useBridgeStore.setState((state) => ({
+      ...state,
+      claudeStream: {
+        thinking: false,
+        previewText: "",
+        thinkingText: "",
+        blockType: "idle" as const,
+        toolName: "",
+        lastUpdatedAt: 0,
+      },
+      claudeStreamsByTask: {
+        task_a: {
+          thinking: true,
+          previewText: "Bucket scoped Claude draft",
+          thinkingText: "",
+          blockType: "text" as const,
+          toolName: "",
+          lastUpdatedAt: 1,
+        },
+      },
+    }));
+
+    const html = renderToStaticMarkup(<MessageList messages={[]} />);
+
+    expect(html).toContain("Bucket scoped Claude draft");
+    expect(html).toContain("writing");
+  });
+
+  test("renders Codex footer from the active task bucket when singleton mirror is empty", async () => {
+    installTauriStub();
+    const [{ MessageList }, { useBridgeStore }, { useTaskStore }] =
+      await Promise.all([
+        import("./MessageList"),
+        import("@/stores/bridge-store"),
+        import("@/stores/task-store"),
+      ]);
+
+    useTaskStore.setState({ activeTaskId: "task_a" });
+    useBridgeStore.setState((state) => ({
+      ...state,
+      codexStream: {
+        thinking: false,
+        currentDelta: "",
+        lastMessage: "",
+        turnStatus: "",
+        activity: "",
+        reasoning: "",
+        commandOutput: "",
+      },
+      codexStreamsByTask: {
+        task_a: {
+          thinking: false,
+          currentDelta: "",
+          lastMessage: "",
+          turnStatus: "",
+          activity: "Running: ls -la",
+          reasoning: "",
+          commandOutput: "",
+        },
+      },
+    }));
+
+    const html = renderToStaticMarkup(<MessageList messages={[]} />);
+
+    expect(html).toContain("Running: ls -la");
   });
 
   // GREEN: Regression guard for the draft-to-final handoff (post-fix).

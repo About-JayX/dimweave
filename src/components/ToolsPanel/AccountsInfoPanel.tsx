@@ -24,7 +24,7 @@ function AccountCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border/40 bg-card/40 px-3 py-2.5 text-[11px]">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-border/40 bg-card/40 px-3 py-2.5 text-[11px]">
       <div className="mb-1.5 flex items-center gap-1.5 text-foreground">
         {icon}
         <span className="font-semibold">{title}</span>
@@ -61,13 +61,16 @@ function Row({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="text-[10px] text-muted-foreground/70">{label}</span>
+    <div className="flex min-w-0 items-center justify-between gap-2 py-0.5">
+      <span className="shrink-0 text-[10px] text-muted-foreground/70">
+        {label}
+      </span>
       <span
         className={cn(
-          "truncate text-foreground/80",
+          "min-w-0 flex-1 truncate text-right text-foreground/80",
           mono && "font-mono text-[10px]",
         )}
+        title={typeof value === "string" ? value : undefined}
       >
         {value}
       </span>
@@ -145,7 +148,7 @@ function ClaudeCard({ profile }: { profile: ClaudeProfile | null }) {
         title="Claude"
         mode="subscription"
       >
-        <p className="text-[10px] text-muted-foreground/60">
+        <p className="max-w-full overflow-hidden whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-[10px] leading-relaxed text-muted-foreground/60">
           {profileError ? `Error: ${profileError}` : "Loading…"}
         </p>
       </AccountCard>
@@ -234,7 +237,7 @@ function CodexCard() {
         title="Codex"
         mode="subscription"
       >
-        <p className="text-[10px] text-muted-foreground/60">
+        <p className="max-w-full overflow-hidden whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-[10px] leading-relaxed text-muted-foreground/60">
           Not signed in — open settings to configure.
         </p>
       </AccountCard>

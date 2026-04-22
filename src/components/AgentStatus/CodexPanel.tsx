@@ -255,6 +255,7 @@ export function CodexPanel({
     selectedReasoning,
     effectiveCwd,
     selectedHistory,
+    activeTask?.taskId,
   ]);
 
   const summaryChips = useMemo(

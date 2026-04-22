@@ -1,6 +1,10 @@
 import type { BridgeMessage } from "@/types";
 import type { BridgeState } from "./types";
 import { GLOBAL_MESSAGE_BUCKET } from "./types";
+import {
+  defaultClaudeStreamState,
+  defaultCodexStreamState,
+} from "./stream-reducers";
 
 export function selectConnected(state: BridgeState) {
   return state.connected;
@@ -114,4 +118,21 @@ export function selectUiErrors(state: BridgeState) {
 
 export function selectUiErrorCount(state: BridgeState) {
   return state.uiErrors.length;
+}
+
+const DEFAULT_CLAUDE_STREAM = defaultClaudeStreamState();
+const DEFAULT_CODEX_STREAM = defaultCodexStreamState();
+
+export function makeActiveClaudeStreamSelector(
+  taskId: string | null,
+): (state: BridgeState) => BridgeState["claudeStream"] {
+  if (!taskId) return (state) => state.claudeStream;
+  return (state) => state.claudeStreamsByTask[taskId] ?? DEFAULT_CLAUDE_STREAM;
+}
+
+export function makeActiveCodexStreamSelector(
+  taskId: string | null,
+): (state: BridgeState) => BridgeState["codexStream"] {
+  if (!taskId) return (state) => state.codexStream;
+  return (state) => state.codexStreamsByTask[taskId] ?? DEFAULT_CODEX_STREAM;
 }

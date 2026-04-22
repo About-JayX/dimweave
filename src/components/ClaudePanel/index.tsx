@@ -157,7 +157,15 @@ export function ClaudePanel({
     } finally {
       setConnecting(false);
     }
-  }, [claudeRole, effectiveCwd, model, effort, selectedHistory, resumeSession]);
+  }, [
+    claudeRole,
+    effectiveCwd,
+    model,
+    effort,
+    selectedHistory,
+    resumeSession,
+    activeTask?.taskId,
+  ]);
 
   const handleLaunch = useCallback(async () => {
     if (!effectiveCwd) return;

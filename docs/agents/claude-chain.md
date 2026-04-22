@@ -633,3 +633,31 @@ Claude Code CLI 支持多种注入机制，按强制性排序：
 - Prompt 教学增加"agent_id-first targeting" 段，要求模型优先按 `sender_agent_id` 回复而非 role-broadcast。
 
 **详细修复记录**：见 [codex-chain.md 2026-04-17 条目](codex-chain.md)（主要落地在 daemon 侧，两链路共享同一份 wire 契约修复）。
+
+## 2026-04-22 — history resume 绑定到 `sess.task_id` + stream 指示器读 per-task bucket
+
+### 现象
+
+- 选 Claude 历史 session 后点 Connect，daemon 成功 launch，但前端按钮一直停留在 Connect，`claudeOnlineForTask` 对真实 task 不翻成 `true`。
+- Claude / Codex agent 明明仍在工作，但 UI 上的 streaming indicator 可能完全不出现，尤其是在 task 切换或 history resume 之后。
+
+### 根因
+
+1. `DaemonCmd::ResumeSession` 的 Claude 分支一直用 `active_task_id.unwrap_or_default()` 作为 resume launch 的 task，当前无 active task 时会掉成空串；当前 active task 与历史 session 原生 task 不同时，会先绑到错误 task。Codex 后端同一路径已经使用 `sess.task_id.clone()`。
+2. `ClaudeStreamIndicator` / `CodexStreamIndicator` 以及 `MessageList` 外层的 draft/footer gating 仍然依赖 singleton mirror（`claudeStream` / `codexStream`）。而 stream 事件真正先落的是 `claudeStreamsByTask` / `codexStreamsByTask` bucket，mirror 只有在 `activeId === taskId` 时才会同步。
+3. 对照排查后确认：Codex backend history resume 没有同类 task 绑定错误，但 `CodexPanel.handleConnect` 和 `ClaudePanel.doLaunch` 一样，都存在 stale `activeTask?.taskId` 闭包。
+
+### 修复
+
+- Claude history resume 改用 `sess.task_id.clone()`，与 Codex 后端一致。
+- 新增 `makeActiveClaudeStreamSelector` / `makeActiveCodexStreamSelector`，并让 `ClaudeStreamIndicator`、`CodexStreamIndicator`、`MessageList` 统一读取 active task 的 per-task bucket。
+- `ClaudePanel.doLaunch` / `CodexPanel.handleConnect` 的 `useCallback` 依赖补齐 `activeTask?.taskId`。
+
+### 验证
+
+- `cargo test -p dimweave claude_resume_uses_session_task`
+- `cargo test -p dimweave state_task_snapshot_tests`
+- `cargo test -p dimweave claude_tests`
+- `bun test src/stores/bridge-store/selectors.test.ts`
+- `bun test src/components/MessagePanel/ src/stores/bridge-store/`
+- `bun test src/components/ClaudePanel/connect-state.test.ts src/components/AgentStatus/codex-launch-config.test.ts src/components/TaskPanel/index.test.tsx`
