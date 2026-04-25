@@ -4,7 +4,7 @@ use super::{codex_base_prompt, role_protocol};
 #[derive(Debug, Clone)]
 pub struct RoleConfig {
     /// Injected as `baseInstructions` in Codex `thread/start` —
-    /// merged from original Codex GPT-5.4 system prompt + Dimweave role instructions
+    /// selected model's archived official prompt + Dimweave role instructions.
     pub base_instructions: String,
     /// Codex sandbox mode (OS-enforced)
     pub sandbox_mode: &'static str,
@@ -56,11 +56,15 @@ fn role_examples(role_id: &str) -> &'static str {
     }
 }
 
-fn build_role_prompt(role_id: &str) -> String {
+fn build_role_prompt(role_id: &str, model: Option<&str>) -> String {
+    let official_base = codex_base_prompt::default_base_instructions_for_model(model);
+    let prompt_source_model = codex_base_prompt::prompt_source_model(model);
     format!(
-        "{identity}\n\n\
+        "{official_base}\n\n\
          # Dimweave Multi-Agent System\n\n\
-         You are also an agent in Dimweave, a multi-agent collaboration system.\n\n\
+         You are also an agent in Dimweave, a multi-agent collaboration system.\n\
+         The section below is appended to the archived official `{prompt_source_model}` default prompt. \
+         Preserve the official Codex behavior unless a Dimweave routing, role, authorization, or JSON output rule below is more specific.\n\n\
          {roles_section}\n\n\
          {subject_matter_authority}\n\n\
          ## Communication\n\
@@ -118,39 +122,42 @@ fn build_role_prompt(role_id: &str) -> String {
          Silence is always safer than an unwanted reply.\n\n\
          ## Examples\n\
          {role_examples}\n\n\
-         {coding_capabilities}\n\n\
-         {communication_style}\n\n\
          {security_research_policy}",
-        identity = codex_base_prompt::identity_and_personality(),
+        official_base = official_base,
+        prompt_source_model = prompt_source_model,
         roles_section = role_protocol::roles_section(),
         subject_matter_authority = role_protocol::subject_matter_authority_section(),
         role_examples = role_examples(role_id),
         role_intro = role_protocol::codex_role_intro(role_id),
         role_specific_rules = role_protocol::role_specific_rules(role_id),
         factual_error_correction_rule = role_protocol::factual_error_correction_rule(),
-        coding_capabilities = codex_base_prompt::coding_capabilities(),
-        communication_style = codex_base_prompt::communication_style(),
         security_research_policy = role_protocol::security_research_policy_section(),
     )
 }
 
 /// Build a role config by id.
 pub fn get_role(role_id: &str) -> Option<RoleConfig> {
+    get_role_for_model(role_id, None)
+}
+
+/// Build a role config by id, merging Dimweave instructions with the selected
+/// model's archived official default prompt.
+pub fn get_role_for_model(role_id: &str, model: Option<&str>) -> Option<RoleConfig> {
     match role_id {
         "user" => Some(RoleConfig {
-            base_instructions: build_role_prompt("user"),
+            base_instructions: build_role_prompt("user", model),
             sandbox_mode: "workspace-write",
             network_access: false,
             approval_policy: "never",
         }),
         "lead" => Some(RoleConfig {
-            base_instructions: build_role_prompt("lead"),
+            base_instructions: build_role_prompt("lead", model),
             sandbox_mode: "danger-full-access",
             network_access: true,
             approval_policy: "never",
         }),
         "coder" => Some(RoleConfig {
-            base_instructions: build_role_prompt("coder"),
+            base_instructions: build_role_prompt("coder", model),
             sandbox_mode: "workspace-write",
             network_access: false,
             approval_policy: "never",

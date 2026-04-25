@@ -36,3 +36,16 @@ async fn ensure_port_available_times_out_when_cleanup_cannot_free_port() {
 
     assert!(err.contains(&format!("Port {port} still in use")));
 }
+
+#[test]
+fn resolve_role_launch_config_uses_selected_model_prompt() {
+    let (_, _, _, prompt) = resolve_role_launch_config("coder", Some("gpt-5.5"));
+    let prompt = prompt.unwrap();
+    assert!(prompt.contains("You have a vivid inner life as Codex"));
+    assert!(prompt.contains("# Dimweave Multi-Agent System"));
+
+    let (_, _, _, prompt) = resolve_role_launch_config("coder", Some("gpt-5.4"));
+    let prompt = prompt.unwrap();
+    assert!(prompt.contains("You are a deeply pragmatic, effective software engineer"));
+    assert!(!prompt.contains("You have a vivid inner life as Codex"));
+}

@@ -211,7 +211,7 @@ pub async fn start(
         codex_port,
     } = opts;
     let (sandbox_mode, approval_policy, network_access, base_instructions) =
-        resolve_role_launch_config(&role_id);
+        resolve_role_launch_config(&role_id, model.as_deref());
     let session_opts = SessionOpts {
         role_id: role_id.clone(),
         cwd: cwd.clone(),
@@ -253,7 +253,7 @@ pub async fn resume(
         launch_epoch,
         codex_port,
     } = opts;
-    let (sandbox_mode, approval_policy, _, _) = resolve_role_launch_config(&role_id);
+    let (sandbox_mode, approval_policy, _, _) = resolve_role_launch_config(&role_id, None);
     launch(
         LaunchMode::Resume {
             role_id: role_id.clone(),
@@ -274,8 +274,15 @@ pub async fn resume(
     .await
 }
 
-fn resolve_role_launch_config(role_id: &str) -> (String, String, bool, Option<String>) {
-    if let Some(rc) = role_config::get_role(role_id) {
+fn resolve_role_launch_config(
+    role_id: &str,
+    model: Option<&str>,
+) -> (String, String, bool, Option<String>) {
+    let role_config = match model {
+        Some(model) => role_config::get_role_for_model(role_id, Some(model)),
+        None => role_config::get_role(role_id),
+    };
+    if let Some(rc) = role_config {
         (
             rc.sandbox_mode.to_string(),
             rc.approval_policy.to_string(),

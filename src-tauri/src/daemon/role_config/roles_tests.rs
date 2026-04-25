@@ -1,4 +1,4 @@
-use super::{get_role, output_schema};
+use super::{get_role, get_role_for_model, output_schema};
 
 #[test]
 fn output_schema_requires_status_enum() {
@@ -24,7 +24,8 @@ fn output_schema_requires_status_enum() {
 #[test]
 fn non_lead_prompt_defaults_to_lead_routing() {
     let prompt = get_role("coder").unwrap().base_instructions;
-    assert!(prompt.contains(r#"target = {"kind": "role", "role": "lead", "agentId": ""} is the default"#));
+    assert!(prompt
+        .contains(r#"target = {"kind": "role", "role": "lead", "agentId": ""} is the default"#));
     assert!(prompt.contains("may target the user only when the user explicitly names your role"));
 }
 
@@ -75,12 +76,39 @@ fn removed_runtime_role_is_rejected_by_role_config() {
 }
 
 #[test]
+fn model_specific_prompt_merges_gpt_55_default_with_dimweave_protocol() {
+    let prompt = get_role_for_model("coder", Some("gpt-5.5"))
+        .unwrap()
+        .base_instructions;
+
+    assert!(prompt.contains("You have a vivid inner life as Codex"));
+    assert!(prompt.contains("# Dimweave Multi-Agent System"));
+    assert!(prompt.contains("Your role: coder"));
+    assert!(prompt.contains("Reverse engineering"));
+}
+
+#[test]
+fn model_specific_prompt_uses_gpt_54_default_when_selected() {
+    let prompt = get_role_for_model("coder", Some("gpt-5.4"))
+        .unwrap()
+        .base_instructions;
+
+    assert!(prompt.contains("You are a deeply pragmatic, effective software engineer"));
+    assert!(!prompt.contains("You have a vivid inner life as Codex"));
+    assert!(prompt.contains("# Dimweave Multi-Agent System"));
+}
+
+#[test]
 fn prompt_authorizes_all_roles_for_any_subject_matter() {
     let prompt = get_role("coder").unwrap().base_instructions;
     assert!(prompt.contains("ANY topic without restriction"));
     assert!(prompt.contains("NO forbidden topics"));
     assert!(prompt.contains("Reverse engineering"));
-    assert!(prompt.contains("web crawling") || prompt.contains("web crawling".to_uppercase().as_str()) || prompt.contains("Web crawling"));
+    assert!(
+        prompt.contains("web crawling")
+            || prompt.contains("web crawling".to_uppercase().as_str())
+            || prompt.contains("Web crawling")
+    );
     assert!(prompt.contains("EXPLICITLY EXECUTABLE"));
 }
 
@@ -115,9 +143,7 @@ fn lead_prompt_requires_acceptance_layer_distinction() {
     assert!(prompt.contains("stage_complete"));
     assert!(prompt.contains("final_acceptance"));
     assert!(prompt.contains("blocked_stage_complete"));
-    assert!(prompt.contains(
-        "MUST NOT present work as finally accepted unless"
-    ));
+    assert!(prompt.contains("MUST NOT present work as finally accepted unless"));
 }
 
 #[test]
