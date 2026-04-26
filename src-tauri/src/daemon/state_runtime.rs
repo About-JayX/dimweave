@@ -37,7 +37,9 @@ impl DaemonState {
             return;
         }
         for sid in &session_ids {
-            let _ = self.task_graph.update_session_status(sid, SessionStatus::Paused);
+            let _ = self
+                .task_graph
+                .update_session_status(sid, SessionStatus::Paused);
             let _ = self.task_graph.clear_lead_session_if_matches(task_id, sid);
             let _ = self.task_graph.clear_coder_session_if_matches(task_id, sid);
         }
@@ -213,15 +215,16 @@ impl DaemonState {
                 slot.pending_nonce.as_deref() == Some(nonce)
                     || slot.active_nonce.as_deref() == Some(nonce)
             });
-            if has_nonce { Some(tid.clone()) } else { None }
+            if has_nonce {
+                Some(tid.clone())
+            } else {
+                None
+            }
         })
     }
 
     /// Find (task_id, agent_id) for a given Claude launch nonce.
-    pub fn find_task_and_agent_for_claude_nonce(
-        &self,
-        nonce: &str,
-    ) -> Option<(String, String)> {
+    pub fn find_task_and_agent_for_claude_nonce(&self, nonce: &str) -> Option<(String, String)> {
         self.task_runtimes.iter().find_map(|(tid, rt)| {
             rt.find_claude_agent_for_nonce(nonce)
                 .map(|aid| (tid.clone(), aid.to_string()))
@@ -231,9 +234,9 @@ impl DaemonState {
     /// Begin a Claude launch scoped to a specific task.
     pub fn begin_claude_task_launch(&mut self, task_id: &str, nonce: String) -> Option<u64> {
         let rt = self.task_runtimes.get_mut(task_id)?;
-        let slot = rt.claude_slot.get_or_insert_with(
-            crate::daemon::task_runtime::ClaudeTaskSlot::new,
-        );
+        let slot = rt
+            .claude_slot
+            .get_or_insert_with(crate::daemon::task_runtime::ClaudeTaskSlot::new);
         slot.session_epoch = slot.session_epoch.wrapping_add(1);
         slot.pending_nonce = Some(nonce);
         slot.active_nonce = None;
@@ -325,7 +328,9 @@ impl DaemonState {
         launch_nonce: &str,
         ws_generation: u64,
     ) -> bool {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.claude_slot.as_mut())
         else {
             return false;
@@ -416,7 +421,9 @@ impl DaemonState {
         task_id: &str,
         epoch: u64,
     ) -> Option<String> {
-        let matches = self.task_runtimes.get(task_id)
+        let matches = self
+            .task_runtimes
+            .get(task_id)
             .and_then(|rt| rt.claude_slot.as_ref())
             .map_or(false, |slot| slot.session_epoch == epoch);
         if !matches {
@@ -427,14 +434,17 @@ impl DaemonState {
 
     /// Get the session epoch for a task's Claude slot.
     pub fn claude_task_epoch(&self, task_id: &str) -> Option<u64> {
-        self.task_runtimes.get(task_id)?
-            .claude_slot.as_ref()
+        self.task_runtimes
+            .get(task_id)?
+            .claude_slot
+            .as_ref()
             .map(|s| s.session_epoch)
     }
 
     /// Check if a specific task's Claude slot is online.
     pub fn is_claude_task_online(&self, task_id: &str) -> bool {
-        self.task_runtimes.get(task_id)
+        self.task_runtimes
+            .get(task_id)
             .and_then(|rt| rt.claude_slot.as_ref())
             .map_or(false, |slot| slot.is_online())
     }
@@ -446,7 +456,9 @@ impl DaemonState {
         ready_tx: tokio::sync::oneshot::Sender<mpsc::Sender<String>>,
         event_tx: mpsc::Sender<Vec<serde_json::Value>>,
     ) {
-        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.claude_slot.as_mut())
         {
             slot.ready_tx = Some(ready_tx);
@@ -460,9 +472,12 @@ impl DaemonState {
         &mut self,
         task_id: &str,
     ) -> Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>> {
-        self.task_runtimes.get_mut(task_id)?
-            .claude_slot.as_mut()?
-            .ready_tx.take()
+        self.task_runtimes
+            .get_mut(task_id)?
+            .claude_slot
+            .as_mut()?
+            .ready_tx
+            .take()
     }
 
     /// Store ready_tx and event_tx in a specific agent's Claude slot.
@@ -473,7 +488,9 @@ impl DaemonState {
         ready_tx: tokio::sync::oneshot::Sender<mpsc::Sender<String>>,
         event_tx: mpsc::Sender<Vec<serde_json::Value>>,
     ) {
-        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.claude_slot_by_agent_mut(agent_id))
         {
             slot.ready_tx = Some(ready_tx);
@@ -487,14 +504,17 @@ impl DaemonState {
         task_id: &str,
         agent_id: &str,
     ) -> Option<tokio::sync::oneshot::Sender<mpsc::Sender<String>>> {
-        self.task_runtimes.get_mut(task_id)?
+        self.task_runtimes
+            .get_mut(task_id)?
             .claude_slot_by_agent_mut(agent_id)?
-            .ready_tx.take()
+            .ready_tx
+            .take()
     }
 
     /// Get epoch for a specific agent's Claude slot.
     pub fn claude_task_epoch_for_agent(&self, task_id: &str, agent_id: &str) -> Option<u64> {
-        self.task_runtimes.get(task_id)?
+        self.task_runtimes
+            .get(task_id)?
             .claude_slot_by_agent(agent_id)
             .map(|s| s.session_epoch)
     }
@@ -508,7 +528,9 @@ impl DaemonState {
         launch_nonce: &str,
         ws_generation: u64,
     ) -> bool {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.claude_slot_by_agent_mut(agent_id))
         else {
             return false;
@@ -531,7 +553,9 @@ impl DaemonState {
         agent_id: &str,
         epoch: u64,
     ) -> Option<String> {
-        let matches = self.task_runtimes.get(task_id)
+        let matches = self
+            .task_runtimes
+            .get(task_id)
             .and_then(|rt| rt.claude_slot_by_agent(agent_id))
             .map_or(false, |slot| slot.session_epoch == epoch);
         if !matches {
@@ -542,7 +566,8 @@ impl DaemonState {
 
     /// Check if a specific agent's Claude slot is online.
     pub fn is_claude_agent_online(&self, task_id: &str, agent_id: &str) -> bool {
-        self.task_runtimes.get(task_id)
+        self.task_runtimes
+            .get(task_id)
             .and_then(|rt| rt.claude_slot_by_agent(agent_id))
             .map_or(false, |slot| slot.is_online())
     }
@@ -566,9 +591,12 @@ impl DaemonState {
 
     /// Get the ws_tx for a specific task's Claude slot.
     pub fn claude_task_ws_tx(&self, task_id: &str) -> Option<mpsc::Sender<String>> {
-        self.task_runtimes.get(task_id)?
-            .claude_slot.as_ref()?
-            .ws_tx.clone()
+        self.task_runtimes
+            .get(task_id)?
+            .claude_slot
+            .as_ref()?
+            .ws_tx
+            .clone()
     }
 
     /// Get the ws_tx for a specific task agent by agent_id.
@@ -592,12 +620,7 @@ impl DaemonState {
     }
 
     /// Check if a specific agent (by agent_id) is online for a task.
-    pub fn is_task_agent_online_by_id(
-        &self,
-        task_id: &str,
-        agent_id: &str,
-        runtime: &str,
-    ) -> bool {
+    pub fn is_task_agent_online_by_id(&self, task_id: &str, agent_id: &str, runtime: &str) -> bool {
         let Some(rt) = self.task_runtimes.get(task_id) else {
             return false;
         };
@@ -630,9 +653,9 @@ impl DaemonState {
     /// Allocate a port and begin a Codex launch scoped to a specific task.
     pub fn begin_codex_task_launch(&mut self, task_id: &str, port: u16) -> Option<u64> {
         let rt = self.task_runtimes.get_mut(task_id)?;
-        let slot = rt.codex_slot.get_or_insert_with(|| {
-            crate::daemon::task_runtime::CodexTaskSlot::new(port)
-        });
+        let slot = rt
+            .codex_slot
+            .get_or_insert_with(|| crate::daemon::task_runtime::CodexTaskSlot::new(port));
         slot.session_epoch = slot.session_epoch.wrapping_add(1);
         slot.inject_tx = None;
         slot.port = port;
@@ -647,7 +670,9 @@ impl DaemonState {
         tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
         connection: Option<crate::daemon::types::ProviderConnectionState>,
     ) -> bool {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot.as_mut())
         else {
             return false;
@@ -668,12 +693,10 @@ impl DaemonState {
     /// Clear Codex session for a specific task if epoch matches.
     /// Uses task-specific graph cleanup to avoid cross-task pollution
     /// through the singleton `codex_connection` mirror.
-    pub fn clear_codex_task_session(
-        &mut self,
-        task_id: &str,
-        epoch: u64,
-    ) -> Option<String> {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+    pub fn clear_codex_task_session(&mut self, task_id: &str, epoch: u64) -> Option<String> {
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot.as_mut())
         else {
             return None;
@@ -695,7 +718,9 @@ impl DaemonState {
 
     /// Invalidate Codex session for a specific task.
     pub fn invalidate_codex_task_session(&mut self, task_id: &str) -> Option<String> {
-        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot.as_mut())
         {
             slot.session_epoch = slot.session_epoch.wrapping_add(1);
@@ -736,7 +761,9 @@ impl DaemonState {
         tx: mpsc::Sender<(Vec<serde_json::Value>, bool)>,
         connection: Option<crate::daemon::types::ProviderConnectionState>,
     ) -> bool {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
         else {
             return false;
@@ -760,7 +787,9 @@ impl DaemonState {
         agent_id: &str,
         epoch: u64,
     ) -> Option<String> {
-        let Some(slot) = self.task_runtimes.get_mut(task_id)
+        let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
         else {
             return None;
@@ -786,7 +815,9 @@ impl DaemonState {
         task_id: &str,
         agent_id: &str,
     ) -> Option<String> {
-        if let Some(slot) = self.task_runtimes.get_mut(task_id)
+        if let Some(slot) = self
+            .task_runtimes
+            .get_mut(task_id)
             .and_then(|rt| rt.codex_slot_by_agent_mut(agent_id))
         {
             slot.session_epoch = slot.session_epoch.wrapping_add(1);
@@ -816,7 +847,9 @@ impl DaemonState {
             return;
         }
         for sid in &session_ids {
-            let _ = self.task_graph.update_session_status(sid, SessionStatus::Paused);
+            let _ = self
+                .task_graph
+                .update_session_status(sid, SessionStatus::Paused);
             let _ = self.task_graph.clear_lead_session_if_matches(task_id, sid);
             let _ = self.task_graph.clear_coder_session_if_matches(task_id, sid);
         }
@@ -850,13 +883,16 @@ impl DaemonState {
     }
 
     pub fn codex_task_epoch(&self, task_id: &str) -> Option<u64> {
-        self.task_runtimes.get(task_id)?
-            .codex_slot.as_ref()
+        self.task_runtimes
+            .get(task_id)?
+            .codex_slot
+            .as_ref()
             .map(|s| s.session_epoch)
     }
 
     pub fn is_codex_task_online(&self, task_id: &str) -> bool {
-        self.task_runtimes.get(task_id)
+        self.task_runtimes
+            .get(task_id)
             .and_then(|rt| rt.codex_slot.as_ref())
             .map_or(false, |slot| slot.is_online())
     }
@@ -874,9 +910,12 @@ impl DaemonState {
         &self,
         task_id: &str,
     ) -> Option<mpsc::Sender<(Vec<serde_json::Value>, bool)>> {
-        self.task_runtimes.get(task_id)?
-            .codex_slot.as_ref()?
-            .inject_tx.clone()
+        self.task_runtimes
+            .get(task_id)?
+            .codex_slot
+            .as_ref()?
+            .inject_tx
+            .clone()
     }
 
     /// Collect the set of ports currently allocated to *online* Codex task slots.
@@ -926,6 +965,21 @@ impl DaemonState {
         match agent {
             "claude" => rt.claude_slot.as_ref()?.connection.clone(),
             "codex" => rt.codex_slot.as_ref()?.connection.clone(),
+            _ => None,
+        }
+    }
+
+    /// Task-local provider connection for a concrete task agent.
+    pub fn task_provider_connection_for_agent(
+        &self,
+        task_id: &str,
+        agent_id: &str,
+        runtime: &str,
+    ) -> Option<ProviderConnectionState> {
+        let rt = self.task_runtimes.get(task_id)?;
+        match runtime {
+            "claude" => rt.claude_slot_by_agent(agent_id)?.connection.clone(),
+            "codex" => rt.codex_slot_by_agent(agent_id)?.connection.clone(),
             _ => None,
         }
     }

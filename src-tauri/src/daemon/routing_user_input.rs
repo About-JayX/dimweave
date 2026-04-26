@@ -76,8 +76,12 @@ fn has_user_input_payload(content: &str, attachments: &Option<Vec<Attachment>>) 
 fn target_from_string(s: &str) -> MessageTarget {
     match s {
         "user" => MessageTarget::User,
-        "claude" | "codex" => MessageTarget::Agent { agent_id: s.to_string() },
-        _ => MessageTarget::Role { role: s.to_string() },
+        "claude" | "codex" => MessageTarget::Agent {
+            agent_id: s.to_string(),
+        },
+        _ => MessageTarget::Role {
+            role: s.to_string(),
+        },
     }
 }
 
@@ -90,14 +94,17 @@ fn target_to_string(t: &MessageTarget) -> String {
 }
 
 fn resolve_structured(s: &DaemonState, target: &str) -> Vec<MessageTarget> {
-    resolve_user_targets(s, target).into_iter().map(|s| target_from_string(&s)).collect()
+    resolve_user_targets(s, target)
+        .into_iter()
+        .map(|s| target_from_string(&s))
+        .collect()
 }
 
-fn resolve_structured_for_task(
-    s: &DaemonState, target: &str, task_id: &str,
-) -> Vec<MessageTarget> {
+fn resolve_structured_for_task(s: &DaemonState, target: &str, task_id: &str) -> Vec<MessageTarget> {
     resolve_user_targets_for_task(s, target, task_id)
-        .into_iter().map(|s| target_from_string(&s)).collect()
+        .into_iter()
+        .map(|s| target_from_string(&s))
+        .collect()
 }
 
 // ── legacy string resolution (public API) ────────────────────────
@@ -105,29 +112,47 @@ fn resolve_structured_for_task(
 /// Resolve targets using task_agents[] as primary truth for a specific task.
 /// "lead" is promoted to first position when present (AC3).
 pub fn resolve_user_targets_for_task(
-    state: &DaemonState, target: &str, task_id: &str,
+    state: &DaemonState,
+    target: &str,
+    task_id: &str,
 ) -> Vec<String> {
-    if target != "auto" { return vec![target.to_string()] }
+    if target != "auto" {
+        return vec![target.to_string()];
+    }
     let agents = state.task_graph.agents_for_task(task_id);
-    if agents.is_empty() { return resolve_user_targets_for_task_legacy(state, task_id) }
+    if agents.is_empty() {
+        return resolve_user_targets_for_task_legacy(state, task_id);
+    }
     let mut roles: Vec<String> = Vec::new();
     for a in &agents {
-        if !roles.contains(&a.role) { roles.push(a.role.clone()) }
+        if !roles.contains(&a.role) {
+            roles.push(a.role.clone())
+        }
     }
     if let Some(idx) = roles.iter().position(|r| r == "lead") {
-        if idx != 0 { roles.swap(0, idx) }
+        if idx != 0 {
+            roles.swap(0, idx)
+        }
     }
-    roles.into_iter().filter(|role| {
-        state.resolve_task_role_providers(task_id, role)
-            .iter().any(|m| state.is_task_agent_online(task_id, m.runtime))
-    }).collect()
+    roles
+        .into_iter()
+        .filter(|role| {
+            state
+                .resolve_task_role_providers(task_id, role)
+                .iter()
+                .any(|m| state.is_task_agent_online_by_id(task_id, &m.agent_id, m.runtime))
+        })
+        .collect()
 }
 
 fn resolve_user_targets_for_task_legacy(state: &DaemonState, task_id: &str) -> Vec<String> {
-    let Some(task) = state.task_graph.get_task(task_id) else { return vec![] };
+    let Some(task) = state.task_graph.get_task(task_id) else {
+        return vec![];
+    };
     let mut targets = Vec::with_capacity(2);
     if let Some(pref) = crate::daemon::orchestrator::task_flow::preferred_auto_target(task) {
-        if state.resolve_task_provider_agent(task_id, &pref)
+        if state
+            .resolve_task_provider_agent(task_id, &pref)
             .map_or(false, |a| state.is_task_agent_online(task_id, a))
         {
             targets.push(pref);
@@ -147,20 +172,26 @@ fn resolve_user_targets_for_task_legacy(state: &DaemonState, task_id: &str) -> V
 
 /// "auto" → online agent roles (deduplicated, excludes "user"); otherwise literal.
 pub fn resolve_user_targets(state: &DaemonState, target: &str) -> Vec<String> {
-    if target != "auto" { return vec![target.to_string()] }
+    if target != "auto" {
+        return vec![target.to_string()];
+    }
     let mut targets = Vec::with_capacity(2);
     if let Some(preferred) = state.preferred_auto_target() {
-        if state.role_has_compatible_online_agent(&preferred) { targets.push(preferred) }
+        if state.role_has_compatible_online_agent(&preferred) {
+            targets.push(preferred)
+        }
     }
     let claude_online = state.is_agent_online("claude");
     let codex_online = state.is_agent_online("codex");
-    if claude_online && state.claude_role != "user"
+    if claude_online
+        && state.claude_role != "user"
         && state.role_has_compatible_online_agent(&state.claude_role)
         && !targets.contains(&state.claude_role)
     {
         targets.push(state.claude_role.clone());
     }
-    if codex_online && state.codex_role != "user"
+    if codex_online
+        && state.codex_role != "user"
         && state.role_has_compatible_online_agent(&state.codex_role)
         && !targets.contains(&state.codex_role)
     {
@@ -170,16 +201,25 @@ pub fn resolve_user_targets(state: &DaemonState, target: &str) -> Vec<String> {
 }
 
 fn build_user_message(
-    now: u64, to: &str, content: &str, attachments: &Option<Vec<Attachment>>,
+    now: u64,
+    to: &str,
+    content: &str,
+    attachments: &Option<Vec<Attachment>>,
 ) -> BridgeMessage {
-    let suffix = if to == "user" { String::new() } else { format!("_{to}") };
+    let suffix = if to == "user" {
+        String::new()
+    } else {
+        format!("_{to}")
+    };
     BridgeMessage {
         id: format!("user_{now}{suffix}"),
         source: MessageSource::User,
         target: if to == "user" {
             MessageTarget::User
         } else {
-            MessageTarget::Role { role: to.to_string() }
+            MessageTarget::Role {
+                role: to.to_string(),
+            }
         },
         reply_target: None,
         message: content.to_string(),

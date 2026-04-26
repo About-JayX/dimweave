@@ -57,27 +57,43 @@ impl DaemonState {
         // Phase 1: task-scoped per-agent slots (authoritative view)
         for rt in self.task_runtimes.values() {
             for slot in rt.all_claude_slots() {
-                if !slot.is_online() { continue; }
+                if !slot.is_online() {
+                    continue;
+                }
                 has_claude_slot = true;
                 let aid = slot.agent_id.as_deref().unwrap_or("claude");
-                if !seen.insert(aid.to_string()) { continue; }
-                let role = self.task_graph.get_task_agent(aid)
+                if !seen.insert(aid.to_string()) {
+                    continue;
+                }
+                let role = self
+                    .task_graph
+                    .get_task_agent(aid)
                     .map(|a| a.role.clone())
                     .unwrap_or_else(|| self.claude_role.clone());
                 result.push(OnlineAgentInfo {
-                    agent_id: aid.into(), role, model_source: "claude".into(),
+                    agent_id: aid.into(),
+                    role,
+                    model_source: "claude".into(),
                 });
             }
             for slot in rt.all_codex_slots() {
-                if !slot.is_online() { continue; }
+                if !slot.is_online() {
+                    continue;
+                }
                 has_codex_slot = true;
                 let aid = slot.agent_id.as_deref().unwrap_or("codex");
-                if !seen.insert(aid.to_string()) { continue; }
-                let role = self.task_graph.get_task_agent(aid)
+                if !seen.insert(aid.to_string()) {
+                    continue;
+                }
+                let role = self
+                    .task_graph
+                    .get_task_agent(aid)
                     .map(|a| a.role.clone())
                     .unwrap_or_else(|| self.codex_role.clone());
                 result.push(OnlineAgentInfo {
-                    agent_id: aid.into(), role, model_source: "codex".into(),
+                    agent_id: aid.into(),
+                    role,
+                    model_source: "codex".into(),
                 });
             }
         }
@@ -104,7 +120,9 @@ impl DaemonState {
         }
 
         // Phase 3: other attached bridge agents (non-claude/codex)
-        let mut others: Vec<_> = self.attached_agents.keys()
+        let mut others: Vec<_> = self
+            .attached_agents
+            .keys()
             .filter(|k| k.as_str() != "claude" && k.as_str() != "codex")
             .filter(|k| !seen.contains(k.as_str()))
             .cloned()
@@ -112,7 +130,9 @@ impl DaemonState {
         others.sort();
         for agent_id in others {
             result.push(OnlineAgentInfo {
-                agent_id, role: "unknown".into(), model_source: "claude".into(),
+                agent_id,
+                role: "unknown".into(),
+                model_source: "claude".into(),
             });
         }
 
@@ -146,11 +166,7 @@ impl DaemonState {
     }
 
     /// Legacy fallback for tasks without task_agents records.
-    fn task_scoped_online_agents_legacy(
-        &self,
-        task_id: &str,
-        task: &Task,
-    ) -> Vec<OnlineAgentInfo> {
+    fn task_scoped_online_agents_legacy(&self, task_id: &str, task: &Task) -> Vec<OnlineAgentInfo> {
         let mut result = Vec::new();
         let lead_rt = provider_runtime(task.lead_provider);
         let coder_rt = provider_runtime(task.coder_provider);
@@ -182,19 +198,18 @@ impl DaemonState {
         let agents = self.task_graph.agents_for_task(task_id);
         let lead_agent = agents.iter().find(|a| a.role == "lead");
         let coder_agent = agents.iter().find(|a| a.role == "coder");
-        let (lead_runtime, lead_agent_id, coder_runtime, coder_agent_id) =
-            if agents.is_empty() {
-                let lead_rt = provider_runtime(task.lead_provider);
-                let coder_rt = provider_runtime(task.coder_provider);
-                (lead_rt, lead_rt.to_string(), coder_rt, coder_rt.to_string())
-            } else {
-                (
-                    lead_agent.map_or("claude", |a| provider_runtime(a.provider)),
-                    lead_agent.map_or_else(|| "claude".into(), |a| a.agent_id.clone()),
-                    coder_agent.map_or("codex", |a| provider_runtime(a.provider)),
-                    coder_agent.map_or_else(|| "codex".into(), |a| a.agent_id.clone()),
-                )
-            };
+        let (lead_runtime, lead_agent_id, coder_runtime, coder_agent_id) = if agents.is_empty() {
+            let lead_rt = provider_runtime(task.lead_provider);
+            let coder_rt = provider_runtime(task.coder_provider);
+            (lead_rt, lead_rt.to_string(), coder_rt, coder_rt.to_string())
+        } else {
+            (
+                lead_agent.map_or("claude", |a| provider_runtime(a.provider)),
+                lead_agent.map_or_else(|| "claude".into(), |a| a.agent_id.clone()),
+                coder_agent.map_or("codex", |a| provider_runtime(a.provider)),
+                coder_agent.map_or_else(|| "codex".into(), |a| a.agent_id.clone()),
+            )
+        };
         let (lead_online, coder_online) = if agents.is_empty() {
             (
                 self.is_task_agent_online(task_id, lead_runtime),
@@ -210,6 +225,24 @@ impl DaemonState {
                 }),
             )
         };
+        let lead_provider_session = if lead_online {
+            if agents.is_empty() {
+                self.task_provider_connection(task_id, lead_runtime)
+            } else {
+                self.task_provider_connection_for_agent(task_id, &lead_agent_id, lead_runtime)
+            }
+        } else {
+            None
+        };
+        let coder_provider_session = if coder_online {
+            if agents.is_empty() {
+                self.task_provider_connection(task_id, coder_runtime)
+            } else {
+                self.task_provider_connection_for_agent(task_id, &coder_agent_id, coder_runtime)
+            }
+        } else {
+            None
+        };
         Some(crate::daemon::types::TaskProviderSummary {
             task_id: task.task_id.clone(),
             lead_provider: lead_runtime.into(),
@@ -218,16 +251,8 @@ impl DaemonState {
             coder_agent_id,
             lead_online,
             coder_online,
-            lead_provider_session: if lead_online {
-                self.task_provider_connection(task_id, lead_runtime)
-            } else {
-                None
-            },
-            coder_provider_session: if coder_online {
-                self.task_provider_connection(task_id, coder_runtime)
-            } else {
-                None
-            },
+            lead_provider_session,
+            coder_provider_session,
         })
     }
 
@@ -301,15 +326,15 @@ impl DaemonState {
     pub fn init_task_runtime(&mut self, task_id: &str, workspace_root: std::path::PathBuf) {
         self.task_runtimes.insert(
             task_id.to_string(),
-            crate::daemon::task_runtime::TaskRuntime::new(
-                task_id.to_string(),
-                workspace_root,
-            ),
+            crate::daemon::task_runtime::TaskRuntime::new(task_id.to_string(), workspace_root),
         );
     }
 
     /// Look up the runtime for a given task.
-    pub fn get_task_runtime(&self, task_id: &str) -> Option<&crate::daemon::task_runtime::TaskRuntime> {
+    pub fn get_task_runtime(
+        &self,
+        task_id: &str,
+    ) -> Option<&crate::daemon::task_runtime::TaskRuntime> {
         self.task_runtimes.get(task_id)
     }
 
