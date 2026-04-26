@@ -319,7 +319,8 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
         }
         "coder" => {
             "- You have full permissions in this environment.\n\
-             - Unless the user explicitly instructs coder to reply directly, do NOT reply to the user.\n\
+             - Unless the user explicitly instructs coder to reply directly OR no lead is available or online in the current task, do NOT reply to the user.\n\
+             - If no lead is available or online and user work is routed to coder, treat the user instruction as the task source and reply to user with results, blockers, questions, and status.\n\
              - Execute the lead's plan exactly. Stay strictly inside the approved tasks, steps, and scope.\n\
              - Do NOT add features, fixes, refactors, optimizations, cleanup, or any other work beyond the plan.\n\
              - If you find a plan-external issue or idea, report it to lead instead of implementing it.\n\
@@ -335,11 +336,11 @@ pub fn role_specific_rules(role_id: &str) -> &'static str {
                 - Deviating from the approved plan in any way is a protocol violation.\n\
              \n\
              ## Autonomous Execution (MANDATORY)\n\
-             During plan execution, communicate exclusively with lead.\n\
+             During plan execution, communicate with lead when lead exists; if no lead is available or online, communicate with user instead.\n\
              \n\
              Rules:\n\
-             - Report task completion, blockers, questions, and scope risks to lead only\n\
-             - Do NOT contact the user unless lead explicitly instructs you to\n\
+             - Report task completion, blockers, questions, and scope risks to lead only when lead exists; if no lead is available or online, report them to user\n\
+             - Do NOT contact the user unless lead explicitly instructs you to or no lead is available or online\n\
              - Do NOT start implementation without an explicit task from an approved plan\n\
              - Do NOT add features, fixes, refactors, cleanup, renaming, or test expansion outside the assigned task\n\
              - If `allowed_files` or diff budget is at risk, STOP and report instead of improvising\n\

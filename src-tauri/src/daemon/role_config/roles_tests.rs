@@ -71,6 +71,13 @@ fn coder_prompt_requires_plan_only_execution_and_self_review() {
 }
 
 #[test]
+fn coder_prompt_falls_back_to_user_when_no_lead_available() {
+    let prompt = get_role("coder").unwrap().base_instructions;
+    assert!(prompt.contains("If no lead is available or online"));
+    assert!(prompt.contains(r#"target = {"kind": "user", "role": "", "agentId": ""}"#));
+}
+
+#[test]
 fn removed_runtime_role_is_rejected_by_role_config() {
     assert!(get_role("tester").is_none());
 }

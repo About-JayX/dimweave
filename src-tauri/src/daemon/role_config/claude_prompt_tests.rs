@@ -26,9 +26,7 @@ fn prompt_teaches_agent_id_targeting_via_sender_agent_id() {
 fn prompt_requires_non_lead_to_default_to_lead() {
     let prompt = claude_system_prompt("coder");
     assert!(prompt.contains("lead is your default recipient"));
-    assert!(
-        prompt.contains("reply directly to user only when the user explicitly names your role")
-    );
+    assert!(prompt.contains("reply directly to user only when the user explicitly names your role"));
     assert!(prompt.contains("Lack of a prior chat thread is NOT a valid reason"));
 }
 
@@ -62,6 +60,13 @@ fn coder_prompt_requires_plan_only_execution_and_self_review() {
 }
 
 #[test]
+fn coder_prompt_falls_back_to_user_when_no_lead_available() {
+    let prompt = claude_system_prompt("coder");
+    assert!(prompt.contains("If no lead is available or online"));
+    assert!(prompt.contains(r#"{"kind":"user","role":"","agentId":""}"#));
+}
+
+#[test]
 fn lead_prompt_requires_message_validity() {
     let prompt = claude_system_prompt("lead");
     assert!(prompt.contains("task_id"));
@@ -79,9 +84,7 @@ fn lead_prompt_requires_acceptance_layer_distinction() {
     assert!(prompt.contains("stage_complete"));
     assert!(prompt.contains("final_acceptance"));
     assert!(prompt.contains("blocked_stage_complete"));
-    assert!(prompt.contains(
-        "MUST NOT present work as finally accepted unless"
-    ));
+    assert!(prompt.contains("MUST NOT present work as finally accepted unless"));
 }
 
 #[test]

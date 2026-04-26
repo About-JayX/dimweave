@@ -1,10 +1,18 @@
 use super::*;
 
-pub async fn route_message(state: &SharedState, app: &AppHandle, msg: BridgeMessage) -> RouteResult {
+pub async fn route_message(
+    state: &SharedState,
+    app: &AppHandle,
+    msg: BridgeMessage,
+) -> RouteResult {
     route_message_with_display(state, app, msg, true).await
 }
 
-pub async fn route_message_silent(state: &SharedState, app: &AppHandle, msg: BridgeMessage) -> RouteResult {
+pub async fn route_message_silent(
+    state: &SharedState,
+    app: &AppHandle,
+    msg: BridgeMessage,
+) -> RouteResult {
     route_message_with_display(state, app, msg, false).await
 }
 
@@ -37,15 +45,24 @@ async fn route_message_with_display(
     if matches!(outcome.result, RouteResult::Delivered | RouteResult::ToGui) {
         let (effects, became_implementing, transition_task_id) = {
             let mut s = state.write().await;
-            let before_status = s.active_task_id.as_ref()
+            let before_status = s
+                .active_task_id
+                .as_ref()
                 .and_then(|tid| s.task_graph.get_task(tid))
                 .map(|t| t.status);
             let eff = s.observe_task_message_effects(&msg);
-            let after_status = s.active_task_id.as_ref()
+            let after_status = s
+                .active_task_id
+                .as_ref()
                 .and_then(|tid| s.task_graph.get_task(tid))
                 .map(|t| t.status);
-            let transitioned = !matches!(before_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing))
-                && matches!(after_status, Some(crate::daemon::task_graph::types::TaskStatus::Implementing));
+            let transitioned = !matches!(
+                before_status,
+                Some(crate::daemon::task_graph::types::TaskStatus::Implementing)
+            ) && matches!(
+                after_status,
+                Some(crate::daemon::task_graph::types::TaskStatus::Implementing)
+            );
             // Prefer msg.task_id (explicit message context) over global active_task_id
             let tid = msg.task_id.clone().or_else(|| s.active_task_id.clone());
             (eff, transitioned, tid)
@@ -64,7 +81,8 @@ async fn route_message_with_display(
                 tokio::spawn(async move {
                     crate::daemon::feishu_project_task_link::try_transition_to_processing(
                         &state2, &app2, &task_id,
-                    ).await;
+                    )
+                    .await;
                 });
             }
         }
