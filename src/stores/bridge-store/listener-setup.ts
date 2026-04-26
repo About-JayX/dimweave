@@ -241,7 +241,13 @@ export function createBridgeListeners(
     if (!hasPendingStreamUpdates(pendingStreamUpdates)) {
       return;
     }
-    set((s) => flushPendingStreamUpdates(s, pendingStreamUpdates));
+    set((s) =>
+      flushPendingStreamUpdates(
+        s,
+        pendingStreamUpdates,
+        useTaskStore.getState().activeTaskId ?? null,
+      ),
+    );
   };
 
   const schedulePendingFlush = () => {
@@ -309,7 +315,10 @@ export function createBridgeListeners(
       // 32ms coalescer so their bucket stays accurate.
       const activeId = useTaskStore.getState().activeTaskId;
       const isActive = taskId !== null && taskId === activeId;
-      if (isActive && queueClaudePreviewUpdate(pendingStreamUpdates, payload)) {
+      if (
+        isActive &&
+        queueClaudePreviewUpdate(pendingStreamUpdates, payload, taskId)
+      ) {
         schedulePendingFlush();
         return;
       }
@@ -329,7 +338,10 @@ export function createBridgeListeners(
       const payload = e.payload.payload;
       const activeId = useTaskStore.getState().activeTaskId;
       const isActive = taskId !== null && taskId === activeId;
-      if (isActive && queueCodexBufferedUpdate(pendingStreamUpdates, payload)) {
+      if (
+        isActive &&
+        queueCodexBufferedUpdate(pendingStreamUpdates, payload, taskId)
+      ) {
         schedulePendingFlush();
         return;
       }

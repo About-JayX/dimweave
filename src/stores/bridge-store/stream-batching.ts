@@ -3,7 +3,12 @@ import type {
   ClaudeStreamPayload,
   CodexStreamPayload,
 } from "./listener-payloads";
-import { handleClaudeStreamEvent } from "./stream-reducers";
+import {
+  defaultClaudeStreamState,
+  defaultCodexStreamState,
+  handleClaudeStreamEvent,
+  reduceClaudeStreamSlice,
+} from "./stream-reducers";
 
 const MAX_CODEX_PREVIEW_CHARS = 100_000;
 
@@ -15,6 +20,7 @@ interface CodexStreamBatch {
 }
 
 export interface PendingStreamUpdates {
+  bucketTaskId: string | null;
   claudePreviewText: string;
   codexActivity: string | null;
   codexReasoning: string | null;
@@ -24,6 +30,7 @@ export interface PendingStreamUpdates {
 
 export function createPendingStreamUpdates(): PendingStreamUpdates {
   return {
+    bucketTaskId: null,
     claudePreviewText: "",
     codexActivity: null,
     codexReasoning: null,
@@ -48,6 +55,7 @@ export function clearPendingClaudePreview(
   pending: PendingStreamUpdates,
 ): void {
   pending.claudePreviewText = "";
+  clearPendingBucketIfEmpty(pending);
 }
 
 export function clearPendingCodexStream(
@@ -57,15 +65,18 @@ export function clearPendingCodexStream(
   pending.codexReasoning = null;
   pending.codexDelta = null;
   pending.codexCommandOutput = "";
+  clearPendingBucketIfEmpty(pending);
 }
 
 export function queueClaudePreviewUpdate(
   pending: PendingStreamUpdates,
   payload: ClaudeStreamPayload,
+  bucketTaskId?: string | null,
 ): boolean {
   if (payload.kind !== "preview" || !payload.text) {
     return false;
   }
+  rememberPendingBucket(pending, bucketTaskId);
   pending.claudePreviewText += payload.text;
   return true;
 }
@@ -73,18 +84,23 @@ export function queueClaudePreviewUpdate(
 export function queueCodexBufferedUpdate(
   pending: PendingStreamUpdates,
   payload: CodexStreamPayload,
+  bucketTaskId?: string | null,
 ): boolean {
   switch (payload.kind) {
     case "activity":
+      rememberPendingBucket(pending, bucketTaskId);
       pending.codexActivity = payload.label ?? "";
       return true;
     case "reasoning":
+      rememberPendingBucket(pending, bucketTaskId);
       pending.codexReasoning = payload.text ?? "";
       return true;
     case "delta":
+      rememberPendingBucket(pending, bucketTaskId);
       pending.codexDelta = payload.text ?? "";
       return true;
     case "commandOutput":
+      rememberPendingBucket(pending, bucketTaskId);
       pending.codexCommandOutput += payload.text ?? "";
       return true;
     default:
@@ -95,31 +111,56 @@ export function queueCodexBufferedUpdate(
 export function flushClaudePreviewIfPending(
   state: BridgeState,
   pending: PendingStreamUpdates,
+  activeTaskId: string | null = null,
 ): Partial<BridgeState> {
   if (!pending.claudePreviewText) {
     return {};
   }
-  return flushPendingStreamUpdates(state, pending);
+  return flushPendingStreamUpdates(state, pending, activeTaskId);
 }
 
 export function flushPendingStreamUpdates(
   state: BridgeState,
   pending: PendingStreamUpdates,
+  activeTaskId: string | null = null,
 ): Partial<BridgeState> {
   let nextState = state;
   let partial: Partial<BridgeState> = {};
+  const targetTaskId = pending.bucketTaskId ?? activeTaskId;
 
   if (pending.claudePreviewText) {
-    const claudePartial = handleClaudeStreamEvent(nextState, {
+    const payload: ClaudeStreamPayload = {
       kind: "preview",
       text: pending.claudePreviewText,
-    });
-    partial = { ...partial, ...claudePartial };
-    nextState = {
-      ...nextState,
-      ...claudePartial,
-      claudeStream: claudePartial.claudeStream ?? nextState.claudeStream,
     };
+    if (targetTaskId) {
+      const prevBucket =
+        nextState.claudeStreamsByTask[targetTaskId] ??
+        defaultClaudeStreamState();
+      const nextBucket = reduceClaudeStreamSlice(prevBucket, payload);
+      const claudePartial: Partial<BridgeState> = {
+        claudeStream: nextBucket,
+        claudeStreamsByTask: {
+          ...nextState.claudeStreamsByTask,
+          [targetTaskId]: nextBucket,
+        },
+      };
+      partial = { ...partial, ...claudePartial };
+      nextState = {
+        ...nextState,
+        ...claudePartial,
+        claudeStream: nextBucket,
+        claudeStreamsByTask: claudePartial.claudeStreamsByTask!,
+      };
+    } else {
+      const claudePartial = handleClaudeStreamEvent(nextState, payload);
+      partial = { ...partial, ...claudePartial };
+      nextState = {
+        ...nextState,
+        ...claudePartial,
+        claudeStream: claudePartial.claudeStream ?? nextState.claudeStream,
+      };
+    }
   }
 
   if (
@@ -128,12 +169,15 @@ export function flushPendingStreamUpdates(
     pending.codexDelta !== null ||
     pending.codexCommandOutput
   ) {
-    const codexPartial = handleCodexStreamBatch(nextState, {
+    const batch = {
       activity: pending.codexActivity,
       reasoning: pending.codexReasoning,
       delta: pending.codexDelta,
       commandOutputAppend: pending.codexCommandOutput,
-    });
+    };
+    const codexPartial = targetTaskId
+      ? handleCodexTaskStreamBatch(nextState, targetTaskId, batch)
+      : handleCodexStreamBatch(nextState, batch);
     partial = { ...partial, ...codexPartial };
   }
 
@@ -142,12 +186,56 @@ export function flushPendingStreamUpdates(
   return partial;
 }
 
+function rememberPendingBucket(
+  pending: PendingStreamUpdates,
+  bucketTaskId: string | null | undefined,
+): void {
+  if (bucketTaskId === undefined) return;
+  if (pending.bucketTaskId && pending.bucketTaskId !== bucketTaskId) {
+    pending.claudePreviewText = "";
+    pending.codexActivity = null;
+    pending.codexReasoning = null;
+    pending.codexDelta = null;
+    pending.codexCommandOutput = "";
+  }
+  pending.bucketTaskId = bucketTaskId;
+}
+
+function clearPendingBucketIfEmpty(pending: PendingStreamUpdates): void {
+  if (!hasPendingStreamUpdates(pending)) {
+    pending.bucketTaskId = null;
+  }
+}
+
 function handleCodexStreamBatch(
   state: BridgeState,
   batch: CodexStreamBatch,
 ): Partial<BridgeState> {
-  const next = { ...state.codexStream };
+  return { codexStream: reduceCodexStreamBatch(state.codexStream, batch) };
+}
 
+function handleCodexTaskStreamBatch(
+  state: BridgeState,
+  activeTaskId: string,
+  batch: CodexStreamBatch,
+): Partial<BridgeState> {
+  const prevBucket =
+    state.codexStreamsByTask[activeTaskId] ?? defaultCodexStreamState();
+  const nextBucket = reduceCodexStreamBatch(prevBucket, batch);
+  return {
+    codexStream: nextBucket,
+    codexStreamsByTask: {
+      ...state.codexStreamsByTask,
+      [activeTaskId]: nextBucket,
+    },
+  };
+}
+
+function reduceCodexStreamBatch(
+  prev: BridgeState["codexStream"],
+  batch: CodexStreamBatch,
+): BridgeState["codexStream"] {
+  const next = { ...prev };
   if (batch.activity !== null) {
     next.activity = batch.activity;
     next.commandOutput = "";
@@ -162,5 +250,5 @@ function handleCodexStreamBatch(
     next.commandOutput += batch.commandOutputAppend;
   }
 
-  return { codexStream: next };
+  return next;
 }

@@ -8,7 +8,9 @@ import {
 import {
   createPendingStreamUpdates,
   flushClaudePreviewIfPending,
+  flushPendingStreamUpdates,
   queueClaudePreviewUpdate,
+  queueCodexBufferedUpdate,
 } from "./stream-batching";
 import type {
   AgentStatusPayload,
@@ -116,6 +118,65 @@ test("no-op flush when pending claude preview is empty", () => {
 
   expect(result).toEqual({});
   expect(state.claudeStream.previewText).toBe("");
+});
+
+test("flushes queued Codex delta into the active task stream bucket", () => {
+  const pending = createPendingStreamUpdates();
+  queueCodexBufferedUpdate(pending, {
+    kind: "delta",
+    text: "streamed codex draft",
+  } as CodexStreamPayload);
+
+  const state = baseState();
+  state.codexStream = {
+    ...state.codexStream,
+    currentDelta: "",
+  };
+  state.codexStreamsByTask = {
+    task_a: {
+      ...state.codexStream,
+      currentDelta: "",
+    },
+  };
+
+  const flushed = flushPendingStreamUpdates(state, pending, "task_a");
+  const next: BridgeState = {
+    ...state,
+    ...flushed,
+    codexStream: flushed.codexStream ?? state.codexStream,
+    codexStreamsByTask:
+      flushed.codexStreamsByTask ?? state.codexStreamsByTask,
+  };
+
+  expect(next.codexStream.currentDelta).toBe("streamed codex draft");
+  expect(next.codexStreamsByTask.task_a.currentDelta).toBe(
+    "streamed codex draft",
+  );
+});
+
+test("flushes queued Codex delta into the queued task bucket after active task changes", () => {
+  const pending = createPendingStreamUpdates();
+  queueCodexBufferedUpdate(
+    pending,
+    {
+      kind: "delta",
+      text: "task a draft",
+    } as CodexStreamPayload,
+    "task_a",
+  );
+
+  const state = baseState();
+  const flushed = flushPendingStreamUpdates(state, pending, "task_b");
+  const next: BridgeState = {
+    ...state,
+    ...flushed,
+    codexStream: flushed.codexStream ?? state.codexStream,
+    codexStreamsByTask:
+      flushed.codexStreamsByTask ?? state.codexStreamsByTask,
+  };
+
+  expect(next.codexStreamsByTask.task_a.currentDelta).toBe("task a draft");
+  expect(next.codexStreamsByTask.task_b).toBeUndefined();
 });
 
 describe("handleCodexStreamEvent", () => {
