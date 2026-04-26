@@ -38,6 +38,19 @@ use tokio::sync::{mpsc, RwLock};
 /// Shared daemon state accessible from all submodules.
 pub type SharedState = Arc<RwLock<DaemonState>>;
 
+const CODEX_PORT_LAUNCH_ATTEMPTS: usize = 2;
+
+fn codex_port_unavailable(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_err()
+}
+
+pub(crate) fn is_retryable_codex_port_error(message: &str) -> bool {
+    message
+        .strip_prefix("Port ")
+        .and_then(|rest| rest.split_once(" still in use"))
+        .is_some()
+}
+
 async fn set_role(
     state: &SharedState,
     _agent: &str,
@@ -460,34 +473,59 @@ async fn attach_provider_history(
                     .unwrap_or_else(|| s.begin_codex_launch());
                 (epoch, aid)
             };
-            let allocated_port = codex_port_pool
-                .reserve(&attach_task_id, launch_epoch)
-                .ok_or("no Codex port available in pool")?;
-            {
-                let mut s = state.write().await;
-                if let Some(slot) = s.task_runtimes.get_mut(&attach_task_id)
-                    .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_agent_id))
-                {
-                    slot.port = allocated_port;
-                }
-            }
             let resume_agent_id_ref = resume_agent_id.clone();
-            let handle = codex::resume(
-                codex::ResumeOpts {
-                    task_id: attach_task_id.clone(),
-                    agent_id: resume_agent_id,
-                    role_id: role_id.clone(),
-                    cwd: cwd.clone(),
-                    thread_id: external_id.clone(),
-                    launch_epoch,
-                    codex_port: allocated_port,
-                },
-                state.clone(),
-                app.clone(),
-                codex_exit_tx.clone(),
-            )
-            .await
-            .map_err(|err| err.to_string())?;
+            let (handle, allocated_port) = {
+                let mut attempts = 0usize;
+                loop {
+                    attempts += 1;
+                    let allocated_port = codex_port_pool
+                        .reserve_skipping(&attach_task_id, launch_epoch, codex_port_unavailable)
+                        .ok_or("no Codex port available in pool")?;
+                    {
+                        let mut s = state.write().await;
+                        if let Some(slot) = s.task_runtimes.get_mut(&attach_task_id)
+                            .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_agent_id_ref))
+                        {
+                            slot.port = allocated_port;
+                        }
+                    }
+                    match codex::resume(
+                        codex::ResumeOpts {
+                            task_id: attach_task_id.clone(),
+                            agent_id: resume_agent_id_ref.clone(),
+                            role_id: role_id.clone(),
+                            cwd: cwd.clone(),
+                            thread_id: external_id.clone(),
+                            launch_epoch,
+                            codex_port: allocated_port,
+                        },
+                        state.clone(),
+                        app.clone(),
+                        codex_exit_tx.clone(),
+                    )
+                    .await
+                    {
+                        Ok(handle) => break (handle, allocated_port),
+                        Err(err) => {
+                            let message = err.to_string();
+                            codex_port_pool.release(allocated_port, &attach_task_id, launch_epoch);
+                            if attempts < CODEX_PORT_LAUNCH_ATTEMPTS
+                                && is_retryable_codex_port_error(&message)
+                            {
+                                gui::emit_system_log(
+                                    app,
+                                    "warn",
+                                    &format!(
+                                        "[Daemon] Codex port {allocated_port} occupied during attach; retrying next port"
+                                    ),
+                                );
+                                continue;
+                            }
+                            return Err(message);
+                        }
+                    }
+                }
+            };
             codex_handles.insert(resume_agent_id_ref.clone(), handle);
             codex_port_pool.promote(allocated_port, &attach_task_id, launch_epoch);
             {
@@ -628,7 +666,8 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
     feishu_project_lifecycle::hydrate_store(&state).await;
     let mut feishu_project_handle: Option<crate::feishu_project::runtime::FeishuProjectHandle> =
         feishu_project_lifecycle::auto_start(&state, &app).await;
-    let mut codex_port_pool = codex::port_pool::CodexPortPool::new(codex_port);
+    let mut codex_port_pool =
+        codex::port_pool::CodexPortPool::new_with_excluded_ports(codex_port, [daemon_port]);
     let mut codex_handles: std::collections::HashMap<String, codex::CodexHandle> = std::collections::HashMap::new();
     let (codex_exit_tx, mut codex_exit_rx) =
         tokio::sync::mpsc::unbounded_channel::<codex::CodexExitNotice>();
@@ -708,39 +747,88 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         .unwrap_or_else(|| s.begin_codex_launch());
                     (epoch, aid)
                 };
-                let allocated_port = match codex_port_pool.reserve(&resolved_task_id, launch_epoch) {
-                    Some(p) => p,
-                    None => {
-                        gui::emit_system_log(
-                            &app,
-                            "error",
-                            "[Daemon] no Codex port available in pool",
-                        );
-                        let _ = reply.send(Err("no Codex port available in pool".into()));
-                        continue;
-                    }
-                };
-                // Update placeholder port in the agent's task slot
-                {
-                    let mut s = state.write().await;
-                    if let Some(slot) = s.task_runtimes.get_mut(&resolved_task_id)
-                        .and_then(|rt| rt.codex_slot_by_agent_mut(&codex_agent_id))
+                let mut attempts = 0usize;
+                let launch_result = loop {
+                    attempts += 1;
+                    let allocated_port = match codex_port_pool.reserve_skipping(
+                        &resolved_task_id,
+                        launch_epoch,
+                        codex_port_unavailable,
+                    ) {
+                        Some(p) => p,
+                        None => {
+                            gui::emit_system_log(
+                                &app,
+                                "error",
+                                "[Daemon] no Codex port available in pool",
+                            );
+                            break Err("no Codex port available in pool".into());
+                        }
+                    };
+                    // Update placeholder port in the agent's task slot
                     {
-                        slot.port = allocated_port;
+                        let mut s = state.write().await;
+                        if let Some(slot) = s.task_runtimes.get_mut(&resolved_task_id)
+                            .and_then(|rt| rt.codex_slot_by_agent_mut(&codex_agent_id))
+                        {
+                            slot.port = allocated_port;
+                        }
                     }
-                }
-                let launch_result = match resume_thread_id {
-                    Some(thread_id) => {
-                        let resumed_thread_id = thread_id.clone();
-                        let resume_role = role_id.clone();
-                        let resume_cwd = cwd.clone();
-                        match codex::resume(
-                            codex::ResumeOpts {
+                    let attempt_result = match resume_thread_id.clone() {
+                        Some(thread_id) => {
+                            let resumed_thread_id = thread_id.clone();
+                            let resume_role = role_id.clone();
+                            let resume_cwd = cwd.clone();
+                            match codex::resume(
+                                codex::ResumeOpts {
+                                    task_id: resolved_task_id.clone(),
+                                    agent_id: codex_agent_id.clone(),
+                                    role_id: role_id.clone(),
+                                    cwd: cwd.clone(),
+                                    thread_id,
+                                    launch_epoch,
+                                    codex_port: allocated_port,
+                                },
+                                state.clone(),
+                                app.clone(),
+                                codex_exit_tx.clone(),
+                            )
+                            .await
+                            {
+                                Ok(h) => {
+                                    codex_handles.insert(codex_agent_id.clone(), h);
+                                    codex_port_pool.promote(
+                                        allocated_port,
+                                        &resolved_task_id,
+                                        launch_epoch,
+                                    );
+                                    let task_id = {
+                                        let mut daemon = state.write().await;
+                                        launch_task_sync::sync_codex_launch_into_task(
+                                            &mut daemon,
+                                            &resolved_task_id,
+                                            &resume_role,
+                                            &resume_cwd,
+                                            &resumed_thread_id,
+                                            Some(&codex_agent_id),
+                                        )
+                                    };
+                                    if let Some(task_id) = task_id {
+                                        emit_task_context_events(&state, &app, &task_id).await;
+                                    }
+                                    Ok(())
+                                }
+                                Err(e) => Err(e.to_string()),
+                            }
+                        }
+                        None => match codex::start(
+                            codex::StartOpts {
                                 task_id: resolved_task_id.clone(),
                                 agent_id: codex_agent_id.clone(),
-                                role_id,
-                                cwd,
-                                thread_id,
+                                role_id: role_id.clone(),
+                                cwd: cwd.clone(),
+                                model: model.clone(),
+                                effort: reasoning_effort.clone(),
                                 launch_epoch,
                                 codex_port: allocated_port,
                             },
@@ -752,71 +840,48 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                         {
                             Ok(h) => {
                                 codex_handles.insert(codex_agent_id.clone(), h);
-                                codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
-                                let task_id = {
-                                    let mut daemon = state.write().await;
-                                    launch_task_sync::sync_codex_launch_into_task(
-                                        &mut daemon,
-                                        &resolved_task_id,
-                                        &resume_role,
-                                        &resume_cwd,
-                                        &resumed_thread_id,
-                                        Some(&codex_agent_id),
-                                    )
-                                };
-                                if let Some(task_id) = task_id {
+                                codex_port_pool.promote(
+                                    allocated_port,
+                                    &resolved_task_id,
+                                    launch_epoch,
+                                );
+                                if let Some(task_id) = state.read().await.active_task_id.clone() {
                                     emit_task_context_events(&state, &app, &task_id).await;
                                 }
                                 Ok(())
                             }
-                            Err(e) => {
-                                codex_port_pool.release(allocated_port, &resolved_task_id, launch_epoch);
-                                gui::emit_agent_status(&app, "codex", false, None, None);
+                            Err(e) => Err(e.to_string()),
+                        },
+                    };
+                    match attempt_result {
+                        Ok(()) => break Ok(()),
+                        Err(e) => {
+                            codex_port_pool.release(
+                                allocated_port,
+                                &resolved_task_id,
+                                launch_epoch,
+                            );
+                            if attempts < CODEX_PORT_LAUNCH_ATTEMPTS
+                                && is_retryable_codex_port_error(&e)
+                            {
                                 gui::emit_system_log(
                                     &app,
-                                    "error",
-                                    &format!("[Daemon] Codex start failed: {e}"),
+                                    "warn",
+                                    &format!(
+                                        "[Daemon] Codex port {allocated_port} occupied during launch; retrying next port"
+                                    ),
                                 );
-                                Err(e.to_string())
+                                continue;
                             }
-                        }
-                    }
-                    None => match codex::start(
-                        codex::StartOpts {
-                            task_id: resolved_task_id.clone(),
-                            agent_id: codex_agent_id.clone(),
-                            role_id,
-                            cwd,
-                            model,
-                            effort: reasoning_effort,
-                            launch_epoch,
-                            codex_port: allocated_port,
-                        },
-                        state.clone(),
-                        app.clone(),
-                        codex_exit_tx.clone(),
-                    )
-                    .await
-                    {
-                        Ok(h) => {
-                            codex_handles.insert(codex_agent_id.clone(), h);
-                            codex_port_pool.promote(allocated_port, &resolved_task_id, launch_epoch);
-                            if let Some(task_id) = state.read().await.active_task_id.clone() {
-                                emit_task_context_events(&state, &app, &task_id).await;
-                            }
-                            Ok(())
-                        }
-                        Err(e) => {
-                            codex_port_pool.release(allocated_port, &resolved_task_id, launch_epoch);
                             gui::emit_agent_status(&app, "codex", false, None, None);
                             gui::emit_system_log(
                                 &app,
                                 "error",
                                 &format!("[Daemon] Codex start failed: {e}"),
                             );
-                            Err(e.to_string())
+                            break Err(e);
                         }
-                    },
+                    }
                 };
                 let _ = reply.send(launch_result);
             }
@@ -1252,52 +1317,77 @@ pub async fn run(app: AppHandle, mut cmd_rx: mpsc::Receiver<DaemonCmd>) {
                                         .unwrap_or_else(|| s.begin_codex_launch());
                                     (e, codex_aid)
                                 };
-                                let alloc = codex_port_pool
-                                    .reserve(&resume_task_id, launch_epoch)
-                                    .ok_or_else(|| "no Codex port available".to_string());
-                                match alloc {
-                                    Err(e) => Err(e),
-                                    Ok(allocated_port) => {
-                                // Update placeholder port in the task slot
-                                {
-                                    let mut s = state.write().await;
-                                    if let Some(slot) = s.task_runtimes.get_mut(&resume_task_id)
-                                        .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_codex_aid))
-                                    {
-                                        slot.port = allocated_port;
-                                    }
-                                }
                                 let role_id = match target.role {
                                     crate::daemon::task_graph::types::SessionRole::Lead => "lead",
                                     crate::daemon::task_graph::types::SessionRole::Coder => "coder",
                                 }
                                 .to_string();
-                                match codex::resume(
-                                    codex::ResumeOpts {
-                                        task_id: resume_task_id.clone(),
-                                        agent_id: resume_codex_aid.clone(),
-                                        role_id,
-                                        cwd: target.cwd,
-                                        thread_id: target.external_id,
+                                let mut attempts = 0usize;
+                                loop {
+                                    attempts += 1;
+                                    let allocated_port = match codex_port_pool.reserve_skipping(
+                                        &resume_task_id,
                                         launch_epoch,
-                                        codex_port: allocated_port,
-                                    },
-                                    state.clone(),
-                                    app.clone(),
-                                    codex_exit_tx.clone(),
-                                )
-                                .await
-                                {
-                                    Ok(handle) => {
-                                        codex_handles.insert(resume_codex_aid.clone(), handle);
-                                        codex_port_pool.promote(allocated_port, &resume_task_id, launch_epoch);
-                                        state.write().await.resume_session(&session_id)
+                                        codex_port_unavailable,
+                                    ) {
+                                        Some(port) => port,
+                                        None => break Err("no Codex port available".to_string()),
+                                    };
+                                    // Update placeholder port in the task slot
+                                    {
+                                        let mut s = state.write().await;
+                                        if let Some(slot) = s.task_runtimes.get_mut(&resume_task_id)
+                                            .and_then(|rt| rt.codex_slot_by_agent_mut(&resume_codex_aid))
+                                        {
+                                            slot.port = allocated_port;
+                                        }
                                     }
-                                    Err(err) => {
-                                        codex_port_pool.release(allocated_port, &sess.task_id, launch_epoch);
-                                        Err(err.to_string())
-                                    }
-                                }
+                                    match codex::resume(
+                                        codex::ResumeOpts {
+                                            task_id: resume_task_id.clone(),
+                                            agent_id: resume_codex_aid.clone(),
+                                            role_id: role_id.clone(),
+                                            cwd: target.cwd.clone(),
+                                            thread_id: target.external_id.clone(),
+                                            launch_epoch,
+                                            codex_port: allocated_port,
+                                        },
+                                        state.clone(),
+                                        app.clone(),
+                                        codex_exit_tx.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(handle) => {
+                                            codex_handles.insert(resume_codex_aid.clone(), handle);
+                                            codex_port_pool.promote(
+                                                allocated_port,
+                                                &resume_task_id,
+                                                launch_epoch,
+                                            );
+                                            break state.write().await.resume_session(&session_id);
+                                        }
+                                        Err(err) => {
+                                            let message = err.to_string();
+                                            codex_port_pool.release(
+                                                allocated_port,
+                                                &resume_task_id,
+                                                launch_epoch,
+                                            );
+                                            if attempts < CODEX_PORT_LAUNCH_ATTEMPTS
+                                                && is_retryable_codex_port_error(&message)
+                                            {
+                                                gui::emit_system_log(
+                                                    &app,
+                                                    "warn",
+                                                    &format!(
+                                                        "[Daemon] Codex port {allocated_port} occupied during resume; retrying next port"
+                                                    ),
+                                                );
+                                                continue;
+                                            }
+                                            break Err(message);
+                                        }
                                     }
                                 }
                             }
