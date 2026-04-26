@@ -19,22 +19,48 @@ pub struct CodexPortPool {
     base_port: u16,
     pool_size: u16,
     leases: HashMap<u16, LeaseState>,
+    excluded_ports: HashSet<u16>,
 }
 
 impl CodexPortPool {
     pub fn new(base_port: u16) -> Self {
+        Self::new_with_excluded_ports(base_port, [])
+    }
+
+    pub fn new_with_excluded_ports<I>(base_port: u16, excluded_ports: I) -> Self
+    where
+        I: IntoIterator<Item = u16>,
+    {
         Self {
             base_port,
             pool_size: POOL_SIZE,
             leases: HashMap::new(),
+            excluded_ports: excluded_ports.into_iter().collect(),
         }
     }
 
     /// Reserve the first free port for `task_id` + `launch_id`.
     /// Returns `None` if the pool is exhausted.
     pub fn reserve(&mut self, task_id: &str, launch_id: u64) -> Option<u16> {
-        let port = (self.base_port..self.base_port + self.pool_size)
-            .find(|p| !self.leases.contains_key(p))?;
+        self.reserve_skipping(task_id, launch_id, |_| false)
+    }
+
+    /// Reserve the first free, non-excluded, currently usable port.
+    ///
+    /// `is_unavailable` lets the daemon skip ports already held by unrelated
+    /// listeners, such as the daemon control server or another local process.
+    pub fn reserve_skipping<F>(
+        &mut self,
+        task_id: &str,
+        launch_id: u64,
+        mut is_unavailable: F,
+    ) -> Option<u16>
+    where
+        F: FnMut(u16) -> bool,
+    {
+        let port = (self.base_port..self.base_port + self.pool_size).find(|p| {
+            !self.leases.contains_key(p) && !self.excluded_ports.contains(p) && !is_unavailable(*p)
+        })?;
         self.leases.insert(
             port,
             LeaseState::Reserved {
@@ -87,11 +113,10 @@ impl CodexPortPool {
 
     /// Release all ports owned by `task_id` (any launch_id).
     pub fn release_all_for_task(&mut self, task_id: &str) {
-        self.leases
-            .retain(|_, lease| match lease {
-                LeaseState::Reserved { task_id: owner, .. }
-                | LeaseState::Live { task_id: owner, .. } => owner != task_id,
-            });
+        self.leases.retain(|_, lease| match lease {
+            LeaseState::Reserved { task_id: owner, .. }
+            | LeaseState::Live { task_id: owner, .. } => owner != task_id,
+        });
     }
 
     /// True if `port` falls within this pool's range.

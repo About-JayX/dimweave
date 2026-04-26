@@ -14,6 +14,31 @@ fn codex_port_pool_skips_reserved_ports() {
 }
 
 #[test]
+fn codex_port_pool_skips_excluded_daemon_port() {
+    let mut pool = CodexPortPool::new_with_excluded_ports(4500, [4502]);
+    assert_eq!(pool.reserve("task_a", 1), Some(4500));
+    assert_eq!(pool.reserve("task_b", 2), Some(4501));
+    assert_eq!(pool.reserve("task_c", 3), Some(4503));
+    assert!(!pool.leased_ports().contains(&4502));
+}
+
+#[test]
+fn codex_port_pool_skips_ports_reported_unavailable() {
+    let mut pool = CodexPortPool::new_with_excluded_ports(4500, [4502]);
+    assert_eq!(
+        pool.reserve_skipping("task_a", 1, |port| matches!(port, 4500 | 4501)),
+        Some(4503)
+    );
+    assert_eq!(
+        pool.reserve_skipping("task_b", 2, |port| matches!(port, 4500 | 4501 | 4503)),
+        Some(4504)
+    );
+    assert!(!pool.leased_ports().contains(&4500));
+    assert!(!pool.leased_ports().contains(&4501));
+    assert!(!pool.leased_ports().contains(&4502));
+}
+
+#[test]
 fn codex_port_pool_returns_none_when_exhausted() {
     let mut pool = CodexPortPool::new(4500);
     for i in 0..8 {
@@ -45,7 +70,10 @@ fn codex_port_pool_promote_guards_owner() {
     let mut pool = CodexPortPool::new(4500);
     pool.reserve("task_a", 1);
     assert!(!pool.promote(4500, "task_b", 1), "wrong task rejected");
-    assert!(!pool.promote(4500, "task_a", 99), "wrong launch_id rejected");
+    assert!(
+        !pool.promote(4500, "task_a", 99),
+        "wrong launch_id rejected"
+    );
     assert!(pool.promote(4500, "task_a", 1), "correct owner accepted");
 }
 
@@ -54,7 +82,10 @@ fn codex_port_pool_release_guards_owner() {
     let mut pool = CodexPortPool::new(4500);
     pool.reserve("task_a", 1);
     assert!(!pool.release(4500, "task_b", 1), "wrong task rejected");
-    assert!(!pool.release(4500, "task_a", 99), "wrong launch_id rejected");
+    assert!(
+        !pool.release(4500, "task_a", 99),
+        "wrong launch_id rejected"
+    );
     assert!(pool.release(4500, "task_a", 1), "correct owner accepted");
 }
 
@@ -143,8 +174,14 @@ fn codex_port_pool_same_task_restart_stale_launch_id_rejected() {
     assert_eq!(port, port2);
     pool.promote(port2, "task_a", 2);
     // Stale exit notice from launch 1 — same task_id, same port, OLD launch_id
-    assert!(!pool.release(port, "task_a", 1), "old launch_id must be rejected");
-    assert!(pool.leased_ports().contains(&port), "new lease must survive");
+    assert!(
+        !pool.release(port, "task_a", 1),
+        "old launch_id must be rejected"
+    );
+    assert!(
+        pool.leased_ports().contains(&port),
+        "new lease must survive"
+    );
     // Correct release with current launch_id succeeds
     assert!(pool.release(port, "task_a", 2));
 }
