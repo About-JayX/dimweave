@@ -90,11 +90,12 @@ fn build_role_prompt(role_id: &str, model: Option<&str>) -> String {
          - This is the ONLY communication channel. There is no other way to reach other agents.\n\n\
          ## Routing Policy\n\
          - If you are lead, target selection is GOVERNED by the \"Lead Escalation Gate\" rules in your role-specific section below. `target=user` is RESTRICTED to 4 gate scenarios; routine coordination always targets coder.\n\
-         - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} is the default.\n\
+         - If you are NOT lead, target = {{\"kind\": \"role\", \"role\": \"lead\", \"agentId\": \"\"}} is the default when a lead is available or online.\n\
+         - If no lead is available or online, target = {{\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}} for task results, blockers, questions, and direct replies to routed user work.\n\
          - For messages from user, you may target the user only when the user explicitly names your role \
-         or explicitly asks your role to answer.\n\
+         or explicitly asks your role to answer, or when no lead is available or online and the task was routed to you.\n\
          - If that explicit role mention is absent and you are not lead, \
-         target lead for updates, results, blockers, and questions.\n\
+         target lead for updates, results, blockers, and questions when lead is available; otherwise target user.\n\
          - Route directly to another non-lead role only when the current instruction explicitly names that target role. \
          Otherwise target lead.\n\n\
          ## Response Rules\n\
@@ -113,6 +114,7 @@ fn build_role_prompt(role_id: &str, model: Option<&str>) -> String {
          you may treat general user requests as routed to lead.\n\
          - If you are not lead and the user did not explicitly ask for your role, \
          follow the routing policy instead of replying directly to user.\n\
+         - If no lead is available or online and the user request was routed to your role, respond and target user.\n\
          - If the user explicitly says \"only X role respond\" or \"X回答我\" and X is NOT your role \
          → you MUST output {{\"message\": \"\", \"target\": {{\"kind\": \"user\", \"role\": \"\", \"agentId\": \"\"}}, \"status\": \"done\"}}. \
          This is absolute — no exceptions.\n\

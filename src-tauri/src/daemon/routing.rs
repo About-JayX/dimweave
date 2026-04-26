@@ -10,20 +10,36 @@ use crate::daemon::{
 };
 use tauri::AppHandle;
 
+fn provider_runtime(provider: crate::daemon::task_graph::types::Provider) -> &'static str {
+    match provider {
+        crate::daemon::task_graph::types::Provider::Claude => "claude",
+        crate::daemon::task_graph::types::Provider::Codex => "codex",
+    }
+}
+
 // ── reply-target tracking ────────────────────────────────────
 // When A delegates to B (agent-targeted), record B → (A, A_role).
 // When B later replies to A_role, redirect to A's specific agent.
 
-fn reply_target_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, (String, String)>> {
-    static MAP: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, (String, String)>>> = std::sync::OnceLock::new();
+fn reply_target_map(
+) -> &'static std::sync::Mutex<std::collections::HashMap<String, (String, String)>> {
+    static MAP: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, (String, String)>>,
+    > = std::sync::OnceLock::new();
     MAP.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 fn apply_reply_target(sender_agent_id: &str, target: &str) -> Option<String> {
-    if matches!(target, "user" | "claude" | "codex") { return None; }
+    if matches!(target, "user" | "claude" | "codex") {
+        return None;
+    }
     let guard = reply_target_map().lock().unwrap();
     let (agent_id, role) = guard.get(sender_agent_id)?;
-    if role == target { Some(agent_id.clone()) } else { None }
+    if role == target {
+        Some(agent_id.clone())
+    } else {
+        None
+    }
 }
 
 /// Returns the specific agent_id that delegated to `sender_agent_id`, if
@@ -66,6 +82,10 @@ struct RouteOutcome {
 }
 
 async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) -> RouteOutcome {
+    let msg = {
+        let s = state.read().await;
+        retarget_worker_reply_to_user_when_no_lead(&s, msg)
+    };
     let decision = {
         let mut s = state.write().await;
         s.prepare_task_routing(&msg)
@@ -101,7 +121,8 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
 
     // Reply-target redirect: if sender has a recorded delegator,
     // redirect role-targeted replies to that specific agent.
-    let redirect = msg.source_agent_id()
+    let redirect = msg
+        .source_agent_id()
         .and_then(|sid| apply_reply_target(sid, msg.target_str()));
     let was_redirected = redirect.is_some();
     let msg = if let Some(new_to) = redirect {
@@ -110,7 +131,10 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
         } else {
             MessageTarget::Agent { agent_id: new_to }
         };
-        BridgeMessage { target: new_target, ..msg }
+        BridgeMessage {
+            target: new_target,
+            ..msg
+        }
     } else {
         msg
     };
@@ -153,6 +177,43 @@ async fn route_message_inner_with_meta(state: &SharedState, msg: BridgeMessage) 
             let record = agent_targeted && !was_redirected;
             deliver_broadcast(state, msg, deliveries, emit_claude_thinking, record).await
         }
+    }
+}
+
+fn retarget_worker_reply_to_user_when_no_lead(
+    s: &crate::daemon::state::DaemonState,
+    msg: BridgeMessage,
+) -> BridgeMessage {
+    if msg.is_from_user()
+        || msg.is_from_system()
+        || msg.source_role() == "lead"
+        || msg.target_str() != "lead"
+    {
+        return msg;
+    }
+
+    let Some(task_id) = msg.task_id.as_deref() else {
+        return msg;
+    };
+    let agents = s.task_graph.agents_for_task(task_id);
+    if agents.is_empty() {
+        return msg;
+    }
+    let has_online_lead = agents.iter().any(|agent| {
+        agent.role == "lead"
+            && s.is_task_agent_online_by_id(
+                task_id,
+                &agent.agent_id,
+                provider_runtime(agent.provider),
+            )
+    });
+    if has_online_lead {
+        return msg;
+    }
+
+    BridgeMessage {
+        target: MessageTarget::User,
+        ..msg
     }
 }
 
@@ -199,7 +260,12 @@ fn resolve_broadcast_targets(
             s.task_graph
                 .agents_for_task(tid)
                 .iter()
-                .find(|a| matches!(a.provider, crate::daemon::task_graph::types::Provider::Claude))
+                .find(|a| {
+                    matches!(
+                        a.provider,
+                        crate::daemon::task_graph::types::Provider::Claude
+                    )
+                })
                 .map(|a| a.role.clone())
                 .unwrap_or_default()
         })
@@ -219,10 +285,14 @@ fn resolve_broadcast_targets(
                     crate::daemon::task_graph::types::Provider::Claude => "claude",
                     crate::daemon::task_graph::types::Provider::Codex => "codex",
                 };
-                (vec![MatchedTaskAgent {
-                    agent_id: agent.agent_id.clone(),
-                    runtime,
-                }], true, true)
+                (
+                    vec![MatchedTaskAgent {
+                        agent_id: agent.agent_id.clone(),
+                        runtime,
+                    }],
+                    true,
+                    true,
+                )
             } else {
                 // Role-targeted: broadcast to all matching agents for this role
                 let agents = s.resolve_task_role_providers(tid, msg.target_str());
@@ -241,13 +311,15 @@ fn resolve_broadcast_targets(
             let agent_targeted = match msg.target_str() {
                 "claude" => {
                     agents.push(MatchedTaskAgent {
-                        agent_id: "claude".into(), runtime: "claude",
+                        agent_id: "claude".into(),
+                        runtime: "claude",
                     });
                     true
                 }
                 "codex" => {
                     agents.push(MatchedTaskAgent {
-                        agent_id: "codex".into(), runtime: "codex",
+                        agent_id: "codex".into(),
+                        runtime: "codex",
                     });
                     true
                 }
@@ -257,12 +329,14 @@ fn resolve_broadcast_targets(
             if !agent_targeted {
                 if s.claude_role == msg.target_str() {
                     agents.push(MatchedTaskAgent {
-                        agent_id: "claude".into(), runtime: "claude",
+                        agent_id: "claude".into(),
+                        runtime: "claude",
                     });
                 }
                 if s.codex_role == msg.target_str() {
                     agents.push(MatchedTaskAgent {
-                        agent_id: "codex".into(), runtime: "codex",
+                        agent_id: "codex".into(),
+                        runtime: "codex",
                     });
                 }
             }
@@ -286,14 +360,12 @@ fn resolve_broadcast_targets(
     let claude_sender_ok = msg.is_from_user()
         || msg.is_from_system()
         || match task_id {
-            Some(tid) => s
-                .task_graph
-                .agents_for_task(tid)
-                .iter()
-                .any(|a| {
-                    matches!(a.provider, crate::daemon::task_graph::types::Provider::Codex)
-                        && a.role == msg.source_role()
-                }),
+            Some(tid) => s.task_graph.agents_for_task(tid).iter().any(|a| {
+                matches!(
+                    a.provider,
+                    crate::daemon::task_graph::types::Provider::Codex
+                ) && a.role == msg.source_role()
+            }),
             None => msg.source_role() == s.codex_role,
         };
 
@@ -331,9 +403,7 @@ fn resolve_broadcast_targets(
                         channel: DeliveryChannel::ClaudeSdk(tx),
                     });
                 } else if !ta_resolved {
-                    if let Some(bridge) =
-                        s.attached_agents.get("claude").map(|a| a.tx.clone())
-                    {
+                    if let Some(bridge) = s.attached_agents.get("claude").map(|a| a.tx.clone()) {
                         deliveries.push(ResolvedDelivery {
                             agent_id: agent.agent_id.clone(),
                             channel: DeliveryChannel::ClaudeBridge(bridge),
@@ -369,9 +439,7 @@ fn resolve_broadcast_targets(
     }
 
     if deliveries.is_empty() {
-        if any_sender_gated
-            && !matched_agents.iter().any(|a| a.runtime == "codex")
-        {
+        if any_sender_gated && !matched_agents.iter().any(|a| a.runtime == "codex") {
             return BroadcastResolution::Dropped;
         }
         return BroadcastResolution::NeedBuffer;
@@ -483,9 +551,19 @@ pub async fn route_message_inner(state: &SharedState, msg: BridgeMessage) -> Rou
     route_message_inner_with_meta(state, msg).await.result
 }
 
-pub use super::routing_format::{build_codex_input_items, format_codex_input, format_ndjson_user_message};
+pub use super::routing_format::{
+    build_codex_input_items, format_codex_input, format_ndjson_user_message,
+};
 
-#[cfg(test)] #[path = "routing_behavior_tests.rs"] mod behavior_tests;
-#[cfg(test)] #[path = "routing_shared_role_tests.rs"] mod shared_role_tests;
-#[cfg(test)] #[path = "routing_tests.rs"] mod tests;
-#[cfg(test)] #[path = "routing_user_target_tests.rs"] mod user_target_tests;
+#[cfg(test)]
+#[path = "routing_behavior_tests.rs"]
+mod behavior_tests;
+#[cfg(test)]
+#[path = "routing_shared_role_tests.rs"]
+mod shared_role_tests;
+#[cfg(test)]
+#[path = "routing_tests.rs"]
+mod tests;
+#[cfg(test)]
+#[path = "routing_user_target_tests.rs"]
+mod user_target_tests;

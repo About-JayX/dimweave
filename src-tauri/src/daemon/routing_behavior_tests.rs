@@ -5,7 +5,7 @@ use crate::daemon::routing_display::{
 use crate::daemon::{
     state::DaemonState,
     task_graph::types::Provider,
-    types::{Attachment, BridgeMessage, MessageSource, MessageTarget},
+    types::{Attachment, BridgeMessage, MessageSource, MessageStatus, MessageTarget},
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -109,12 +109,116 @@ async fn explicit_user_target_routes_to_gui() {
 }
 
 #[tokio::test]
+async fn worker_reply_to_missing_lead_surfaces_to_gui_when_task_has_no_lead() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "Coder Only");
+        let coder = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Codex, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let (tx, _) = tokio::sync::mpsc::channel(1);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_codex_slot(&coder.agent_id, 4500)
+            .inject_tx = Some(tx);
+        task.task_id
+    };
+    let msg = BridgeMessage {
+        id: "coder-no-lead-1".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex-coder-1".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
+        reply_target: None,
+        message: "I completed the task and verified it.".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: None,
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+
+    let result = route_message_inner(&state, msg).await;
+
+    assert!(
+        matches!(result, RouteResult::ToGui),
+        "coder output must remain visible when no lead exists"
+    );
+    assert!(state.read().await.buffered_messages.is_empty());
+}
+
+#[tokio::test]
+async fn worker_reply_to_offline_lead_surfaces_to_gui() {
+    let state = Arc::new(RwLock::new(DaemonState::new()));
+    let task_id = {
+        let mut s = state.write().await;
+        let task = s.task_graph.create_task("/ws", "Offline Lead");
+        let _lead = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Claude, "lead");
+        let coder = s
+            .task_graph
+            .add_task_agent(&task.task_id, Provider::Codex, "coder");
+        s.init_task_runtime(&task.task_id, "/ws".into());
+        let (tx, _) = tokio::sync::mpsc::channel(1);
+        s.task_runtimes
+            .get_mut(&task.task_id)
+            .unwrap()
+            .get_or_create_codex_slot(&coder.agent_id, 4500)
+            .inject_tx = Some(tx);
+        task.task_id
+    };
+
+    let msg = BridgeMessage {
+        id: "coder-offline-lead-1".into(),
+        source: MessageSource::Agent {
+            agent_id: "codex-coder-1".into(),
+            role: "coder".into(),
+            provider: Provider::Codex,
+            display_source: Some("codex".into()),
+        },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
+        reply_target: None,
+        message: "done".into(),
+        timestamp: 1,
+        reply_to: None,
+        priority: None,
+        status: Some(MessageStatus::Done),
+        task_id: Some(task_id),
+        session_id: None,
+        attachments: None,
+    };
+
+    let result = route_message_inner(&state, msg).await;
+
+    assert!(
+        matches!(result, RouteResult::ToGui),
+        "coder output must remain visible when the task lead is offline"
+    );
+    assert!(state.read().await.buffered_messages.is_empty());
+}
+
+#[tokio::test]
 async fn invalid_target_is_dropped_not_buffered() {
     let state = Arc::new(RwLock::new(DaemonState::new()));
     let msg = BridgeMessage {
         id: "bad-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "admin".into() },
+        target: MessageTarget::Role {
+            role: "admin".into(),
+        },
         reply_target: None,
         message: "hello".into(),
         timestamp: 1,
@@ -136,7 +240,9 @@ async fn valid_role_offline_is_buffered() {
     let msg = BridgeMessage {
         id: "buf-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "implement this".into(),
         timestamp: 1,
@@ -158,7 +264,9 @@ async fn removed_role_target_is_dropped_not_buffered() {
     let msg = BridgeMessage {
         id: "bad-tester-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "tester".into() },
+        target: MessageTarget::Role {
+            role: "tester".into(),
+        },
         reply_target: None,
         message: "test this".into(),
         timestamp: 1,
@@ -234,7 +342,9 @@ fn claude_thinking_starts_only_for_delivered_non_claude_messages() {
     let msg = BridgeMessage {
         id: "msg-claude".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "lead".into() },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
         reply_target: None,
         message: "please help".into(),
         timestamp: 1,
@@ -302,7 +412,9 @@ async fn reply_target_redirects_role_reply_to_delegating_agent() {
             provider: Provider::Claude,
             display_source: Some("claude".into()),
         },
-        target: MessageTarget::Agent { agent_id: "codex".into() },
+        target: MessageTarget::Agent {
+            agent_id: "codex".into(),
+        },
         reply_target: None,
         message: "implement this".into(),
         timestamp: 1,
@@ -325,7 +437,9 @@ async fn reply_target_redirects_role_reply_to_delegating_agent() {
             provider: Provider::Codex,
             display_source: Some("codex".into()),
         },
-        target: MessageTarget::Role { role: "lead".into() },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
         reply_target: None,
         message: "done".into(),
         timestamp: 2,
@@ -372,7 +486,9 @@ async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
             provider: Provider::Claude,
             display_source: Some("claude".into()),
         },
-        target: MessageTarget::Agent { agent_id: "codex".into() },
+        target: MessageTarget::Agent {
+            agent_id: "codex".into(),
+        },
         reply_target: None,
         message: "implement".into(),
         timestamp: 1,
@@ -383,7 +499,10 @@ async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
         session_id: None,
         attachments: None,
     };
-    assert!(matches!(route_message_inner(&state, delegate).await, RouteResult::Delivered));
+    assert!(matches!(
+        route_message_inner(&state, delegate).await,
+        RouteResult::Delivered
+    ));
     assert!(codex_rx.try_recv().is_ok());
     // Step 2: Coder replies to "lead" → redirected to claude
     let reply = BridgeMessage {
@@ -394,7 +513,9 @@ async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
             provider: Provider::Codex,
             display_source: Some("codex".into()),
         },
-        target: MessageTarget::Role { role: "lead".into() },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
         reply_target: None,
         message: "done".into(),
         timestamp: 2,
@@ -405,7 +526,10 @@ async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
         session_id: None,
         attachments: None,
     };
-    assert!(matches!(route_message_inner(&state, reply).await, RouteResult::Delivered));
+    assert!(matches!(
+        route_message_inner(&state, reply).await,
+        RouteResult::Delivered
+    ));
     assert!(claude_rx.try_recv().is_ok());
     // Step 3: Lead sends a NEW message to role "coder" — must NOT be
     // redirected by a reciprocal mapping; should reach codex via normal
@@ -418,7 +542,9 @@ async fn reply_target_no_reciprocal_mapping_from_redirected_reply() {
             provider: Provider::Claude,
             display_source: Some("claude".into()),
         },
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "next task".into(),
         timestamp: 3,
@@ -500,7 +626,9 @@ async fn task_runtime_routing_delivers_via_task_local_codex_channel() {
     let msg = BridgeMessage {
         id: "task-local-codex-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "implement this".into(),
         timestamp: 1,
@@ -575,7 +703,9 @@ async fn task_runtime_routing_delivers_via_task_local_claude_channel() {
     let msg = BridgeMessage {
         id: "task-local-claude-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "lead".into() },
+        target: MessageTarget::Role {
+            role: "lead".into(),
+        },
         reply_target: None,
         message: "plan the task".into(),
         timestamp: 1,
@@ -614,7 +744,9 @@ async fn task_runtime_routing_falls_back_to_global_without_task_id() {
     let msg = BridgeMessage {
         id: "global-fallback-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "implement".into(),
         timestamp: 1,
@@ -674,7 +806,9 @@ async fn task_first_routing_resolves_codex_coder_via_task_provider() {
     let msg = BridgeMessage {
         id: "task-route-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "implement this".into(),
         timestamp: 1,
@@ -706,7 +840,9 @@ async fn task_first_routing_uses_global_role_without_task_id() {
     let msg = BridgeMessage {
         id: "global-route-1".into(),
         source: MessageSource::User,
-        target: MessageTarget::Role { role: "coder".into() },
+        target: MessageTarget::Role {
+            role: "coder".into(),
+        },
         reply_target: None,
         message: "implement this".into(),
         timestamp: 1,
